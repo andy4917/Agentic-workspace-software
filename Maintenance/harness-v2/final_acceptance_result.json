@@ -1,0 +1,90 @@
+{
+  "schema_version": "harness_v2_final_acceptance_result.v1",
+  "checked_at_local": "2026-05-08T04:16:13+09:00",
+  "checked_at_utc": "2026-05-07T19:16:13Z",
+  "status": "verified_candidate_evidence",
+  "completion_authority": "none",
+  "pm_role_demonstrated": true,
+  "user_requested_thread": "current_globalssot_turn",
+  "config_updates": {
+    "config_path": "C:\\Users\\anise\\.codex\\config.toml",
+    "agents_max_threads": 8,
+    "agents_max_threads_set": true,
+    "agents_max_depth": 1,
+    "worker_model": "gpt-5.5",
+    "worker_reasoning_effort": "medium",
+    "inspector_model": "gpt-5.3-codex-spark",
+    "inspector_fallback_model": "latest-mini",
+    "inspector_reasoning_effort": "high",
+    "chrome_devtools_mcp_status": "disabled",
+    "skill_route_enabled": true
+  },
+  "runtime_receipt_sync": {
+    "chrome_devtools_disabled_recorded": true,
+    "worker_model_recorded": "gpt-5.5",
+    "worker_reasoning_effort_recorded": "medium",
+    "worker_max_threads_recorded": 8,
+    "worker_max_depth_recorded": 1,
+    "inspector_fallback_model_recorded": "latest-mini",
+    "inspector_reasoning_effort_recorded": "high",
+    "skill_resolution_receipt_recorded": true,
+    "skill_usage_ledger_recorded": true,
+    "runtime_schema_synced": true
+  },
+  "agent_skills_install": {
+    "source_url": "https://github.com/addyosmani/agent-skills.git",
+    "upstream_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills",
+    "installed_root": "C:\\Users\\anise\\.agents\\skills",
+    "inventory_path": "Maintenance\\agent-skills-integration\\agent_skills_inventory.json",
+    "p0_skill_count": 10,
+    "inventory_hashes_match": true
+  },
+  "git_setup": {
+    "repository_initialized": true,
+    "branch": "main",
+    "local_user_name": "귤우유",
+    "local_user_email": "annie050321@gmail.com",
+    "core_autocrlf": false,
+    "core_filemode": false,
+    "core_safecrlf": "warn",
+    "core_quotepath": false,
+    "gitignore_added": true,
+    "gitattributes_added": true,
+    "commit_created": false
+  },
+  "acceptance": {
+    "harness_v2_total": 126,
+    "harness_v2_passed": 126,
+    "harness_v2_failed": 0,
+    "skill_usage_case_count": 14
+  },
+  "checks": {
+    "toml_yaml_json_parse": "passed",
+    "powershell_parse_matrix": "passed",
+    "harness_v2_acceptance": "passed",
+    "subagent_inspection_routing": "verified",
+    "event_ledger_integrity": "verified",
+    "heuristic_false_positive_review": "verified",
+    "repo_gate_adoption": "verified",
+    "agent_skills_inventory": "verified",
+    "skill_route_acceptance": "verified",
+    "current_turn_receipt_freshness": "verified",
+    "fresh_session_observation": "verified",
+    "git_ignore_smoke": "passed",
+    "git_local_config": "passed"
+  },
+  "pm_decisions": [
+    "Accepted agent-skills P0 install from the pinned addyosmani/agent-skills upstream as local capability setup, not completion evidence.",
+    "Accepted skill_usage_event.v1 and explicit UNAVAILABLE/NOT_APPLICABLE as the only completion evidence for required skill routes.",
+    "Separated skill_routes from tool_routes, worker_routes, and inspector_routes in policy, schema, receipts, and Harness V2 tests.",
+    "Accepted worker and inspector reports only as candidate evidence; Stop/gate-issued receipt remains the completion authority.",
+    "Rejected catalog text such as frontend/backend as route evidence unless touched path or direct artifact evidence supports the surface."
+    ,
+    "Accepted live PreToolUse blocking for Class 3/4 control-plane writes when PM preflight or required subagent scheduling is missing.",
+    "Accepted Korean operational gate/worktree intent as Class 3 control-plane work requiring worker and inspector route orchestration."
+  ],
+  "known_limits": [
+    "This result file is candidate evidence only and is not a gate-issued completion receipt.",
+    "Fresh-session hook observations were exercised locally through SessionStart and validation paths; external desktop restart observation remains an operational handoff check when requested."
+  ]
+}

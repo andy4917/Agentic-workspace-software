@@ -1,0 +1,83 @@
+{
+  "schema_version": "agent_skills_inventory.v1",
+  "source_url": "https://github.com/addyosmani/agent-skills.git",
+  "source_head": "742dca58ae557bc67afec9ea8e6de59c085f0534",
+  "upstream_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills",
+  "installed_root": "C:\\Users\\anise\\.agents\\skills",
+  "copied_skills": [
+    {
+      "name": "using-agent-skills",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\using-agent-skills",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\using-agent-skills",
+      "skill_md_sha256": "7bd7da5999acd2d4c4fbe59cda7483a96fa6f2fe852ff32bc4f97b649b444b31"
+    },
+    {
+      "name": "spec-driven-development",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\spec-driven-development",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\spec-driven-development",
+      "skill_md_sha256": "6d098845420d0f7bbdedfcb8a80bee391b4e9aff58a8195638b35a7bfd7b9b59"
+    },
+    {
+      "name": "planning-and-task-breakdown",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\planning-and-task-breakdown",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\planning-and-task-breakdown",
+      "skill_md_sha256": "d9dc9a1bea50a0bb2b5c51ed59833b65969b5b0bda2c8dacefb5560275443a35"
+    },
+    {
+      "name": "incremental-implementation",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\incremental-implementation",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\incremental-implementation",
+      "skill_md_sha256": "5f16adf542330dfadb8b9a9c6d7ec45e4196bd1db9a67d4407e9dc07e6e29e41"
+    },
+    {
+      "name": "test-driven-development",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\test-driven-development",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\test-driven-development",
+      "skill_md_sha256": "6c60e193d77a6c52eb3d9a7ca774f1801b9f798ec34f075720e0425a8094f50e"
+    },
+    {
+      "name": "code-review-and-quality",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\code-review-and-quality",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\code-review-and-quality",
+      "skill_md_sha256": "7587de5eff9eccd098f0d3b57b6d86ee18df680a7bbbef03710de7c1a4e67263"
+    },
+    {
+      "name": "code-simplification",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\code-simplification",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\code-simplification",
+      "skill_md_sha256": "f0c5ed754057eb0c1e027e2587f59de816651feb5e837242296c43ea21cf621d"
+    },
+    {
+      "name": "debugging-and-error-recovery",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\debugging-and-error-recovery",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\debugging-and-error-recovery",
+      "skill_md_sha256": "2539c0078466755c192123c34758aa432da5d29529340037113eeaecb6647b0e"
+    },
+    {
+      "name": "security-and-hardening",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\security-and-hardening",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\security-and-hardening",
+      "skill_md_sha256": "d13c91c5aa27dbd95c25a83aa5a3290294d9068852dec3b2918b167f1f09e5d6"
+    },
+    {
+      "name": "documentation-and-adrs",
+      "source_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills\\skills\\documentation-and-adrs",
+      "installed_path": "C:\\Users\\anise\\.agents\\skills\\documentation-and-adrs",
+      "skill_md_sha256": "7fed35f9c5b95d8e3623ad24d78d209c3267ab62d7157fc03954c76a7e58adf4"
+    }
+  ],
+  "skipped_skills": [
+    "api-and-interface-design",
+    "browser-testing-with-devtools",
+    "ci-cd-and-automation",
+    "context-engineering",
+    "deprecation-and-migration",
+    "frontend-ui-engineering",
+    "git-workflow-and-versioning",
+    "idea-refine",
+    "performance-optimization",
+    "shipping-and-launch",
+    "source-driven-development"
+  ],
+  "generated_at_utc": "2026-05-07T18:32:59.0646009Z"
+}

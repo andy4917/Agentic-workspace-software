@@ -1,0 +1,85 @@
+workflow_orchestration:
+  priority: 6
+  default_flow:
+    - Frame
+    - Guard
+    - Plan
+    - Execute
+    - Evidence
+    - Review
+    - Report
+
+  frame:
+    must_identify:
+      - user_goal
+      - target
+      - hard_constraints
+      - forbidden_boundaries
+      - likely_done_condition
+      - task_classification_receipt
+      - need_resolution_receipt
+      - skill_resolution_receipt
+
+  guard:
+    must_check:
+      - scope
+      - protected_surface
+      - destructive_action
+      - credential_or_secret
+      - command_source
+      - oracle_availability
+
+  plan:
+    rule:
+      - create_minimal_internal_plan
+      - do_not_turn_plan_into_deliverable_unless_user_requests
+      - do_not_ask_for_micromanagement
+
+  execute:
+    rule:
+      - agent_performs_implementation_inside_scope
+      - agent_performs_cleanup_inside_scope
+      - agent_does_not_delegate_agent_work_to_user
+
+  evidence:
+    rule:
+      - check_touched_path_directly_when_practical
+      - basic_task_is_allowed_only_when_positive_allowlist_conditions_are_all_true
+      - ambiguous_task_class_or_unknown_route_need_classifies_upward_or_blocks_completion_at_Stop
+      - when_task_class_or_need_changes_record_task_classification_receipt_and_need_resolution_receipt
+      - when_required_skill_routes_exist_record_skill_resolution_receipt_after_need_resolution
+      - when_a_surface_changes_identify_connected_surfaces_and_check_them_against_the_latest_changed_version
+      - when_task_matches_required_tool_route_record_tool_usage_event_check_evidence_or_explicit_unavailable_report
+      - when_task_matches_required_skill_route_record_skill_usage_event_or_explicit_unavailable_not_applicable_report
+      - when_task_matches_required_routes_record_pm_decision_v1_with_delegation_report_review_unresolved_findings_and_completion_claim_eligibility
+      - completion_receipt_is_candidate_evidence_until_gate_issued_completion_receipt_is_written_by_stop_gate
+      - validation_timestamp_must_not_be_future_dated
+      - allowed_clock_skew_seconds_must_be_explicit_for_receipt_freshness
+      - PostToolUse_or_equivalent_observation_must_write_tool_usage_event_v2
+      - event_ledger_records_must_preserve_event_id_append_only_and_parent_lineage_when_present
+      - pm_decision_ledger_records_must_preserve_append_only_pm_failure_reason_codes_and_report_review_status
+      - installed_configured_available_tool_skill_or_subagent_is_not_completion_evidence_without_usage_or_explicit_unavailable_not_applicable
+      - repo_gate_adoption_claims_require_actual_hook_wiring_receipt
+      - frontend_visual_claims_require_render_or_screenshot_when_practical
+      - do_not_substitute_tests_or_receipts_for_visible_ui_review
+      - test_is_counterexample_search_not_authority
+      - verification_is_oracle_scope_policy_match
+
+  review:
+    rule:
+      - adversarially_check_task_classification_downshift_before_completion_claim
+      - adversarially_check_need_resolution_unknown_or_unsatisfied_routes_before_completion_claim
+      - adversarially_check_scope_expansion
+      - adversarially_check_changed_surface_dependency_alignment
+      - adversarially_check_required_tool_routes_before_completion_claim
+      - adversarially_check_required_skill_routes_before_completion_claim
+      - adversarially_check_pm_accountability_aggregation_and_unresolved_findings_before_completion_claim
+      - adversarially_check_gate_issued_receipt_matches_candidate_receipt_fingerprint
+      - adversarially_check_future_dated_receipt_timestamps
+      - adversarially_check_hidden_blockers
+      - adversarially_check_rejected_logic_repetition
+
+  report:
+    rule:
+      - report_result_changed_evidence_remain_review_focus
+      - blocked_must_be_first

@@ -1,0 +1,33 @@
+state_machine:
+  priority: 7
+  states:
+    - not_started
+    - in_progress
+    - candidate
+    - blockers
+    - verified_complete
+
+  transitions:
+    not_started:
+      - in_progress
+      - blockers
+    in_progress:
+      - candidate
+      - blockers
+    candidate:
+      - in_progress
+      - blockers
+      - verified_complete
+    blockers:
+      - in_progress
+    verified_complete: []
+
+  transition_rules:
+    - candidate_is_not_complete
+    - final_output_is_not_completion
+    - hidden_oracle_requires_user_confirmation
+    - exact_output_completes_only_by_exact_string_match_and_no_higher_conflict
+    - blocked_cannot_be_reported_as_complete
+    - raw_score_cannot_change_state_to_verified_complete
+    - self_test_pass_cannot_change_state_to_verified_complete
+    - package_verify_pass_cannot_change_state_to_verified_complete

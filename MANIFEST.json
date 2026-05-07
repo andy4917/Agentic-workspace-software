@@ -1,0 +1,446 @@
+{
+  "root_name": "Dev_Codex_App_GlobalSSOT",
+  "canonical_root": "C:\\Users\\anise\\.codex\\Dev_Codex_App_GlobalSSOT",
+  "managed_elements": [
+    {
+      "path": "MANIFEST.json",
+      "type": "manifest",
+      "purpose": "Registry of managed elements under the canonical root."
+    },
+    {
+      "path": "CHANGELOG.md",
+      "type": "changelog",
+      "purpose": "Records behavior, scope, and naming changes under the canonical root."
+    },
+    {
+      "path": ".gitignore",
+      "type": "git_config",
+      "purpose": "Prevents runtime logs, append-only ledgers, local caches, dependencies, and large upstream mirrors from being accidentally staged."
+    },
+    {
+      "path": ".gitattributes",
+      "type": "git_config",
+      "purpose": "Normalizes line-ending behavior for text, PowerShell, Markdown, JSON, YAML, and TOML files."
+    },
+    {
+      "path": "README.md",
+      "type": "root_readme",
+      "purpose": "Root overview and bookkeeping requirements for Dev_Codex_App_GlobalSSOT."
+    },
+    {
+      "path": "Maintenance/README.md",
+      "type": "maintenance_readme",
+      "purpose": "Maintenance folder scope and storage rules."
+    },
+    {
+      "path": "Maintenance/hook_invocations.jsonl",
+      "type": "hook_invocation_log",
+      "purpose": "JSONL evidence log written by the SSOT hook runner when hooks execute."
+    },
+    {
+      "path": "Maintenance/Test-RepoGateAdoption.ps1",
+      "type": "validation_script",
+      "purpose": "Verifies actual Codex hook wiring for repo/session gate adoption and writes repo_gate_adoption_receipt.json."
+    },
+    {
+      "path": "Maintenance/Test-RepoV2AdoptionReceiptV2.ps1",
+      "type": "validation_script",
+      "purpose": "Generates and validates repo_v2_adoption_receipt.json, including Git state, agent chain, checks, required routes, inspector evidence, contamination scan, gate link, and handoff readiness."
+    },
+    {
+      "path": "Maintenance/Test-EventLedgerIntegrity.ps1",
+      "type": "validation_script",
+      "purpose": "Verifies append-only event ledger writes, event_id uniqueness, PreToolUse/PostToolUse/Stop recording, parent lineage preservation, and blocked event recording."
+    },
+    {
+      "path": "Maintenance/Test-SubagentInspectionRouting.ps1",
+      "type": "validation_script",
+      "purpose": "Verifies hook-routed Spark inspector job queueing and candidate-only subagent_spawn/subagent_report ledger events without tightening PreToolUse."
+    },
+    {
+      "path": "Maintenance/Test-HeuristicFalsePositiveReview.ps1",
+      "type": "validation_script",
+      "purpose": "Verifies reward-hacking heuristic false-positive review jobs, candidate-only reports, SUSPECT handling, and preserved absolute deny blockers."
+    },
+    {
+      "path": "Maintenance/harness-v2",
+      "type": "isolated_harness_v2_workspace",
+      "purpose": "Isolated minimal Harness V2 design, policy, acceptance tests, prototype runner, migration plan, GPT Pro discussion note, and integrity compatibility actions."
+    },
+    {
+      "path": "Maintenance/harness-v2/HARNESS_V2_DESIGN.md",
+      "type": "harness_v2_design_doc",
+      "purpose": "Isolated Harness V2 architecture and authority boundary design."
+    },
+    {
+      "path": "Maintenance/harness-v2/harness_v2_policy.yaml",
+      "type": "harness_v2_policy",
+      "purpose": "Machine-readable V2 policy for task types, action safety, Stop finalization, required routes, dependency alignment, and event ledger fields."
+    },
+    {
+      "path": "Maintenance/harness-v2/harness_v2_acceptance_tests.yaml",
+      "type": "harness_v2_acceptance_oracle",
+      "purpose": "Acceptance cases for isolated V2 decisions, including path_scope_observed and future-dated receipt rejection."
+    },
+    {
+      "path": "Maintenance/harness-v2/Invoke-HarnessV2Acceptance.ps1",
+      "type": "validation_script",
+      "purpose": "Runs isolated Harness V2 acceptance tests without wiring V2 into production hooks."
+    },
+    {
+      "path": "Maintenance/harness-v2/MIGRATION_PLAN.md",
+      "type": "harness_v2_migration_plan",
+      "purpose": "Staged isolated acceptance, shadow observation, PreToolUse, Stop, ledger, receipt, and fresh-session migration plan."
+    },
+    {
+      "path": "Maintenance/harness-v2/GPT_PRO_DISCUSSION_NOTE.md",
+      "type": "harness_v2_discussion_note",
+      "purpose": "English V2 discussion summary and production wiring questions."
+    },
+    {
+      "path": "Maintenance/harness-v2/GPT_PRO_DISCUSSION_NOTE.ko.md",
+      "type": "harness_v2_discussion_note_ko",
+      "purpose": "Korean V2 discussion summary and production wiring questions."
+    },
+    {
+      "path": "Maintenance/harness-v2/harness_v2_integrity_compatibility_actions.md",
+      "type": "harness_v2_integrity_actions",
+      "purpose": "Conditional PASS status, integrity compatibility definition, repo adoption receipt template, representative repo minimums, and production transition ban conditions."
+    },
+    {
+      "path": "Maintenance/harness-v2/final_acceptance_result.json",
+      "type": "harness_v2_final_acceptance_result",
+      "purpose": "Machine-readable PM-reviewed candidate evidence for the current Harness V2 final acceptance run."
+    },
+    {
+      "path": "Maintenance/harness-v2/final_acceptance_report.md",
+      "type": "harness_v2_final_acceptance_report",
+      "purpose": "Human-readable PM-reviewed candidate evidence report for the current Harness V2 final acceptance run."
+    },
+    {
+      "path": "INVENTORY.md",
+      "type": "inventory",
+      "purpose": "Human-readable root inventory for managed SSOT surfaces."
+    },
+    {
+      "path": "Settings/README.md",
+      "type": "settings_readme",
+      "purpose": "Settings folder layout for declarative config, runtime state, and hooks."
+    },
+    {
+      "path": "Tools/README.md",
+      "type": "tools_readme",
+      "purpose": "Executable helper scaffolding for managed local development surfaces."
+    },
+    {
+      "path": "Tools/Warp/INVENTORY.md",
+      "type": "inventory",
+      "purpose": "Inventory for auxiliary Warp helper scripts."
+    },
+    {
+      "path": "Tools/Warp/Start-WarpAuxiliary.ps1",
+      "type": "helper_script",
+      "purpose": "Launches Warp as an auxiliary minimized PowerShell surface and restores the previously active foreground window by default."
+    },
+    {
+      "path": "WINDOWS_DEV_TERMS.md",
+      "type": "terminology",
+      "purpose": "Windows user-facing terminology requirements."
+    },
+    {
+      "path": "콘픽설정.md",
+      "type": "config_note",
+      "purpose": "Config layer boundary note."
+    },
+    {
+      "path": "ROOT_MAP.json",
+      "type": "root_map",
+      "purpose": "Canonical root and imported storage folder mapping."
+    },
+    {
+      "path": "NAMING_CONVENTION.md",
+      "type": "naming_convention",
+      "purpose": "Managed element naming rules."
+    },
+    {
+      "path": "VERSION.md",
+      "type": "version",
+      "purpose": "Current SSOT version record."
+    },
+    {
+      "path": "AGENTS.md",
+      "type": "canonical_agent_instructions",
+      "purpose": "SSOT source copy for the global Codex agent contract."
+    },
+    {
+      "path": "AGENT.md",
+      "type": "agent_alias",
+      "purpose": "Alias note pointing to AGENTS.md as canonical."
+    },
+    {
+      "path": "AGENTS.override.md",
+      "type": "agent_override_marker",
+      "purpose": "Explicit marker that no override is active."
+    },
+    {
+      "path": "docs/codex-handoffs",
+      "type": "handoff_docs",
+      "purpose": "Continuity-preserving handoff and reactivation documents for active Codex repo chats."
+    },
+    {
+      "path": "Maintenance/upstream/openai-codex",
+      "type": "upstream_reference_clone",
+      "purpose": "Read-only reference clone of the official openai/codex repository used to derive actual tool, skill, subagent, MCP, and workflow requirements."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/clean-slate.agent.config.toml",
+      "type": "declarative_agent_config",
+      "purpose": "Clean-slate authoritative replacement configuration for Codex App GlobalSSOT behavior."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/tool-skill-subagent-mcp-usage.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Actual-use policy for tools, skills, subagents, MCP, and official OpenAI Codex repo workflows."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/required-tool-routes.json",
+      "type": "declarative_agent_config",
+      "purpose": "Stop-only required capability route table plus task classification and need resolution resolver policy mapping task, path, and surface triggers to required tools, skills, MCP servers, subagents, or checks."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/repo-gate-adoption.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Policy for proving actual repo/session completion gate adoption through live hook wiring and runtime receipts."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/warp-assistant-terminal.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Auxiliary Warp + PowerShell adoption policy limiting Warp to Codex-authorized observation and disabling Warp-managed agents."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/workflow-orchestration.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Workflow orchestration configuration for frame, guard, plan, execute, evidence, review, and report flow."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/state-machine.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "State machine configuration for completion states, transitions, and transition rules."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/retry-recovery-policy.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Retry, recovery, fallback prohibition, and unresolved handling policy."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/agent-reliability-tests.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Negative-only agent reliability test configuration and score gate ordering."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/reward-signal-filter.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Rulebase that treats frequent work command PASS signals as filtered evidence and blocks completion until counterexample review clears the signal."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/control-plane-change-policy.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Policy that separates ordinary product work from authority, hook, policy, and runtime schema mutations, requiring current user scope and post-change review for control-plane changes."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/cost-latency-policy.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Cost and latency policy for fast path, protected path, subagents, and repeated workflow skills."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/human-in-the-loop.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Human-in-the-loop policy for user and agent responsibilities, ask-only conditions, and no-ask routine work."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/reporting-ssot-bookkeeping.agent.config.yaml",
+      "type": "declarative_agent_config",
+      "purpose": "Reporting shape, Korean language policy, forbidden reporting claims, and SSOT bookkeeping rules."
+    },
+    {
+      "path": "Settings/Dev_Codex_HOOKS/pre_turn_active_contract.yaml",
+      "type": "hook_config",
+      "purpose": "Pre-turn active contract loading and injection hook."
+    },
+    {
+      "path": "Settings/Dev_Codex_HOOKS/pre_command_guard.yaml",
+      "type": "hook_config",
+      "purpose": "Pre-command scope, command-source, protected-surface, destructive-action, and credential guard hook."
+    },
+    {
+      "path": "Settings/Dev_Codex_HOOKS/pre_response_checklist.yaml",
+      "type": "hook_config",
+      "purpose": "Pre-response checklist hook for exact-output, scope, oracle, and completion-state checks."
+    },
+    {
+      "path": "Settings/Dev_Codex_HOOKS/retry_invalidation.yaml",
+      "type": "hook_config",
+      "purpose": "Retry invalidation hook for rejected answers and repeated-logic prevention."
+    },
+    {
+      "path": "Settings/Dev_Codex_HOOKS/completion_gate.yaml",
+      "type": "hook_config",
+      "purpose": "Completion gate hook for classifying and validating completion state."
+    },
+    {
+      "path": "Settings/Dev_Codex_HOOKS/post_turn_state_register.yaml",
+      "type": "hook_config",
+      "purpose": "Post-turn state registration hook for active contract, rejected hypotheses, completion receipts, remain, and stable lessons."
+    },
+    {
+      "path": "Settings/Dev_Codex_HOOKS/codex-ssot-hook.ps1",
+      "type": "hook_runner",
+      "purpose": "Shared executable Codex hook runner for clean-slate SSOT loading, task classification and need resolution receipts, dry-run checks, command guard, retry invalidation, completion gate, state context, and current-task repair classification for isolated Harness V2 and PM decision ledger surfaces."
+    },
+    {
+      "path": "Settings/Codex_App_DECLARATIVE/INVENTORY.md",
+      "type": "inventory",
+      "purpose": "Inventory for declarative config files."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/INVENTORY.md",
+      "type": "inventory",
+      "purpose": "Inventory for runtime state files."
+    },
+    {
+      "path": "Settings/Dev_Codex_HOOKS/INVENTORY.md",
+      "type": "inventory",
+      "purpose": "Inventory for hook configs and hook runner."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/active_contract.json",
+      "type": "runtime_state",
+      "purpose": "Runtime active contract state file initialized from the active contract schema."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/rejected_hypotheses.json",
+      "type": "runtime_state",
+      "purpose": "Runtime rejected hypotheses state file."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/completion_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Agent-written candidate completion receipt state file initialized from the completion receipt schema."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/gate_issued_completion_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Stop gate-issued final authority receipt for a validated candidate completion receipt fingerprint."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/task_classification_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Current-turn task_classification_receipt.v1 proving basic positive-allowlist classification or upward classification before completion authority."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/need_resolution_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Current-turn need_resolution_receipt.v1 from required_route_resolver, including route need levels and valid evidence policy."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/runtime_capability_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Runtime capability receipt generated at SessionStart or UserPromptSubmit with loaded AGENTS.md sources, active hooks, available MCP servers and skills, configured subagents, cwd, project root, and trust state."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/tool_usage_events.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only ledger of tool_usage_event.v2 records from PostToolUse or equivalent PreToolUse observation for Stop finalization evidence."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/heuristic_review_jobs.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only queue for reward-hacking heuristic SUSPECT false-positive review jobs."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/heuristic_review_reports.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only ledger of candidate-only spark_false_positive_reviewer classifications."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/required_tool_loop_state.json",
+      "type": "runtime_state",
+      "purpose": "Loop-breaker state for repeated required_tool_not_used completion attempts without artifact or evidence change."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/subagent_inspection_jobs.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only queue for hook-routed Spark inspector jobs with candidate-only authority."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/subagent_inspection_reports.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only candidate-only Spark inspector report ledger for PM review before Stop evidence adoption."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/subagent_worker_jobs.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only worker job ledger for scoped workspace-write subagents with candidate_artifact_only authority."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/subagent_worker_reports.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only worker report ledger reviewed by the parent PM before Stop finalization."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/subagent_lifecycle_events.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only subagent_lifecycle_event.v1 ledger for worker warning, quarantine, termination, replacement, and acceptance decisions."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/subagent_inspection_loop_state.json",
+      "type": "runtime_state",
+      "purpose": "Loop-breaker state for repeated required_subagent_not_spawned or subagent_report_missing completion attempts."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/pm_decisions.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only pm_decision.v1 ledger for main-agent orchestration accountability, reviewed reports, unresolved findings, PM failure reason codes, and completion-claim eligibility."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/repo_gate_adoption_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Runtime receipt proving actual live hook wiring for repo/session gate adoption."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/repo_v2_adoption_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Repo-specific adoption receipt bundling repo path, Git dirty state, active agent chain, check evidence, required routes, inspector reports, contamination scan, gate decision, and handoff confirmation."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/stable_lessons.json",
+      "type": "runtime_state",
+      "purpose": "Runtime stable lessons state file containing stable lessons only."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/runtime_state.schema.json",
+      "type": "runtime_schema",
+      "purpose": "Schema and state-file declaration for Codex App runtime state."
+    },
+    {
+      "path": "Maintenance/agent-skills-integration",
+      "type": "maintenance_workspace",
+      "purpose": "Workspace for fixed upstream agent-skills clone/install inventory, copied-skill hash verification, and Harness V2 skill-route integration evidence."
+    },
+    {
+      "path": "Maintenance/agent-skills-integration/agent_skills_inventory.json",
+      "type": "agent_skills_inventory",
+      "purpose": "Inventory of addyosmani/agent-skills source URL, HEAD commit, installed P0 skills, skipped skills, and copied SKILL.md hashes."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/skill_resolution_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Current-turn skill_resolution_receipt.v1 generated between need resolution and Stop finalization; installed/configured skills are not evidence without usage or explicit unavailable/not_applicable."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/skill_usage_events.jsonl",
+      "type": "runtime_state",
+      "purpose": "Append-only skill_usage_event.v1 ledger proving actual skill use for required skill routes before Stop completion authority."
+    }
+  ]
+}

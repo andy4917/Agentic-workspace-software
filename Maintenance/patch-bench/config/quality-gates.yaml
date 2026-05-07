@@ -1,0 +1,34 @@
+quality_gates:
+  definition_of_done:
+    requires:
+      - changed_paths_are_known
+      - spec_relation_is_recorded
+      - dynamic_input_processing_output_evidence_exists
+      - checks_are_run_or_limits_are_explicit
+      - warnings_and_limits_are_visible
+      - no_bare_pass_or_subagent_pass_completion
+  ci_gate:
+    required_steps:
+      - powershell_ast
+      - yaml_json_parse
+      - local_reward_nullification_bench
+      - semgrep_smoke
+      - secret_scanner_smoke
+      - policy_config_validator
+      - change_impact_analysis
+  quality_gate:
+    required_steps:
+      - ci_gate
+      - lint_typecheck_detection
+      - nx_bazel_turbo_detection
+      - coverage_smoke
+  release_gate:
+    required_steps:
+      - quality_gate
+      - receipt_freshness_ready
+      - gpt_pro_discussion_packet_generated
+      - report_generated
+failure_policy:
+  any_required_step_failed: block_release
+  optional_tool_missing: warn_only
+  external_repo_dirty: impact_warning_not_patch_bench_failure

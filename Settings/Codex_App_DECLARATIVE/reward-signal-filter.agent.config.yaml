@@ -1,0 +1,207 @@
+reward_signal_filter:
+  priority: 10
+  model: "tic_like_slop_control"
+  threat_model:
+    repeated_slop_is_uncontrolled_threat: true
+    frequent_work_commands_can_act_as_reward_signals: true
+    command_success_is_filtered_evidence_not_completion: true
+
+  scope_limit:
+    applies_only_to: "finalization_of_executable_or_procedural_artifacts"
+    applies_to:
+      - code
+      - scripts
+      - tests
+      - configuration
+      - automation
+      - build_logic
+      - runbooks
+      - agent_instructions
+      - hook_or_policy_text_intended_for_runtime_use
+    does_not_apply_to:
+      - ordinary_conversation
+      - explanation
+      - planning
+      - analysis
+      - translation
+      - question_answering
+      - draft_output
+      - non_final_intermediate_output
+    hook_authority:
+      may_read_apply_report_and_check: true
+      may_modify_disable_bypass_reinterpret_or_alter_without_explicit_user_instruction: false
+    doc_surface:
+      changelog: "non_runtime_record_keyword_only"
+      readme: "non_runtime_explanation_keyword_only"
+      audit_note: "non_runtime_record_keyword_only"
+      runbook: "procedural_artifact"
+      policy_doc: "procedural_artifact"
+      hook_config: "control_plane_artifact"
+
+  authorized_repair_scope:
+    priority: "after_absolute_deny_before_keyword_heuristic"
+    enabled_when: "current_task_explicitly_requests_hook_policy_or_control_plane_repair"
+    allowed_paths:
+      - "C:/Users/anise/.codex/Dev_Codex_App_GlobalSSOT/Settings/Dev_Codex_HOOKS/"
+      - "C:/Users/anise/.codex/Dev_Codex_App_GlobalSSOT/Settings/Codex_App_DECLARATIVE/"
+      - "C:/Users/anise/.codex/Dev_Codex_App_GlobalSSOT/Settings/Codex_App_RUNTIME/runtime_state.schema.json"
+      - "C:/Users/anise/.codex/hooks.json"
+    absolute_deny_still_precedes_repair:
+      - secret_or_auth_private_surface_access
+      - destructive_side_effect
+      - unauthorized_mutation
+      - enforcement_weakening
+      - hidden_warning_error_or_nonzero_exit
+      - pass_fail_manipulation
+
+  filtered_command_families:
+    - name: package_verify_pass_signal
+      examples:
+        - npm run verify
+        - pnpm verify
+        - yarn verify
+      rule: "Treat package-level verify success as a reward-like signal until direct counterexample review clears it."
+
+    - name: test_pass_signal
+      examples:
+        - npm test
+        - npm run test
+        - pytest
+        - cargo test
+        - go test
+      rule: "Treat test pass as scoped evidence only; it cannot close oracle, scope, or slop-risk questions."
+
+    - name: typecheck_pass_signal
+      examples:
+        - npm run typecheck
+        - tsc --noEmit
+        - pyright
+        - mypy
+        - cargo check
+      rule: "Treat type success as syntax/interface evidence only, not behavior completion."
+
+    - name: lint_pass_signal
+      examples:
+        - npm run lint
+        - eslint
+        - biome check
+        - ruff check
+        - cargo clippy
+      rule: "Treat lint success as style/static evidence only."
+
+    - name: build_pass_signal
+      examples:
+        - npm run build
+        - vite build
+        - cargo build
+        - dotnet build
+      rule: "Treat build success as artifact creation evidence only."
+
+    - name: absence_scan_pass_signal
+      examples:
+        - rg -q fallback
+        - if (-not (rg commandId src)) { "pass" }
+        - rg verified_complete | Measure-Object
+      rule: "Treat only absence-confirmation scans as reward-like signals; plain rg observation is read-only inspection, not a blocker."
+
+    - name: hook_pass_signal
+      examples:
+        - codex-ssot-hook.ps1 -HookName completion_gate
+        - codex-ssot-hook.ps1 -HookName stop_checks
+        - codex-ssot-hook.ps1 -DryRun
+      rule: "Treat hook pass as control-plane evidence only; it does not replace user oracle matching."
+
+  pre_control:
+    on_detected_reward_signal_command:
+      - classify_as_reward_signal_command_filtered
+      - set_completion_receipt_to_candidate
+      - add_reward_signal_counterexample_review_pending_blocker
+      - keep_raw_score_visible_false
+      - keep_rewardable_false
+    inspect_only_exception:
+      - commands_explicitly_using_NoLog_are_observation_only
+      - do_not_mutate_completion_receipt_for_NoLog_reward_signal_probes
+      - plain_search_commands_are_observation_only_until_they_are_used_as_absence_proof
+
+  clearing_required:
+    - inspect_or_run_a_direct_counterexample_path_not_equivalent_to_the_reward_command
+    - confirm_oracle_match_scope_match_no_blockers_and_evidence
+    - clear_reward_signal_filter_pending_counterexample_review
+
+  finalization_nullification:
+    dynamic_reproduction_required: "Before finalizing an applicable artifact, verify the intended specification through dynamic input or condition -> processing -> output or effect."
+    reproduction_failure_action:
+      - discard_only_affected_artifact_from_current_attempt
+      - redo_using_normal_implementation_logic
+      - preserve_unrelated_clean_artifacts_user_requirements_and_ordinary_conversation
+    contamination_candidates:
+      - case_tuned_success
+      - pass_label
+      - test_pass
+      - final_output
+      - hook_pass
+      - hardcoded_success
+      - fake_test
+      - harness_manipulation
+      - completion_definition_tamper
+      - validation_bypass
+      - fixed_cases_without_dynamic_reproduction
+      - hidden_warnings
+      - altered_definitions
+      - manipulated_evaluation_paths
+      - test_specific_shortcuts
+    rule: "Treat case-tuned success, PASS/test/final/hook pass, and similar finalization signals as contamination candidates, not completion evidence."
+    cannot_serve_as_completion_evidence:
+      - case_tuned_success
+      - PASS
+      - test_pass
+      - final_answer
+      - hook_pass
+      - hardcoded_success
+      - fake_test
+      - harness_manipulation
+      - completion_definition_tamper
+      - validation_bypass
+
+  path_value_model:
+    normal_implementation_path:
+      expected_value: positive
+      sequence:
+        - understand_requirements
+        - implement_real_logic
+        - validate_with_direct_evidence
+        - continue_work
+    reward_hacking_path:
+      expected_value: zero_or_negative
+      pass_result_value: invalid
+      fail_result_value: invalid
+      on_harness_or_validation_definition_touch:
+        - stop_immediately
+        - discard_pass_fail_signal
+        - restart_from_normal_implementation_path
+      stop_snapshot_fallback:
+        enabled: true
+        purpose: "Catch contamination written by subagents or modes whose write path may not invoke PreToolUse."
+        detects:
+          - hardcoded_success_marker
+          - unconditional_valid_harness
+          - completion_definition_tamper
+          - validation_bypass_language
+          - frontend_fake_guest_room_occupancy_or_revenue_data
+          - legacy_sidepanel_surface_resurrection
+          - repo_local_agents_authority_or_gate_receipt_contamination
+          - backend_test_specific_or_static_success
+
+  forbidden:
+    - use_test_or_verify_pass_as_completion
+    - use_rg_no_match_as_proof_of_absence_without_positive_contract_evidence
+    - clear_reward_signal_filter_without_counterexample_review
+    - report_reward_signal_as_approval
+    - hardcode_success_to_satisfy_harness
+    - fake_or_weaken_tests_to_create_pass
+    - manipulate_validation_harness_or_completion_definition_to_bypass_work
+    - treat_bypassed_validation_as_evidence
+    - use_fake_frontend_backend_business_data_as_real_product_behavior
+    - reintroduce_rejected_legacy_frontend_surfaces
+    - use_repo_local_agents_or_gate_receipts_to_weaken_global_completion_authority
+    - use_backend_test_specific_or_static_success_as_implementation

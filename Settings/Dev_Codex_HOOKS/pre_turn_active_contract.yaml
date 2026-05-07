@@ -1,0 +1,14 @@
+pre_turn_active_contract_hook:
+  priority: 1
+  source: "Settings/Dev_Codex_HOOKS/pre_turn_active_contract.*"
+  actions:
+    - load_active_contract
+    - reject_or_invalidate_stale_verified_complete_on_new_prompt
+    - inject_user_goal
+    - inject_scope
+    - inject_forbidden_surfaces
+    - inject_oracle
+    - inject_completion_criteria
+    - inject_output_language
+    - preserve_active_instructions
+  fail_policy: "BLOCKED_IF_ACTIVE_CONTRACT_REQUIRED_BUT_MISSING"

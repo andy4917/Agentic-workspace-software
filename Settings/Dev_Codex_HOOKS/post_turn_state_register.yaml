@@ -1,0 +1,21 @@
+post_turn_state_register_hook:
+  priority: 6
+  source: "Settings/Dev_Codex_HOOKS/post_turn_state_register.*"
+  actions:
+    - save_active_contract
+    - save_rejected_hypotheses
+    - save_completion_receipt
+    - save_gate_issued_completion_receipt
+    - save_task_classification_receipt
+    - save_need_resolution_receipt
+    - save_turn_fingerprint
+    - save_runtime_capability_receipt
+    - append_tool_usage_event_ledger
+    - save_required_tool_loop_state
+    - save_repo_gate_adoption_receipt
+    - save_remain
+    - save_stable_lessons_only
+    - exclude_self_made_pass_from_memory
+    - exclude_raw_score_from_memory
+    - exclude_rejected_answer_as_fact
+  fail_policy: "STATE_WRITE_REQUIRED_FOR_MULTI_TURN_TASKS"

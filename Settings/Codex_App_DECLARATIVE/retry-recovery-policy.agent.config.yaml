@@ -1,0 +1,35 @@
+retry_recovery_policy:
+  priority: 8
+
+  retry:
+    enabled: true
+    requires_invalidation: true
+    preserve_active_contract: true
+    repeat_rejected_logic: false
+    steps:
+      - mark_previous_attempt_rejected
+      - add_to_rejected_hypotheses
+      - identify_failed_assumption
+      - remove_failed_assumption_from_next_attempt
+      - rerun_inside_same_scope
+      - report_candidate_or_verified_complete
+
+  recovery:
+    enabled: true
+    allowed:
+      - rerun_with_corrected_assumption
+      - narrow_scope_to_authorized_area
+      - report_unresolved
+      - report_blocked
+
+  fallback:
+    enabled: false
+    legacy_path: false
+    compatibility_adapter: false
+    backward_compatibility: false
+    silent_default_behavior: false
+    route_around: false
+
+  unresolved_policy:
+    unknowns_become: "unresolved_or_BLOCKED"
+    unknowns_must_not_be_hidden_by_fallback: true

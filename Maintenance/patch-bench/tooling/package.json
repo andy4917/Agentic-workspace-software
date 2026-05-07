@@ -1,0 +1,30 @@
+{
+  "name": "patch-bench-tooling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "tool:nx": "nx --version",
+    "tool:turbo": "turbo --version",
+    "tool:versions": "npm run tool:nx && npm run tool:turbo",
+    "coverage:smoke": "c8 --reporter=text npm test",
+    "openapi:types": "openapi-typescript ../config/openapi-smoke.yaml --output generated/openapi-smoke.d.ts"
+  },
+  "devDependencies": {
+    "c8": "latest",
+    "eslint": "latest",
+    "nx": "^22.6.5",
+    "openapi-typescript": "latest",
+    "turbo": "latest",
+    "typescript": "latest"
+  },
+  "overrides": {
+    "axios": "^1.15.2",
+    "brace-expansion": "^5.0.5",
+    "follow-redirects": "^1.15.12",
+    "yaml": "^2.8.3"
+  }
+}

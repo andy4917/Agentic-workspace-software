@@ -1,0 +1,628 @@
+{
+  "schema_version": "required_tool_routes.v1",
+  "owner": "Settings/Dev_Codex_HOOKS/codex-ssot-hook.ps1",
+  "enforcement_layer": "Stop finalization only",
+  "pretooluse_policy": {
+    "missing_required_tool_blocks_pretooluse": false,
+    "ordinary_conversation_planning_read_only_and_normal_implementation_continue": true
+  },
+  "failure_scope": "discard_only_affected_artifact_from_current_attempt",
+  "task_classification": {
+    "receipt": "Settings/Codex_App_RUNTIME/task_classification_receipt.json",
+    "schema_version": "task_classification_receipt.v1",
+    "basic_is_positive_allowlist": true,
+    "ambiguous_classifies_upward": true,
+    "missing_reason_code": "task_classification_missing",
+    "unknown_reason_code": "task_classification_unknown",
+    "downshift_reason_code": "task_classification_downshift_detected"
+  },
+  "need_resolution": {
+    "receipt": "Settings/Codex_App_RUNTIME/need_resolution_receipt.json",
+    "schema_version": "need_resolution_receipt.v1",
+    "resolver": "required_route_resolver",
+    "not_required_is_computed_not_default": true,
+    "need_levels": [
+      "REQUIRED",
+      "RECOMMENDED",
+      "OPTIONAL",
+      "NOT_APPLICABLE",
+      "UNAVAILABLE",
+      "UNKNOWN"
+    ],
+    "unknown_blocks_completion": true,
+    "missing_reason_code": "need_resolution_missing",
+    "unknown_reason_code": "need_resolution_unknown",
+    "route_unknown_reason_code": "route_need_unknown",
+    "unsatisfied_reason_code": "required_route_unsatisfied",
+    "resolver_inputs": [
+      "task_class",
+      "touched_surface",
+      "action_class",
+      "risk_class",
+      "completion_claim",
+      "user_explicit_instruction",
+      "changed_paths",
+      "prior_failures",
+      "unresolved_findings"
+    ],
+    "valid_completion_evidence": [
+      "tool_usage_event",
+      "skill_usage_event",
+      "worker_spawn_event",
+      "worker_report_event",
+      "inspector_spawn_event",
+      "inspector_report_event",
+      "subagent_job_event",
+      "subagent_report_event",
+      "pm_worker_waiver_event",
+      "check_evidence",
+      "explicit_unavailable",
+      "explicit_not_applicable"
+    ],
+    "installed_configured_available_is_not_evidence": true
+  },
+  "routes": [
+    {
+      "route_id": "substantive_agent_work_vowline",
+      "description": "Meaningful implementation, debugging, review, prompt, policy, or artifact work requires the Vowline operating skill to be loaded.",
+      "trigger_patterns": [
+        "(?i)\\b(implement|fix|debug|review|change|update|add|remove|refactor|validate|verify|policy|prompt|hook|schema|receipt|runtime)\\b",
+        "(?i)(구현|수정|검증|추적|제거|정리)"
+      ],
+      "requires": [
+        {
+          "type": "skill",
+          "id": "vowline",
+          "evidence_patterns": [
+            "(?i)skill_loaded:vowline",
+            "(?i)vowline.*loaded",
+            "(?i)vowline_required_operating_context_loaded"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "git_or_github_user_facing_work",
+      "description": "Git or GitHub work for this Korean user requires the git-easy-korean skill for user-facing reporting.",
+      "trigger_patterns": [
+        "(?i)\\b(git|github|commit|push|pull|branch|merge|conflict|pr|pull request|ci|workflow run)\\b"
+      ],
+      "requires": [
+        {
+          "type": "skill",
+          "id": "git-easy-korean",
+          "evidence_patterns": [
+            "(?i)skill_loaded:git-easy-korean",
+            "(?i)git-easy-korean.*loaded"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "mcp_or_connector_tool_discovery",
+      "description": "Tasks that actually need MCP/app connector tools require tool_search discovery before falling back to MCP resource listing or shell-only guesses.",
+      "trigger_patterns": [
+        "(?i)\\b(use|open|query|inspect|search|connect|load|call)\\b.{0,80}\\b(mcp|connector|app://|github app|google drive|gmail|slack|figma|supabase|hugging face)\\b",
+        "(?i)\\btool_search\\b"
+      ],
+      "requires": [
+        {
+          "type": "tool",
+          "id": "tool_search",
+          "evidence_patterns": [
+            "(?i)tool_usage:tool_search",
+            "(?i)tool_search.*invoked",
+            "(?i)mcp_discovery:tool_search"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "explicit_browser_local_target",
+      "description": "Explicit browser inspection of local targets requires the Browser Use browser skill/plugin route when available.",
+      "trigger_patterns": [
+        "(?i)\\b(open|inspect|click|type|screenshot|navigate|test)\\b.{0,80}\\b(localhost|127\\.0\\.0\\.1|file://|browser|chrome)\\b"
+      ],
+      "requires": [
+        {
+          "type": "skill_or_plugin",
+          "id": "browser-use:browser",
+          "evidence_patterns": [
+            "(?i)skill_loaded:browser-use:browser",
+            "(?i)browser-use.*invoked",
+            "(?i)tool_usage:browser"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "openai_product_or_api_docs",
+      "description": "OpenAI product/API guidance requires the openai-docs skill and official OpenAI documentation path.",
+      "trigger_patterns": [
+        "(?i)\\b(openai|chatgpt|responses api|assistants api|codex api|model|gpt-)\\b"
+      ],
+      "requires": [
+        {
+          "type": "skill",
+          "id": "openai-docs",
+          "evidence_patterns": [
+            "(?i)skill_loaded:openai-docs",
+            "(?i)official_openai_docs_checked"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "pdf_artifact_work",
+      "description": "PDF read/create/review work requires the pdf skill when the task involves PDF files or layout-sensitive PDF inspection.",
+      "trigger_patterns": [
+        "(?i)\\bpdf\\b"
+      ],
+      "path_patterns": [
+        "(?i)\\.pdf$"
+      ],
+      "requires": [
+        {
+          "type": "skill",
+          "id": "pdf",
+          "evidence_patterns": [
+            "(?i)skill_loaded:pdf",
+            "(?i)pdf_skill.*loaded"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "image_generation_or_edit",
+      "description": "Raster image generation or image editing requires the imagegen skill/tool route.",
+      "trigger_patterns": [
+        "(?i)\\b(generate|create|edit|modify|transform)\\b.{0,80}\\b(image|photo|illustration|sprite|bitmap)\\b"
+      ],
+      "requires": [
+        {
+          "type": "skill_or_tool",
+          "id": "imagegen",
+          "evidence_patterns": [
+            "(?i)skill_loaded:imagegen",
+            "(?i)tool_usage:image_gen",
+            "(?i)imagegen.*invoked"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "explicit_subagent_or_parallel_agent_work",
+      "description": "When the user explicitly requests subagents or parallel agent work, spawned subagent evidence is candidate only and the parent Stop receipt remains mandatory.",
+      "trigger_patterns": [
+        "(?i)\\b(use|spawn|delegate|run)\\b.{0,80}\\b(subagents?|parallel agents?|worker agents?|explorer agents?)\\b"
+      ],
+      "requires": [
+        {
+          "type": "subagent",
+          "id": "spawn_agent",
+          "evidence_patterns": [
+            "(?i)record_type\\s*[\\\"':=]+\\s*[\\\"']?subagent_spawn_event",
+            "(?i)record_type\\s*[\\\"':=]+\\s*[\\\"']?worker_spawn_event",
+            "(?i)event\\s*[\\\"':=]+\\s*[\\\"']?subagent_spawn"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "parent_stop_receipt_required",
+          "evidence_patterns": [
+            "(?i)parent_stop_receipt_verified",
+            "(?i)subagent_pass_candidate_parent_receipt_verified"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "control_plane_hook_runtime_policy_change",
+      "description": "Hook, runtime schema, authority, policy, or AGENTS changes require parser/schema checks and completion gate reproduction evidence.",
+      "trigger_patterns": [
+        "(?i)\\b(hook|pretooluse|stop|completion gate|runtime|receipt|schema|policy|agents\\.md|agent\\.md|control plane|blocker)\\b"
+      ],
+      "path_patterns": [
+        "(?i)settings/dev_codex_hooks/",
+        "(?i)settings/codex_app_runtime/runtime_state\\.schema\\.json$",
+        "(?i)settings/codex_app_declarative/",
+        "(?i)(^|/)agents?\\.md$",
+        "(?i)(^|/)agents\\.override\\.md$",
+        "(?i)\\.codex/hooks\\.json$"
+      ],
+      "requires": [
+        {
+          "type": "check",
+          "id": "powershell_parse_codex_ssot_hook",
+          "evidence_patterns": [
+            "(?i)powershell_parse:codex-ssot-hook\\.ps1:ok",
+            "(?i)scriptblock_parse.*codex-ssot-hook.*ok"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "runtime_schema_json_parse",
+          "evidence_patterns": [
+            "(?i)json_parse:runtime_state\\.schema\\.json:ok",
+            "(?i)runtime_state\\.schema\\.json.*json.*ok"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "policy_config_parse",
+          "evidence_patterns": [
+            "(?i)config_parse:.*:ok",
+            "(?i)yq_parse:.*:ok",
+            "(?i)toml_parse:.*:ok"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "completion_gate_reproduction",
+          "evidence_patterns": [
+            "(?i)completion_gate_negative_reproduction:.*:ok",
+            "(?i)completion_gate_positive_reproduction:.*:ok"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "required_tool_routing_and_receipt_validation_change",
+      "description": "Required-tool routing, runtime capability receipts, tool usage ledgers, Stop validation, and loop-breaker changes require direct negative and positive reproductions.",
+      "trigger_patterns": [
+        "(?i)required[-_ ]tool",
+        "(?i)runtime_capability_receipt",
+        "(?i)tool_usage_event",
+        "(?i)required_tool_not_used",
+        "(?i)installed capability",
+        "(?i)loop breaker"
+      ],
+      "path_patterns": [
+        "(?i)required-tool-routes\\.json$",
+        "(?i)tool-skill-subagent-mcp-usage\\.agent\\.config\\.yaml$",
+        "(?i)codex-ssot-hook\\.ps1$",
+        "(?i)runtime_state\\.schema\\.json$",
+        "(?i)completion_gate\\.yaml$"
+      ],
+      "requires": [
+        {
+          "type": "check",
+          "id": "required_tool_routes_table_present",
+          "evidence_patterns": [
+            "(?i)required_tool_routes_table_present:ok",
+            "(?i)required-tool-routes\\.json.*parse.*ok"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "runtime_capability_receipt_generated",
+          "evidence_patterns": [
+            "(?i)runtime_capability_receipt_generated:ok",
+            "(?i)runtime_capability_receipt\\.json.*generated"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "tool_usage_event_ledger_has_current_attempt_event",
+          "evidence_patterns": [
+            "(?i)tool_usage_event_ledger_current_attempt:ok",
+            "(?i)tool_usage_events\\.jsonl.*current.*ok"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "required_tool_not_used_negative_reproduction",
+          "evidence_patterns": [
+            "(?i)required_tool_not_used_negative_reproduction:ok",
+            "(?i)reason\\s+required_tool_not_used"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "required_tool_route_report_positive_reproduction",
+          "evidence_patterns": [
+            "(?i)required_tool_route_report_positive_reproduction:ok",
+            "(?i)required_tool_routes_satisfied"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "required_tool_loop_breaker_reproduction",
+          "evidence_patterns": [
+            "(?i)required_tool_loop_breaker_reproduction:ok",
+            "(?i)loop_breaker_required_tool_not_used"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "gate_issued_completion_receipt_separation",
+          "evidence_patterns": [
+            "(?i)gate_issued_completion_receipt_separation:ok",
+            "(?i)agent_completion_receipt_treated_as_candidate_input",
+            "(?i)gate_issued_completion_receipt\\.json.*issued"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "future_dated_validation_timestamp_negative_reproduction",
+          "evidence_patterns": [
+            "(?i)future_dated_validation_timestamp_negative_reproduction:ok",
+            "(?i)reason\\s+future_dated_validation_timestamp"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "tool_usage_event_v2_schema",
+          "evidence_patterns": [
+            "(?i)tool_usage_event_v2_schema:ok",
+            "(?i)tool_usage_event\\.v2"
+          ]
+        },
+        {
+          "type": "check",
+          "id": "repo_gate_adoption_receipt_generated",
+          "evidence_patterns": [
+            "(?i)repo_gate_adoption_receipt_generated:ok",
+            "(?i)repo_gate_adoption_verified:ok"
+          ]
+        }
+      ]
+    }
+  ],
+  "worker_routes": {
+    "authority": "candidate_artifact_only",
+    "primary_model": "latest-main",
+    "preferred_model": "gpt-5.5",
+    "reasoning_effort": "medium",
+    "sandbox_mode": "workspace-write-scoped",
+    "max_depth": 1,
+    "jobs": "Settings/Codex_App_RUNTIME/subagent_worker_jobs.jsonl",
+    "reports": "Settings/Codex_App_RUNTIME/subagent_worker_reports.jsonl",
+    "required_spawn_evidence": "worker_spawn_event",
+    "waiver_event": "pm_worker_waiver_event",
+    "waiver_required_fields": [
+      "reason",
+      "scope",
+      "expiry=current_turn",
+      "replacement_evidence",
+      "residual_risk"
+    ],
+    "routes": [
+      "implementation_worker",
+      "test_worker",
+      "config_worker",
+      "control_plane_worker",
+      "frontend_worker",
+      "backend_worker"
+    ],
+    "reason_codes": {
+      "missing_spawn": "required_worker_not_spawned",
+      "missing_report": "worker_report_missing",
+      "inspector_only_for_mutating_task": "inspector_only_delegation_for_mutating_task",
+      "collapsed_worker_into_inspector": "pm_collapsed_worker_route_into_inspector_route"
+    }
+  },
+  "inspector_routes": {
+    "authority": "candidate_evidence_only",
+    "primary_model": "gpt-5.3-codex-spark",
+    "fallback_model": "latest-mini",
+    "reasoning_effort": "high",
+    "sandbox_mode": "read-only",
+    "max_depth": 1,
+    "jobs": "Settings/Codex_App_RUNTIME/subagent_inspection_jobs.jsonl",
+    "reports": "Settings/Codex_App_RUNTIME/subagent_inspection_reports.jsonl",
+    "required_spawn_evidence": "subagent_spawn_event",
+    "routes": [
+      "repo_integrity_inspection",
+      "contamination_inspection",
+      "required_tool_route_inspection",
+      "frontend_adoption_inspection",
+      "backend_adoption_inspection",
+      "ssot_contract_inspection"
+    ]
+  },
+  "subagent_inspection_routes": [
+    {
+      "route_id": "repo_integrity_inspection",
+      "agent_name": "spark_repo_inspector",
+      "authority": "candidate_evidence_only",
+      "trigger_patterns": [
+        "(?i)\\brepo[_ -]?integrity\\b",
+        "(?i)\\brepo[_ -]?adoption\\b",
+        "(?i)\\brepo gate adoption\\b",
+        "(?i)\\brepresentative repo\\b",
+        "(?i)\\bproduction\\s+complete\\b"
+      ],
+      "path_patterns": [
+        "(?i)(^|/)MANIFEST\\.json$",
+        "(?i)(^|/)INVENTORY\\.md$",
+        "(?i)(^|/)README\\.md$",
+        "(?i)(^|/)AGENTS?\\.md$",
+        "(?i)(^|/)package\\.json$",
+        "(?i)(^|/)\\.github/"
+      ],
+      "completion_requirement": "report_or_explicit_not_applicable"
+    },
+    {
+      "route_id": "contamination_inspection",
+      "agent_name": "spark_contamination_inspector",
+      "authority": "candidate_evidence_only",
+      "trigger_patterns": [
+        "(?i)\\bcontamination\\b",
+        "(?i)\\breward[-_ ]?hacking\\b",
+        "(?i)\\bfake\\s+success\\b",
+        "(?i)\\bhardcoded\\s+success\\b",
+        "(?i)\\btest[-_ ]?only\\b",
+        "(?i)\\blegacy frontend\\b"
+      ],
+      "path_patterns": [
+        "(?i)vibe-coding-contamination-bench\\.ps1$",
+        "(?i)reward-signal-filter\\.agent\\.config\\.yaml$",
+        "(?i)agent-reliability-tests\\.agent\\.config\\.yaml$"
+      ],
+      "completion_requirement": "report_or_explicit_not_applicable"
+    },
+    {
+      "route_id": "required_tool_route_inspection",
+      "agent_name": "spark_tool_route_inspector",
+      "authority": "candidate_evidence_only",
+      "trigger_patterns": [
+        "(?i)required[-_ ]tool",
+        "(?i)required[-_ ]route",
+        "(?i)tool_usage_event",
+        "(?i)runtime_capability_receipt",
+        "(?i)loop breaker",
+        "(?i)required_subagent",
+        "(?i)subagent_report_missing"
+      ],
+      "path_patterns": [
+        "(?i)required-tool-routes\\.json$",
+        "(?i)tool-skill-subagent-mcp-usage\\.agent\\.config\\.yaml$",
+        "(?i)runtime_state\\.schema\\.json$",
+        "(?i)completion_gate\\.yaml$",
+        "(?i)codex-ssot-hook\\.ps1$"
+      ],
+      "completion_requirement": "report_or_explicit_not_applicable"
+    },
+    {
+      "route_id": "frontend_adoption_inspection",
+      "agent_name": "spark_frontend_inspector",
+      "authority": "candidate_evidence_only",
+      "trigger_patterns": [
+        "(?i)\\bfrontend[_ -]?adoption\\b",
+        "(?i)\\bvisual evidence required\\b",
+        "(?i)\\bscreenshot required\\b"
+      ],
+      "path_patterns": [
+        "(?i)(^|/)src/.*\\.(tsx|jsx|css|scss)$",
+        "(?i)(^|/)app/.*\\.(tsx|jsx|css|scss)$",
+        "(?i)(^|/)components/",
+        "(?i)vite\\.config\\.",
+        "(?i)playwright\\.config\\."
+      ],
+      "completion_requirement": "report_or_explicit_not_applicable"
+    },
+    {
+      "route_id": "backend_adoption_inspection",
+      "agent_name": "spark_backend_inspector",
+      "authority": "candidate_evidence_only",
+      "trigger_patterns": [
+        "(?i)\\bbackend[_ -]?adoption\\b",
+        "(?i)\\bapi contract required\\b",
+        "(?i)\\bdatabase migration required\\b"
+      ],
+      "path_patterns": [
+        "(?i)(^|/)server/",
+        "(?i)(^|/)api/",
+        "(?i)(^|/)db/",
+        "(?i)(^|/)migrations/",
+        "(?i)(^|/)prisma/",
+        "(?i)(^|/)src/.*\\.(py|rs|go|java|cs)$"
+      ],
+      "completion_requirement": "report_or_explicit_not_applicable"
+    },
+    {
+      "route_id": "ssot_contract_inspection",
+      "agent_name": "spark_contract_inspector",
+      "authority": "candidate_evidence_only",
+      "trigger_patterns": [
+        "(?i)\\bcontrol[-_ ]?plane\\b",
+        "(?i)\\bhook\\b",
+        "(?i)\\bpretooluse\\b",
+        "(?i)\\bposttooluse\\b",
+        "(?i)\\bstop\\b",
+        "(?i)\\bcompletion gate\\b",
+        "(?i)\\bruntime schema\\b",
+        "(?i)\\bcontract\\b",
+        "(?i)\\bHarness V2\\b",
+        "(?i)\\bsubagent inspection\\b"
+      ],
+      "path_patterns": [
+        "(?i)Settings/Dev_Codex_HOOKS/",
+        "(?i)Settings/Codex_App_DECLARATIVE/",
+        "(?i)Settings/Codex_App_RUNTIME/runtime_state\\.schema\\.json$",
+        "(?i)Maintenance/harness-v2/",
+        "(?i)(^|/)MANIFEST\\.json$",
+        "(?i)(^|/)ROOT_MAP\\.json$",
+        "(?i)(^|/)AGENTS?\\.md$",
+        "(?i)\\.codex/config\\.toml$",
+        "(?i)\\.codex/agents/"
+      ],
+      "completion_requirement": "report_or_explicit_not_applicable"
+    }
+  ],
+  "skill_routes": {
+    "schema_version": "skill_routes.v1",
+    "resolution_receipt": "Settings/Codex_App_RUNTIME/skill_resolution_receipt.json",
+    "usage_ledger": "Settings/Codex_App_RUNTIME/skill_usage_events.jsonl",
+    "upstream_source_url": "https://github.com/addyosmani/agent-skills.git",
+    "upstream_path": "C:\\Users\\anise\\.agents\\upstream\\agent-skills",
+    "installed_root": "C:\\Users\\anise\\.agents\\skills",
+    "installed_configured_available_is_not_evidence": true,
+    "need_levels": [
+      "REQUIRED",
+      "RECOMMENDED",
+      "OPTIONAL",
+      "NOT_APPLICABLE",
+      "UNAVAILABLE",
+      "UNKNOWN"
+    ],
+    "p0_skills": [
+      "using-agent-skills",
+      "spec-driven-development",
+      "planning-and-task-breakdown",
+      "incremental-implementation",
+      "test-driven-development",
+      "code-review-and-quality",
+      "code-simplification",
+      "debugging-and-error-recovery",
+      "security-and-hardening",
+      "documentation-and-adrs"
+    ],
+    "class_policy": {
+      "class0_class1": {
+        "default": "OPTIONAL_OR_RECOMMENDED"
+      },
+      "class2_required": [
+        "planning-and-task-breakdown",
+        "incremental-implementation",
+        "test-driven-development",
+        "code-review-and-quality"
+      ],
+      "class3_class4_control_plane_required": [
+        "spec-driven-development",
+        "planning-and-task-breakdown",
+        "security-and-hardening",
+        "code-review-and-quality",
+        "documentation-and-adrs"
+      ],
+      "class4_additional_required": [
+        "incremental-implementation",
+        "test-driven-development"
+      ]
+    },
+    "valid_completion_evidence": [
+      "skill_usage_event",
+      "explicit_unavailable",
+      "explicit_not_applicable"
+    ],
+    "reason_codes": {
+      "required_skill_not_used": "required_skill_not_used",
+      "skill_need_unknown": "skill_need_unknown",
+      "installed_skill_not_evidence": "installed_skill_not_evidence",
+      "skill_verification_missing": "skill_verification_missing",
+      "worker_required_skill_not_used": "worker_required_skill_not_used",
+      "skill_resolution_receipt_missing": "skill_resolution_receipt_missing"
+    },
+    "inventory": "Maintenance/agent-skills-integration/agent_skills_inventory.json",
+    "worker_propagation": {
+      "required_skills": "subagent_worker_jobs.required_skills",
+      "skill_usage_required": true,
+      "required_output": "required_outputs.skill_usage_summary"
+    },
+    "inspector_propagation": {
+      "skill_compliance_targets": "subagent_inspection_jobs.skill_compliance_targets",
+      "authority": "candidate_evidence_only"
+    }
+  }
+}

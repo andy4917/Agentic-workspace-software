@@ -1,0 +1,22 @@
+retry_invalidation_hook:
+  priority: 4
+  source: "Settings/Dev_Codex_HOOKS/retry_invalidation.*"
+  trigger_phrases:
+    - "다시"
+    - "틀렸어"
+    - "오답"
+    - "아님"
+    - "again"
+    - "retry"
+    - "wrong"
+    - "수정작업"
+    - "수정"
+  actions:
+    - previous_answer.status = "rejected_by_user"
+    - add_to_rejected_hypotheses
+    - preserve_active_instructions
+    - identify_failed_assumption
+    - forbid_same_answer
+    - forbid_same_logic_structure
+    - generate_new_candidate_only_if_rejected_failure_removed
+  fail_policy: "NO_OUTPUT_IF_SAME_LOGIC_REPEATS"

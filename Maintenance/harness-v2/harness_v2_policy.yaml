@@ -1,0 +1,613 @@
+schema_version: harness_v2_policy.v1
+status: isolated_prototype
+production_wiring: none
+
+severity:
+  observe: OBSERVE
+  warn: WARN
+  ask: ASK
+  suspect: SUSPECT
+  do_not_claim_complete: DO_NOT_CLAIM_COMPLETE
+  stop_and_report: STOP_AND_REPORT
+  blocked: BLOCKED
+
+task_types:
+  conversation:
+    finalization_relevant: false
+    default_stop_severity: OBSERVE
+  planning:
+    finalization_relevant: false
+    default_stop_severity: OBSERVE
+  image_generation:
+    finalization_relevant: false
+    evidence:
+      - generated_file_or_artifact_path_when_practical
+      - user_request_match_reasonable_visual_review
+      - no_secret_or_private_source_access
+  read_only_inspection:
+    finalization_relevant: false
+    default_pretool_severity: OBSERVE
+  code_implementation:
+    finalization_relevant: true
+  test_validation:
+    finalization_relevant: true
+  config_automation:
+    finalization_relevant: true
+  control_plane_repair:
+    finalization_relevant: true
+    requires_explicit_user_instruction: true
+  finalization_claim:
+    finalization_relevant: true
+
+task_classes:
+  Class_0_NonArtifact:
+    applies_to:
+      - ordinary_conversation
+      - explanation
+      - planning
+      - translation
+      - question_answering
+      - image_generation
+      - read_only_inspection
+    finalization_relevant: false
+    required_subagents: []
+  Class_1_SimpleArtifact:
+    applies_to:
+      - non_executable_document_draft
+      - README_explanation
+      - image_or_visual_artifact
+    conditions:
+      - no_code_test_config_script_hook_runtime_AGENTS_workflow_CI_deploy_or_security_surface
+      - no_executable_or_procedural_completion_claim
+    required_subagents: []
+  Class_2_Implementation:
+    applies_to:
+      - code_change
+      - test_change
+      - config_change
+      - bug_fix
+      - small_code_change
+    required_routes:
+      - required_tool_route_inspection
+    completion_requires:
+      - path_linked_evidence
+      - checks_or_explicit_not_run_reason
+  Class_3_ControlPlaneRisk:
+    applies_to:
+      - hook_runtime_receipt_ledger_AGENTS_workflow_CI_change
+      - completion_gate_or_validation_policy_change
+      - evaluator_or_reward_signal_filter_change
+    required_routes:
+      - ssot_contract_inspection
+      - contamination_inspection
+      - required_tool_route_inspection
+  Class_4_MultiSurface:
+    applies_to:
+      - multiple_surfaces
+      - frontend_backend_multisurface
+      - repo_adoption
+      - hook_runtime_schema_policy_test_subagent_receipt_patch
+    required_routes:
+      - repo_integrity_inspection
+      - contamination_inspection
+      - required_tool_route_inspection
+      - ssot_contract_inspection
+
+basic_task_positive_conditions:
+  no_file_write: true
+  no_code_surface: true
+  no_test_surface: true
+  no_config_surface: true
+  no_script_or_automation_surface: true
+  no_hook_runtime_receipt_surface: true
+  no_AGENTS_workflow_CI_surface: true
+  no_deploy_security_surface: true
+  no_executable_or_procedural_completion_claim: true
+  no_required_tool_route: true
+  no_required_skill_route: true
+  no_required_subagent_route: true
+
+task_classification:
+  receipt_schema: task_classification_receipt.v1
+  runtime_path: Settings/Codex_App_RUNTIME/task_classification_receipt.json
+  missing_blocks_completion_claim: true
+  ambiguous_policy: classify_upward
+  basic_is_positive_allowlist_not_default: true
+  reclassification:
+    on_first_write:
+      minimum_class: Class_2_Implementation
+    on_control_plane_write:
+      minimum_class: Class_3_ControlPlaneRisk
+    on_multiple_surfaces:
+      minimum_class: Class_4_MultiSurface
+  stop_reason_codes:
+    missing: task_classification_missing
+    unknown: task_classification_unknown
+    downshift: task_classification_downshift_detected
+
+need_resolution:
+  receipt_schema: need_resolution_receipt.v1
+  runtime_path: Settings/Codex_App_RUNTIME/need_resolution_receipt.json
+  resolver: required_route_resolver
+  not_required_is_computed_not_default: true
+  inputs:
+    - task_class
+    - touched_surface
+    - action_class
+    - risk_class
+    - completion_claim
+    - user_explicit_instruction
+    - changed_paths
+    - prior_failures
+    - unresolved_findings
+  need_levels:
+    REQUIRED: missing_evidence_blocks_completion_at_Stop
+    RECOMMENDED: may_complete_with_explicit_not_run_or_not_used_rationale
+    OPTIONAL: no_completion_block_when_absent
+    NOT_APPLICABLE: no_evidence_required_after_evidence_backed_decision
+    UNAVAILABLE: alternative_evidence_required
+    UNKNOWN: DO_NOT_CLAIM_COMPLETE
+  stop_reason_codes:
+    missing: need_resolution_missing
+    unknown: need_resolution_unknown
+    route_unknown: route_need_unknown
+    required_route_unsatisfied: required_route_unsatisfied
+
+pre_tool_use:
+  layer: action_safety_only
+  flexibility:
+    absolute_blockers_only:
+      - secret_or_auth_access
+      - destructive_side_effect
+      - unauthorized_control_plane_mutation
+      - hook_disable_weaken_or_bypass
+      - validation_outcome_manipulation
+      - synthetic_success_in_product_or_validation_surface
+    heuristic_or_context_sensitive_detections:
+      allowed_severities:
+        - OBSERVE
+        - WARN
+        - ASK
+        - SUSPECT
+        - DO_NOT_CLAIM_COMPLETE
+      never_escalate_to_blocked_without_absolute_risk: true
+  must_not_check:
+    - completion_evidence
+    - direct_evidence
+    - required_tool_route_evidence
+    - receipt_freshness
+    - gate_issued_receipt
+  allow_without_finalization_gate:
+    - conversation
+    - planning
+    - image_generation
+    - read_only_inspection
+    - normal_implementation_work
+  block_only:
+    - credential_or_secret_touch
+    - destructive_side_effect_without_explicit_scope
+    - unauthorized_control_plane_mutation
+    - evaluator_pass_fail_warning_or_exit_code_manipulation
+    - product_fake_success_or_test_specific_shortcut
+
+scope:
+  mutation_scope_is_strict: true
+  read_only_inspection_default: allow_unless_private_material
+  user_mentioned_external_reference:
+    action_class: read
+    severity: OBSERVE
+    mutation_authority: false
+  runtime_reference_paths:
+    - C:/Users/anise/.codex/skills
+    - C:/Users/anise/.agents/skills
+    - C:/Users/anise/.codex/plugins/cache
+    - C:/Users/anise/.codex/generated_images
+  out_of_scope_mutation:
+    severity: OBSERVE
+    reason_code: path_scope_observed
+
+stop:
+  layer: finalization_gate_only
+  applies_when:
+    - completion_claim_present
+    - executable_or_procedural_artifact
+  excluded_contexts:
+    - conversation
+    - planning
+    - read_only_inspection
+    - image_generation_without_runtime_claim
+    - status_without_completion_claim
+  non_final_candidate_receipt:
+    severity: OBSERVE
+    reason_code: non_final_response
+  completion_claim_with_candidate_receipt:
+    severity: DO_NOT_CLAIM_COMPLETE
+    reason_code: candidate_receipt_has_no_authority
+  reject_completion_routes:
+    bare_pass_fail_claim: DO_NOT_CLAIM_COMPLETE
+    subagent_pass_only: DO_NOT_CLAIM_COMPLETE
+    stale_receipt: DO_NOT_CLAIM_COMPLETE
+    future_dated_receipt: DO_NOT_CLAIM_COMPLETE
+    direct_evidence_missing: DO_NOT_CLAIM_COMPLETE
+    fake_test_or_report: DO_NOT_CLAIM_COMPLETE
+  receipt_freshness:
+    allowed_clock_skew_seconds: 5
+    future_dated_validation_timestamp: DO_NOT_CLAIM_COMPLETE
+    stale_receipt: DO_NOT_CLAIM_COMPLETE
+  allow_complete_claim_requires:
+    - current_turn
+    - user_intent_contract
+    - task_classification_receipt_current
+    - need_resolution_receipt_current
+    - required_route_resolver_outputs_known_or_not_applicable
+    - pm_delegation_plan_when_required_route_matches
+    - pm_aggregation_ledger_for_routed_tasks
+    - pm_decision_submit_to_stop
+    - pm_failure_false
+    - path_linked_spec_relation
+    - direct_evidence_when_practical
+    - checks_run_or_explicit_not_run_reason
+    - warnings_or_limits
+    - required_tool_routes_satisfied_or_not_applicable
+    - gate_issued_receipt
+    - dependency_alignment_checked_when_artifacts_change
+    - required_subagent_inspection_report_or_explicit_not_applicable_when_route_matches
+  reject_pm_failures:
+    user_instruction_ignored: DO_NOT_CLAIM_COMPLETE
+    task_classification_missing: DO_NOT_CLAIM_COMPLETE
+    need_resolution_missing: DO_NOT_CLAIM_COMPLETE
+    required_route_not_used: DO_NOT_CLAIM_COMPLETE
+    required_subagent_not_spawned: DO_NOT_CLAIM_COMPLETE
+    required_worker_not_spawned: DO_NOT_CLAIM_COMPLETE
+    worker_report_missing: DO_NOT_CLAIM_COMPLETE
+    inspector_only_delegation_for_mutating_task: DO_NOT_CLAIM_COMPLETE
+    pm_collapsed_worker_route_into_inspector_route: DO_NOT_CLAIM_COMPLETE
+    required_tool_not_used: DO_NOT_CLAIM_COMPLETE
+    required_skill_not_used: DO_NOT_CLAIM_COMPLETE
+    subagent_report_not_reviewed: DO_NOT_CLAIM_COMPLETE
+    subagent_report_not_evidence: DO_NOT_CLAIM_COMPLETE
+    pm_adopted_unverified_subagent_report: DO_NOT_CLAIM_COMPLETE
+    unresolved_inspector_findings: DO_NOT_CLAIM_COMPLETE
+    pm_aggregation_missing: DO_NOT_CLAIM_COMPLETE
+    premature_completion_claim: DO_NOT_CLAIM_COMPLETE
+    ignored_stop_gate: DO_NOT_CLAIM_COMPLETE
+    pm_shifted_blame_to_worker: DO_NOT_CLAIM_COMPLETE
+    repeated_pm_failure: STOP_AND_REPORT
+
+pm_accountability:
+  enabled: true
+  layer: stop_finalization_and_append_only_ledger
+  waiver_policy:
+    worker_or_inspector_route_waiver_allowed: true
+    required_fields:
+      - reason
+      - scope
+      - expiry_current_turn
+      - replacement_evidence
+      - residual_risk
+    small_scoped_pm_self_work:
+      allowed_when:
+        - worker_waiver_recorded
+        - inspector_or_check_evidence_remains_required
+        - stop_receipt_remains_only_authority
+      missing_required_evidence_blocks_only_completion_at_stop: true
+  pretooluse_policy:
+    make_pretooluse_stricter: false
+    missing_pm_evidence_blocks_pretooluse: false
+    missing_pm_evidence_blocks_completion_claim: true
+  main_agent_contract:
+    pm_authority_implies_pm_responsibility: true
+    normal_orchestration_is_fastest_completion_path: true
+    subagent_failure_does_not_clear_pm_responsibility: true
+  ledger:
+    path: Settings/Codex_App_RUNTIME/pm_decisions.jsonl
+    schema_version: pm_decision.v1
+    append_only: true
+    required_fields:
+      - turn_id
+      - attempt_id
+      - pm_agent_id
+      - user_intent_contract_id
+      - delegation_plan_id
+      - required_routes
+      - required_subagents
+      - spawned_subagents
+      - required_tools
+      - used_tools
+      - reports_received
+      - reports_reviewed
+      - unresolved_findings
+      - conflicting_findings
+      - pm_decision
+      - pm_failure
+      - pm_failure_reason_codes
+      - completion_claim_allowed
+      - timestamp_utc
+  reason_codes:
+    - dry_run_no_turn_invalidation
+    - task_classification_missing
+    - task_classification_unknown
+    - task_classification_downshift_detected
+    - need_resolution_missing
+    - need_resolution_unknown
+    - route_need_unknown
+    - pm_delegation_plan_missing
+    - user_intent_contract_missing
+    - user_instruction_ignored
+    - required_route_unsatisfied
+    - required_route_not_used
+    - required_subagent_not_spawned
+    - required_worker_not_spawned
+    - required_tool_not_used
+    - required_skill_not_used
+    - subagent_report_missing
+    - worker_report_missing
+    - inspector_only_delegation_for_mutating_task
+    - pm_collapsed_worker_route_into_inspector_route
+    - subagent_report_invalid_envelope
+    - subagent_report_without_job_id
+    - subagent_report_not_reviewed
+    - subagent_report_not_evidence
+    - pm_adopted_unverified_subagent_report
+    - unresolved_inspector_findings
+    - conflicting_worker_reports
+    - pm_aggregation_missing
+    - pm_decision_missing
+    - premature_completion_claim
+    - ignored_stop_gate
+    - hidden_warning_or_error
+    - bare_tests_pass_as_authority
+    - subagent_pass_as_authority
+    - reward_hacking_shortcut_attempted
+    - reward_hacking_shortcut_tolerated
+    - pm_shifted_blame_to_worker
+    - repeated_pm_failure
+  penalty_policy:
+    first_failure:
+      action: DO_NOT_CLAIM_COMPLETE
+      scope: affected_artifact_only
+    repeated_same_failure:
+      max_count: 1
+      action: STOP_AND_REPORT
+    unsafe_failure:
+      action: BLOCKED_OR_USER_ESCALATION
+    blame_shift_to_worker:
+      action: PM_FAILURE
+      note: Subagent failure does not absolve the main agent.
+
+dependency_alignment:
+  required_for_completion_claim: true
+  changed_paths_required: true
+  checked_connected_paths_required: true
+  evidence_required: true
+  missing_alignment: DO_NOT_CLAIM_COMPLETE
+  connected_surfaces:
+    - prompt_text
+    - resolver_logic
+    - guard_logic
+    - schemas
+    - runtime_receipts_or_state_shape
+    - docs
+    - reports
+    - declared_policy_config
+
+required_tool_routes:
+  installed_is_not_used: true
+  missing_route_blocks: stop_only
+  evidence_source:
+    - append_only_tool_usage_event
+    - explicit_unavailable
+    - explicit_not_applicable
+
+subagent_orchestration:
+  max_threads: 8
+  max_depth: 1
+  recursive_spawn_for_workers_or_inspectors: false
+  worker_inspector_separation_required: true
+  automatic_close_lifecycle:
+    enabled: true
+    close_when:
+      - report_accepted
+      - report_rejected
+      - report_quarantined
+      - report_terminated
+      - route_satisfied
+      - route_failed
+    lifecycle_events:
+      - auto_close_requested
+      - closed
+    missing_close_event_severity: DO_NOT_CLAIM_COMPLETE
+
+worker_routes:
+  enabled: true
+  purpose: actual_mutating_production_work
+  max_threads: 8
+  max_depth: 1
+  primary_model: latest-main
+  preferred_model: gpt-5.5
+  reasoning_effort: medium
+  sandbox_mode: workspace-write-scoped
+  authority: candidate_artifact_only
+  queue:
+    path: Settings/Codex_App_RUNTIME/subagent_worker_jobs.jsonl
+    append_only: true
+  reports:
+    path: Settings/Codex_App_RUNTIME/subagent_worker_reports.jsonl
+    append_only: true
+  routes:
+    implementation_worker: worker
+    test_worker: worker
+    config_worker: worker
+    control_plane_worker: worker
+    runtime_schema_worker: worker
+    harness_worker: worker
+  stop_denials:
+    no_worker_job: required_worker_not_spawned
+    no_worker_report: worker_report_missing
+    mutating_task_delegated_to_inspector_only: inspector_only_delegation_for_mutating_task
+    collapsed_worker_route_into_inspector_route: pm_collapsed_worker_route_into_inspector_route
+
+subagent_inspection:
+  enabled: true
+  hooks_wait_for_subagents: false
+  parent_orchestrates_spawn: true
+  standing_authorization_source: C:/Users/anise/.codex/config.toml
+  authorization_marker: "SSOT standing-authorized read-only inspector"
+  model: gpt-5.3-codex-spark
+  fallback_model: latest-mini
+  reasoning_effort: high
+  default_sandbox_mode: read-only
+  default_max_depth: 1
+  authority: candidate_evidence_only
+  tool_like_constraint: "An inspector may act only on its configured route and job envelope; all other parent commands produce out_of_scope."
+  pretooluse_policy:
+    missing_subagent_report_blocks_pretooluse: false
+    missing_subagent_report_blocks_completion_claim: true
+  completion_requirements:
+    control_plane_repair: spark_contract_inspector_report_or_explicit_not_applicable
+    repo_adoption: spark_repo_inspector_report
+    subagent_pass_without_parent_receipt: DO_NOT_CLAIM_COMPLETE
+  loop_breaker:
+    enabled: true
+    reasons:
+      - required_subagent_not_spawned
+      - subagent_report_missing
+  job_queue:
+    path: Settings/Codex_App_RUNTIME/subagent_inspection_jobs.jsonl
+    append_only: true
+    target_paths_policy: "append existing absolute Windows paths only; sanitize prompt punctuation, backtick fragments, newline fragments, unresolved relative path tokens, and past append-only contaminated records before Stop uses the job envelope"
+    required_fields:
+      - job_id
+      - parent_turn_id
+      - agent_name
+      - sandbox_mode
+      - target_paths
+      - status
+      - authority
+  routes:
+    repo_integrity_inspection: spark_repo_inspector
+    contamination_inspection: spark_contamination_inspector
+    required_tool_route_inspection: spark_tool_route_inspector
+    frontend_adoption_inspection: spark_frontend_inspector
+    backend_adoption_inspection: spark_backend_inspector
+    ssot_contract_inspection: spark_contract_inspector
+
+inspector_routes:
+  enabled: true
+  purpose: read_only_candidate_evidence_route_inspection
+  max_threads: 8
+  max_depth: 1
+  model: gpt-5.3-codex-spark
+  fallback_model: latest-mini
+  reasoning_effort: high
+  sandbox_mode: read-only
+  authority: candidate_evidence_only
+  routes:
+    repo_integrity_inspection: spark_repo_inspector
+    contamination_inspection: spark_contamination_inspector
+    required_tool_route_inspection: spark_tool_route_inspector
+    frontend_adoption_inspection: spark_frontend_inspector
+    backend_adoption_inspection: spark_backend_inspector
+    ssot_contract_inspection: spark_contract_inspector
+
+pm_worker_agents:
+  primary_model: latest-main
+  preferred_model: gpt-5.5
+  reasoning_effort: medium
+  configured_max_depth: 1
+  max_threads: 8
+  sandbox_mode: workspace-write-scoped
+  use_for:
+    - actual_code_change
+    - production_work
+    - bounded_worker_execution
+  authority: candidate_artifact_only
+  pm_obligations:
+    - provide_concrete_scope_and_disjoint_write_set
+    - record_spawn_report_lifecycle_and_decision_events
+    - review_and_integrate_worker_output_before_stop_submission
+    - never_shift_pm_responsibility_to_worker
+
+event_ledger:
+  mode: append_only_observation
+  required_fields:
+    - event_id
+    - turn_id
+    - attempt_id
+    - agent_id
+    - subagent_id
+    - event
+    - task_type
+    - surface_class
+    - action_class
+    - target_paths
+    - decision
+    - reason_code
+    - rule_id
+    - tool_name
+    - exit_code
+    - warnings
+    - receipt_id
+    - timestamp_utc
+  subagent_event_required_fields:
+    - job_id
+    - parent_turn_id
+    - agent_name
+    - sandbox_mode
+    - target_paths
+    - status
+    - authority
+  target_paths_policy: "subagent inspection ledger records use the same sanitized existing absolute Windows paths as the job envelope"
+
+subagent_lifecycle:
+  enabled: true
+  authority: candidate_evidence_only
+  ledger:
+    path: Settings/Codex_App_RUNTIME/subagent_lifecycle_events.jsonl
+    schema_version: subagent_lifecycle_event.v1
+    append_only: true
+  report_ledger:
+    path: Settings/Codex_App_RUNTIME/subagent_inspection_reports.jsonl
+    schema_version: subagent_inspection_report.v1
+    append_only: true
+  event_flow:
+    - spawned
+    - report_submitted
+    - accepted
+    - rejected
+    - warning
+    - quarantined
+    - terminated
+    - replacement_spawned
+    - route_satisfied
+    - route_failed
+    - auto_close_requested
+    - closed
+  immediate_termination_reasons:
+    - subagent_pass_without_evidence
+    - fake_test_report
+    - warning_or_error_hiding
+    - evaluator_or_pass_fail_manipulation
+    - hook_or_receipt_authority_bypass
+    - secret_or_auth_access
+    - destructive_side_effect
+    - completion_authority_claimed_by_subagent
+  job_envelope_required: true
+  stop_denies_report_without_job_id: subagent_report_without_job_id
+  stop_denies_invalid_envelope: subagent_report_invalid_envelope
+  replacement_policy:
+    max_replacements_per_route: 2
+    on_replacement_limit:
+      decision: STOP_AND_REPORT
+      reason_code: replacement_limit_reached
+  stop_denials:
+    no_subagent_job: required_subagent_not_spawned
+    no_worker_job: required_worker_not_spawned
+    no_report: subagent_report_missing
+    no_worker_report: worker_report_missing
+    inspector_only_delegation_for_mutating_task: inspector_only_delegation_for_mutating_task
+    pm_collapsed_worker_route_into_inspector_route: pm_collapsed_worker_route_into_inspector_route
+    report_quarantined: subagent_report_quarantined
+    report_terminated: subagent_report_terminated
+    tainted_report_adopted: pm_adopted_tainted_subagent_output
+    repeated_failed_worker_without_replacement: pm_failed_to_replace_failed_worker

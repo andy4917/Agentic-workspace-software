@@ -1,0 +1,28 @@
+# Runtime logs and append-only ledgers
+Maintenance/hook_invocations.jsonl
+Settings/Codex_App_RUNTIME/*.jsonl
+Settings/Codex_App_RUNTIME/*.json
+!Settings/Codex_App_RUNTIME/runtime_state.schema.json
+
+# Local scratch and caches
+.tmp/
+tmp_probe.txt
+*.tmp
+*.log
+
+# Tooling dependencies and generated caches
+node_modules/
+Maintenance/patch-bench/tooling/node_modules/
+Maintenance/**/node_modules/
+Maintenance/**/.cache/
+Maintenance/**/coverage/
+Maintenance/patch-bench/reports/
+
+# Large local upstream mirrors used as reference material
+Maintenance/upstream/
+
+# OS/editor noise
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/

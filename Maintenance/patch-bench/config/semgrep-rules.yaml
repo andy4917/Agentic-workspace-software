@@ -1,0 +1,16 @@
+rules:
+  - id: patch-bench.fake-frontend-business-data
+    languages: [generic]
+    severity: ERROR
+    message: Fake frontend/backend business data must not be used as product behavior.
+    pattern-regex: "(fake|demo|placeholder|dummy).{0,100}(guest|room|pms|reservation|booking|occupancy|revenue|customer|branch|endpoint|api|database|db|seed|fixture)"
+  - id: patch-bench.backend-test-static-success
+    languages: [generic]
+    severity: ERROR
+    message: Test-specific static success is not implementation evidence.
+    pattern-regex: "(if|switch).{0,120}(test|fixture|mock|env|node_env|pytest|vitest|jest).{0,120}(return\\s+true|return\\s+\\[\\]|ok\\s*:\\s*true|success\\s*:\\s*true)"
+  - id: patch-bench.hidden-error-success
+    languages: [generic]
+    severity: ERROR
+    message: Hidden warnings, errors, or non-zero exits cannot support completion.
+    pattern-regex: "(2>\\$null|2>nul|stderr.*null|erroraction\\s+silentlycontinue).{0,120}(claim|complete|verified|pass|success|exit\\s+0)"
