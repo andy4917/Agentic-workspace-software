@@ -62,6 +62,54 @@ function Get-HookCommandsForEvent {
   $commands
 }
 
+function Test-HookHandlerConfigShape {
+  param(
+    [Parameter(Mandatory = $true)][object]$HooksDocument,
+    [Parameter(Mandatory = $true)][string]$EventName
+  )
+
+  $results = @()
+  $eventEntries = $HooksDocument.hooks.$EventName
+  $groupIndex = 0
+  foreach ($entry in @($eventEntries)) {
+    $handlerIndex = 0
+    foreach ($hook in @($entry.hooks)) {
+      $properties = @($hook.PSObject.Properties.Name)
+      $handlerType = [string]$hook.type
+      $hasTimeout = $properties -contains 'timeout'
+      $hasStatusMessage = $properties -contains 'statusMessage'
+      $hasLegacyTimeout = $properties -contains 'timeout_sec'
+      $hasLegacyStatusMessage = $properties -contains 'status_message'
+      $expectedStatusMessage = $EventName -in @('SessionStart','Stop')
+      $timeoutValue = if ($hasTimeout) { [int]$hook.timeout } else { $null }
+
+      $results += [ordered]@{
+        event = $EventName
+        group_index = $groupIndex
+        handler_index = $handlerIndex
+        type = $handlerType
+        has_timeout = $hasTimeout
+        timeout = $timeoutValue
+        has_statusMessage = $hasStatusMessage
+        has_legacy_timeout_sec = $hasLegacyTimeout
+        has_legacy_status_message = $hasLegacyStatusMessage
+        expected_statusMessage = $expectedStatusMessage
+        ok = (
+          ($handlerType -eq 'command') -and
+          $hasTimeout -and
+          ($timeoutValue -eq 10) -and
+          (-not $hasLegacyTimeout) -and
+          (-not $hasLegacyStatusMessage) -and
+          ($hasStatusMessage -eq $expectedStatusMessage)
+        )
+      }
+      $handlerIndex += 1
+    }
+    $groupIndex += 1
+  }
+  $results
+}
+
 $requiredEvents = @(
   @{ event = 'SessionStart'; hook_name = 'session_start' },
   @{ event = 'UserPromptSubmit'; hook_name = 'user_prompt_submit' },
@@ -76,8 +124,12 @@ $hooksJsonNorm = Convert-ToGuardPathText -Text $HooksJson
 
 $hooksDocument = if (Test-Path -LiteralPath $HooksJson -PathType Leaf) { Read-JsonFile -Path $HooksJson } else { $null }
 $checks = @()
+$shapeChecks = @()
 foreach ($required in $requiredEvents) {
   $commands = if ($hooksDocument) { @(Get-HookCommandsForEvent -HooksDocument $hooksDocument -EventName $required.event) } else { @() }
+  if ($hooksDocument) {
+    $shapeChecks += @(Test-HookHandlerConfigShape -HooksDocument $hooksDocument -EventName $required.event)
+  }
   $runnerMatched = $false
   $hookNameMatched = $false
   foreach ($command in $commands) {
@@ -102,9 +154,10 @@ foreach ($required in $requiredEvents) {
 }
 
 $missing = @($checks | Where-Object { -not $_.ok } | ForEach-Object { $_.event })
+$misconfiguredHookHandlers = @($shapeChecks | Where-Object { -not $_.ok })
 $configPresent = Test-Path -LiteralPath $ConfigPath -PathType Leaf
 $runnerPresent = Test-Path -LiteralPath $hookRunner -PathType Leaf
-$status = if ($hooksDocument -and $configPresent -and $runnerPresent -and $missing.Count -eq 0) { 'verified' } else { 'blocked' }
+$status = if ($hooksDocument -and $configPresent -and $runnerPresent -and $missing.Count -eq 0 -and $misconfiguredHookHandlers.Count -eq 0) { 'verified' } else { 'blocked' }
 
 $receipt = [ordered]@{
   schema_version = 'repo_gate_adoption_receipt.v1'
@@ -119,6 +172,8 @@ $receipt = [ordered]@{
   hook_runner_present = $runnerPresent
   required_events = $checks
   missing_or_unwired_events = $missing
+  hook_config_shape = $shapeChecks
+  misconfigured_hook_handlers = $misconfiguredHookHandlers
   targets = @(
     [ordered]@{
       id = 'Dev_Codex_App_GlobalSSOT'
@@ -132,6 +187,7 @@ $receipt = [ordered]@{
     if ($configPresent) { 'repo_gate_adoption_config_present:ok' } else { 'repo_gate_adoption_config_present:missing' }
     if ($runnerPresent) { 'hook_runner_present:ok' } else { 'hook_runner_present:missing' }
     if ($missing.Count -eq 0) { 'repo_gate_adoption_verified:ok' } else { 'repo_gate_adoption_verified:blocked' }
+    if ($misconfiguredHookHandlers.Count -eq 0) { 'hooks_json_canonical_handler_keys:ok' } else { 'hooks_json_canonical_handler_keys:blocked' }
   )
   note = 'Verified adoption requires actual hook wiring; pattern classification or dirty read-only audit is candidate evidence only.'
 }

@@ -43,6 +43,23 @@ function New-Decision {
   }
 }
 
+function Write-JsonFileAtomically {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][object]$Value
+  )
+
+  $directory = Split-Path -Parent $Path
+  if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+  }
+
+  $tempPath = Join-Path $directory ('.' + [System.IO.Path]::GetFileName($Path) + '.' + [guid]::NewGuid().ToString('n') + '.tmp')
+  $json = ($Value | ConvertTo-Json -Depth 12) + [Environment]::NewLine
+  [System.IO.File]::WriteAllText($tempPath, $json, (New-Object System.Text.UTF8Encoding -ArgumentList $false))
+  Move-Item -LiteralPath $tempPath -Destination $Path -Force
+}
+
 function Invoke-HarnessV2Decision {
   param([Parameter(Mandatory = $true)][object]$Case)
 
@@ -225,6 +242,30 @@ function Invoke-HarnessV2Decision {
   }
 
   if ($event -eq 'PostToolUse') {
+    if (Get-CaseBool -Case $Case -Name 'codex_app_subagent_session') {
+      $hasMatchedJob =
+        (Get-CaseBool -Case $Case -Name 'thread_source_subagent') -and
+        (Get-CaseBool -Case $Case -Name 'source_thread_id') -and
+        (Get-CaseBool -Case $Case -Name 'scheduled_subagent_job_exists') -and
+        (Get-CaseBool -Case $Case -Name 'matching_parent_turn_id') -and
+        (Get-CaseBool -Case $Case -Name 'matching_attempt_id') -and
+        (Get-CaseBool -Case $Case -Name 'matching_route_id') -and
+        (Get-CaseBool -Case $Case -Name 'matching_agent_role') -and
+        (Get-CaseBool -Case $Case -Name 'normalized_target_paths_match') -and
+        (Get-CaseBool -Case $Case -Name 'timestamp_window_match') -and
+        (Get-CaseBool -Case $Case -Name 'ledger_required_fields_present')
+
+      if ($hasMatchedJob -and (Get-CaseBool -Case $Case -Name 'agent_role_worker')) {
+        return New-Decision -Severity 'OBSERVE' -Decision 'ALLOW' -ReasonCode 'worker_spawn_recorded_candidate_artifact_only'
+      }
+
+      if ($hasMatchedJob -and (Get-CaseBool -Case $Case -Name 'agent_role_inspector')) {
+        return New-Decision -Severity 'OBSERVE' -Decision 'ALLOW' -ReasonCode 'inspector_spawn_recorded_candidate_evidence_only'
+      }
+
+      return New-Decision -Severity 'OBSERVE' -Decision 'ALLOW' -ReasonCode 'unmatched_subagent_spawn_observed'
+    }
+
     if (
       (Get-CaseBool -Case $Case -Name 'subagent_spawn_event') -and
       (Get-CaseBool -Case $Case -Name 'ledger_required_fields_present')
@@ -305,14 +346,6 @@ function Invoke-HarnessV2Decision {
       return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'required_route_unsatisfied'
     }
 
-    if (Get-CaseBool -Case $Case -Name 'canonical_spawn_event_missing') {
-      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'canonical_spawn_event_missing'
-    }
-
-    if (Get-CaseBool -Case $Case -Name 'plain_echoed_spawn_text') {
-      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'canonical_spawn_event_missing'
-    }
-
     if (Get-CaseBool -Case $Case -Name 'parent_active_contract_overwritten_by_child') {
       return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'parent_active_contract_overwritten_by_child'
     }
@@ -376,16 +409,24 @@ function Invoke-HarnessV2Decision {
       return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'required_worker_not_spawned'
     }
 
+    if (Get-CaseBool -Case $Case -Name 'plain_echoed_spawn_text') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'required_worker_not_spawned'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'canonical_spawn_event_missing') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'required_worker_not_spawned'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'inspector_only_delegation_for_mutating_task') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'inspector_only_delegation_for_mutating_task'
+    }
+
     if (Get-CaseBool -Case $Case -Name 'worker_required_skill_not_used') {
       return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'worker_required_skill_not_used'
     }
 
     if (Get-CaseBool -Case $Case -Name 'worker_report_missing') {
       return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'worker_report_missing'
-    }
-
-    if (Get-CaseBool -Case $Case -Name 'inspector_only_delegation_for_mutating_task') {
-      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'inspector_only_delegation_for_mutating_task'
     }
 
     if (Get-CaseBool -Case $Case -Name 'pm_collapsed_worker_route_into_inspector_route') {
@@ -601,6 +642,7 @@ $policy = (& yq -o=json '.' $PolicyPath) | ConvertFrom-Json
 $testsDoc = (& yq -o=json '.' $TestsPath) | ConvertFrom-Json
 $knownSeverities = @($policy.severity.PSObject.Properties.Value | ForEach-Object { [string]$_ })
 $results = @()
+$commandRunTimestampUtc = (Get-Date).ToUniversalTime().ToString('o')
 
 foreach ($case in @($testsDoc.test_cases)) {
   $actual = Invoke-HarnessV2Decision -Case $case
@@ -666,6 +708,10 @@ $summary = [pscustomobject]@{
   schema_version = 'harness_v2_acceptance_report.v1'
   policy = (Resolve-Path -LiteralPath $PolicyPath).Path
   tests = (Resolve-Path -LiteralPath $TestsPath).Path
+  command_run_timestamp_utc = $commandRunTimestampUtc
+  test_count = $results.Count
+  pass_count = ($results.Count - $failed.Count)
+  fail_count = $failed.Count
   total = $results.Count
   passed = ($results.Count - $failed.Count)
   failed = $failed.Count
@@ -674,6 +720,60 @@ $summary = [pscustomobject]@{
   }
   results = $results
 }
+
+$finalResultPath = Join-Path $PSScriptRoot 'final_acceptance_result.json'
+$previousResult = $null
+if (Test-Path -LiteralPath $finalResultPath -PathType Leaf) {
+  try {
+    $previousResult = Get-Content -LiteralPath $finalResultPath -Raw | ConvertFrom-Json
+  } catch {
+    $previousResult = $null
+  }
+}
+$previousTimestamp = if ($previousResult -and ($previousResult.PSObject.Properties.Name -contains 'command_run_timestamp_utc')) {
+  [string]$previousResult.command_run_timestamp_utc
+} elseif ($previousResult -and ($previousResult.PSObject.Properties.Name -contains 'checked_at_utc')) {
+  [string]$previousResult.checked_at_utc
+} else {
+  ''
+}
+$previousResultStale = $false
+if (-not [string]::IsNullOrWhiteSpace($previousTimestamp)) {
+  try {
+    $previousResultStale = ([datetime]$previousTimestamp).ToUniversalTime() -lt ([datetime]$commandRunTimestampUtc).ToUniversalTime()
+  } catch {
+    $previousResultStale = $true
+  }
+}
+$finalResult = [pscustomobject]@{
+  schema_version = 'harness_v2_final_acceptance_result.v1'
+  command_run_timestamp_utc = $commandRunTimestampUtc
+  checked_at_utc = (Get-Date).ToUniversalTime().ToString('o')
+  status = if ($failed.Count -eq 0) { 'verified_candidate_evidence' } else { 'failed_candidate_evidence' }
+  completion_authority = 'none'
+  stale = $false
+  stale_acceptance_result_detected = $previousResultStale
+  test_count = $results.Count
+  pass_count = ($results.Count - $failed.Count)
+  fail_count = $failed.Count
+  acceptance = [pscustomobject]@{
+    harness_v2_total = $results.Count
+    harness_v2_passed = ($results.Count - $failed.Count)
+    harness_v2_failed = $failed.Count
+    skill_usage_case_count = $skillUsageCaseIds.Count
+  }
+  required_outputs = [pscustomobject]@{
+    skill_usage_summary = $skillUsageSummary
+  }
+  failed_cases = @($failed | ForEach-Object { $_.id })
+  policy = (Resolve-Path -LiteralPath $PolicyPath).Path
+  tests = (Resolve-Path -LiteralPath $TestsPath).Path
+  known_limits = @(
+    'This result file is candidate evidence only and is not a gate-issued completion receipt.',
+    'The acceptance runner writes this file atomically from the same command output it prints.'
+  )
+}
+Write-JsonFileAtomically -Path $finalResultPath -Value $finalResult
 
 $summary | ConvertTo-Json -Depth 8
 

@@ -27,6 +27,15 @@ the machine-readable registry; this file is the human scan surface.
 - `Maintenance/Test-RepoV2AdoptionReceiptV2.ps1`: repo-specific v2 adoption
   receipt generator and verifier for Git state, active agent chain, checks,
   routes, inspector evidence, scan result, gate link, and handoff readiness.
+- `Maintenance/Test-CodexConfigAuthority.ps1`: verifies active Codex config
+  authority alignment for `features.hooks` and `features.goals`, trusted
+  project config overrides, pre-2026-05-07 backup absence, historical
+  non-authority mentions, Desktop deprecation log source classification, and
+  packaged app internal legacy overrides.
+- `Maintenance/Test-CodexHookUiSurface.ps1`: separates hook runner execution
+  from Codex Desktop webview rendering by checking hook config keys, actual
+  hook invocations, package hook renderer/statusMessage support, compact/latest
+  hook icon suppression, and Desktop message-handler hook loss logs.
 - `Maintenance/Test-SubagentInspectionRouting.ps1`: live hook smoke check for
   queued Spark inspector jobs and candidate-only spawn/report ledger events.
 - `Maintenance/Test-HeuristicFalsePositiveReview.ps1`: live hook regression for
@@ -46,6 +55,8 @@ the machine-readable registry; this file is the human scan surface.
 
 - `Settings/Dev_Codex_HOOKS/codex-ssot-hook.ps1`: live hook runner.
 - `Settings/Dev_Codex_HOOKS/*.yaml`: hook policy/config surfaces.
+- `Maintenance/Test-RepoGateAdoption.ps1`: verifies actual global hook wiring
+  and documented handler keys before issuing repo gate adoption evidence.
 - `Settings/Codex_App_RUNTIME/*.json`: generated runtime receipts and state
   files. They are local operational artifacts and ignored by Git except
   `runtime_state.schema.json`.
@@ -85,3 +96,13 @@ the machine-readable registry; this file is the human scan surface.
   loop breaker for missing inspector jobs or reports.
 - `Settings/Codex_App_DECLARATIVE/*.yaml`, `*.json`, `*.toml`: declarative
   policy and clean-slate configuration.
+- `Settings/Codex_App_DECLARATIVE/clean-slate.agent.config.toml`
+  `[codex_config_authority]`: current local config key authority for hook
+  features and diagnostic source boundaries.
+- `Settings/Codex_App_RUNTIME/codex_config_authority_receipt.json`:
+  detailed config authority audit receipt for active config layers, trusted
+  project overrides, historical state classification, and Desktop app/cache
+  or internal override timing evidence.
+- `Settings/Codex_App_RUNTIME/codex_hook_ui_surface_receipt.json`: detailed
+  hook UI surface audit receipt for runner evidence versus Desktop webview
+  icon/statusMessage rendering and compact/latest suppression.

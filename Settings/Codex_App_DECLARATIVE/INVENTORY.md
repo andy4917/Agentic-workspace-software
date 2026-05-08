@@ -1,6 +1,6 @@
 # Inventory
 
-- `clean-slate.agent.config.toml`: clean-slate machine-readable policy layer.
+- `clean-slate.agent.config.toml`: clean-slate machine-readable policy layer, including current Codex config authority for `features.hooks` and `features.goals`, deprecated `features.codex_hooks` and non-feature `goal_command_enabled` handling, Desktop hook UI surface classification, session-start live status, and runtime audit receipt policy.
 - `workflow-orchestration.agent.config.yaml`: frame, guard, plan, execute, evidence, review, report flow.
 - `state-machine.agent.config.yaml`: completion states and transition rules.
 - `retry-recovery-policy.agent.config.yaml`: retry, recovery, no-fallback policy.

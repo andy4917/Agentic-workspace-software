@@ -40,7 +40,17 @@
     {
       "path": "Maintenance/Test-RepoGateAdoption.ps1",
       "type": "validation_script",
-      "purpose": "Verifies actual Codex hook wiring for repo/session gate adoption and writes repo_gate_adoption_receipt.json."
+      "purpose": "Verifies actual Codex hook wiring and documented hook handler keys for repo/session gate adoption, then writes repo_gate_adoption_receipt.json."
+    },
+    {
+      "path": "Maintenance/Test-CodexConfigAuthority.ps1",
+      "type": "validation_script",
+      "purpose": "Verifies Codex config authority alignment: active user config uses features.hooks and features.goals, trusted project config layers do not reintroduce features.codex_hooks or goal_command_enabled, pre-2026-05-07 backup files are absent, historical state is not treated as config authority, and Desktop package/log cache paths are reported separately."
+    },
+    {
+      "path": "Maintenance/Test-CodexHookUiSurface.ps1",
+      "type": "validation_script",
+      "purpose": "Verifies Codex hook UI surface health by separating hook runner execution, hooks.json handler keys, Desktop webview hook renderer support, compact/latest hook icon suppression, message-handler hook loss logs, and target-session hook persistence limits."
     },
     {
       "path": "Maintenance/Test-RepoV2AdoptionReceiptV2.ps1",
@@ -345,7 +355,7 @@
     {
       "path": "Settings/Codex_App_RUNTIME/runtime_capability_receipt.json",
       "type": "runtime_state",
-      "purpose": "Runtime capability receipt generated at SessionStart or UserPromptSubmit with loaded AGENTS.md sources, active hooks, available MCP servers and skills, configured subagents, cwd, project root, and trust state."
+      "purpose": "Runtime capability receipt generated at SessionStart or UserPromptSubmit with loaded AGENTS.md sources, active hooks, Codex config authority quick status, available MCP servers and skills, configured subagents, cwd, project root, and trust state."
     },
     {
       "path": "Settings/Codex_App_RUNTIME/tool_usage_events.jsonl",
@@ -406,6 +416,16 @@
       "path": "Settings/Codex_App_RUNTIME/repo_gate_adoption_receipt.json",
       "type": "runtime_state",
       "purpose": "Runtime receipt proving actual live hook wiring for repo/session gate adoption."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/codex_config_authority_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Runtime audit receipt comparing active Codex config authority, trusted project overrides, backup absence, app global state legacy mentions, Desktop package legacy overrides, and Desktop deprecation log source classification."
+    },
+    {
+      "path": "Settings/Codex_App_RUNTIME/codex_hook_ui_surface_receipt.json",
+      "type": "runtime_state",
+      "purpose": "Runtime audit receipt separating Codex hook execution evidence from Desktop webview hook icon/statusMessage rendering and compact/latest summary suppression."
     },
     {
       "path": "Settings/Codex_App_RUNTIME/repo_v2_adoption_receipt.json",

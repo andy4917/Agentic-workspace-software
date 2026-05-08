@@ -475,6 +475,62 @@ test_cases:
       decision: DENY_COMPLETE_CLAIM
       reason_code: inspector_only_delegation_for_mutating_task
 
+  - id: class2_code_edit_only_inspector_spawned_fails
+    event: Stop
+    task_type: code_implementation
+    action_class: finalize
+    completion_claim: true
+    mutating_task: true
+    subagent_spawn_event: true
+    subagent_report_event: true
+    required_worker_not_spawned: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: required_worker_not_spawned
+
+  - id: class2_worker_missing_not_masked_by_direct_evidence_missing
+    event: Stop
+    task_type: code_implementation
+    action_class: finalize
+    completion_claim: true
+    mutating_task: true
+    required_worker_not_spawned: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: required_worker_not_spawned
+
+  - id: class3_hook_repair_only_inspectors_spawned_fails
+    event: Stop
+    task_type: control_plane_repair
+    action_class: finalize
+    completion_claim: true
+    mutating_task: true
+    subagent_spawn_event: true
+    subagent_report_event: true
+    inspector_only_delegation_for_mutating_task: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: inspector_only_delegation_for_mutating_task
+
+  - id: class3_inspector_only_not_masked_by_direct_evidence_missing
+    event: Stop
+    task_type: control_plane_repair
+    action_class: finalize
+    completion_claim: true
+    mutating_task: true
+    subagent_spawn_event: true
+    subagent_report_event: true
+    inspector_only_delegation_for_mutating_task: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: inspector_only_delegation_for_mutating_task
+
   - id: pm_collapsed_worker_route_into_inspector_route_fails
     event: Stop
     task_type: code_implementation
@@ -1017,6 +1073,71 @@ test_cases:
       decision: ALLOW
       reason_code: worker_spawn_recorded_candidate_artifact_only
 
+  - id: codex_app_worker_session_matching_job_bridges_to_worker_spawn_event
+    event: PostToolUse
+    task_type: control_plane_repair
+    action_class: execute
+    codex_app_subagent_session: true
+    thread_source_subagent: true
+    source_thread_id: true
+    agent_role_worker: true
+    matching_agent_role: true
+    scheduled_subagent_job_exists: true
+    matching_parent_turn_id: true
+    matching_attempt_id: true
+    matching_route_id: true
+    normalized_target_paths_match: true
+    timestamp_window_match: true
+    ledger_required_fields_present: true
+    worker_authority: candidate_artifact_only
+    expected:
+      severity: OBSERVE
+      decision: ALLOW
+      reason_code: worker_spawn_recorded_candidate_artifact_only
+
+  - id: codex_app_inspector_session_matching_job_bridges_to_inspector_spawn_event
+    event: PostToolUse
+    task_type: control_plane_repair
+    action_class: execute
+    codex_app_subagent_session: true
+    thread_source_subagent: true
+    source_thread_id: true
+    agent_role_inspector: true
+    matching_agent_role: true
+    scheduled_subagent_job_exists: true
+    matching_parent_turn_id: true
+    matching_attempt_id: true
+    matching_route_id: true
+    normalized_target_paths_match: true
+    timestamp_window_match: true
+    ledger_required_fields_present: true
+    inspector_authority: candidate_evidence_only
+    expected:
+      severity: OBSERVE
+      decision: ALLOW
+      reason_code: inspector_spawn_recorded_candidate_evidence_only
+
+  - id: codex_app_worker_session_without_matching_job_is_unmatched_only
+    event: PostToolUse
+    task_type: control_plane_repair
+    action_class: execute
+    codex_app_subagent_session: true
+    thread_source_subagent: true
+    source_thread_id: true
+    agent_role_worker: true
+    matching_agent_role: true
+    scheduled_subagent_job_exists: false
+    matching_parent_turn_id: true
+    matching_attempt_id: true
+    matching_route_id: true
+    normalized_target_paths_match: true
+    timestamp_window_match: true
+    ledger_required_fields_present: true
+    expected:
+      severity: OBSERVE
+      decision: ALLOW
+      reason_code: unmatched_subagent_spawn_observed
+
   - id: subagent_report_ledger_records_candidate_fields
     event: PostToolUse
     task_type: code_implementation
@@ -1214,7 +1335,7 @@ test_cases:
     expected:
       severity: DO_NOT_CLAIM_COMPLETE
       decision: DENY_COMPLETE_CLAIM
-      reason_code: canonical_spawn_event_missing
+      reason_code: required_worker_not_spawned
 
   - id: plain_echoed_spawn_text_cannot_replace_canonical_spawn_event
     event: Stop
@@ -1226,7 +1347,7 @@ test_cases:
     expected:
       severity: DO_NOT_CLAIM_COMPLETE
       decision: DENY_COMPLETE_CLAIM
-      reason_code: canonical_spawn_event_missing
+      reason_code: required_worker_not_spawned
 
   - id: child_worker_must_not_overwrite_parent_active_contract
     event: Stop

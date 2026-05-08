@@ -36,9 +36,18 @@ Canonical root:
 이 환경은 Codex hook 기능을 새 feature flag로 사용합니다.
 
 - `C:\Users\anise\.codex\config.toml`에는 `[features] hooks = true`가 필요합니다.
+- `/goal` slash command를 쓰려면 `[features] goals = true`가 필요합니다. `goal_command_enabled`는 현재 런타임 feature key가 아니므로 사용하지 않습니다.
 - 더 이상 `[features].codex_hooks`를 사용하지 마십시오. 해당 경고가 보이면 `codex_hooks`가 아니라 `hooks`로 맞춥니다.
+- 2026-05-08 기준 공개 OpenAI Codex 문서의 일부 페이지는 아직 `features.codex_hooks`를 안내하지만, 이 로컬 앱/SSOT 환경에서는 deprecated 경고를 직접 기준으로 삼아 `features.hooks`를 현재 권위 키로 사용합니다.
+- 설정 진단의 권위 입력은 활성 config layer뿐입니다. 백업 파일, session log, memory, `.codex-global-state.json`, append-only ledger에 남은 문자열은 역사 기록이며 현재 설정 권위가 아닙니다.
+- 프로젝트별 `.codex/config.toml`은 신뢰된 프로젝트에서 사용자 config보다 높은 우선순위를 가지므로 `codex_hooks`를 다시 넣지 않아야 합니다. 검증은 `Maintenance/Test-CodexConfigAuthority.ps1`로 수행합니다.
+- session-start context와 `Settings/Codex_App_RUNTIME/runtime_capability_receipt.json`은 빠른 config authority 상태를 포함해야 합니다. 상세 감사는 `Settings/Codex_App_RUNTIME/codex_config_authority_receipt.json`에 기록할 수 있습니다.
+- Codex Desktop 앱의 설정 경고 배너는 app-server의 `deprecationNotice`를 받은 뒤 앱 프로세스 메모리의 config notice list에 남을 수 있습니다. 설정 파일 수정 직후에도 같은 프로세스에서 배너가 남아 있으면 파일 권위 문제가 아니라 notice cache 또는 앱 내부 override 경로로 분류합니다.
+- 2026-05-08 기준 Windows 앱 패키지 `26.506.2212.0`에는 내부 요청용 `"features.codex_hooks": false` override가 남아 있으므로, 사용자 config가 깨끗해도 앱 내부 경로가 같은 deprecation notice를 새로 만들 수 있습니다.
+- 같은 Windows 앱 패키지의 webview에는 hook renderer와 `statusMessage` summary formatter가 남아 있지만, compact/latest summary 호출부는 `showHookSummaryIcon: false`를 전달합니다. 훅이 실행되는데 마지막 결과 표면에서 아이콘이 안 보이면 `Maintenance/Test-CodexHookUiSurface.ps1`로 훅 실행과 UI suppression을 분리 확인합니다.
 - 전역 `C:\Users\anise\.codex\config.toml`, `C:\Users\anise\.codex\hooks.json`, `C:\Users\anise\.codex\agents\*.toml`은 repo 밖 전역 표면입니다. 사용자가 명시적으로 앱/전역 설정 수정을 요청했을 때만 변경합니다.
 - 이 저장소의 훅 러너는 `Settings/Dev_Codex_HOOKS/codex-ssot-hook.ps1`입니다.
+- `hooks.json` command handler 키는 공식/소스 스키마에 맞춰 `timeout`과 `statusMessage`를 사용합니다. `timeout_sec`와 `status_message`는 런타임 metadata 표현에는 보일 수 있지만 설정 입력 키로 쓰지 않습니다.
 - Windows PowerShell 호환성을 실제 기준으로 봅니다. PowerShell 스크립트 변경 후에는 `powershell.exe` 경로도 확인합니다.
 
 ## 4. 실행 흐름
@@ -153,6 +162,7 @@ Hook-routed Spark inspector는 candidate evidence only입니다. parent PM revie
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File Maintenance/Test-SubagentInspectionRouting.ps1 -Root C:\Users\anise\.codex\Dev_Codex_App_GlobalSSOT
 powershell -NoProfile -ExecutionPolicy Bypass -File Maintenance/Test-RepoGateAdoption.ps1 -Root C:\Users\anise\.codex\Dev_Codex_App_GlobalSSOT
+powershell -NoProfile -ExecutionPolicy Bypass -File Maintenance/Test-CodexConfigAuthority.ps1 -Root C:\Users\anise\.codex\Dev_Codex_App_GlobalSSOT
 powershell -NoProfile -ExecutionPolicy Bypass -File Maintenance/Test-EventLedgerIntegrity.ps1 -Root C:\Users\anise\.codex\Dev_Codex_App_GlobalSSOT
 powershell -NoProfile -ExecutionPolicy Bypass -File Maintenance/Test-HeuristicFalsePositiveReview.ps1 -Root C:\Users\anise\.codex\Dev_Codex_App_GlobalSSOT
 powershell -NoProfile -ExecutionPolicy Bypass -File Settings/Dev_Codex_HOOKS/codex-ssot-hook.ps1 -HookName session_start -DryRun

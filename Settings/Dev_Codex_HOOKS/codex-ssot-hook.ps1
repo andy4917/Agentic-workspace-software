@@ -420,7 +420,8 @@ function Get-RequiredStatus {
     'Settings/Codex_App_RUNTIME/pm_decisions.jsonl',
     'Settings/Codex_App_RUNTIME/runtime_state.schema.json',
     'Settings/Codex_App_DECLARATIVE/repo-gate-adoption.agent.config.yaml',
-    'Maintenance/Test-RepoGateAdoption.ps1'
+    'Maintenance/Test-RepoGateAdoption.ps1',
+    'Maintenance/Test-CodexConfigAuthority.ps1'
   )
 
   $missing = @()
@@ -771,6 +772,140 @@ function Test-SubagentInspectionStandingAuthorization {
   return $false
 }
 
+function Get-CodexConfigTomlTableBody {
+  param(
+    [Parameter(Mandatory = $true)][string]$Text,
+    [Parameter(Mandatory = $true)][string]$TableName
+  )
+
+  $pattern = "(?ms)^\s*\[$([regex]::Escape($TableName))\]\s*(?<body>.*?)(?=^\s*\[|\z)"
+  $match = [regex]::Match($Text, $pattern)
+  if (-not $match.Success) {
+    return ''
+  }
+  $match.Groups['body'].Value
+}
+
+function Test-CodexConfigTomlBool {
+  param(
+    [Parameter(Mandatory = $true)][string]$Body,
+    [Parameter(Mandatory = $true)][string]$Key
+  )
+
+  $match = [regex]::Match($Body, "(?m)^\s*$([regex]::Escape($Key))\s*=\s*(?<value>true|false)\s*(#.*)?$")
+  if (-not $match.Success) {
+    return $null
+  }
+  [string]$match.Groups['value'].Value -eq 'true'
+}
+
+function Get-CodexTrustedProjectRootsFromConfig {
+  param([Parameter(Mandatory = $true)][string]$UserConfigText)
+
+  $roots = @()
+  foreach ($match in [regex]::Matches($UserConfigText, "(?ms)^\[projects\.'(?<path>[^']+)'\]\s*(?<body>.*?)(?=^\[|\z)")) {
+    if ($match.Groups['body'].Value -match '(?m)^\s*trust_level\s*=\s*"trusted"\s*$') {
+      $roots += $match.Groups['path'].Value
+    }
+  }
+  foreach ($match in [regex]::Matches($UserConfigText, '(?ms)^\[projects\."(?<path>[^"]+)"\]\s*(?<body>.*?)(?=^\[|\z)')) {
+    if ($match.Groups['body'].Value -match '(?m)^\s*trust_level\s*=\s*"trusted"\s*$') {
+      $roots += $match.Groups['path'].Value
+    }
+  }
+
+  $roots | Select-Object -Unique
+}
+
+function Resolve-CodexConfigPath {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  if ($Path.StartsWith('~')) {
+    return (Join-Path ([Environment]::GetFolderPath('UserProfile')) $Path.Substring(1).TrimStart('\', '/'))
+  }
+  $Path
+}
+
+function Get-CodexConfigAuthorityQuickStatus {
+  param([Parameter(Mandatory = $true)][string]$Root)
+
+  $codexHome = Join-Path $HOME '.codex'
+  $configPath = Join-Path $codexHome 'config.toml'
+  $auditScript = Join-Path $Root 'Maintenance\Test-CodexConfigAuthority.ps1'
+  $runtimeReceipt = Join-Path $Root 'Settings\Codex_App_RUNTIME\codex_config_authority_receipt.json'
+  if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+    return [ordered]@{
+      ok = $false
+      reason = 'user_config_missing'
+      user_config = $configPath
+      audit_script = $auditScript
+      runtime_receipt = $runtimeReceipt
+    }
+  }
+
+  $text = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $configPath), $script:Utf8NoBom)
+  $featuresBody = Get-CodexConfigTomlTableBody -Text $text -TableName 'features'
+  $hooks = Test-CodexConfigTomlBool -Body $featuresBody -Key 'hooks'
+  $legacyHooks = Test-CodexConfigTomlBool -Body $featuresBody -Key 'codex_hooks'
+  $goals = Test-CodexConfigTomlBool -Body $featuresBody -Key 'goals'
+  $nonFeatureGoalCommand = Test-CodexConfigTomlBool -Body $featuresBody -Key 'goal_command_enabled'
+  $trustedRoots = @(Get-CodexTrustedProjectRootsFromConfig -UserConfigText $text)
+  $projectLegacyConfigs = @()
+  $projectNonFeatureGoalConfigs = @()
+  foreach ($trustedRoot in $trustedRoots) {
+    $expanded = Resolve-CodexConfigPath -Path ([string]$trustedRoot)
+    if (-not (Test-Path -LiteralPath $expanded -PathType Container)) {
+      continue
+    }
+    try {
+      $resolvedRoot = (Resolve-Path -LiteralPath $expanded).Path
+      if ($resolvedRoot.TrimEnd('\') -ieq $codexHome.TrimEnd('\')) {
+        continue
+      }
+      foreach ($projectConfig in @(Get-ChildItem -LiteralPath $resolvedRoot -Recurse -Force -File -Filter 'config.toml' -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '(?i)\\\.codex\\config\.toml$' })) {
+        $projectText = [System.IO.File]::ReadAllText($projectConfig.FullName, $script:Utf8NoBom)
+        $projectFeatures = Get-CodexConfigTomlTableBody -Text $projectText -TableName 'features'
+        if ($null -ne (Test-CodexConfigTomlBool -Body $projectFeatures -Key 'codex_hooks')) {
+          $projectLegacyConfigs += $projectConfig.FullName
+        }
+        if ($null -ne (Test-CodexConfigTomlBool -Body $projectFeatures -Key 'goal_command_enabled')) {
+          $projectNonFeatureGoalConfigs += $projectConfig.FullName
+        }
+      }
+    } catch {
+      $projectLegacyConfigs += "scan_error:$expanded"
+    }
+  }
+
+  $receiptStatus = ''
+  if (Test-Path -LiteralPath $runtimeReceipt -PathType Leaf) {
+    try {
+      $receipt = Read-JsonFile -Path $runtimeReceipt
+      $receiptStatus = [string](Get-OptionalPropertyValue -Object $receipt -Name 'status')
+    } catch {
+      $receiptStatus = 'unreadable'
+    }
+  }
+
+  [ordered]@{
+    ok = (($hooks -eq $true) -and ($goals -eq $true) -and ($null -eq $legacyHooks) -and ($null -eq $nonFeatureGoalCommand) -and ($projectLegacyConfigs.Count -eq 0) -and ($projectNonFeatureGoalConfigs.Count -eq 0))
+    user_config = $configPath
+    user_config_features_hooks = $hooks
+    user_config_features_goals = $goals
+    user_config_has_deprecated_codex_hooks = ($null -ne $legacyHooks)
+    user_config_has_non_feature_goal_command_enabled = ($null -ne $nonFeatureGoalCommand)
+    trusted_project_roots_count = $trustedRoots.Count
+    trusted_project_configs_with_deprecated_codex_hooks = $projectLegacyConfigs
+    trusted_project_configs_with_non_feature_goal_command_enabled = $projectNonFeatureGoalConfigs
+    audit_script = $auditScript
+    audit_script_present = (Test-Path -LiteralPath $auditScript -PathType Leaf)
+    runtime_receipt = $runtimeReceipt
+    runtime_receipt_status = $receiptStatus
+    source_boundary = 'active_config_layers_only'
+    historical_state_authority = $false
+  }
+}
+
 function Write-RuntimeCapabilityReceipt {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
@@ -787,6 +922,7 @@ function Write-RuntimeCapabilityReceipt {
     project_root = $Root
     loaded_agents_md_sources = @(Get-AgentsMdSources -Root $Root -Workdir $Workdir)
     active_hooks = @(Get-ActiveHookConfig -Root $Root)
+    codex_config_authority = Get-CodexConfigAuthorityQuickStatus -Root $Root
     available_mcp_servers = @(Get-ConfiguredMcpServers -Root $Root)
     available_skills = @(Get-AvailableSkills -Root $Root)
     configured_subagents = @(Get-ConfiguredSubagents)
@@ -821,6 +957,252 @@ function Write-RuntimeCapabilityReceipt {
 
   Write-JsonFile -Path $path -Value $receipt
   $receipt
+}
+
+function Get-RuntimeIdentityReceiptsPath {
+  param([Parameter(Mandatory = $true)][string]$Root)
+
+  Join-Path $Root 'Settings/Codex_App_RUNTIME/runtime_identity_receipts.jsonl'
+}
+
+function Get-HookSurfaceProbePath {
+  param([Parameter(Mandatory = $true)][string]$Root)
+
+  Join-Path $Root 'Settings/Codex_App_RUNTIME/hook_surface_probe.jsonl'
+}
+
+function Resolve-EffectiveProjectRoot {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [AllowEmptyString()][string]$Workdir = ''
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Workdir)) {
+    return (Resolve-Path -LiteralPath $Root).Path
+  }
+
+  try {
+    $current = (Resolve-Path -LiteralPath $Workdir -ErrorAction Stop).Path
+  } catch {
+    return [string]$Workdir
+  }
+
+  $rootFull = (Resolve-Path -LiteralPath $Root).Path
+  $rootKey = (Convert-ToGuardPathText -Text $rootFull).TrimEnd('/')
+  $currentKey = (Convert-ToGuardPathText -Text $current).TrimEnd('/')
+  if ($currentKey -eq $rootKey -or $currentKey.StartsWith($rootKey + '/')) {
+    return $rootFull
+  }
+
+  while (-not [string]::IsNullOrWhiteSpace($current)) {
+    foreach ($marker in @('.git','MANIFEST.json','ROOT_MAP.json')) {
+      if (Test-Path -LiteralPath (Join-Path $current $marker)) {
+        return $current
+      }
+    }
+    $parent = Split-Path -Parent $current
+    if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $current) {
+      break
+    }
+    $current = $parent
+  }
+
+  (Resolve-Path -LiteralPath $Workdir).Path
+}
+
+function Get-RuntimeProjectKind {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][string]$ProjectRoot
+  )
+
+  $rootKey = (Convert-ToGuardPathText -Text (Resolve-Path -LiteralPath $Root)).TrimEnd('/')
+  $projectKey = (Convert-ToGuardPathText -Text $ProjectRoot).TrimEnd('/')
+  $codexHomeKey = (Convert-ToGuardPathText -Text (Join-Path $HOME '.codex')).TrimEnd('/')
+  $devProductKey = (Convert-ToGuardPathText -Text (Join-Path $HOME 'code\Dev-Product')).TrimEnd('/')
+  $generatedKey = (Convert-ToGuardPathText -Text (Join-Path $HOME '.codex\generated_images')).TrimEnd('/')
+
+  if ($projectKey -eq $rootKey) { return 'ssot' }
+  if ($projectKey -eq $devProductKey) { return 'product_monorepo' }
+  if ($projectKey.StartsWith($devProductKey + '/')) { return 'product_repo' }
+  if ($projectKey.StartsWith($generatedKey + '/')) { return 'generated_artifact' }
+  if ($projectKey.StartsWith($codexHomeKey + '/') -and $projectKey -ne $rootKey) { return 'app_worktree' }
+  'unknown'
+}
+
+function Get-RuntimeTrustState {
+  param([Parameter(Mandatory = $true)][string]$ProjectRoot)
+
+  $configPath = Join-Path $HOME '.codex\config.toml'
+  if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+    return 'unknown'
+  }
+
+  try {
+    $text = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $configPath), $script:Utf8NoBom)
+    $trustedRoots = @(Get-CodexTrustedProjectRootsFromConfig -UserConfigText $text)
+    $projectKey = (Convert-ToGuardPathText -Text $ProjectRoot).TrimEnd('/')
+    foreach ($trustedRoot in $trustedRoots) {
+      $expanded = Resolve-CodexConfigPath -Path ([string]$trustedRoot)
+      $trustedKey = (Convert-ToGuardPathText -Text $expanded).TrimEnd('/')
+      if ($projectKey -eq $trustedKey -or $projectKey.StartsWith($trustedKey + '/')) {
+        return 'trusted'
+      }
+    }
+  } catch {
+    return 'unknown'
+  }
+
+  'unknown'
+}
+
+function Get-RuntimeSurfaceName {
+  param([object]$Payload)
+
+  $payloadSurface = Get-PayloadString -Object $Payload -Names @('surface','runtime_surface','originator')
+  if (-not [string]::IsNullOrWhiteSpace($payloadSurface)) {
+    if ($payloadSurface -match '(?i)codex desktop|windows_app|desktop') { return 'windows_app' }
+    if ($payloadSurface -match '(?i)cli') { return 'cli' }
+  }
+
+  if ([string]$env:CODEX_INTERNAL_ORIGINATOR_OVERRIDE -eq 'Codex Desktop') {
+    return 'windows_app'
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:CODEX_SHELL)) {
+    return 'cli'
+  }
+
+  'direct_script_control'
+}
+
+function Get-RuntimeThreadId {
+  param([object]$Payload)
+
+  $threadId = Get-PayloadString -Object $Payload -Names @('thread_id','threadId','conversation_id','conversationId')
+  if (-not [string]::IsNullOrWhiteSpace($threadId)) {
+    return $threadId
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:CODEX_THREAD_ID)) {
+    return [string]$env:CODEX_THREAD_ID
+  }
+  ''
+}
+
+function New-RuntimeIdentityReceipt {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][object]$ActiveContract,
+    [object]$Payload,
+    [AllowEmptyString()][string]$Workdir = '',
+    [AllowEmptyString()][string]$HookEventName = ''
+  )
+
+  $projectRoot = Resolve-EffectiveProjectRoot -Root $Root -Workdir $Workdir
+  $runtimeLedgerPath = Join-Path $Root 'Settings\Codex_App_RUNTIME'
+  $projectConfigPath = Join-Path $projectRoot '.codex\config.toml'
+  $threadId = Get-RuntimeThreadId -Payload $Payload
+  $timestampUtc = (Get-Date).ToUniversalTime().ToString('o')
+  $receiptCore = [ordered]@{
+    surface = Get-RuntimeSurfaceName -Payload $Payload
+    thread_id = $threadId
+    cwd = $Workdir
+    project_root = $projectRoot
+    hook_event = $HookEventName
+    turn_fingerprint = [string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint')
+    timestamp_utc = $timestampUtc
+  }
+
+  [ordered]@{
+    schema_version = 'runtime_identity_receipt.v1'
+    record_type = 'runtime_identity_receipt'
+    receipt_id = 'rir_' + (Get-TextFingerprint -Text ($receiptCore | ConvertTo-Json -Depth 6 -Compress)).Substring(0, 32)
+    surface = $receiptCore.surface
+    thread_id = $threadId
+    cwd = $Workdir
+    project_root = $projectRoot
+    codex_home = Join-Path $HOME '.codex'
+    user_config = Join-Path $HOME '.codex\config.toml'
+    user_hooks = Join-Path $HOME '.codex\hooks.json'
+    ssot_root = $Root
+    runtime_ledger_path = $runtimeLedgerPath
+    project_kind = Get-RuntimeProjectKind -Root $Root -ProjectRoot $projectRoot
+    trust_state = Get-RuntimeTrustState -ProjectRoot $projectRoot
+    project_local_codex_config_loaded = (Test-Path -LiteralPath $projectConfigPath -PathType Leaf)
+    user_hooks_loaded = (Test-Path -LiteralPath (Join-Path $HOME '.codex\hooks.json') -PathType Leaf)
+    hook_surface_probe_path = Get-HookSurfaceProbePath -Root $Root
+    hook_event = $HookEventName
+    turn_fingerprint = $receiptCore.turn_fingerprint
+    timestamp_utc = $timestampUtc
+    append_only = $true
+  }
+}
+
+function Write-RuntimeIdentityReceipt {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][object]$ActiveContract,
+    [object]$Payload,
+    [AllowEmptyString()][string]$Workdir = '',
+    [AllowEmptyString()][string]$HookEventName = '',
+    [bool]$NoLog = $false
+  )
+
+  $receipt = New-RuntimeIdentityReceipt -Root $Root -ActiveContract $ActiveContract -Payload $Payload -Workdir $Workdir -HookEventName $HookEventName
+  if (-not $NoLog) {
+    Write-InvocationLog -Path (Get-RuntimeIdentityReceiptsPath -Root $Root) -Entry $receipt
+  }
+  $receipt
+}
+
+function Write-HookSurfaceProbe {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][object]$ActiveContract,
+    [object]$Payload,
+    [AllowEmptyString()][string]$Workdir = '',
+    [AllowEmptyString()][string]$HookName = '',
+    [AllowEmptyString()][string]$HookEventName = '',
+    [AllowEmptyString()][string]$PayloadText = '',
+    [AllowEmptyString()][string]$StdoutText = '',
+    [AllowEmptyString()][string]$Decision = '',
+    [AllowEmptyString()][string]$Reason = '',
+    [object]$RuntimeIdentityReceipt = $null,
+    [bool]$NoLog = $false
+  )
+
+  $identity = $RuntimeIdentityReceipt
+  if ($null -eq $identity) {
+    $identity = New-RuntimeIdentityReceipt -Root $Root -ActiveContract $ActiveContract -Payload $Payload -Workdir $Workdir -HookEventName $HookEventName
+  }
+  $entry = [ordered]@{
+    schema_version = 'hook_surface_probe.v1'
+    record_type = 'hook_surface_probe'
+    event_id = 'hsp_' + ([guid]::NewGuid().ToString('n'))
+    hook_event = $HookEventName
+    hook = $HookName
+    surface = [string](Get-OptionalPropertyValue -Object $identity -Name 'surface')
+    thread_id = [string](Get-OptionalPropertyValue -Object $identity -Name 'thread_id')
+    cwd = $Workdir
+    project_root = [string](Get-OptionalPropertyValue -Object $identity -Name 'project_root')
+    codex_home = Join-Path $HOME '.codex'
+    tool_name = Get-PayloadString -Object $Payload -Names @('tool_name','toolName','tool','name')
+    payload_event_name = $HookEventName
+    exit_code = 0
+    decision = $Decision
+    reason = $Reason
+    stdout_hash = Get-TextFingerprint -Text $StdoutText
+    stderr_hash = Get-TextFingerprint -Text ''
+    payload_fingerprint = Get-TextFingerprint -Text $PayloadText
+    runtime_identity_receipt_id = [string](Get-OptionalPropertyValue -Object $identity -Name 'receipt_id')
+    turn_fingerprint = [string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint')
+    timestamp_utc = (Get-Date).ToUniversalTime().ToString('o')
+    append_only = $true
+  }
+
+  if (-not $NoLog) {
+    Write-InvocationLog -Path (Get-HookSurfaceProbePath -Root $Root) -Entry $entry
+  }
+  $entry
 }
 
 function Get-TaskClassificationReceiptPath {
@@ -868,6 +1250,33 @@ function Test-ChildAgentPromptContext {
   }
 
   $false
+}
+
+function New-ChildJobContract {
+  param(
+    [Parameter(Mandatory = $true)][object]$ActiveContract,
+    [object]$TaskClassification,
+    [Parameter(Mandatory = $true)][string]$RouteId,
+    [Parameter(Mandatory = $true)][string]$AgentRole,
+    [string[]]$TargetPaths = @()
+  )
+
+  $turn = [string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint')
+  [ordered]@{
+    schema_version = 'child_job_contract.v1'
+    parent_turn_id = $turn
+    attempt_id = $turn
+    route_id = $RouteId
+    agent_role = $AgentRole
+    parent_user_goal_fingerprint = Get-TextFingerprint -Text ([string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'user_goal'))
+    inherited_task_class = if ($TaskClassification) { Get-OptionalPropertyValue -Object $TaskClassification -Name 'selected_class' } else { $null }
+    inherited_required_worker_routes = if ($TaskClassification) { @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $TaskClassification -Name 'required_worker_routes')) } else { @() }
+    inherited_required_inspector_routes = if ($TaskClassification) { @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $TaskClassification -Name 'required_inspector_routes')) } else { @() }
+    target_paths = @($TargetPaths)
+    may_mutate_parent_active_contract = $false
+    may_recompute_parent_required_routes = $false
+    resolver_scope = 'child_job_only'
+  }
 }
 
 function Get-ClassificationSurfaceSignals {
@@ -1584,6 +1993,8 @@ function Test-NeedRequirementSatisfied {
 
   $routeId = [string](Get-OptionalPropertyValue -Object $Requirement -Name 'route_id')
   $requirementId = [string](Get-OptionalPropertyValue -Object $Requirement -Name 'requirement_id')
+  $validEvidencePattern = '(?i)\b(tool_usage_event|skill_usage_event|worker_spawn_event|worker_report_event|inspector_spawn_event|inspector_report_event|subagent_job_event|subagent_spawn_event|subagent_report_event|pm_worker_waiver_event|check_evidence|explicit_unavailable|explicit_not_applicable)\b'
+  $invalidEvidencePattern = '(?i)\b(installed|configured|available|capability_present|route_configured|subagent_configured|skill_installed)\b'
   foreach ($entry in @($ReportEntries)) {
     $entryRouteId = [string](Get-OptionalPropertyValue -Object $entry -Name 'route_id')
     $entryRequirementId = [string](Get-OptionalPropertyValue -Object $entry -Name 'requirement_id')
@@ -1592,14 +2003,26 @@ function Test-NeedRequirementSatisfied {
     }
     $status = [string](Get-OptionalPropertyValue -Object $entry -Name 'status')
     $evidence = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $entry -Name 'evidence'))
-    if (($status -in @('satisfied','used','reported','checked','unavailable','not_applicable')) -and $evidence.Count -gt 0) {
+    $evidenceText = $evidence -join "`n"
+    if (
+      ($status -in @('satisfied','used','reported','checked','unavailable','not_applicable')) -and
+      $evidence.Count -gt 0 -and
+      $evidenceText -match $validEvidencePattern -and
+      $evidenceText -notmatch $invalidEvidencePattern
+    ) {
       return [ordered]@{ ok = $true; source = "completion_receipt:$status" }
     }
   }
 
   $status = [string](Get-OptionalPropertyValue -Object $Requirement -Name 'status')
   $ownEvidence = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $Requirement -Name 'evidence'))
-  if (($status -in @('satisfied','used','reported','checked','unavailable','not_applicable')) -and $ownEvidence.Count -gt 0) {
+  $ownEvidenceText = $ownEvidence -join "`n"
+  if (
+    ($status -in @('satisfied','used','reported','checked','unavailable','not_applicable')) -and
+    $ownEvidence.Count -gt 0 -and
+    $ownEvidenceText -match $validEvidencePattern -and
+    $ownEvidenceText -notmatch $invalidEvidencePattern
+  ) {
     return [ordered]@{ ok = $true; source = "need_resolution:$status" }
   }
 
@@ -1618,6 +2041,8 @@ function Test-SkillRequirementSatisfied {
   if (-not $skillResolution -or [string](Get-OptionalPropertyValue -Object $skillResolution -Name 'turn_fingerprint') -ne $TurnFingerprint) {
     return [ordered]@{ ok = $false; reason = 'skill_resolution_receipt_missing'; skill_id = $SkillId }
   }
+  $validSkillEvidencePattern = '(?i)\b(skill_usage_event|explicit_unavailable|explicit_not_applicable)\b'
+  $invalidSkillEvidencePattern = '(?i)\b(installed|configured|available|skill_installed|catalog)\b'
 
   $unknown = @(Get-OptionalPropertyValue -Object $skillResolution -Name 'unknown_skill_needs')
   if ($unknown.Count -gt 0) {
@@ -1633,7 +2058,13 @@ function Test-SkillRequirementSatisfied {
     }
     $status = [string](Get-OptionalPropertyValue -Object $entry -Name 'status')
     $evidence = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $entry -Name 'evidence'))
-    if (($status -in @('used','satisfied','unavailable','not_applicable')) -and $evidence.Count -gt 0) {
+    $evidenceText = $evidence -join "`n"
+    if (
+      ($status -in @('used','satisfied','unavailable','not_applicable')) -and
+      $evidence.Count -gt 0 -and
+      $evidenceText -match $validSkillEvidencePattern -and
+      $evidenceText -notmatch $invalidSkillEvidencePattern
+    ) {
       return [ordered]@{ ok = $true; source = "completion_receipt:$status" }
     }
   }
@@ -1644,7 +2075,13 @@ function Test-SkillRequirementSatisfied {
     }
     $status = [string](Get-OptionalPropertyValue -Object $entry -Name 'status')
     $evidence = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $entry -Name 'evidence'))
-    if (($status -in @('used','satisfied','unavailable','not_applicable')) -and $evidence.Count -gt 0) {
+    $evidenceText = $evidence -join "`n"
+    if (
+      ($status -in @('used','satisfied','unavailable','not_applicable')) -and
+      $evidence.Count -gt 0 -and
+      $evidenceText -match $validSkillEvidencePattern -and
+      $evidenceText -notmatch $invalidSkillEvidencePattern
+    ) {
       return [ordered]@{ ok = $true; source = "skill_resolution:$status" }
     }
   }
@@ -1784,14 +2221,43 @@ function Test-TaskClassificationAndNeedForCompletion {
 
 function Test-PmAccountabilityForCompletion {
   param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][object]$ActiveContract,
     [Parameter(Mandatory = $true)][object]$NeedCheck,
     [Parameter(Mandatory = $true)][object]$CompletionReceipt
   )
 
   $needResolution = Get-OptionalPropertyValue -Object $NeedCheck -Name 'need_resolution'
-  $requiredRoutes = if ($needResolution) { @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $needResolution -Name 'required_routes')) } else { @() }
+  $requiredRoutes = if ($needResolution) {
+    @(
+      Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $needResolution -Name 'required_routes')
+      Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $needResolution -Name 'required_worker_routes')
+      Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $needResolution -Name 'required_inspector_routes')
+    ) | Select-Object -Unique
+  } else { @() }
   if ($requiredRoutes.Count -eq 0) {
     return [ordered]@{ ok = $true; reason = 'pm_accountability_not_required' }
+  }
+
+  $turn = [string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint')
+  $pmEvents = @(Read-PmDecisionEvents -Root $Root -TurnFingerprint $turn)
+  $missingPmDecisions = @()
+  foreach ($routeId in $requiredRoutes) {
+    if (Test-PmWorkerWaiverObserved -Root $Root -TurnFingerprint $turn -RouteId $routeId) {
+      continue
+    }
+    $routeDecisions = @($pmEvents | Where-Object {
+      [string](Get-OptionalPropertyValue -Object $_ -Name 'schema_version') -eq 'pm_decision_event.v1' -and
+      [string](Get-OptionalPropertyValue -Object $_ -Name 'route_id') -eq $routeId -and
+      [string](Get-OptionalPropertyValue -Object $_ -Name 'decision') -in @('accept_report','reject_report','quarantine','terminate','terminate_subagent','spawn_replacement','deny_completion') -and
+      -not [string]::IsNullOrWhiteSpace([string](Get-OptionalPropertyValue -Object $_ -Name 'job_id'))
+    })
+    if ($routeDecisions.Count -eq 0) {
+      $missingPmDecisions += $routeId
+    }
+  }
+  if ($missingPmDecisions.Count -gt 0) {
+    return [ordered]@{ ok = $false; reason = 'pm_decision_missing'; required_routes = $requiredRoutes; missing_routes = $missingPmDecisions }
   }
 
   $pmReport = Get-OptionalPropertyValue -Object $CompletionReceipt -Name 'pm_accountability_report'
@@ -2395,6 +2861,10 @@ function Get-SubagentLifecycleEventsPath {
   Join-Path $Root 'Settings/Codex_App_RUNTIME/subagent_lifecycle_events.jsonl'
 }
 
+function Get-CodexAppSessionsRoot {
+  Join-Path $HOME '.codex\sessions'
+}
+
 function Get-SubagentInspectionLoopStatePath {
   param([Parameter(Mandatory = $true)][string]$Root)
 
@@ -2727,8 +3197,9 @@ function Get-SubagentInspectionTargetPaths {
     $paths += @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $dependencyAlignment -Name 'checked_connected_paths'))
   }
 
+  $pathSearchText = ([string]$Text) -replace '\\\\', '\' -replace '\\r', "`r" -replace '\\n', "`n" -replace '\\t', "`t"
   $pathPattern = "(?i)([A-Z]:\\[^\s`"'<>\|]+|(?:Settings|Maintenance|Tools|docs|src|app|components|tests?)/[^\s`"'<>\|]+)"
-  foreach ($match in [regex]::Matches($Text, $pathPattern)) {
+  foreach ($match in [regex]::Matches($pathSearchText, $pathPattern)) {
     $paths += $match.Groups[1].Value
   }
 
@@ -3017,15 +3488,17 @@ function Test-SubagentSpawnObserved {
     return $false
   }
 
-  $spawnEventId = [string](Get-OptionalPropertyValue -Object $Job -Name 'spawn_event_id')
-  if (-not [string]::IsNullOrWhiteSpace($spawnEventId)) {
-    return $true
-  }
-
   $lifecycleEvents = @(Read-SubagentLifecycleEvents -Root $Root -TurnFingerprint $TurnFingerprint)
   $spawnEvents = @($lifecycleEvents | Where-Object {
-    [string](Get-OptionalPropertyValue -Object $_ -Name 'subagent_id') -eq $jobId -and
-    [string](Get-OptionalPropertyValue -Object $_ -Name 'event') -eq 'spawned'
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'record_type') -eq 'inspector_spawn_event' -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'schema_version') -eq 'subagent_lifecycle_event.v1' -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'parent_turn_id') -eq $TurnFingerprint -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'job_id') -eq $jobId -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'route_id') -eq [string](Get-OptionalPropertyValue -Object $Job -Name 'route_id') -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_role') -eq 'inspector' -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'authority') -eq 'candidate_evidence_only' -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'event') -eq 'spawned' -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'status') -eq 'spawned'
   })
 
   return ($spawnEvents.Count -gt 0)
@@ -3035,22 +3508,23 @@ function Test-WorkerSpawnObserved {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$TurnFingerprint,
-    [Parameter(Mandatory = $true)][string]$RouteId
+    [Parameter(Mandatory = $true)][string]$RouteId,
+    [string]$JobId = ''
   )
-
-  $workerJobs = @(Read-SubagentWorkerJobs -Root $Root -TurnFingerprint $TurnFingerprint | Where-Object {
-    ([string]::IsNullOrWhiteSpace($RouteId) -or [string](Get-OptionalPropertyValue -Object $_ -Name 'route_id') -eq $RouteId) -and
-    (-not [string]::IsNullOrWhiteSpace([string](Get-OptionalPropertyValue -Object $_ -Name 'spawn_event_id')))
-  })
-  if ($workerJobs.Count -gt 0) {
-    return $true
-  }
 
   $lifecycleEvents = @(Read-SubagentLifecycleEvents -Root $Root -TurnFingerprint $TurnFingerprint)
   $workerEvents = @($lifecycleEvents | Where-Object {
     [string](Get-OptionalPropertyValue -Object $_ -Name 'record_type') -eq 'worker_spawn_event' -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'event_type') -eq 'worker_spawn_event' -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'schema_version') -eq 'subagent_lifecycle_event.v1' -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'parent_turn_id') -eq $TurnFingerprint -and
+    -not [string]::IsNullOrWhiteSpace([string](Get-OptionalPropertyValue -Object $_ -Name 'job_id')) -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_role') -eq 'worker' -and
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'authority') -eq 'candidate_artifact_only' -and
     [string](Get-OptionalPropertyValue -Object $_ -Name 'event') -eq 'spawned' -and
-    ([string]::IsNullOrWhiteSpace($RouteId) -or [string](Get-OptionalPropertyValue -Object $_ -Name 'subagent_role') -eq $RouteId)
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'status') -eq 'spawned' -and
+    ([string]::IsNullOrWhiteSpace($JobId) -or [string](Get-OptionalPropertyValue -Object $_ -Name 'job_id') -eq $JobId) -and
+    ([string]::IsNullOrWhiteSpace($RouteId) -or [string](Get-OptionalPropertyValue -Object $_ -Name 'route_id') -eq $RouteId)
   })
 
   return ($workerEvents.Count -gt 0)
@@ -3106,12 +3580,15 @@ function Register-SubagentWorkerJob {
     attempt_id = $turn
     route_id = $RouteId
     agent_name = 'worker'
+    model_alias = 'latest-main'
+    resolved_model = 'gpt-5.5'
     model_primary = 'latest-main'
     model_preferred = 'gpt-5.5'
     reasoning_effort = 'medium'
     sandbox_mode = 'workspace-write-scoped'
     max_depth = 1
     target_paths = @($TargetPaths)
+    child_job_contract = New-ChildJobContract -ActiveContract $ActiveContract -TaskClassification $taskClassification -RouteId $RouteId -AgentRole 'worker' -TargetPaths $TargetPaths
     required_skills = $requiredSkills
     skill_usage_required = ($requiredSkills.Count -gt 0)
     required_outputs = [ordered]@{
@@ -3211,6 +3688,11 @@ function Register-SubagentInspectionJob {
 
   $cleanTargetPaths = @(Normalize-SubagentInspectionTargetPaths -Root $Root -Paths $TargetPaths)
   $dedupeKey = Get-SubagentInspectionDedupeKey -Root $Root -ParentTurnId $turn -RouteId $RouteId -TargetPaths $cleanTargetPaths
+  $taskClassification = Read-OptionalJsonFile -Path (Get-TaskClassificationReceiptPath -Root $Root)
+  $requiredSkills = @()
+  if ($taskClassification -and [string](Get-OptionalPropertyValue -Object $taskClassification -Name 'turn_fingerprint') -eq $turn) {
+    $requiredSkills = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $taskClassification -Name 'required_skills'))
+  }
 
   if ([string]::IsNullOrWhiteSpace($JobId)) {
     $existing = Find-LatestSubagentInspectionJob -Root $Root -TurnFingerprint $turn -RouteId $RouteId -AgentName $AgentName -TargetPaths $cleanTargetPaths
@@ -3231,11 +3713,13 @@ function Register-SubagentInspectionJob {
             duplicate_of = [string](Get-OptionalPropertyValue -Object $existing -Name 'job_id')
             superseded_by = $null
             model = 'gpt-5.3-codex-spark'
+            resolved_model = 'gpt-5.3-codex-spark'
             fallback_model = 'latest-mini'
             reasoning_effort = 'high'
             sandbox_mode = 'read-only'
             max_depth = 1
             target_paths = $cleanTargetPaths
+            child_job_contract = New-ChildJobContract -ActiveContract $ActiveContract -TaskClassification $taskClassification -RouteId $RouteId -AgentRole 'inspector' -TargetPaths $cleanTargetPaths
             skill_compliance_targets = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $existing -Name 'skill_compliance_targets'))
             trigger_hook = $TriggerHook
             status = 'duplicate'
@@ -3257,11 +3741,6 @@ function Register-SubagentInspectionJob {
   $freshness = Get-OptionalPropertyValue -Object (Read-OptionalJsonFile -Path (Join-Path $Root 'Settings/Codex_App_RUNTIME/completion_receipt.json')) -Name 'freshness'
   $attemptId = if ($freshness) { [string](Get-OptionalPropertyValue -Object $freshness -Name 'attempt_id') } else { $turn }
   $now = (Get-Date).ToUniversalTime().ToString('o')
-  $taskClassification = Read-OptionalJsonFile -Path (Get-TaskClassificationReceiptPath -Root $Root)
-  $requiredSkills = @()
-  if ($taskClassification -and [string](Get-OptionalPropertyValue -Object $taskClassification -Name 'turn_fingerprint') -eq $turn) {
-    $requiredSkills = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $taskClassification -Name 'required_skills'))
-  }
   $targetWarnings = @()
   if ((Get-TextFingerprint -Text (@($TargetPaths) | ConvertTo-Json -Depth 6 -Compress)) -ne (Get-TextFingerprint -Text ($cleanTargetPaths | ConvertTo-Json -Depth 6 -Compress))) {
     $targetWarnings += 'target_paths_sanitized'
@@ -3280,11 +3759,13 @@ function Register-SubagentInspectionJob {
     duplicate_of = $null
     superseded_by = $null
     model = 'gpt-5.3-codex-spark'
+    resolved_model = 'gpt-5.3-codex-spark'
     fallback_model = 'latest-mini'
     reasoning_effort = 'high'
     sandbox_mode = 'read-only'
     max_depth = 1
     target_paths = $cleanTargetPaths
+    child_job_contract = New-ChildJobContract -ActiveContract $ActiveContract -TaskClassification $taskClassification -RouteId $RouteId -AgentRole 'inspector' -TargetPaths $cleanTargetPaths
     skill_compliance_targets = $requiredSkills
     trigger_hook = $TriggerHook
     status = $Status
@@ -3366,16 +3847,51 @@ function Register-SubagentLifecycleEvent {
   if ([string]::IsNullOrWhiteSpace($jobAuthority)) {
     $jobAuthority = 'candidate_evidence_only'
   }
-  $recordType = if ($Event -eq 'spawned' -and $jobAuthority -eq 'candidate_artifact_only') { 'worker_spawn_event' } elseif ($Event -eq 'spawned') { 'subagent_spawn_event' } else { 'subagent_lifecycle_event' }
+  $agentRole = if ($jobAuthority -eq 'candidate_artifact_only') { 'worker' } else { 'inspector' }
+  $recordType = if ($Event -eq 'spawned' -and $agentRole -eq 'worker') {
+    'worker_spawn_event'
+  } elseif ($Event -eq 'spawned' -and $agentRole -eq 'inspector') {
+    'inspector_spawn_event'
+  } elseif ($Event -eq 'spawned') {
+    'subagent_spawn_event'
+  } elseif ($Event -eq 'report_submitted' -and $agentRole -eq 'worker') {
+    'worker_report_event'
+  } elseif ($Event -eq 'report_submitted') {
+    'subagent_report_event'
+  } else {
+    'subagent_lifecycle_event'
+  }
+  $jobId = [string](Get-OptionalPropertyValue -Object $Job -Name 'job_id')
+  $routeId = [string](Get-OptionalPropertyValue -Object $Job -Name 'route_id')
+  $agentName = [string](Get-OptionalPropertyValue -Object $Job -Name 'agent_name')
+  $resolvedModel = if ($agentRole -eq 'worker') {
+    [string](Get-OptionalPropertyValue -Object $Job -Name 'model_preferred')
+  } else {
+    [string](Get-OptionalPropertyValue -Object $Job -Name 'model')
+  }
+  if ([string]::IsNullOrWhiteSpace($resolvedModel)) {
+    $resolvedModel = if ($agentRole -eq 'worker') { 'gpt-5.5' } else { 'gpt-5.3-codex-spark' }
+  }
   $entry = [ordered]@{
     schema_version = 'subagent_lifecycle_event.v1'
     record_type = $recordType
+    event_type = $recordType
     event_id = 'sle_' + ([guid]::NewGuid().ToString('n'))
     turn_id = $turn
+    parent_turn_id = $turn
     attempt_id = [string](Get-OptionalPropertyValue -Object $Job -Name 'attempt_id')
+    job_id = $jobId
+    route_id = $routeId
+    agent_name = $agentName
+    agent_role = $agentRole
+    model = $resolvedModel
+    reasoning_effort = [string](Get-OptionalPropertyValue -Object $Job -Name 'reasoning_effort')
+    sandbox_mode = [string](Get-OptionalPropertyValue -Object $Job -Name 'sandbox_mode')
+    target_paths = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $Job -Name 'target_paths'))
+    status = if ($Event -eq 'report_submitted') { 'reported' } elseif ($Event -eq 'spawned') { 'spawned' } else { $Event }
     parent_agent_id = 'main_pm'
-    subagent_id = [string](Get-OptionalPropertyValue -Object $Job -Name 'job_id')
-    subagent_role = [string](Get-OptionalPropertyValue -Object $Job -Name 'route_id')
+    subagent_id = $jobId
+    subagent_role = $routeId
     event = $Event
     severity = $Severity
     reason_code = $ReasonCode
@@ -3393,6 +3909,415 @@ function Register-SubagentLifecycleEvent {
   }
 
   $entry
+}
+
+function Get-UtcTimestampString {
+  param([object]$Value)
+
+  if ($Value -is [DateTime]) {
+    return ([DateTime]::SpecifyKind([DateTime]$Value, [DateTimeKind]::Utc)).ToString('o')
+  }
+
+  $text = [string]$Value
+  if ([string]::IsNullOrWhiteSpace($text)) {
+    return (Get-Date).ToUniversalTime().ToString('o')
+  }
+
+  try {
+    return ([DateTimeOffset]::Parse($text)).UtcDateTime.ToString('o')
+  } catch {
+    return (Get-Date).ToUniversalTime().ToString('o')
+  }
+}
+
+function Get-UtcDateTimeOrNull {
+  param([object]$Value)
+
+  if ($Value -is [DateTime]) {
+    return [DateTime]::SpecifyKind([DateTime]$Value, [DateTimeKind]::Utc)
+  }
+
+  $text = [string]$Value
+  if ([string]::IsNullOrWhiteSpace($text)) {
+    return $null
+  }
+
+  try {
+    return ([DateTimeOffset]::Parse($text)).UtcDateTime
+  } catch {
+    return $null
+  }
+}
+
+function Get-RegexGroupValue {
+  param(
+    [AllowEmptyString()][string]$Text,
+    [Parameter(Mandatory = $true)][string]$Pattern,
+    [Parameter(Mandatory = $true)][string]$GroupName
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Text)) {
+    return ''
+  }
+
+  $match = [regex]::Match($Text, $Pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+  if (-not $match.Success) {
+    return ''
+  }
+
+  [string]$match.Groups[$GroupName].Value
+}
+
+function Get-CodexAppSessionTextPreview {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  $lines = @()
+  try {
+    $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+    $reader = New-Object System.IO.StreamReader($stream, $script:Utf8NoBom, $true)
+    try {
+      for ($i = 0; $i -lt 30; $i++) {
+        if ($reader.EndOfStream) { break }
+        $lines += $reader.ReadLine()
+      }
+    } finally {
+      $reader.Dispose()
+      $stream.Dispose()
+    }
+  } catch {
+    return ''
+  }
+
+  $lines -join "`n"
+}
+
+function Get-CodexAppRecentSubagentSessions {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [int]$SinceHours = 48
+  )
+
+  $sessionsRoot = Get-CodexAppSessionsRoot
+  if (-not (Test-Path -LiteralPath $sessionsRoot -PathType Container)) {
+    return @()
+  }
+
+  $rootFull = ''
+  try {
+    $rootFull = (Resolve-Path -LiteralPath $Root -ErrorAction Stop).Path
+  } catch {
+    $rootFull = $Root
+  }
+  $rootKey = (Convert-ToGuardPathText -Text $rootFull).TrimEnd('/')
+  $cutoff = (Get-Date).ToUniversalTime().AddHours(-1 * [Math]::Abs($SinceHours))
+  $files = @(Get-ChildItem -LiteralPath $sessionsRoot -Recurse -Filter 'rollout-*.jsonl' -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.LastWriteTimeUtc -ge $cutoff } |
+    Sort-Object LastWriteTimeUtc -Descending |
+    Select-Object -First 200)
+
+  $sessions = @()
+  foreach ($file in $files) {
+    $firstLine = ''
+    try {
+      $stream = [System.IO.File]::Open($file.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+      $reader = New-Object System.IO.StreamReader($stream, $script:Utf8NoBom, $true)
+      try {
+        if (-not $reader.EndOfStream) {
+          $firstLine = $reader.ReadLine()
+        }
+      } finally {
+        $reader.Dispose()
+        $stream.Dispose()
+      }
+    } catch {
+      continue
+    }
+
+    if ([string]::IsNullOrWhiteSpace($firstLine)) {
+      continue
+    }
+    $rawSessionTimestamp = Get-RegexGroupValue -Text $firstLine -Pattern '"payload"\s*:\s*\{[^}]*"timestamp"\s*:\s*"(?<value>[^"]+)"' -GroupName 'value'
+
+    try {
+      $record = $firstLine | ConvertFrom-Json
+    } catch {
+      continue
+    }
+    if ([string](Get-OptionalPropertyValue -Object $record -Name 'type') -ne 'session_meta') {
+      continue
+    }
+
+    $meta = Get-OptionalPropertyValue -Object $record -Name 'payload'
+    if (-not $meta -or [string](Get-OptionalPropertyValue -Object $meta -Name 'thread_source') -ne 'subagent') {
+      continue
+    }
+
+    $cwd = [string](Get-OptionalPropertyValue -Object $meta -Name 'cwd')
+    if (-not [string]::IsNullOrWhiteSpace($cwd) -and (Convert-ToGuardPathText -Text $cwd).TrimEnd('/') -ne $rootKey) {
+      continue
+    }
+
+    $rawRole = [string](Get-OptionalPropertyValue -Object $meta -Name 'agent_role')
+    $agentRole = if ($rawRole -eq 'worker') {
+      'worker'
+    } elseif ($rawRole -match '(?i)inspector') {
+      'inspector'
+    } else {
+      ''
+    }
+    if ([string]::IsNullOrWhiteSpace($agentRole)) {
+      continue
+    }
+
+    $preview = Get-CodexAppSessionTextPreview -Path $file.FullName
+    $decodedPreview = ([string]$preview) -replace '\\"', '"' -replace '\\\\', '\'
+    $targetPaths = @(Get-SubagentInspectionTargetPaths -Root $Root -Text $decodedPreview -ActiveContract $null -CompletionReceipt $null)
+    $source = Get-OptionalPropertyValue -Object $meta -Name 'source'
+    $subagentSource = if ($source) { Get-OptionalPropertyValue -Object $source -Name 'subagent' } else { $null }
+    $threadSpawn = if ($subagentSource) { Get-OptionalPropertyValue -Object $subagentSource -Name 'thread_spawn' } else { $null }
+
+    $sessions += [pscustomobject]@{
+      app_session_id = [string](Get-OptionalPropertyValue -Object $meta -Name 'id')
+      app_session_path = $file.FullName
+      session_timestamp_utc = if ([string]::IsNullOrWhiteSpace($rawSessionTimestamp)) { Get-UtcTimestampString -Value (Get-OptionalPropertyValue -Object $meta -Name 'timestamp') } else { Get-UtcTimestampString -Value $rawSessionTimestamp }
+      cwd = $cwd
+      thread_source = [string](Get-OptionalPropertyValue -Object $meta -Name 'thread_source')
+      agent_role = $agentRole
+      raw_agent_role = $rawRole
+      agent_name = if ($agentRole -eq 'worker') { 'worker' } else { $rawRole }
+      source_thread_id = [string](Get-OptionalPropertyValue -Object $meta -Name 'id')
+      parent_thread_id = if ($threadSpawn) { [string](Get-OptionalPropertyValue -Object $threadSpawn -Name 'parent_thread_id') } else { '' }
+      depth = if ($threadSpawn) { Get-OptionalPropertyValue -Object $threadSpawn -Name 'depth' } else { $null }
+      parent_turn_id = Get-RegexGroupValue -Text $decodedPreview -Pattern '\bparent_turn_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9_-]{16,})' -GroupName 'value'
+      attempt_id = Get-RegexGroupValue -Text $decodedPreview -Pattern '\battempt_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9_-]{16,})' -GroupName 'value'
+      route_id = Get-RegexGroupValue -Text $decodedPreview -Pattern '\broute_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9_]+)' -GroupName 'value'
+      job_id = Get-RegexGroupValue -Text $decodedPreview -Pattern '\bjob_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>(worker|subagent)-[A-Za-z0-9_-]+)' -GroupName 'value'
+      target_paths = $targetPaths
+      payload_fingerprint = Get-TextFingerprint -Text $decodedPreview
+    }
+  }
+
+  $sessions
+}
+
+function Test-SubagentLifecycleBridgeAlreadyRecorded {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][string]$AppSessionId
+  )
+
+  if ([string]::IsNullOrWhiteSpace($AppSessionId)) {
+    return $true
+  }
+
+  $events = @(Read-SubagentLifecycleEvents -Root $Root)
+  foreach ($event in $events) {
+    if ([string](Get-OptionalPropertyValue -Object $event -Name 'source_thread_id') -eq $AppSessionId -or
+        [string](Get-OptionalPropertyValue -Object $event -Name 'app_session_id') -eq $AppSessionId -or
+        [string](Get-OptionalPropertyValue -Object $event -Name 'subagent_id') -eq $AppSessionId) {
+      return $true
+    }
+  }
+
+  $false
+}
+
+function Test-CodexAppSessionWithinJobWindow {
+  param(
+    [Parameter(Mandatory = $true)][object]$Session,
+    [Parameter(Mandatory = $true)][object]$Job
+  )
+
+  $sessionTime = Get-UtcDateTimeOrNull -Value (Get-OptionalPropertyValue -Object $Session -Name 'session_timestamp_utc')
+  if (-not $sessionTime) {
+    return $false
+  }
+
+  $created = Get-UtcDateTimeOrNull -Value (Get-OptionalPropertyValue -Object $Job -Name 'created_at_utc')
+  $updated = Get-UtcDateTimeOrNull -Value (Get-OptionalPropertyValue -Object $Job -Name 'updated_at_utc')
+  $anchor = if ($updated) { $updated } else { $created }
+  if (-not $anchor) {
+    return $false
+  }
+
+  return ($sessionTime -ge $created.AddMinutes(-10) -and $sessionTime -le $anchor.AddHours(6))
+}
+
+function Find-CodexAppSubagentSpawnJobMatch {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][object]$ActiveContract,
+    [Parameter(Mandatory = $true)][object]$Session
+  )
+
+  $currentTurn = [string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint')
+  $sessionParentTurn = [string](Get-OptionalPropertyValue -Object $Session -Name 'parent_turn_id')
+  if ([string]::IsNullOrWhiteSpace($sessionParentTurn)) {
+    $sessionParentTurn = $currentTurn
+  }
+  if ([string]::IsNullOrWhiteSpace($sessionParentTurn)) {
+    return $null
+  }
+
+  $sessionAttempt = [string](Get-OptionalPropertyValue -Object $Session -Name 'attempt_id')
+  if ([string]::IsNullOrWhiteSpace($sessionAttempt)) {
+    $sessionAttempt = $sessionParentTurn
+  }
+  $sessionRole = [string](Get-OptionalPropertyValue -Object $Session -Name 'agent_role')
+  $sessionRoute = [string](Get-OptionalPropertyValue -Object $Session -Name 'route_id')
+  $sessionJobId = [string](Get-OptionalPropertyValue -Object $Session -Name 'job_id')
+  $sessionTargets = @(Normalize-SubagentInspectionTargetPaths -Root $Root -Paths (Get-OptionalPropertyValue -Object $Session -Name 'target_paths'))
+  $sessionTargetKey = if ($sessionTargets.Count -gt 0) { Get-SubagentInspectionTargetSetKey -Root $Root -TargetPaths $sessionTargets } else { '' }
+
+  if ($sessionRole -eq 'inspector' -and [string]::IsNullOrWhiteSpace($sessionRoute)) {
+    $agentName = [string](Get-OptionalPropertyValue -Object $Session -Name 'agent_name')
+    $route = @(Get-SubagentInspectionRoutes -Root $Root | Where-Object {
+      [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_name') -eq $agentName
+    } | Select-Object -First 1)
+    if ($route.Count -gt 0) {
+      $sessionRoute = [string](Get-OptionalPropertyValue -Object $route[0] -Name 'route_id')
+    }
+  }
+
+  $jobs = if ($sessionRole -eq 'worker') {
+    @(Read-SubagentWorkerJobs -Root $Root -TurnFingerprint $sessionParentTurn)
+  } else {
+    @(Get-LatestSubagentInspectionJobs -Root $Root -TurnFingerprint $sessionParentTurn)
+  }
+
+  $matches = @($jobs | Where-Object {
+    $jobRole = if ([string](Get-OptionalPropertyValue -Object $_ -Name 'authority') -eq 'candidate_artifact_only') { 'worker' } else { 'inspector' }
+    $jobAttempt = [string](Get-OptionalPropertyValue -Object $_ -Name 'attempt_id')
+    $jobTargets = @(Normalize-SubagentInspectionTargetPaths -Root $Root -Paths (Get-OptionalPropertyValue -Object $_ -Name 'target_paths'))
+    $jobTargetKey = Get-SubagentInspectionTargetSetKey -Root $Root -TargetPaths $jobTargets
+    $status = [string](Get-OptionalPropertyValue -Object $_ -Name 'status')
+    $jobId = [string](Get-OptionalPropertyValue -Object $_ -Name 'job_id')
+    $routeId = [string](Get-OptionalPropertyValue -Object $_ -Name 'route_id')
+    $agentName = [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_name')
+
+    $jobRole -eq $sessionRole -and
+    $status -in @('queued','spawn_requested','spawned') -and
+    ([string]::IsNullOrWhiteSpace($sessionJobId) -or $jobId -eq $sessionJobId) -and
+    ([string]::IsNullOrWhiteSpace($sessionRoute) -or $routeId -eq $sessionRoute) -and
+    ($sessionRole -eq 'worker' -or $agentName -eq [string](Get-OptionalPropertyValue -Object $Session -Name 'agent_name')) -and
+    ([string]::IsNullOrWhiteSpace($jobAttempt) -or $jobAttempt -eq $sessionAttempt) -and
+    (-not [string]::IsNullOrWhiteSpace($sessionTargetKey)) -and
+    $jobTargetKey -eq $sessionTargetKey -and
+    (Test-CodexAppSessionWithinJobWindow -Session $Session -Job $_)
+  })
+
+  if ($matches.Count -eq 0) {
+    return $null
+  }
+
+  @($matches | Sort-Object @{ Expression = { [string](Get-OptionalPropertyValue -Object $_ -Name 'updated_at_utc') } })[-1]
+}
+
+function Write-CodexAppSubagentSpawnBridgeLifecycleEvent {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][object]$ActiveContract,
+    [Parameter(Mandatory = $true)][object]$Session,
+    [object]$Job,
+    [bool]$NoLog = $false
+  )
+
+  $role = [string](Get-OptionalPropertyValue -Object $Session -Name 'agent_role')
+  $matched = $null -ne $Job
+  $recordType = if ($matched -and $role -eq 'worker') { 'worker_spawn_event' } elseif ($matched -and $role -eq 'inspector') { 'inspector_spawn_event' } else { 'subagent_lifecycle_event' }
+  $eventType = if ($matched) { $recordType } else { 'unmatched_subagent_spawn_observed' }
+  $authority = if ($role -eq 'worker') { 'candidate_artifact_only' } else { 'candidate_evidence_only' }
+  $turn = if ($matched) { [string](Get-OptionalPropertyValue -Object $Job -Name 'parent_turn_id') } else { [string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint') }
+  $routeId = if ($matched) { [string](Get-OptionalPropertyValue -Object $Job -Name 'route_id') } else { [string](Get-OptionalPropertyValue -Object $Session -Name 'route_id') }
+  $agentName = if ($matched) { [string](Get-OptionalPropertyValue -Object $Job -Name 'agent_name') } else { [string](Get-OptionalPropertyValue -Object $Session -Name 'agent_name') }
+  $targetPaths = if ($matched) {
+    @(Normalize-SubagentInspectionTargetPaths -Root $Root -Paths (Get-OptionalPropertyValue -Object $Job -Name 'target_paths'))
+  } else {
+    @(Normalize-SubagentInspectionTargetPaths -Root $Root -Paths (Get-OptionalPropertyValue -Object $Session -Name 'target_paths'))
+  }
+  $targetPaths = @($targetPaths)
+  $eventId = 'sle_' + ([guid]::NewGuid().ToString('n'))
+
+  $entry = [ordered]@{
+    schema_version = 'subagent_lifecycle_event.v1'
+    record_type = $recordType
+    event_type = $eventType
+    event_id = $eventId
+    turn_id = $turn
+    parent_turn_id = $turn
+    attempt_id = if ($matched) { [string](Get-OptionalPropertyValue -Object $Job -Name 'attempt_id') } else { [string](Get-OptionalPropertyValue -Object $Session -Name 'attempt_id') }
+    job_id = if ($matched) { [string](Get-OptionalPropertyValue -Object $Job -Name 'job_id') } else { $null }
+    route_id = if ([string]::IsNullOrWhiteSpace($routeId)) { $null } else { $routeId }
+    agent_name = $agentName
+    agent_role = $role
+    model = if ($role -eq 'worker') { 'gpt-5.5' } else { 'gpt-5.3-codex-spark' }
+    reasoning_effort = if ($role -eq 'worker') { 'medium' } else { 'high' }
+    sandbox_mode = if ($role -eq 'worker') { 'workspace-write-scoped' } else { 'read-only' }
+    target_paths = $targetPaths
+    status = if ($matched) { 'spawned' } else { 'observed_unmatched' }
+    parent_agent_id = 'codex_app:' + [string](Get-OptionalPropertyValue -Object $Session -Name 'parent_thread_id')
+    subagent_id = [string](Get-OptionalPropertyValue -Object $Session -Name 'app_session_id')
+    subagent_role = if ([string]::IsNullOrWhiteSpace($routeId)) { $role } else { $routeId }
+    event = if ($matched) { 'spawned' } else { 'unmatched_subagent_spawn_observed' }
+    severity = if ($matched) { 'info' } else { 'minor' }
+    reason_code = if ($matched) { 'codex_app_subagent_spawn_bridge' } else { 'no_matching_subagent_job' }
+    report_hash = $null
+    evidence_paths = @([string](Get-OptionalPropertyValue -Object $Session -Name 'app_session_path'))
+    pm_action = if ($matched) { if ($role -eq 'worker') { 'delegate_worker_route' } else { 'delegate_inspector_route' } } else { 'observe_unmatched_subagent_without_canonical_spawn' }
+    replacement_subagent_id = $null
+    authority = $authority
+    source = 'codex_app_session_meta'
+    source_thread_id = [string](Get-OptionalPropertyValue -Object $Session -Name 'source_thread_id')
+    parent_thread_id = [string](Get-OptionalPropertyValue -Object $Session -Name 'parent_thread_id')
+    app_session_id = [string](Get-OptionalPropertyValue -Object $Session -Name 'app_session_id')
+    app_session_path = [string](Get-OptionalPropertyValue -Object $Session -Name 'app_session_path')
+    match_requirements = [ordered]@{
+      parent_turn_id = -not [string]::IsNullOrWhiteSpace($turn)
+      attempt_id = $matched -and -not [string]::IsNullOrWhiteSpace([string](Get-OptionalPropertyValue -Object $Job -Name 'attempt_id'))
+      route_id = $matched -and -not [string]::IsNullOrWhiteSpace($routeId)
+      agent_role = -not [string]::IsNullOrWhiteSpace($role)
+      normalized_target_paths = $targetPaths.Count -gt 0
+      timestamp_window = $matched
+      matched_prescheduled_job = $matched
+    }
+    timestamp_utc = Get-UtcTimestampString -Value (Get-OptionalPropertyValue -Object $Session -Name 'session_timestamp_utc')
+    observed_at_utc = (Get-Date).ToUniversalTime().ToString('o')
+    append_only = $true
+  }
+
+  if (-not $NoLog) {
+    Write-InvocationLog -Path (Get-SubagentLifecycleEventsPath -Root $Root) -Entry $entry
+    if ($matched) {
+      if ($role -eq 'worker') {
+        $null = Register-SubagentWorkerJob -Root $Root -ActiveContract $ActiveContract -RouteId $routeId -TargetPaths $targetPaths -Status 'spawned' -JobId ([string](Get-OptionalPropertyValue -Object $Job -Name 'job_id')) -SpawnEventId $eventId -NoLog:$NoLog
+      } else {
+        $null = Register-SubagentInspectionJob -Root $Root -ActiveContract $ActiveContract -RouteId $routeId -AgentName $agentName -TargetPaths $targetPaths -TriggerHook 'PostToolUse' -Status 'spawned' -JobId ([string](Get-OptionalPropertyValue -Object $Job -Name 'job_id')) -SpawnEventId $eventId -NoLog:$NoLog
+      }
+    }
+  }
+
+  $entry
+}
+
+function Invoke-CodexAppSubagentSpawnBridge {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][object]$ActiveContract,
+    [bool]$NoLog = $false
+  )
+
+  $events = @()
+  foreach ($session in @(Get-CodexAppRecentSubagentSessions -Root $Root)) {
+    $sessionId = [string](Get-OptionalPropertyValue -Object $session -Name 'app_session_id')
+    if (Test-SubagentLifecycleBridgeAlreadyRecorded -Root $Root -AppSessionId $sessionId) {
+      continue
+    }
+
+    $job = Find-CodexAppSubagentSpawnJobMatch -Root $Root -ActiveContract $ActiveContract -Session $session
+    $events += Write-CodexAppSubagentSpawnBridgeLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Session $session -Job $job -NoLog:$NoLog
+  }
+
+  $events
 }
 
 function Register-PmDecisionEvent {
@@ -3413,7 +4338,9 @@ function Register-PmDecisionEvent {
     schema_version = 'pm_decision_event.v1'
     event_id = 'pmd_' + ([guid]::NewGuid().ToString('n'))
     turn_id = $turn
+    parent_turn_id = $turn
     attempt_id = $turn
+    job_id = if ([string]::IsNullOrWhiteSpace($SubagentId)) { $null } else { $SubagentId }
     decision = $Decision
     subagent_id = if ([string]::IsNullOrWhiteSpace($SubagentId)) { $null } else { $SubagentId }
     route_id = if ([string]::IsNullOrWhiteSpace($RouteId)) { $null } else { $RouteId }
@@ -3614,11 +4541,11 @@ function Get-SubagentInspectionObservation {
   $event = ''
   if ($PayloadText -match '(?i)subagent_inspection_report\.v1|subagent_report|candidate_evidence_only.*reported') {
     $event = 'subagent_report'
-  } elseif ($toolName -match '(?i)spawn_agent' -or $PayloadText -match '(?i)record_type\s*["'':=]+\s*["'']?subagent_spawn_event|event\s*["'':=]+\s*["'']?subagent_spawn') {
+  } elseif ($toolName -match '(?i)spawn_agent') {
     $event = 'subagent_spawn'
   }
 
-  if ($event -eq 'subagent_spawn' -and [string]::IsNullOrWhiteSpace($jobId)) {
+  if ($event -in @('subagent_spawn','subagent_report') -and [string]::IsNullOrWhiteSpace($jobId)) {
     return $null
   }
 
@@ -3659,13 +4586,6 @@ function Register-SubagentInspectionObservation {
 
   $routeId = [string](Get-OptionalPropertyValue -Object $route[0] -Name 'route_id')
   $targetPaths = @(Get-SubagentInspectionTargetPaths -Root $Root -Text $PayloadText -ActiveContract $ActiveContract -CompletionReceipt (Read-OptionalJsonFile -Path (Join-Path $Root 'Settings/Codex_App_RUNTIME/completion_receipt.json')))
-  if ([string]::IsNullOrWhiteSpace($jobId)) {
-    $existing = Find-LatestSubagentInspectionJob -Root $Root -TurnFingerprint $turn -RouteId $routeId -AgentName $agentName
-    if ($existing) {
-      $jobId = [string](Get-OptionalPropertyValue -Object $existing -Name 'job_id')
-    }
-  }
-
   $status = if ($event -eq 'subagent_report') { 'reported' } else { 'spawned' }
   $fingerprint = Get-TextFingerprint -Text $PayloadText
   $job = Register-SubagentInspectionJob -Root $Root -ActiveContract $ActiveContract -RouteId $routeId -AgentName $agentName -TargetPaths $targetPaths -TriggerHook 'PostToolUse' -Status $status -JobId $jobId -ReportFingerprint $(if ($event -eq 'subagent_report') { $fingerprint } else { '' }) -NoLog:$NoLog
@@ -3684,6 +4604,8 @@ function Register-SubagentInspectionObservation {
     if ($isBarePass) {
       $null = Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'quarantined' -Severity 'moderate' -ReasonCode 'subagent_pass_without_evidence' -ReportHash ([string](Get-OptionalPropertyValue -Object $report -Name 'report_hash')) -PmAction 'reject_report_and_spawn_replacement' -NoLog:$NoLog
       $null = Register-PmDecisionEvent -Root $Root -ActiveContract $ActiveContract -Decision 'reject_report' -SubagentId ([string](Get-OptionalPropertyValue -Object $job -Name 'job_id')) -RouteId $routeId -ReasonCode 'subagent_pass_without_evidence' -AcceptedAsEvidence:$false -CompletionImpact 'route_not_satisfied_until_replacement' -NoLog:$NoLog
+    } else {
+      $null = Register-PmDecisionEvent -Root $Root -ActiveContract $ActiveContract -Decision 'accept_report' -SubagentId ([string](Get-OptionalPropertyValue -Object $job -Name 'job_id')) -RouteId $routeId -ReasonCode 'inspector_report_accepted_as_candidate_evidence' -AcceptedAsEvidence:$true -CompletionImpact 'route_satisfied_candidate' -NoLog:$NoLog
     }
     $closeReason = if ($isBarePass) { 'auto_close_after_report_quarantine' } else { 'auto_close_after_report_review' }
     $null = Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'auto_close_requested' -Severity 'info' -ReasonCode $closeReason -ReportHash ([string](Get-OptionalPropertyValue -Object $report -Name 'report_hash')) -PmAction 'close_finished_agent' -NoLog:$NoLog
@@ -3706,9 +4628,8 @@ function Register-SubagentWorkerObservation {
 
   $toolName = Get-PayloadString -Object $Payload -Names @('tool_name','toolName','tool','name')
   $isWorkerSpawn = ($toolName -match '(?i)spawn_agent') -and ($PayloadText -match '(?i)agent_type\s*["'':=]+\s*["'']?worker|\bworker\b')
-  $isCanonicalWorkerSpawn = $PayloadText -match '(?i)record_type\s*["'':=]+\s*["'']?worker_spawn_event'
   $isWorkerReport = $PayloadText -match '(?i)subagent_worker_report\.v1|record_type\s*["'':=]+\s*["'']?worker_report_event'
-  if (-not ($isWorkerSpawn -or $isCanonicalWorkerSpawn -or $isWorkerReport)) {
+  if (-not ($isWorkerSpawn -or $isWorkerReport)) {
     return $null
   }
 
@@ -3724,14 +4645,28 @@ function Register-SubagentWorkerObservation {
   if ([string]::IsNullOrWhiteSpace($jobId) -and $PayloadText -match '(?i)\bjob_id\b\s*[:=]\s*["'']?(?<id>worker-[A-Za-z0-9_-]+)') {
     $jobId = $Matches.id
   }
+  if ($isWorkerReport -and [string]::IsNullOrWhiteSpace($jobId)) {
+    return $null
+  }
   $targetPaths = @(Get-SubagentInspectionTargetPaths -Root $Root -Text $PayloadText -ActiveContract $ActiveContract -CompletionReceipt (Read-OptionalJsonFile -Path (Join-Path $Root 'Settings/Codex_App_RUNTIME/completion_receipt.json')))
   if ($isWorkerReport) {
     $job = Register-SubagentWorkerJob -Root $Root -ActiveContract $ActiveContract -RouteId $routeId -TargetPaths $targetPaths -Status 'reported' -JobId $jobId -NoLog:$NoLog
-    $report = Register-SubagentWorkerReport -Root $Root -ActiveContract $ActiveContract -Job $job -PayloadText $PayloadText -ChangedPaths $targetPaths -Validation @('worker_report_observed') -NoLog:$NoLog
-    Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'report_submitted' -Severity 'info' -ReasonCode 'worker_report_submitted' -ReportHash ([string](Get-OptionalPropertyValue -Object $report -Name 'report_hash')) -PmAction 'review_worker_report' -NoLog:$NoLog
-    Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'auto_close_requested' -Severity 'info' -ReasonCode 'auto_close_after_worker_report' -ReportHash ([string](Get-OptionalPropertyValue -Object $report -Name 'report_hash')) -PmAction 'close_finished_agent' -NoLog:$NoLog
-    Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'closed' -Severity 'info' -ReasonCode 'auto_close_after_worker_report' -ReportHash ([string](Get-OptionalPropertyValue -Object $report -Name 'report_hash')) -PmAction 'agent_closed' -NoLog:$NoLog
-    Register-SubagentWorkerJob -Root $Root -ActiveContract $ActiveContract -RouteId $routeId -TargetPaths $targetPaths -Status 'closed' -JobId ([string](Get-OptionalPropertyValue -Object $job -Name 'job_id')) -ReportEventId ([string](Get-OptionalPropertyValue -Object $report -Name 'report_id')) -NoLog:$NoLog
+    $spawnObserved = Test-WorkerSpawnObserved -Root $Root -TurnFingerprint ([string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint')) -RouteId $routeId -JobId $jobId
+    $reportStatus = if ($spawnObserved) { 'reported' } else { 'quarantined' }
+    $validation = if ($spawnObserved) { @('worker_report_observed') } else { @('worker_report_without_spawn_quarantined') }
+    $warnings = if ($spawnObserved) { @() } else { @('worker_report_without_worker_spawn_event') }
+    $report = Register-SubagentWorkerReport -Root $Root -ActiveContract $ActiveContract -Job $job -PayloadText $PayloadText -Status $reportStatus -ChangedPaths $targetPaths -Validation $validation -WarningsOrLimits $warnings -NoLog:$NoLog
+    Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'report_submitted' -Severity $(if ($spawnObserved) { 'info' } else { 'moderate' }) -ReasonCode $(if ($spawnObserved) { 'worker_report_submitted' } else { 'worker_report_without_spawn_quarantined' }) -ReportHash ([string](Get-OptionalPropertyValue -Object $report -Name 'report_hash')) -PmAction $(if ($spawnObserved) { 'review_worker_report' } else { 'quarantine_worker_report' }) -NoLog:$NoLog
+    if ($spawnObserved) {
+      Register-PmDecisionEvent -Root $Root -ActiveContract $ActiveContract -Decision 'accept_report' -SubagentId ([string](Get-OptionalPropertyValue -Object $job -Name 'job_id')) -RouteId $routeId -ReasonCode 'worker_report_accepted_as_candidate_artifact' -AcceptedAsEvidence:$true -CompletionImpact 'route_satisfied_candidate' -NoLog:$NoLog
+      Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'auto_close_requested' -Severity 'info' -ReasonCode 'auto_close_after_worker_report' -ReportHash ([string](Get-OptionalPropertyValue -Object $report -Name 'report_hash')) -PmAction 'close_finished_agent' -NoLog:$NoLog
+      Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'closed' -Severity 'info' -ReasonCode 'auto_close_after_worker_report' -ReportHash ([string](Get-OptionalPropertyValue -Object $report -Name 'report_hash')) -PmAction 'agent_closed' -NoLog:$NoLog
+      Register-SubagentWorkerJob -Root $Root -ActiveContract $ActiveContract -RouteId $routeId -TargetPaths $targetPaths -Status 'closed' -JobId ([string](Get-OptionalPropertyValue -Object $job -Name 'job_id')) -ReportEventId ([string](Get-OptionalPropertyValue -Object $report -Name 'report_id')) -NoLog:$NoLog
+    } else {
+      Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'quarantined' -Severity 'moderate' -ReasonCode 'worker_report_without_spawn_quarantined' -ReportHash ([string](Get-OptionalPropertyValue -Object $report -Name 'report_hash')) -PmAction 'reject_report_before_route_satisfaction' -NoLog:$NoLog
+      Register-PmDecisionEvent -Root $Root -ActiveContract $ActiveContract -Decision 'reject_report' -SubagentId ([string](Get-OptionalPropertyValue -Object $job -Name 'job_id')) -RouteId $routeId -ReasonCode 'worker_report_without_spawn_quarantined' -AcceptedAsEvidence:$false -CompletionImpact 'route_unsatisfied' -NoLog:$NoLog
+      Register-SubagentWorkerJob -Root $Root -ActiveContract $ActiveContract -RouteId $routeId -TargetPaths $targetPaths -Status 'failed' -JobId ([string](Get-OptionalPropertyValue -Object $job -Name 'job_id')) -ReportEventId ([string](Get-OptionalPropertyValue -Object $report -Name 'report_id')) -NoLog:$NoLog
+    }
   } else {
     $job = Register-SubagentWorkerJob -Root $Root -ActiveContract $ActiveContract -RouteId $routeId -TargetPaths $targetPaths -Status 'spawned' -JobId $jobId -NoLog:$NoLog
     $event = Register-SubagentLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Job $job -Event 'spawned' -Severity 'info' -ReasonCode 'worker_spawned' -PmAction 'delegate_worker_route' -NoLog:$NoLog
@@ -4333,7 +5268,13 @@ function Test-RequiredRouteRequirement {
     }
     $status = [string](Get-OptionalPropertyValue -Object $entry -Name 'status')
     $evidence = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $entry -Name 'evidence'))
-    if (($status -in @('used','satisfied','checked','unavailable','not_applicable')) -and $evidence.Count -gt 0) {
+    $evidenceText = $evidence -join "`n"
+    if (
+      ($status -in @('used','satisfied','checked','unavailable','not_applicable')) -and
+      $evidence.Count -gt 0 -and
+      $evidenceText -match '(?i)\b(tool_usage_event|skill_usage_event|subagent_spawn_event|worker_spawn_event|check_evidence|explicit_unavailable|explicit_not_applicable)\b' -and
+      $evidenceText -notmatch '(?i)\b(installed|configured|available|capability_present|route_configured)\b'
+    ) {
       return [ordered]@{ ok = $true; source = "receipt_report:$status" }
     }
   }
@@ -4427,13 +5368,9 @@ function Test-RequiredToolRoutesForCompletion {
   $pathText = @($affectedPaths + $changedPaths + $connectedPaths | ForEach-Object { Convert-ToGuardPathText -Text ([string]$_) }) -join "`n"
 
   $corpusParts = @()
-  $corpusParts += $routesDoc.evidence
   $corpusParts += $receiptEvidence
   $corpusParts += @($reportEntries | ConvertTo-Json -Depth 8 -Compress)
-  if ($runtimeCapabilityReceipt -and [string](Get-OptionalPropertyValue -Object $runtimeCapabilityReceipt -Name 'turn_fingerprint') -eq $turn) {
-    $corpusParts += 'runtime_capability_receipt_generated:ok'
-    $corpusParts += ($runtimeCapabilityReceipt | ConvertTo-Json -Depth 8 -Compress)
-  }
+  $runtimeCapabilityReceipt = $null
   if ($events.Count -gt 0) {
     $corpusParts += 'tool_usage_event_ledger_current_attempt:ok'
   }
@@ -6709,21 +7646,6 @@ function Test-CompletionGate {
     return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = $freshnessCheck.reason; freshness = $freshnessCheck }
   }
 
-  $evidence = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $CompletionReceipt -Name 'evidence'))
-  if ($evidence.Count -eq 0) {
-    return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = 'direct_evidence_missing' }
-  }
-
-  $dynamicReproduction = Test-DynamicReproductionCheck -CompletionReceipt $CompletionReceipt
-  if (-not $dynamicReproduction.ok) {
-    return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = $dynamicReproduction.reason }
-  }
-
-  $dependencyAlignment = Test-DependencyAlignmentCheck -CompletionReceipt $CompletionReceipt
-  if (-not $dependencyAlignment.ok) {
-    return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = $dependencyAlignment.reason }
-  }
-
   $taskNeedResolution = Test-TaskClassificationAndNeedForCompletion -Root $Root -ActiveContract $ActiveContract -CompletionReceipt $CompletionReceipt
   if (-not $taskNeedResolution.ok) {
     return [ordered]@{
@@ -6733,7 +7655,7 @@ function Test-CompletionGate {
     }
   }
 
-  $pmAccountability = Test-PmAccountabilityForCompletion -NeedCheck $taskNeedResolution -CompletionReceipt $CompletionReceipt
+  $pmAccountability = Test-PmAccountabilityForCompletion -Root $Root -ActiveContract $ActiveContract -NeedCheck $taskNeedResolution -CompletionReceipt $CompletionReceipt
   if (-not $pmAccountability.ok) {
     return [ordered]@{
       decision = 'DO_NOT_CLAIM_COMPLETE'
@@ -6787,6 +7709,21 @@ function Test-CompletionGate {
       reason = $repoV2Adoption.reason
       repo_v2_adoption = $repoV2Adoption
     }
+  }
+
+  $dependencyAlignment = Test-DependencyAlignmentCheck -CompletionReceipt $CompletionReceipt
+  if (-not $dependencyAlignment.ok) {
+    return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = $dependencyAlignment.reason }
+  }
+
+  $dynamicReproduction = Test-DynamicReproductionCheck -CompletionReceipt $CompletionReceipt
+  if (-not $dynamicReproduction.ok) {
+    return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = $dynamicReproduction.reason }
+  }
+
+  $evidence = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $CompletionReceipt -Name 'evidence'))
+  if ($evidence.Count -eq 0) {
+    return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = 'direct_evidence_missing' }
   }
 
   $gateIssuedReceipt = Write-GateIssuedCompletionReceipt -Root $Root -ActiveContract $ActiveContract -CompletionReceipt $CompletionReceipt -TaskNeedResolution $taskNeedResolution -PmAccountability $pmAccountability -RequiredToolRoutes $requiredToolRoutes -SubagentInspections $subagentInspection -HeuristicReviews $heuristicReviews -RepoV2Adoption $repoV2Adoption -FreshnessCheck $freshnessCheck -NoLog:$NoLog
@@ -7619,6 +8556,9 @@ switch ($HookName) {
     $decision = Test-CompletionGate -State $CompletionState -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -NoLog:($NoLog.IsPresent -or $DryRun.IsPresent)
   }
   'stop_checks' {
+    if (-not $DryRun) {
+      $null = Invoke-CodexAppSubagentSpawnBridge -Root $root -ActiveContract $activeContract -NoLog:($NoLog.IsPresent)
+    }
     $gateDecision = Test-CompletionGate -State $CompletionState -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -NoLog:($NoLog.IsPresent -or $DryRun.IsPresent)
     $gateReason = [string](Get-OptionalPropertyValue -Object $gateDecision -Name 'reason')
     $hasCompletionClaim = Test-CompletionClaimText -Text $lastAssistantMessage
@@ -7641,6 +8581,7 @@ switch ($HookName) {
   }
   'post_tool_use' {
     if (-not $DryRun) {
+      $null = Invoke-CodexAppSubagentSpawnBridge -Root $root -ActiveContract $activeContract -NoLog:($NoLog.IsPresent)
       $subagentInspectionJobs = @(Register-SubagentInspectionJobsForContext -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -HookEventName 'PostToolUse' -TriggerText $payloadText -PathText $payloadText -NoLog:($NoLog.IsPresent))
       $null = Register-HeuristicReviewObservation -Root $root -ActiveContract $activeContract -Payload $payload -PayloadText $payloadText -Workdir $payloadWorkdir -NoLog:($NoLog.IsPresent)
       $null = Register-SubagentInspectionObservation -Root $root -ActiveContract $activeContract -Payload $payload -PayloadText $payloadText -Workdir $payloadWorkdir -NoLog:($NoLog.IsPresent)
@@ -7684,6 +8625,9 @@ $pendingSubagentInspectionJobsJson = if ($pendingSubagentInspectionJobs.Count -g
   '[]'
 }
 
+$codexConfigAuthorityContext = Get-CodexConfigAuthorityQuickStatus -Root $root
+$codexConfigAuthorityContextJson = ConvertTo-Json -InputObject $codexConfigAuthorityContext -Depth 6 -Compress
+
 $additionalContext = @"
 Dev_Codex_App_GlobalSSOT is active.
 Canonical root: $root
@@ -7694,6 +8638,8 @@ Completion is not established by score, PASS, tests, self-verification, package 
 Workflow document policy: repo workflows are preferred only when present in the current repo or explicitly named by the user. Global/system-contract paths do not require a separate workflow document file; never report a missing optional global workflow document as a blocker or as something the user must provide.
 Dependency alignment policy: when artifact A changes, connected prompt/resolver/guard/schema/runtime/doc/reporting surfaces must be checked against the latest A before development completion can be claimed.
 Required tool route policy: installed/configured tools, skills, MCP servers, and subagents are required when a task matches a required route. Missing route evidence is checked at Stop finalization only, not by PreToolUse.
+Codex config authority policy: this local environment uses [features].hooks as the active hook feature key. Treat [features].codex_hooks as deprecated in active config, even though some public docs still mention it. Diagnostics must read active config layers only; backup files, session logs, memories, global-state history, and append-only ledgers are not current config authority.
+Codex config authority live status: $codexConfigAuthorityContextJson
 Completion authority policy: agent-written completion_receipt.json is candidate input only. The Stop completion gate must issue Settings/Codex_App_RUNTIME/gate_issued_completion_receipt.json with a matching source receipt fingerprint before completion is authority.
 Timestamp policy: future-dated completion receipt validation timestamps are invalid evidence and block completion with future_dated_validation_timestamp.
 Tool ledger policy: required-route tool evidence is append-only tool_usage_event.v2 from PostToolUse or an equivalent observation layer.
@@ -7732,6 +8678,7 @@ $dryRunOutput = [ordered]@{
     required = $requiredStatus
     clean_slate = $cleanSlateStatus
     hook_configs = $hookStatus
+    codex_config_authority = $codexConfigAuthorityContext
     blocker_schema = [ordered]@{
       version = 'blocker_schema.v1'
       reasons = @(Get-BlockerDefinitions)
@@ -7806,6 +8753,11 @@ if ($DryRun) {
   $json = '{}' 
 } else {
   $json = $actualOutput | ConvertTo-Json -Depth 5 -Compress
+}
+
+if ((-not $NoLog) -and (-not $DryRun)) {
+  $runtimeIdentityReceipt = Write-RuntimeIdentityReceipt -Root $root -ActiveContract $activeContract -Payload $payload -Workdir $payloadWorkdir -HookEventName $eventName -NoLog:($NoLog.IsPresent)
+  $null = Write-HookSurfaceProbe -Root $root -ActiveContract $activeContract -Payload $payload -Workdir $payloadWorkdir -HookName $HookName -HookEventName $eventName -PayloadText $payloadText -StdoutText $json -Decision $decisionCode -Reason $decisionReason -RuntimeIdentityReceipt $runtimeIdentityReceipt -NoLog:($NoLog.IsPresent)
 }
 
 Write-Output $json
