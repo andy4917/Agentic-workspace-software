@@ -3856,6 +3856,8 @@ function Register-SubagentLifecycleEvent {
     'subagent_spawn_event'
   } elseif ($Event -eq 'report_submitted' -and $agentRole -eq 'worker') {
     'worker_report_event'
+  } elseif ($Event -eq 'report_submitted' -and $agentRole -eq 'inspector') {
+    'inspector_report_event'
   } elseif ($Event -eq 'report_submitted') {
     'subagent_report_event'
   } else {
@@ -3987,6 +3989,246 @@ function Get-RegexGroupLastValue {
   [string]$matches[-1].Groups[$GroupName].Value
 }
 
+function Get-RegexGroupValues {
+  param(
+    [AllowEmptyString()][string]$Text,
+    [Parameter(Mandatory = $true)][string]$Pattern,
+    [Parameter(Mandatory = $true)][string]$GroupName
+  )
+
+  $values = @()
+  if ([string]::IsNullOrWhiteSpace($Text)) {
+    return $values
+  }
+
+  foreach ($match in @([regex]::Matches($Text, $Pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase))) {
+    $value = [string]$match.Groups[$GroupName].Value
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+      $values += $value
+    }
+  }
+
+  $values
+}
+
+function Convert-CodexAppSessionEscapedText {
+  param([AllowEmptyString()][string]$Text)
+
+  ([string]$Text) -replace '\\"', '"' -replace '\\\\', '\' -replace '\\r', "`r" -replace '\\n', "`n" -replace '\\t', "`t"
+}
+
+function Test-CodexAppLineageId {
+  param([AllowEmptyString()][string]$Value)
+
+  return ([string]$Value -match '^[A-Fa-f0-9]{32,128}$')
+}
+
+function Test-CodexAppCompleteSubagentJobId {
+  param([AllowEmptyString()][string]$Value)
+
+  return ([string]$Value -match '^(worker|subagent)-[A-Fa-f0-9]{32}$')
+}
+
+function Test-CodexAppRouteId {
+  param([AllowEmptyString()][string]$Value)
+
+  return ([string]$Value -match '^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+$')
+}
+
+function Test-CodexAppAgentName {
+  param([AllowEmptyString()][string]$Value)
+
+  return ([string]$Value -match '^(worker|[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+)$')
+}
+
+function Get-CodexAppInitialRequestTextsFromRecord {
+  param([object]$Record)
+
+  $texts = @()
+  if (-not $Record) {
+    return $texts
+  }
+
+  $type = [string](Get-OptionalPropertyValue -Object $Record -Name 'type')
+  $payload = Get-OptionalPropertyValue -Object $Record -Name 'payload'
+  if ($type -eq 'event_msg' -and $payload) {
+    $payloadType = [string](Get-OptionalPropertyValue -Object $payload -Name 'type')
+    if ($payloadType -eq 'user_message') {
+      $message = [string](Get-OptionalPropertyValue -Object $payload -Name 'message')
+      if (-not [string]::IsNullOrWhiteSpace($message)) {
+        $texts += $message
+      }
+    }
+  }
+
+  if ($type -eq 'response_item' -and $payload) {
+    $payloadType = [string](Get-OptionalPropertyValue -Object $payload -Name 'type')
+    $role = [string](Get-OptionalPropertyValue -Object $payload -Name 'role')
+    if ($payloadType -eq 'message' -and $role -eq 'user') {
+      foreach ($content in @(Get-OptionalPropertyValue -Object $payload -Name 'content')) {
+        foreach ($name in @('text','input_text','output_text')) {
+          $value = [string](Get-OptionalPropertyValue -Object $content -Name $name)
+          if (-not [string]::IsNullOrWhiteSpace($value)) {
+            $texts += $value
+          }
+        }
+      }
+    }
+  }
+
+  $texts
+}
+
+function Get-CodexAppSubagentInitialRequestEnvelope {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [string]$Root = '',
+    [string]$AgentRole = '',
+    [string]$RawAgentRole = ''
+  )
+
+  $candidateJobIds = @()
+  $rejectedPartialValues = @()
+  $empty = [pscustomobject]@{
+    job_id = ''
+    parent_turn_id = ''
+    attempt_id = ''
+    route_id = ''
+    agent_name = if ($AgentRole -eq 'worker') { 'worker' } else { $RawAgentRole }
+    target_paths = @()
+    envelope_text = ''
+    envelope_source_line = $null
+    extraction_mode = 'not_found'
+    candidate_job_ids = @()
+    rejected_partial_values = @()
+    matched_complete_envelope = $false
+    route_id_source = ''
+    parent_turn_id_source = ''
+  }
+
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    $empty.extraction_mode = 'session_file_missing'
+    return $empty
+  }
+
+  try {
+    $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+    $reader = New-Object System.IO.StreamReader($stream, $script:Utf8NoBom, $true)
+    try {
+      $lineNumber = 0
+      while (-not $reader.EndOfStream -and $lineNumber -lt 120) {
+        $line = $reader.ReadLine()
+        $lineNumber += 1
+        if ([string]::IsNullOrWhiteSpace($line)) {
+          continue
+        }
+
+        $texts = @()
+        try {
+          $record = $line | ConvertFrom-Json
+          $texts += @(Get-CodexAppInitialRequestTextsFromRecord -Record $record)
+        } catch {
+          if ($line -match '"type"\s*:\s*"user_message"' -or $line -match '"role"\s*:\s*"user"') {
+            $texts += (Convert-CodexAppSessionEscapedText -Text $line)
+          }
+        }
+
+        foreach ($text in @($texts)) {
+          $decodedText = Convert-CodexAppSessionEscapedText -Text ([string]$text)
+          if ([string]::IsNullOrWhiteSpace($decodedText)) {
+            continue
+          }
+
+          $jobId = ''
+          foreach ($value in @(Get-RegexGroupValues -Text $decodedText -Pattern '\bjob_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>(worker|subagent)-[A-Za-z0-9_-]+)' -GroupName 'value')) {
+            $candidateJobIds += $value
+            if (Test-CodexAppCompleteSubagentJobId -Value $value) {
+              $jobId = $value
+              break
+            }
+            $rejectedPartialValues += "job_id:$value"
+          }
+
+          $parentTurnId = ''
+          foreach ($value in @(Get-RegexGroupValues -Text $decodedText -Pattern '\bparent_turn_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Fa-f0-9]{1,128})' -GroupName 'value')) {
+            if (Test-CodexAppLineageId -Value $value) {
+              $parentTurnId = $value
+              break
+            }
+            $rejectedPartialValues += "parent_turn_id:$value"
+          }
+
+          $attemptId = ''
+          foreach ($value in @(Get-RegexGroupValues -Text $decodedText -Pattern '\battempt_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Fa-f0-9]{1,128})' -GroupName 'value')) {
+            if (Test-CodexAppLineageId -Value $value) {
+              $attemptId = $value
+              break
+            }
+            $rejectedPartialValues += "attempt_id:$value"
+          }
+
+          $routeId = ''
+          foreach ($value in @(Get-RegexGroupValues -Text $decodedText -Pattern '\broute_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+)' -GroupName 'value')) {
+            if (Test-CodexAppRouteId -Value $value) {
+              $routeId = $value
+              break
+            }
+            $rejectedPartialValues += "route_id:$value"
+          }
+
+          $agentName = ''
+          foreach ($value in @(Get-RegexGroupValues -Text $decodedText -Pattern '\bagent_name\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+)' -GroupName 'value')) {
+            if (Test-CodexAppAgentName -Value $value) {
+              $agentName = $value
+              break
+            }
+            $rejectedPartialValues += "agent_name:$value"
+          }
+          if (
+            (Test-CodexAppCompleteSubagentJobId -Value $jobId) -and
+            (Test-CodexAppLineageId -Value $parentTurnId) -and
+            (Test-CodexAppLineageId -Value $attemptId) -and
+            (Test-CodexAppRouteId -Value $routeId) -and
+            (Test-CodexAppAgentName -Value $agentName)
+          ) {
+            $targetPaths = @()
+            if (-not [string]::IsNullOrWhiteSpace($Root)) {
+              $targetPaths = @(Get-SubagentInspectionTargetPaths -Root $Root -Text $decodedText -ActiveContract $null -CompletionReceipt $null)
+            }
+
+            return [pscustomobject]@{
+              job_id = $jobId
+              parent_turn_id = $parentTurnId
+              attempt_id = $attemptId
+              route_id = $routeId
+              agent_name = $agentName
+              target_paths = $targetPaths
+              envelope_text = $decodedText
+              envelope_source_line = $lineNumber
+              extraction_mode = 'initial_user_request_envelope'
+              candidate_job_ids = @($candidateJobIds)
+              rejected_partial_values = @($rejectedPartialValues)
+              matched_complete_envelope = $true
+              route_id_source = 'initial_user_request_envelope'
+              parent_turn_id_source = 'initial_user_request_envelope'
+            }
+          }
+        }
+      }
+    } finally {
+      $reader.Dispose()
+      $stream.Dispose()
+    }
+  } catch {
+    $empty.extraction_mode = 'session_file_unreadable'
+    return $empty
+  }
+
+  $empty.candidate_job_ids = @($candidateJobIds)
+  $empty.rejected_partial_values = @($rejectedPartialValues)
+  $empty
+}
+
 function Get-CodexAppSessionTextPreview {
   param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -4089,18 +4331,23 @@ function Get-CodexAppRecentSubagentSessions {
     }
 
     $preview = Get-CodexAppSessionTextPreview -Path $file.FullName
-    $decodedPreview = ([string]$preview) -replace '\\"', '"' -replace '\\\\', '\' -replace '\\r', "`r" -replace '\\n', "`n" -replace '\\t', "`t"
-    $targetPaths = @(Get-SubagentInspectionTargetPaths -Root $Root -Text $decodedPreview -ActiveContract $null -CompletionReceipt $null)
+    $decodedPreview = Convert-CodexAppSessionEscapedText -Text $preview
+    $envelope = Get-CodexAppSubagentInitialRequestEnvelope -Path $file.FullName -Root $Root -AgentRole $agentRole -RawAgentRole $rawRole
+    $envelopeText = [string](Get-OptionalPropertyValue -Object $envelope -Name 'envelope_text')
+    $targetPaths = @(Get-OptionalPropertyValue -Object $envelope -Name 'target_paths')
     $source = Get-OptionalPropertyValue -Object $meta -Name 'source'
     $subagentSource = if ($source) { Get-OptionalPropertyValue -Object $source -Name 'subagent' } else { $null }
     $threadSpawn = if ($subagentSource) { Get-OptionalPropertyValue -Object $subagentSource -Name 'thread_spawn' } else { $null }
-    $agentName = if ($agentRole -eq 'worker') { 'worker' } else { $rawRole }
-    $routeId = Get-RegexGroupLastValue -Text $decodedPreview -Pattern '\broute_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+)' -GroupName 'value'
+    $agentName = [string](Get-OptionalPropertyValue -Object $envelope -Name 'agent_name')
+    if ([string]::IsNullOrWhiteSpace($agentName)) {
+      $agentName = if ($agentRole -eq 'worker') { 'worker' } else { $rawRole }
+    }
+    $routeId = [string](Get-OptionalPropertyValue -Object $envelope -Name 'route_id')
     if ($agentRole -eq 'inspector') {
       $agentRoute = @(Get-SubagentInspectionRoutes -Root $Root | Where-Object {
         [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_name') -eq $agentName
       } | Select-Object -First 1)
-      if ($agentRoute.Count -gt 0) {
+      if ([string]::IsNullOrWhiteSpace($routeId) -and $agentRoute.Count -gt 0) {
         $routeId = [string](Get-OptionalPropertyValue -Object $agentRoute[0] -Name 'route_id')
       }
     }
@@ -4117,12 +4364,19 @@ function Get-CodexAppRecentSubagentSessions {
       source_thread_id = [string](Get-OptionalPropertyValue -Object $meta -Name 'id')
       parent_thread_id = if ($threadSpawn) { [string](Get-OptionalPropertyValue -Object $threadSpawn -Name 'parent_thread_id') } else { '' }
       depth = if ($threadSpawn) { Get-OptionalPropertyValue -Object $threadSpawn -Name 'depth' } else { $null }
-      parent_turn_id = Get-RegexGroupLastValue -Text $decodedPreview -Pattern '\bparent_turn_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Fa-f0-9]{32,128})' -GroupName 'value'
-      attempt_id = Get-RegexGroupLastValue -Text $decodedPreview -Pattern '\battempt_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Fa-f0-9]{32,128})' -GroupName 'value'
+      parent_turn_id = [string](Get-OptionalPropertyValue -Object $envelope -Name 'parent_turn_id')
+      attempt_id = [string](Get-OptionalPropertyValue -Object $envelope -Name 'attempt_id')
       route_id = $routeId
-      job_id = Get-RegexGroupLastValue -Text $decodedPreview -Pattern '\bjob_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>(worker|subagent)-[A-Za-z0-9_-]+)' -GroupName 'value'
+      job_id = [string](Get-OptionalPropertyValue -Object $envelope -Name 'job_id')
       target_paths = $targetPaths
-      payload_fingerprint = Get-TextFingerprint -Text $decodedPreview
+      payload_fingerprint = Get-TextFingerprint -Text $(if ([string]::IsNullOrWhiteSpace($envelopeText)) { $decodedPreview } else { $envelopeText })
+      extraction_mode = [string](Get-OptionalPropertyValue -Object $envelope -Name 'extraction_mode')
+      envelope_source_line = Get-OptionalPropertyValue -Object $envelope -Name 'envelope_source_line'
+      candidate_job_ids = @(Get-OptionalPropertyValue -Object $envelope -Name 'candidate_job_ids')
+      rejected_partial_values = @(Get-OptionalPropertyValue -Object $envelope -Name 'rejected_partial_values')
+      matched_complete_envelope = [bool](Get-OptionalPropertyValue -Object $envelope -Name 'matched_complete_envelope')
+      route_id_source = [string](Get-OptionalPropertyValue -Object $envelope -Name 'route_id_source')
+      parent_turn_id_source = [string](Get-OptionalPropertyValue -Object $envelope -Name 'parent_turn_id_source')
     }
   }
 
@@ -4184,17 +4438,6 @@ function Find-CodexAppSubagentSpawnJobMatch {
 
   $currentTurn = [string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint')
   $sessionParentTurn = [string](Get-OptionalPropertyValue -Object $Session -Name 'parent_turn_id')
-  if ([string]::IsNullOrWhiteSpace($sessionParentTurn)) {
-    $sessionParentTurn = $currentTurn
-  }
-  if ([string]::IsNullOrWhiteSpace($sessionParentTurn)) {
-    return $null
-  }
-
-  $sessionAttempt = [string](Get-OptionalPropertyValue -Object $Session -Name 'attempt_id')
-  if ([string]::IsNullOrWhiteSpace($sessionAttempt)) {
-    $sessionAttempt = $sessionParentTurn
-  }
   $sessionRole = [string](Get-OptionalPropertyValue -Object $Session -Name 'agent_role')
   $sessionRoute = [string](Get-OptionalPropertyValue -Object $Session -Name 'route_id')
   $sessionJobId = [string](Get-OptionalPropertyValue -Object $Session -Name 'job_id')
@@ -4209,6 +4452,38 @@ function Find-CodexAppSubagentSpawnJobMatch {
     if ($route.Count -gt 0) {
       $sessionRoute = [string](Get-OptionalPropertyValue -Object $route[0] -Name 'route_id')
     }
+  }
+
+  if (Test-CodexAppCompleteSubagentJobId -Value $sessionJobId) {
+    $jobsForExact = if ($sessionRole -eq 'worker') {
+      @(Read-SubagentWorkerJobs -Root $Root)
+    } else {
+      @(Read-SubagentInspectionJobs -Root $Root)
+    }
+    $exactMatches = @($jobsForExact | Where-Object {
+      $jobRole = if ([string](Get-OptionalPropertyValue -Object $_ -Name 'authority') -eq 'candidate_artifact_only') { 'worker' } else { 'inspector' }
+      $status = [string](Get-OptionalPropertyValue -Object $_ -Name 'status')
+      $jobId = [string](Get-OptionalPropertyValue -Object $_ -Name 'job_id')
+      $jobId -eq $sessionJobId -and
+      $jobRole -eq $sessionRole -and
+      $status -in @('queued','spawn_requested','spawned') -and
+      (Test-CodexAppSessionWithinJobWindow -Session $Session -Job $_)
+    })
+    if ($exactMatches.Count -gt 0) {
+      return @($exactMatches | Sort-Object @{ Expression = { [string](Get-OptionalPropertyValue -Object $_ -Name 'updated_at_utc') } })[-1]
+    }
+  }
+
+  if ([string]::IsNullOrWhiteSpace($sessionParentTurn)) {
+    $sessionParentTurn = $currentTurn
+  }
+  if ([string]::IsNullOrWhiteSpace($sessionParentTurn)) {
+    return $null
+  }
+
+  $sessionAttempt = [string](Get-OptionalPropertyValue -Object $Session -Name 'attempt_id')
+  if ([string]::IsNullOrWhiteSpace($sessionAttempt)) {
+    $sessionAttempt = $sessionParentTurn
   }
 
   $jobs = if ($sessionRole -eq 'worker') {
@@ -4240,6 +4515,41 @@ function Find-CodexAppSubagentSpawnJobMatch {
   })
 
   if ($matches.Count -eq 0) {
+    $candidateJobs = @($jobs | Select-Object -First 20 | ForEach-Object {
+      [ordered]@{
+        job_id = [string](Get-OptionalPropertyValue -Object $_ -Name 'job_id')
+        parent_turn_id = [string](Get-OptionalPropertyValue -Object $_ -Name 'parent_turn_id')
+        attempt_id = [string](Get-OptionalPropertyValue -Object $_ -Name 'attempt_id')
+        route_id = [string](Get-OptionalPropertyValue -Object $_ -Name 'route_id')
+        agent_name = [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_name')
+        status = [string](Get-OptionalPropertyValue -Object $_ -Name 'status')
+        authority = [string](Get-OptionalPropertyValue -Object $_ -Name 'authority')
+        timestamp_window = Test-CodexAppSessionWithinJobWindow -Session $Session -Job $_
+      }
+    })
+    $diagnostics = [ordered]@{
+      extracted_envelope = [ordered]@{
+        job_id = $sessionJobId
+        parent_turn_id = $sessionParentTurn
+        attempt_id = $sessionAttempt
+        route_id = $sessionRoute
+        agent_name = [string](Get-OptionalPropertyValue -Object $Session -Name 'agent_name')
+        extraction_mode = [string](Get-OptionalPropertyValue -Object $Session -Name 'extraction_mode')
+        envelope_source_line = Get-OptionalPropertyValue -Object $Session -Name 'envelope_source_line'
+        candidate_job_ids = @(Get-OptionalPropertyValue -Object $Session -Name 'candidate_job_ids')
+        rejected_partial_values = @(Get-OptionalPropertyValue -Object $Session -Name 'rejected_partial_values')
+      }
+      queued_jobs_considered = $candidateJobs
+      decision_tree = @(
+        'exact_complete_job_id_plus_expected_agent_role',
+        'exact_complete_job_id_plus_expected_route_id',
+        'same_parent_turn_id_plus_route_id_plus_agent_name',
+        'same_attempt_id_plus_route_id_plus_agent_name',
+        'timestamp_window_fallback',
+        'unmatched_subagent_spawn_observed'
+      )
+    }
+    Add-Member -InputObject $Session -NotePropertyName 'match_diagnostics' -NotePropertyValue $diagnostics -Force
     return $null
   }
 
@@ -4304,6 +4614,16 @@ function Write-CodexAppSubagentSpawnBridgeLifecycleEvent {
     parent_thread_id = [string](Get-OptionalPropertyValue -Object $Session -Name 'parent_thread_id')
     app_session_id = [string](Get-OptionalPropertyValue -Object $Session -Name 'app_session_id')
     app_session_path = [string](Get-OptionalPropertyValue -Object $Session -Name 'app_session_path')
+    extraction = [ordered]@{
+      mode = [string](Get-OptionalPropertyValue -Object $Session -Name 'extraction_mode')
+      envelope_source_line = Get-OptionalPropertyValue -Object $Session -Name 'envelope_source_line'
+      candidate_job_ids = @(Get-OptionalPropertyValue -Object $Session -Name 'candidate_job_ids')
+      rejected_partial_values = @(Get-OptionalPropertyValue -Object $Session -Name 'rejected_partial_values')
+      matched_complete_envelope = [bool](Get-OptionalPropertyValue -Object $Session -Name 'matched_complete_envelope')
+      route_id_source = [string](Get-OptionalPropertyValue -Object $Session -Name 'route_id_source')
+      parent_turn_id_source = [string](Get-OptionalPropertyValue -Object $Session -Name 'parent_turn_id_source')
+    }
+    match_diagnostics = if ($matched) { $null } else { Get-OptionalPropertyValue -Object $Session -Name 'match_diagnostics' }
     match_requirements = [ordered]@{
       parent_turn_id = -not [string]::IsNullOrWhiteSpace($turn)
       attempt_id = $matched -and -not [string]::IsNullOrWhiteSpace([string](Get-OptionalPropertyValue -Object $Job -Name 'attempt_id'))
@@ -4559,7 +4879,7 @@ function Get-SubagentInspectionObservation {
 
   $toolName = Get-PayloadString -Object $Payload -Names @('tool_name','toolName','tool','name')
   $jobId = Get-PayloadString -Object $Payload -Names @('job_id','jobId','subagent_job_id','inspection_job_id')
-  if ([string]::IsNullOrWhiteSpace($jobId) -and $PayloadText -match '(?i)\bjob_id\b\s*[:=]\s*["'']?(?<id>subagent-[A-Za-z0-9_-]+)') {
+  if ([string]::IsNullOrWhiteSpace($jobId) -and $PayloadText -match '(?i)\bjob_id\b\s*\\?["'']?\s*[:=]\s*\\?["'']?(?<id>subagent-[A-Za-z0-9_-]+)') {
     $jobId = $Matches.id
   }
 
@@ -8601,7 +8921,18 @@ switch ($HookName) {
       'state_in_progress',
       'state_not_started'
     )
-    if ($hasCompletionClaim -and -not (Test-FinalizationEvidenceText -Text $lastAssistantMessage)) {
+    $orchestrationPrecedenceReasons = @(
+      'required_worker_not_spawned',
+      'inspector_only_delegation_for_mutating_task',
+      'worker_report_missing',
+      'subagent_report_missing',
+      'pm_decision_missing',
+      'subagent_report_quarantined',
+      'subagent_report_terminated',
+      'pm_adopted_tainted_subagent_output',
+      'required_subagent_not_spawned'
+    )
+    if ($hasCompletionClaim -and -not (Test-FinalizationEvidenceText -Text $lastAssistantMessage) -and ($orchestrationPrecedenceReasons -notcontains $gateReason)) {
       $decision = [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = 'direct_evidence_missing'; gated_reason = $gateReason }
     } elseif ([string]::IsNullOrWhiteSpace($CompletionState) -and (-not $hasCompletionClaim) -and ($statusOnlyReasons -contains $gateReason)) {
       $decision = [ordered]@{ decision = 'ALLOW'; reason = 'non_completion_stop_snapshot'; gated_reason = $gateReason }

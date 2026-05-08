@@ -37,6 +37,19 @@ function Get-TextFingerprint {
   }
 }
 
+function Get-GateDecisionFingerprint {
+  param(
+    [Parameter(Mandatory = $true)][object]$ActiveContract,
+    [Parameter(Mandatory = $true)][object]$CompletionReceipt
+  )
+  $shape = [ordered]@{
+    active_turn_fingerprint = Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint'
+    active_state = Get-OptionalPropertyValue -Object $ActiveContract -Name 'state'
+    receipt = $CompletionReceipt
+  }
+  Get-TextFingerprint -Text ($shape | ConvertTo-Json -Depth 14 -Compress)
+}
+
 function Convert-ToStringArray {
   param([object]$Value)
   $items = @()
@@ -165,7 +178,15 @@ $gateIssuedReceipt = Read-OptionalJsonFile -Path (Join-Path $Root 'Settings\Code
 $turn = [string](Get-OptionalPropertyValue -Object $activeContract -Name 'turn_fingerprint')
 $requiredRoutes = @(Get-RequiredRoutes -CompletionReceipt $completionReceipt)
 if ($requiredRoutes.Count -eq 0) { $requiredRoutes = @('repo_integrity_inspection','required_tool_route_inspection') }
-$gateStatus = if ($gateIssuedReceipt -and [string](Get-OptionalPropertyValue -Object $gateIssuedReceipt -Name 'turn_fingerprint') -eq $turn -and [string](Get-OptionalPropertyValue -Object $gateIssuedReceipt -Name 'decision') -eq 'ALLOW_COMPLETE_CLAIM') { 'gate_issued' } else { 'pending_stop_gate' }
+$expectedGateFingerprint = if ($activeContract -and $completionReceipt) { Get-GateDecisionFingerprint -ActiveContract $activeContract -CompletionReceipt $completionReceipt } else { $null }
+$observedGateFingerprint = if ($gateIssuedReceipt) { [string](Get-OptionalPropertyValue -Object $gateIssuedReceipt -Name 'source_completion_receipt_fingerprint') } else { $null }
+$gateStatus = if (
+  $gateIssuedReceipt -and
+  [string](Get-OptionalPropertyValue -Object $gateIssuedReceipt -Name 'turn_fingerprint') -eq $turn -and
+  [string](Get-OptionalPropertyValue -Object $gateIssuedReceipt -Name 'decision') -eq 'ALLOW_COMPLETE_CLAIM' -and
+  -not [string]::IsNullOrWhiteSpace($expectedGateFingerprint) -and
+  $observedGateFingerprint -eq $expectedGateFingerprint
+) { 'gate_issued' } else { 'pending_stop_gate' }
 
 $receipt = [ordered]@{
   schema_version = 'repo_v2_adoption_receipt.v1'

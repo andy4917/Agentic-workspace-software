@@ -1,7 +1,7 @@
 {
     "schema_version":  "harness_v2_final_acceptance_result.v1",
-    "command_run_timestamp_utc":  "2026-05-08T18:21:24.8064063Z",
-    "checked_at_utc":  "2026-05-08T18:21:25.4839380Z",
+    "command_run_timestamp_utc":  "2026-05-08T19:56:35.8321303Z",
+    "checked_at_utc":  "2026-05-08T19:56:36.6328746Z",
     "status":  "verified_candidate_evidence",
     "completion_authority":  "none",
     "stale":  false,
