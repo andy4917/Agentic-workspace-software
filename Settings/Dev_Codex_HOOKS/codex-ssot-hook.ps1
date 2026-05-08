@@ -3968,6 +3968,25 @@ function Get-RegexGroupValue {
   [string]$match.Groups[$GroupName].Value
 }
 
+function Get-RegexGroupLastValue {
+  param(
+    [AllowEmptyString()][string]$Text,
+    [Parameter(Mandatory = $true)][string]$Pattern,
+    [Parameter(Mandatory = $true)][string]$GroupName
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Text)) {
+    return ''
+  }
+
+  $matches = @([regex]::Matches($Text, $Pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
+  if ($matches.Count -eq 0) {
+    return ''
+  }
+
+  [string]$matches[-1].Groups[$GroupName].Value
+}
+
 function Get-CodexAppSessionTextPreview {
   param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -4070,11 +4089,21 @@ function Get-CodexAppRecentSubagentSessions {
     }
 
     $preview = Get-CodexAppSessionTextPreview -Path $file.FullName
-    $decodedPreview = ([string]$preview) -replace '\\"', '"' -replace '\\\\', '\'
+    $decodedPreview = ([string]$preview) -replace '\\"', '"' -replace '\\\\', '\' -replace '\\r', "`r" -replace '\\n', "`n" -replace '\\t', "`t"
     $targetPaths = @(Get-SubagentInspectionTargetPaths -Root $Root -Text $decodedPreview -ActiveContract $null -CompletionReceipt $null)
     $source = Get-OptionalPropertyValue -Object $meta -Name 'source'
     $subagentSource = if ($source) { Get-OptionalPropertyValue -Object $source -Name 'subagent' } else { $null }
     $threadSpawn = if ($subagentSource) { Get-OptionalPropertyValue -Object $subagentSource -Name 'thread_spawn' } else { $null }
+    $agentName = if ($agentRole -eq 'worker') { 'worker' } else { $rawRole }
+    $routeId = Get-RegexGroupLastValue -Text $decodedPreview -Pattern '\broute_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+)' -GroupName 'value'
+    if ($agentRole -eq 'inspector') {
+      $agentRoute = @(Get-SubagentInspectionRoutes -Root $Root | Where-Object {
+        [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_name') -eq $agentName
+      } | Select-Object -First 1)
+      if ($agentRoute.Count -gt 0) {
+        $routeId = [string](Get-OptionalPropertyValue -Object $agentRoute[0] -Name 'route_id')
+      }
+    }
 
     $sessions += [pscustomobject]@{
       app_session_id = [string](Get-OptionalPropertyValue -Object $meta -Name 'id')
@@ -4084,14 +4113,14 @@ function Get-CodexAppRecentSubagentSessions {
       thread_source = [string](Get-OptionalPropertyValue -Object $meta -Name 'thread_source')
       agent_role = $agentRole
       raw_agent_role = $rawRole
-      agent_name = if ($agentRole -eq 'worker') { 'worker' } else { $rawRole }
+      agent_name = $agentName
       source_thread_id = [string](Get-OptionalPropertyValue -Object $meta -Name 'id')
       parent_thread_id = if ($threadSpawn) { [string](Get-OptionalPropertyValue -Object $threadSpawn -Name 'parent_thread_id') } else { '' }
       depth = if ($threadSpawn) { Get-OptionalPropertyValue -Object $threadSpawn -Name 'depth' } else { $null }
-      parent_turn_id = Get-RegexGroupValue -Text $decodedPreview -Pattern '\bparent_turn_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9_-]{16,})' -GroupName 'value'
-      attempt_id = Get-RegexGroupValue -Text $decodedPreview -Pattern '\battempt_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9_-]{16,})' -GroupName 'value'
-      route_id = Get-RegexGroupValue -Text $decodedPreview -Pattern '\broute_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9_]+)' -GroupName 'value'
-      job_id = Get-RegexGroupValue -Text $decodedPreview -Pattern '\bjob_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>(worker|subagent)-[A-Za-z0-9_-]+)' -GroupName 'value'
+      parent_turn_id = Get-RegexGroupLastValue -Text $decodedPreview -Pattern '\bparent_turn_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Fa-f0-9]{32,128})' -GroupName 'value'
+      attempt_id = Get-RegexGroupLastValue -Text $decodedPreview -Pattern '\battempt_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Fa-f0-9]{32,128})' -GroupName 'value'
+      route_id = $routeId
+      job_id = Get-RegexGroupLastValue -Text $decodedPreview -Pattern '\bjob_id\b\s*["'']?\s*[:=]\s*["'']?(?<value>(worker|subagent)-[A-Za-z0-9_-]+)' -GroupName 'value'
       target_paths = $targetPaths
       payload_fingerprint = Get-TextFingerprint -Text $decodedPreview
     }
@@ -4112,9 +4141,12 @@ function Test-SubagentLifecycleBridgeAlreadyRecorded {
 
   $events = @(Read-SubagentLifecycleEvents -Root $Root)
   foreach ($event in $events) {
-    if ([string](Get-OptionalPropertyValue -Object $event -Name 'source_thread_id') -eq $AppSessionId -or
-        [string](Get-OptionalPropertyValue -Object $event -Name 'app_session_id') -eq $AppSessionId -or
-        [string](Get-OptionalPropertyValue -Object $event -Name 'subagent_id') -eq $AppSessionId) {
+    $sameSession = [string](Get-OptionalPropertyValue -Object $event -Name 'source_thread_id') -eq $AppSessionId -or
+      [string](Get-OptionalPropertyValue -Object $event -Name 'app_session_id') -eq $AppSessionId -or
+      [string](Get-OptionalPropertyValue -Object $event -Name 'subagent_id') -eq $AppSessionId
+    $canonicalSpawn = [string](Get-OptionalPropertyValue -Object $event -Name 'record_type') -in @('worker_spawn_event','inspector_spawn_event') -and
+      [string](Get-OptionalPropertyValue -Object $event -Name 'event') -eq 'spawned'
+    if ($sameSession -and $canonicalSpawn) {
       return $true
     }
   }
@@ -4194,6 +4226,8 @@ function Find-CodexAppSubagentSpawnJobMatch {
     $jobId = [string](Get-OptionalPropertyValue -Object $_ -Name 'job_id')
     $routeId = [string](Get-OptionalPropertyValue -Object $_ -Name 'route_id')
     $agentName = [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_name')
+    $explicitJobMatch = (-not [string]::IsNullOrWhiteSpace($sessionJobId)) -and $jobId -eq $sessionJobId
+    $targetSetMatch = (-not [string]::IsNullOrWhiteSpace($sessionTargetKey)) -and $jobTargetKey -eq $sessionTargetKey
 
     $jobRole -eq $sessionRole -and
     $status -in @('queued','spawn_requested','spawned') -and
@@ -4201,8 +4235,7 @@ function Find-CodexAppSubagentSpawnJobMatch {
     ([string]::IsNullOrWhiteSpace($sessionRoute) -or $routeId -eq $sessionRoute) -and
     ($sessionRole -eq 'worker' -or $agentName -eq [string](Get-OptionalPropertyValue -Object $Session -Name 'agent_name')) -and
     ([string]::IsNullOrWhiteSpace($jobAttempt) -or $jobAttempt -eq $sessionAttempt) -and
-    (-not [string]::IsNullOrWhiteSpace($sessionTargetKey)) -and
-    $jobTargetKey -eq $sessionTargetKey -and
+    ($explicitJobMatch -or $targetSetMatch) -and
     (Test-CodexAppSessionWithinJobWindow -Session $Session -Job $_)
   })
 
