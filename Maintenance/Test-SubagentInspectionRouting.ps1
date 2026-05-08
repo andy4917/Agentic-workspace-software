@@ -118,6 +118,45 @@ if ($toolRouteJob.Count -eq 0) {
   throw 'Expected required_tool_route_inspection job was not queued.'
 }
 
+$duplicateQueuePayload = @{
+  tool_name = 'shell_command'
+  command = "Set-Content -LiteralPath '$Root\Settings\Dev_Codex_HOOKS\codex-ssot-hook.ps1' -Value '# required_tool_route_inspection duplicate enqueue fixture' -WhatIf"
+  cwd = $Root
+  thread_id = 'thread-subagent-inspection-routing'
+}
+$firstDuplicateQueueResult = Invoke-HookJson -HookName 'post_tool_use' -Payload $duplicateQueuePayload
+$afterFirstDuplicateQueueLines = Read-Lines -Path $JobsPath
+$firstDuplicateQueueJobs = @(Read-JsonLines -Lines @($afterFirstDuplicateQueueLines | Select-Object -Skip $afterPromptJobLines.Count))
+$duplicateQueueJob = @($firstDuplicateQueueJobs | Where-Object {
+  [string]$_.route_id -eq 'required_tool_route_inspection' -and
+  [string]$_.status -eq 'queued' -and
+  -not [string]::IsNullOrWhiteSpace([string]$_.dedupe_key)
+} | Select-Object -Last 1)
+
+$duplicatePromptResult = Invoke-HookJson -HookName 'post_tool_use' -Payload $duplicateQueuePayload
+$afterDuplicatePromptJobLines = Read-Lines -Path $JobsPath
+$duplicatePromptJobs = @(Read-JsonLines -Lines @($afterDuplicatePromptJobLines | Select-Object -Skip $afterFirstDuplicateQueueLines.Count))
+$allPromptJobsForRun = @($newPromptJobs + $firstDuplicateQueueJobs + $duplicatePromptJobs)
+$duplicateDedupeKey = if ($duplicateQueueJob.Count -gt 0) {
+  [string]$duplicateQueueJob[0].dedupe_key
+} elseif (@($firstDuplicateQueueJobs | Where-Object { [string]$_.status -eq 'duplicate' -and -not [string]::IsNullOrWhiteSpace([string]$_.dedupe_key) }).Count -gt 0) {
+  [string]@($firstDuplicateQueueJobs | Where-Object { [string]$_.status -eq 'duplicate' -and -not [string]::IsNullOrWhiteSpace([string]$_.dedupe_key) } | Select-Object -First 1)[0].dedupe_key
+} else {
+  [string]$toolRouteJob[0].dedupe_key
+}
+
+$duplicateMarkers = @(@($firstDuplicateQueueJobs + $duplicatePromptJobs) | Where-Object {
+  [string]$_.status -eq 'duplicate' -and
+  -not [string]::IsNullOrWhiteSpace([string]$_.duplicate_of) -and
+  [string]$_.dedupe_key -eq $duplicateDedupeKey
+})
+$activeToolRouteDuplicates = @($allPromptJobsForRun | Where-Object {
+  [string]$_.route_id -eq 'required_tool_route_inspection' -and
+  [string]$_.dedupe_key -eq $duplicateDedupeKey -and
+  [string]$_.status -in @('queued','spawn_requested','spawned','reported','not_applicable') -and
+  [string]::IsNullOrWhiteSpace([string]$_.duplicate_of)
+})
+
 $job = $contractJob[0]
 $spawnPayload = @{
   tool_name = 'spawn_agent'
@@ -187,6 +226,8 @@ $checks = [ordered]@{
   job_queued = $true
   job_has_required_fields = -not [string]::IsNullOrWhiteSpace([string]$job.job_id) -and -not [string]::IsNullOrWhiteSpace([string]$job.parent_turn_id) -and [string]$job.agent_name -eq 'spark_contract_inspector' -and [string]$job.sandbox_mode -eq 'read-only' -and $null -ne $job.target_paths -and [string]$job.status -eq 'queued' -and [string]$job.authority -eq 'candidate_evidence_only'
   required_tool_route_job_queued = $toolRouteJob.Count -ge 1
+  duplicate_enqueue_marked_append_only = $firstDuplicateQueueResult.output -eq '{}' -and $duplicatePromptResult.output -eq '{}' -and $duplicateMarkers.Count -ge 1
+  duplicate_enqueue_has_single_active_job = $activeToolRouteDuplicates.Count -eq 1
   jobs_have_clean_absolute_target_paths = $allNewJobsHaveCleanTargetPaths
   subagent_spawn_recorded = $spawnEvents.Count -ge 1
   subagent_report_recorded = $reportEvents.Count -ge 1

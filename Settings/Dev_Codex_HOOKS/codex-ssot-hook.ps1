@@ -884,6 +884,11 @@ function Get-ClassificationSurfaceSignals {
   $domainTextNorm = Convert-ToGuardPathText -Text $domainText
   $norm = Convert-ToGuardPathText -Text ((@($Text) + @($Paths)) -join "`n")
   $signals = @()
+  $koGateWords = @(
+    (New-UnicodeWord @(0xD1B5,0xACFC)),
+    (New-UnicodeWord @(0xC644,0xB8CC,0xC870,0xAC74)),
+    (New-UnicodeWord @(0xC6B4,0xC601,0xAC00,0xB2A5,0xC0C1,0xD0DC))
+  )
   if ($pathNorm -match '(?i)(^|/)(src|source|lib|app|server|api|db|migrations)/|\.([cm]?[jt]sx?|py|rs|go|java|cs|ps1|sh)$' -or $textNorm -match '(?i)\b(code|implementation|refactor|bug|fix)\b') {
     $signals += 'source_code'
   }
@@ -893,7 +898,7 @@ function Get-ClassificationSurfaceSignals {
   if ($pathNorm -match '(?i)(settings/codex_app_declarative|\.ya?ml$|\.toml$|\.json$)' -or $textNorm -match '(?i)\b(config|configuration)\b') {
     $signals += 'config'
   }
-  if ($pathNorm -match '(?i)(settings/dev_codex_hooks|codex-ssot-hook\.ps1|completion_gate)' -or $textNorm -match '(?i)\b(hook|pretooluse|posttooluse|stop|completion[_ -]?gate|gate pass)\b|gate\s+통과|완료조건|운영가능상태') {
+  if ($pathNorm -match '(?i)(settings/dev_codex_hooks|codex-ssot-hook\.ps1|completion_gate)' -or $textNorm -match '(?i)\b(hook|pretooluse|posttooluse|stop|completion[_ -]?gate|gate pass)\b' -or @($koGateWords | Where-Object { $textNorm.Contains([string]$_) }).Count -gt 0) {
     $signals += 'hook'
   }
   if ($pathNorm -match '(?i)(settings/codex_app_runtime|tool_usage_events\.jsonl|skill_usage_events\.jsonl|pm_decisions|subagent_.*\.jsonl)' -or $textNorm -match '(?i)\b(runtime|receipt|ledger|tool_usage_event|skill_usage_event)\b') {
@@ -923,8 +928,17 @@ function Test-PositiveBasicTask {
     [bool]$CompletionClaim
   )
 
-  $writeSignals = '(?i)\b(implement|fix|change|update|add|remove|refactor|patch|apply|write|edit|validate|build|test|commit|push)\b|수정|정리|커밋|푸시|패치|보강|검증'
-  $fileWritePlanned = ($ActionClass -in @('write','delete','execute')) -or ($Text -match $writeSignals)
+  $writeSignals = '(?i)\b(implement|fix|change|update|add|remove|refactor|patch|apply|write|edit|validate|build|test|commit|push)\b'
+  $koWriteSignals = @(
+    (New-UnicodeWord @(0xC218,0xC815)),
+    (New-UnicodeWord @(0xC815,0xB9AC)),
+    (New-UnicodeWord @(0xCEE4,0xBC0B)),
+    (New-UnicodeWord @(0xD478,0xC2DC)),
+    (New-UnicodeWord @(0xD328,0xCE58)),
+    (New-UnicodeWord @(0xBCF4,0xAC15)),
+    (New-UnicodeWord @(0xAC80,0xC99D))
+  )
+  $fileWritePlanned = ($ActionClass -in @('write','delete','execute')) -or ($Text -match $writeSignals) -or @($koWriteSignals | Where-Object { ([string]$Text).Contains([string]$_) }).Count -gt 0
   $hasCode = $Surfaces -contains 'source_code'
   $hasTest = $Surfaces -contains 'tests'
   $hasConfig = $Surfaces -contains 'config'
@@ -992,7 +1006,8 @@ function Resolve-TaskClassification {
   $selectedClass = 'Class 0'
   $ambiguityApplied = $false
   if ($basic.allowed) {
-    if ($allText -match '(?i)\b(draft|document|memo|readme|note)\b|문서|초안') {
+    $koDocSignals = @((New-UnicodeWord @(0xBB38,0xC11C)), (New-UnicodeWord @(0xCD08,0xC548)))
+    if ($allText -match '(?i)\b(draft|document|memo|readme|note)\b' -or @($koDocSignals | Where-Object { $allText.Contains([string]$_) }).Count -gt 0) {
       $selectedClass = 'Class 1'
     } else {
       $selectedClass = 'Class 0'
@@ -1101,7 +1116,13 @@ function Resolve-RequiredWorkerRoutes {
   )
 
   $routes = @()
-  $mutatingIntent = $ContextText -match '(?i)\b(implement|fix|repair|patch|update|edit|write|change|add|remove|refactor|test update|config update|control[-_ ]?plane repair)\b|구현|수정|패치|보강'
+  $koMutatingSignals = @(
+    (New-UnicodeWord @(0xAD6C,0xD604)),
+    (New-UnicodeWord @(0xC218,0xC815)),
+    (New-UnicodeWord @(0xD328,0xCE58)),
+    (New-UnicodeWord @(0xBCF4,0xAC15))
+  )
+  $mutatingIntent = ($ContextText -match '(?i)\b(implement|fix|repair|patch|update|edit|write|change|add|remove|refactor|test update|config update|control[-_ ]?plane repair)\b') -or @($koMutatingSignals | Where-Object { $ContextText.Contains([string]$_) }).Count -gt 0
   if ($TaskClass -in @('Class 2','Class 3','Class 4') -and $mutatingIntent) {
     $routes += 'implementation_worker'
   }
@@ -1133,7 +1154,8 @@ function Resolve-RequiredSkillRoutes {
 
   $routes = @()
   if ($TaskClass -in @('Class 0','Class 1')) {
-    if ($ContextText -match '(?i)\b(plan|design|document|adr|readme|handoff)\b|문서|계획') {
+    $koDocSkillSignals = @((New-UnicodeWord @(0xBB38,0xC11C)), (New-UnicodeWord @(0xACC4,0xD68D)))
+    if ($ContextText -match '(?i)\b(plan|design|document|adr|readme|handoff)\b' -or @($koDocSkillSignals | Where-Object { $ContextText.Contains([string]$_) }).Count -gt 0) {
       $routes += [ordered]@{ skill_id = 'documentation-and-adrs'; need_level = 'RECOMMENDED'; reason = 'low_risk_doc_or_planning_support' }
     }
   }
@@ -2577,6 +2599,74 @@ function Normalize-SubagentInspectionTargetPaths {
   $normalized
 }
 
+function Get-SubagentInspectionTargetSetKey {
+  param(
+    [string]$Root,
+    [object]$TargetPaths
+  )
+
+  $normalized = @(Normalize-SubagentInspectionTargetPaths -Root $Root -Paths $TargetPaths | ForEach-Object {
+    (Convert-ToGuardPathText -Text ([string]$_)).TrimEnd('/')
+  } | Sort-Object -Unique)
+
+  if ($normalized.Count -eq 0) {
+    return 'targets:empty'
+  }
+
+  'targets:' + (Get-TextFingerprint -Text ($normalized | ConvertTo-Json -Depth 6 -Compress))
+}
+
+function Get-SubagentInspectionDedupeKey {
+  param(
+    [string]$Root,
+    [Parameter(Mandatory = $true)][string]$ParentTurnId,
+    [Parameter(Mandatory = $true)][string]$RouteId,
+    [object]$TargetPaths
+  )
+
+  $targetSetKey = Get-SubagentInspectionTargetSetKey -Root $Root -TargetPaths $TargetPaths
+  $raw = [ordered]@{
+    parent_turn_id = $ParentTurnId
+    route_id = $RouteId
+    target_set_key = $targetSetKey
+  }
+
+  'subagent-inspection:' + (Get-TextFingerprint -Text ($raw | ConvertTo-Json -Depth 8 -Compress))
+}
+
+function Test-SubagentInspectionJobActive {
+  param([object]$Job)
+
+  $status = [string](Get-OptionalPropertyValue -Object $Job -Name 'status')
+  if ($status -notin @('queued','spawn_requested','spawned','reported','not_applicable')) {
+    return $false
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace([string](Get-OptionalPropertyValue -Object $Job -Name 'duplicate_of'))) {
+    return $false
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace([string](Get-OptionalPropertyValue -Object $Job -Name 'superseded_by'))) {
+    return $false
+  }
+
+  return $true
+}
+
+function Get-SubagentInspectionJobSortRank {
+  param([object]$Job)
+
+  $status = [string](Get-OptionalPropertyValue -Object $Job -Name 'status')
+  switch ($status) {
+    'reported' { return 6 }
+    'not_applicable' { return 5 }
+    'spawned' { return 4 }
+    'spawn_requested' { return 3 }
+    'queued' { return 2 }
+    default { return 1 }
+  }
+}
+
 function Repair-SubagentInspectionJobTargetPaths {
   param(
     [string]$Root,
@@ -2604,6 +2694,13 @@ function Repair-SubagentInspectionJobTargetPaths {
     $entry[$property.Name] = $property.Value
   }
   $entry['target_paths'] = $cleanPaths
+  if ([string]::IsNullOrWhiteSpace([string](Get-OptionalPropertyValue -Object $entry -Name 'dedupe_key'))) {
+    $parentTurnId = [string](Get-OptionalPropertyValue -Object $entry -Name 'parent_turn_id')
+    $routeId = [string](Get-OptionalPropertyValue -Object $entry -Name 'route_id')
+    if (-not [string]::IsNullOrWhiteSpace($parentTurnId) -and -not [string]::IsNullOrWhiteSpace($routeId)) {
+      $entry['dedupe_key'] = Get-SubagentInspectionDedupeKey -Root $Root -ParentTurnId $parentTurnId -RouteId $routeId -TargetPaths $cleanPaths
+    }
+  }
   $entry['warnings'] = $warnings
   $entry
 }
@@ -2678,10 +2775,33 @@ function Get-LatestSubagentInspectionJobs {
     if ([string]::IsNullOrWhiteSpace($jobId)) {
       continue
     }
+    if (-not (Test-SubagentInspectionJobActive -Job $job)) {
+      continue
+    }
     $routeId = [string](Get-OptionalPropertyValue -Object $job -Name 'route_id')
-    $agentName = [string](Get-OptionalPropertyValue -Object $job -Name 'agent_name')
-    $key = "$jobId|$routeId|$agentName"
-    $latest[$key] = $job
+    $parentTurnId = [string](Get-OptionalPropertyValue -Object $job -Name 'parent_turn_id')
+    $dedupeKey = [string](Get-OptionalPropertyValue -Object $job -Name 'dedupe_key')
+    if ([string]::IsNullOrWhiteSpace($dedupeKey)) {
+      $dedupeKey = Get-SubagentInspectionDedupeKey -Root $Root -ParentTurnId $parentTurnId -RouteId $routeId -TargetPaths (Get-OptionalPropertyValue -Object $job -Name 'target_paths')
+    }
+    $key = $dedupeKey
+    if ([string]::IsNullOrWhiteSpace($key)) {
+      $agentName = [string](Get-OptionalPropertyValue -Object $job -Name 'agent_name')
+      $key = "$jobId|$routeId|$agentName"
+    }
+    if (-not $latest.ContainsKey($key)) {
+      $latest[$key] = $job
+      continue
+    }
+
+    $existing = $latest[$key]
+    $existingRank = Get-SubagentInspectionJobSortRank -Job $existing
+    $candidateRank = Get-SubagentInspectionJobSortRank -Job $job
+    $existingUpdated = [string](Get-OptionalPropertyValue -Object $existing -Name 'updated_at_utc')
+    $candidateUpdated = [string](Get-OptionalPropertyValue -Object $job -Name 'updated_at_utc')
+    if ($candidateRank -gt $existingRank -or (($candidateRank -eq $existingRank) -and ($candidateUpdated -gt $existingUpdated))) {
+      $latest[$key] = $job
+    }
   }
 
   @($latest.Values)
@@ -2843,12 +2963,19 @@ function Find-LatestSubagentInspectionJob {
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$TurnFingerprint,
     [Parameter(Mandatory = $true)][string]$RouteId,
-    [Parameter(Mandatory = $true)][string]$AgentName
+    [Parameter(Mandatory = $true)][string]$AgentName,
+    [object]$TargetPaths = $null
   )
+
+  $requestedDedupeKey = ''
+  if ($null -ne $TargetPaths) {
+    $requestedDedupeKey = Get-SubagentInspectionDedupeKey -Root $Root -ParentTurnId $TurnFingerprint -RouteId $RouteId -TargetPaths $TargetPaths
+  }
 
   $matches = @(Get-LatestSubagentInspectionJobs -Root $Root -TurnFingerprint $TurnFingerprint | Where-Object {
     [string](Get-OptionalPropertyValue -Object $_ -Name 'route_id') -eq $RouteId -and
-    [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_name') -eq $AgentName
+    [string](Get-OptionalPropertyValue -Object $_ -Name 'agent_name') -eq $AgentName -and
+    ([string]::IsNullOrWhiteSpace($requestedDedupeKey) -or [string](Get-OptionalPropertyValue -Object $_ -Name 'dedupe_key') -eq $requestedDedupeKey)
   })
   if ($matches.Count -eq 0) {
     return $null
@@ -2858,10 +2985,9 @@ function Find-LatestSubagentInspectionJob {
     @{ Expression = {
         $status = [string](Get-OptionalPropertyValue -Object $_ -Name 'status')
         switch ($status) {
-          'reported' { 5 }
-          'closed' { 5 }
+          'reported' { 6 }
+          'not_applicable' { 5 }
           'spawned' { 4 }
-          'not_applicable' { 4 }
           'spawn_requested' { 3 }
           'queued' { 2 }
           default { 1 }
@@ -3073,11 +3199,55 @@ function Register-SubagentInspectionJob {
     $turn = Get-TextFingerprint -Text ((Get-OptionalPropertyValue -Object $ActiveContract -Name 'user_goal') | Out-String)
   }
 
+  $existingForJobId = $null
+  if (-not [string]::IsNullOrWhiteSpace($JobId)) {
+    $existingForJobId = @(Read-SubagentInspectionJobs -Root $Root -TurnFingerprint $turn | Where-Object {
+      [string](Get-OptionalPropertyValue -Object $_ -Name 'job_id') -eq $JobId
+    } | Select-Object -Last 1)
+    if ($existingForJobId.Count -gt 0) {
+      $TargetPaths = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $existingForJobId[0] -Name 'target_paths'))
+    }
+  }
+
+  $cleanTargetPaths = @(Normalize-SubagentInspectionTargetPaths -Root $Root -Paths $TargetPaths)
+  $dedupeKey = Get-SubagentInspectionDedupeKey -Root $Root -ParentTurnId $turn -RouteId $RouteId -TargetPaths $cleanTargetPaths
+
   if ([string]::IsNullOrWhiteSpace($JobId)) {
-    $existing = Find-LatestSubagentInspectionJob -Root $Root -TurnFingerprint $turn -RouteId $RouteId -AgentName $AgentName
+    $existing = Find-LatestSubagentInspectionJob -Root $Root -TurnFingerprint $turn -RouteId $RouteId -AgentName $AgentName -TargetPaths $cleanTargetPaths
     if ($existing) {
       $existingStatus = [string](Get-OptionalPropertyValue -Object $existing -Name 'status')
       if ($existingStatus -in @('queued','spawn_requested','spawned','reported','not_applicable')) {
+        if (-not $NoLog -and $Status -eq 'queued') {
+          $duplicateEntry = [ordered]@{
+            schema_version = 'subagent_inspection_job.v1'
+            job_id = 'subagent-duplicate-' + ([guid]::NewGuid().ToString('n'))
+            created_at_utc = (Get-Date).ToUniversalTime().ToString('o')
+            updated_at_utc = (Get-Date).ToUniversalTime().ToString('o')
+            parent_turn_id = $turn
+            attempt_id = [string](Get-OptionalPropertyValue -Object $existing -Name 'attempt_id')
+            route_id = $RouteId
+            agent_name = $AgentName
+            dedupe_key = $dedupeKey
+            duplicate_of = [string](Get-OptionalPropertyValue -Object $existing -Name 'job_id')
+            superseded_by = $null
+            model = 'gpt-5.3-codex-spark'
+            fallback_model = 'latest-mini'
+            reasoning_effort = 'high'
+            sandbox_mode = 'read-only'
+            max_depth = 1
+            target_paths = $cleanTargetPaths
+            skill_compliance_targets = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $existing -Name 'skill_compliance_targets'))
+            trigger_hook = $TriggerHook
+            status = 'duplicate'
+            authority = 'candidate_evidence_only'
+            spawn_event_id = $null
+            report_event_id = $null
+            report_fingerprint = $null
+            not_applicable_reason = 'duplicate_of:' + [string](Get-OptionalPropertyValue -Object $existing -Name 'job_id')
+            warnings = @('duplicate_job_suppressed')
+          }
+          Write-InvocationLog -Path (Get-SubagentInspectionJobsPath -Root $Root) -Entry $duplicateEntry
+        }
         return $existing
       }
     }
@@ -3092,7 +3262,6 @@ function Register-SubagentInspectionJob {
   if ($taskClassification -and [string](Get-OptionalPropertyValue -Object $taskClassification -Name 'turn_fingerprint') -eq $turn) {
     $requiredSkills = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $taskClassification -Name 'required_skills'))
   }
-  $cleanTargetPaths = @(Normalize-SubagentInspectionTargetPaths -Root $Root -Paths $TargetPaths)
   $targetWarnings = @()
   if ((Get-TextFingerprint -Text (@($TargetPaths) | ConvertTo-Json -Depth 6 -Compress)) -ne (Get-TextFingerprint -Text ($cleanTargetPaths | ConvertTo-Json -Depth 6 -Compress))) {
     $targetWarnings += 'target_paths_sanitized'
@@ -3107,6 +3276,9 @@ function Register-SubagentInspectionJob {
     attempt_id = $attemptId
     route_id = $RouteId
     agent_name = $AgentName
+    dedupe_key = $dedupeKey
+    duplicate_of = $null
+    superseded_by = $null
     model = 'gpt-5.3-codex-spark'
     fallback_model = 'latest-mini'
     reasoning_effort = 'high'
@@ -3330,6 +3502,10 @@ function Register-SubagentInspectionLedgerEvent {
   $routeId = [string](Get-OptionalPropertyValue -Object $Job -Name 'route_id')
   $status = [string](Get-OptionalPropertyValue -Object $Job -Name 'status')
   $targetPaths = @(Normalize-SubagentInspectionTargetPaths -Root $Root -Paths (Get-OptionalPropertyValue -Object $Job -Name 'target_paths'))
+  $dedupeKey = [string](Get-OptionalPropertyValue -Object $Job -Name 'dedupe_key')
+  if ([string]::IsNullOrWhiteSpace($dedupeKey)) {
+    $dedupeKey = Get-SubagentInspectionDedupeKey -Root $Root -ParentTurnId $turn -RouteId $routeId -TargetPaths $targetPaths
+  }
 
   $entry = [ordered]@{
     schema_version = 'tool_usage_event.v2'
@@ -3359,6 +3535,9 @@ function Register-SubagentInspectionLedgerEvent {
     parent_turn_id = $turn
     route_id = $routeId
     agent_name = $agentName
+    dedupe_key = $dedupeKey
+    duplicate_of = Get-OptionalPropertyValue -Object $Job -Name 'duplicate_of'
+    superseded_by = Get-OptionalPropertyValue -Object $Job -Name 'superseded_by'
     sandbox_mode = 'read-only'
     target_paths = $targetPaths
     status = $status

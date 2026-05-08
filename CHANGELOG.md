@@ -2,6 +2,11 @@
 
 ## 2026-05-08
 
+- Adjusted the live Codex hook display policy in `C:\Users\anise\.codex\hooks.json` so only SessionStart and Stop keep visible `status_message` text; UserPromptSubmit, PreToolUse, and PostToolUse continue running silently for state, guard, and ledger evidence.
+- Rewrote `AGENTS.md` for the current Codex App GlobalSSOT environment, including `[features].hooks`, protected global config boundaries, append-only runtime ledgers, Spark inspector dedupe semantics, connected-surface review, and the current PowerShell verification commands; reduced `AGENT.md` to a canonical alias to avoid stale duplicate guidance.
+- Made Spark inspector enqueue idempotent with a `parent_turn_id + route_id + normalized target set` `dedupe_key`, append-only `duplicate_of` markers for suppressed duplicate queue attempts, and Stop/context read paths that ignore duplicate/superseded job records while preserving ledger history.
+- Updated the subagent inspection routing regression to reproduce duplicate enqueue attempts and prove only one active queued job is counted for the same dedupe key.
+- Removed direct Korean string literals from the PowerShell hook runner classification paths so `powershell.exe` can parse the UTF-8 no-BOM script reliably, and enabled the new `[features].hooks` flag in the user Codex config to address the deprecated `[features].codex_hooks` warning.
 - Added Harness V2 skill-route integration: fixed `addyosmani/agent-skills` as the upstream source, installed the P0 skill subset under `C:\Users\anise\.agents\skills`, and recorded source HEAD plus copied `SKILL.md` hashes in `Maintenance/agent-skills-integration/agent_skills_inventory.json`.
 - Extended live receipts from `task_classification -> need_resolution -> required route -> Stop` to include `skill_resolution_receipt.v1` and `skill_usage_event.v1`, with required skill evidence checked only at Stop unless an action is an absolute risk.
 - Added skill-route policy wiring to the hook runner, runtime schema, manifest, `required-tool-routes.json`, and workflow/tool-skill orchestration config; installed/configured skills remain non-evidence unless a real `skill_usage_event` or explicit unavailable/not_applicable record exists.

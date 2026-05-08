@@ -303,11 +303,14 @@
     "parent_turn_id": null,
     "route_id": null,
     "agent_name": null,
+    "dedupe_key": null,
+    "duplicate_of": null,
+    "superseded_by": null,
     "sandbox_mode": "read-only | null",
     "target_paths": [
       "Existing absolute Windows paths only; prompt punctuation, backtick fragments, newline fragments, and unresolved relative path tokens are sanitized before append and again when read by Stop."
     ],
-    "status": "queued | spawn_requested | spawned | reported | not_applicable | missing | expired | failed | null",
+    "status": "queued | spawn_requested | spawned | reported | not_applicable | missing | expired | failed | duplicate | superseded | null",
     "authority": "candidate_evidence_only | null",
     "append_only": true
   },
@@ -370,6 +373,9 @@
     "attempt_id": null,
     "route_id": "repo_integrity_inspection | contamination_inspection | required_tool_route_inspection | frontend_adoption_inspection | backend_adoption_inspection | ssot_contract_inspection",
     "agent_name": "spark_repo_inspector | spark_contamination_inspector | spark_tool_route_inspector | spark_frontend_inspector | spark_backend_inspector | spark_contract_inspector",
+    "dedupe_key": "sha256 over parent_turn_id + route_id + normalized target set",
+    "duplicate_of": null,
+    "superseded_by": null,
     "model": "gpt-5.3-codex-spark",
     "reasoning_effort": "high",
     "sandbox_mode": "read-only",
@@ -378,7 +384,7 @@
       "Existing absolute Windows paths only; prompt punctuation, backtick fragments, newline fragments, and unresolved relative path tokens are sanitized before append and again when read by Stop."
     ],
     "trigger_hook": "UserPromptSubmit | PostToolUse | Stop",
-    "status": "queued | spawn_requested | spawned | reported | not_applicable | missing | expired | failed",
+    "status": "queued | spawn_requested | spawned | reported | not_applicable | missing | expired | failed | duplicate | superseded",
     "authority": "candidate_evidence_only",
     "spawn_event_id": null,
     "report_event_id": null,
