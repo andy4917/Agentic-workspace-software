@@ -5,7 +5,7 @@ Active root: `%USERPROFILE%\.codex`
 ## Active Surfaces
 
 - `AGENTS.md`: current root operating guidance.
-- `AGENT.md`: compact agent-facing role note.
+- `agent.md`: lower-priority pointer to `AGENTS.md`.
 - `README.md`: root overview.
 - `MANIFEST.json`: active manifest.
 - `ROOT_MAP.json`: root map.
