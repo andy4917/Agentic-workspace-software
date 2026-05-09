@@ -1,0 +1,156 @@
+{
+  "profile": "anti_reward_pm_workflow_v1",
+  "autonomy": {
+    "user_role": "reviewer_not_operator",
+    "create_files_inside_scope": "allow",
+    "edit_codex_workflow_files": "allow_when_requested_or_current_task_is_workflow_config",
+    "use_new_tools_or_mcp": "allow_when_task_matches",
+    "ask_before_destructive_action": true,
+    "ask_before_secret_or_auth_content_access": true,
+    "ask_before_legal_or_safety_decision": true,
+    "ask_before_mutually_exclusive_goal_resolution": true,
+    "ask_before_scope_expansion": true,
+    "ask_before_external_side_effect": true
+  },
+  "subagents": {
+    "max_parallel": 8,
+    "max_depth": 1,
+    "default_spawn_policy": "conditional",
+    "spawn_threshold": "multi_surface_or_parallelizable_or_risk_or_repeated_failure",
+    "reuse_policy": "bounded_compatible_objective_surface_risk_repo_context",
+    "stale_session_ttl_minutes": 60,
+    "no_subagent_for": [
+      "simple_conversation",
+      "simple_explanation",
+      "tiny_single_file_edit_without_risk",
+      "image_generation_without_code_or_policy_work"
+    ],
+    "spawn_when": [
+      "independent_exploration_needed",
+      "review_dimensions_are_separable",
+      "verification_can_run_in_parallel",
+      "implementation_work_has_non_overlapping_file_ownership",
+      "repeated_failure_or_unknown_root_cause",
+      "security_or_auth_or_dependency_or_schema_or_hook_risk",
+      "large_or_multi_surface_change"
+    ]
+  },
+  "team_presets": {
+    "enabled": [
+      "review",
+      "debug",
+      "feature",
+      "full_stack",
+      "migration",
+      "research",
+      "security"
+    ],
+    "file_ownership_required": "true_for_parallel_implementation",
+    "status_board_required": "true_for_team_preset_runs"
+  },
+  "work_size": {
+    "tiny_files": 1,
+    "tiny_changed_lines": 30,
+    "normal_files_max": 3,
+    "normal_changed_lines_max": 150,
+    "large_files": 4,
+    "large_changed_lines": 150,
+    "multi_surface_threshold": 3,
+    "threshold_behavior": "warn_plan_and_report_not_hard_block",
+    "risky_change_always_high_ceremony": true
+  },
+  "size_limits": {
+    "docs_file_lines": 800,
+    "source_file_lines": 500,
+    "function_lines": 80,
+    "component_lines": 250,
+    "generated_files_exempt": true,
+    "behavior": "warn_with_split_or_justification",
+    "finalization_blocking": "false_unless_size_growth_hides_behavior_or_breaks_validation"
+  },
+  "hooks": {
+    "workflow_reminder": "inject",
+    "safe_read_only_inspection": "observe",
+    "ordinary_implementation": "observe",
+    "large_or_risky_change_without_plan": "warn",
+    "missing_final_evidence": "not_ready",
+    "required_validation_missing": "not_ready",
+    "dependency_schema_sync_missing": "not_ready",
+    "secret_content_access": "hard_block",
+    "irreversible_destructive_action": "hard_block_unless_explicit",
+    "hook_or_multi_agent_weakening": "hard_block_unless_explicit",
+    "fake_success_insertion": "hard_block",
+    "evaluator_or_exit_code_manipulation": "hard_block",
+    "policy_fixture_risky_text": "observe",
+    "safe_git_status_diff_add_commit": "allow"
+  },
+  "validation": {
+    "docs": "readback",
+    "config": "parser_check",
+    "hooks": [
+      "parser_check",
+      "sample_allow_case",
+      "sample_deny_or_not_ready_case"
+    ],
+    "dependencies": "lockfile_or_sync_validation_or_not_needed_reason",
+    "schemas": "regeneration_or_static_consistency_check",
+    "security": "explicit_risk_review",
+    "git": [
+      "git_status",
+      "relevant_diff_or_log"
+    ],
+    "not_run_policy": "requires_reason"
+  },
+  "contamination": {
+    "scan_product_code": true,
+    "scan_control_scripts": true,
+    "scan_tests": true,
+    "scan_fixtures": true,
+    "audit_policy_exempt": true,
+    "negative_fixture_exempt": true,
+    "exit_zero_policy": "product_or_control_script_unconditional_success_hard_block",
+    "hidden_fallback_policy": "hard_block_unless_user_requested_or_explicitly_justified",
+    "hardcoded_success_policy": "hard_block_for_product_and_control_code",
+    "legacy_revival_policy": "warn_or_not_ready_if_unrequested",
+    "broad_catch_all_success_policy": "hard_block",
+    "warning_or_error_suppression_policy": "hard_block_unless_explicitly_justified"
+  },
+  "research": {
+    "external_docs_required_for_version_sensitive_work": true,
+    "checkout_required_for_repo_distillation": true,
+    "representative_file_claims_full_tree": "prohibited",
+    "citations_required_for_research_and_current_fact_claims": true,
+    "source_recording_required": true
+  },
+  "git": {
+    "status_before_git_action": true,
+    "auto_commit_when_requested": true,
+    "stage_scope": "current_requested_changes_only",
+    "push_requires_explicit_request": true,
+    "pr_default": "draft",
+    "destructive_git_policy": "explicit_request_required",
+    "protected_files_excluded": true
+  },
+  "reporting": {
+    "status_board_trigger": [
+      "multi_agent_run",
+      "team_preset_run",
+      "large_change",
+      "multi_surface_change",
+      "risky_change",
+      "repeated_failure",
+      "long_running_task"
+    ],
+    "changed_files_required": "true_for_modifications",
+    "risks_required": "true_when_non_empty",
+    "not_run_required": "true_when_any_check_not_run",
+    "evidence_pack_policy": "separate_doc_for_long_evidence",
+    "final_answer_style": "short_outcome_first"
+  },
+  "security": {
+    "metadata_only_allowed": true,
+    "copy_archive_sensitive_files": "blocked_by_default",
+    "scope_expansion_policy": "explicit_user_instruction_required",
+    "product_repo_boundary": "do_not_mutate_unless_current_task_targets_that_repo"
+  }
+}

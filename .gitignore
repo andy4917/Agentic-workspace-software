@@ -22,6 +22,7 @@ ambient-suggestions/
 log/
 logs/
 state/
+hooks/state/
 cache/
 plugins/
 sqlite/

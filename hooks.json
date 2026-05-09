@@ -1,0 +1,80 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Loading lightweight PM workflow"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Classifying workflow"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Checking immediate action safety"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Checking approval request"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Recording lightweight evidence"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Checking final evidence"
+          }
+        ]
+      }
+    ]
+  }
+}
