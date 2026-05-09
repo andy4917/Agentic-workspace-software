@@ -85,6 +85,7 @@ $negativeRun = Invoke-JsonScript -RelativePath 'Maintenance\Test-NegativeLiveSto
 $productRun = Invoke-JsonScript -RelativePath 'Maintenance\Test-DevProductRepoAdoption.ps1'
 $repoGateRun = Invoke-JsonScript -RelativePath 'Maintenance\Test-RepoGateAdoption.ps1'
 $repoV2Run = Invoke-JsonScript -RelativePath 'Maintenance\Test-RepoV2AdoptionReceiptV2.ps1'
+$mcpRun = Invoke-JsonScript -RelativePath 'Maintenance\Test-McpIntegration.ps1'
 $acceptanceRun = Invoke-JsonScript -RelativePath 'Maintenance\harness-v2\Invoke-HarnessV2Acceptance.ps1'
 
 $active = Read-JsonFile -Path (Join-Path $runtime 'active_contract.json')
@@ -144,7 +145,9 @@ $authorityCaseIds = @(
   'subagent_pass_is_not_authority',
   'bare_tests_pass_cannot_complete',
   'fake_test_report_is_blocked',
-  'skill_installed_but_not_used_cannot_complete'
+  'skill_installed_but_not_used_cannot_complete',
+  'configured_mcp_is_not_usage_evidence',
+  'mcp_result_is_not_completion_authority'
 )
 $missingAuthorityCases = @()
 foreach ($caseId in $authorityCaseIds) {
@@ -165,7 +168,8 @@ $criteria = @(
   (New-Criterion -Id '10' -Description 'Dev-Product repo adoption receipt generated' -Passed ([string]$product.status -eq 'verified') -Evidence @("dev_product_receipt:$($product.receipt_id)", "product_typecheck:$($product.checks.typecheck.status)"))
 )
 
-$allPassed = @($criteria | Where-Object { $_.passed -ne $true }).Count -eq 0
+$mcpAuxiliaryPassed = ($mcpRun.exit_code -eq 0 -and [string]$mcpRun.json.status -eq 'PASS')
+$allPassed = (@($criteria | Where-Object { $_.passed -ne $true }).Count -eq 0) -and $mcpAuxiliaryPassed
 $verdict = if ($allPassed) { 'PASS' } else { 'FAIL' }
 
 $criteriaLines = @($criteria | ForEach-Object {
@@ -202,11 +206,17 @@ $runtimeProof = @(
   "- App SessionStart marker: $($product.app_session_marker.receipt_id); hook probe: $($product.hook_surface_probe.event_id).",
   "- Product typecheck: $($product.checks.typecheck.status) via $($product.checks.typecheck.command).",
   "",
+  "## MCP Auxiliary Chain",
+  "- MCP integration proof: status=$($mcpRun.json.status); usage_event_config_only=$($mcpRun.json.mcp_usage_events_unchanged_by_config_only).",
+  "- MCP auxiliary passed: $mcpAuxiliaryPassed.",
+  "- MCP servers are candidate-only support and do not replace worker/inspector spawn, report, PM decision, Stop, or gate-issued receipt.",
+  "",
   "## Audit Commands",
   "- Harness acceptance: $($acceptance.pass_count)/$($acceptance.test_count), failed=$($acceptance.fail_count).",
   "- Repo gate adoption: $($repoGateRun.json.status).",
   "- Repo V2 adoption: $($repoV2Run.json.status).",
-  "- Product adoption: $($productRun.json.status)."
+  "- Product adoption: $($productRun.json.status).",
+  "- MCP integration: $($mcpRun.json.status)."
 ) -join [Environment]::NewLine
 
 $codeReview = @(
@@ -219,6 +229,7 @@ $codeReview = @(
   "- Stop precedence: orchestration failures, including required_worker_not_spawned, remain ahead of direct_evidence_missing.",
   "- PM decision writer: worker and inspector report adoption is backed by job_id/route_id accept_report records.",
   "- Gate-issued receipt path: completion authority remains gate_issued_completion_receipt with ALLOW_COMPLETE_CLAIM; candidate receipts remain candidate input.",
+  "- MCP integration: context7, sequential_thinking, and windows_powershell are configured as candidate support only; mcp_tool_usage_event is required for actual MCP route evidence.",
   "",
   "## Residual Risk",
   "- Product repo worktree is dirty, but the adoption proof is read-only except for SSOT receipt/report generation and npm typecheck."
@@ -244,6 +255,7 @@ $candidateReport = @(
   "Authority: candidate summary only; gate-issued receipt is the authority.",
   "Harness acceptance: $($acceptance.pass_count)/$($acceptance.test_count).",
   "Gate-issued receipt: $($gate.decision).",
+  "MCP integration proof: $($mcpRun.json.status).",
   "Final runtime proof: FINAL_RUNTIME_PROOF.latest.md verdict $verdict."
 ) -join [Environment]::NewLine
 

@@ -105,6 +105,25 @@ required_tool_routes:
   failure_scope: discard_only_affected_artifact_from_current_attempt
   subagent_pass_policy: subagent_pass_is_candidate_evidence_parent_stop_receipt_required
   subagent_orchestration:
+    standing_authorization:
+      scope_root: C:\Users\anise\.codex\Dev_Codex_App_GlobalSSOT
+      enabled: true
+      applies_to:
+        - worker
+        - subagent
+        - spawn
+        - inspector
+      do_not_ask_again_before_required_in_scope_spawn: true
+      protected_actions_still_require_explicit_current_instruction:
+        - credential_or_secret_access
+        - destructive_side_effect
+        - force_push_or_history_rewrite
+        - out_of_scope_mutation
+        - repo_external_global_state_mutation
+      worker_outputs_remain: candidate_artifact_only
+      inspector_outputs_remain: candidate_evidence_only
+      parent_review_required: true
+      higher_priority_spawn_agent_use_rule_source: runtime_provided_tool_description_not_repo_files
     max_threads: 8
     max_depth: 1
     recursive_spawn_for_workers_or_inspectors: false
@@ -417,6 +436,15 @@ actual_use_policy:
     max_threads: 8
     job_max_runtime_seconds: 900
     recursive_spawn_for_workers_or_inspectors: false
+    standing_authorization:
+      scope_root: C:\Users\anise\.codex\Dev_Codex_App_GlobalSSOT
+      enabled: true
+      do_not_ask_again_before_required_in_scope_worker_or_inspector_spawn: true
+      protected_actions_still_require_explicit_current_instruction: true
+      worker_outputs_remain: candidate_artifact_only
+      inspector_outputs_remain: candidate_evidence_only
+      parent_review_required: true
+      higher_priority_spawn_agent_use_rule_source: runtime_provided_tool_description_not_repo_files
     use_when:
       - user_explicitly_requests_subagents_or_parallel_agent_work
       - a_bounded_sidecar_task_can_run_without_blocking_the_main_path
@@ -464,11 +492,100 @@ actual_use_policy:
     current_verified:
       - tool_search_loaded_github_mcp
       - github_mcp_repository_search_invoked
+      - config_has_context7_sequential_thinking_windows_powershell_mcp_servers
     discovery_rule: Use tool_search for MCP tool discovery before list_mcp_resources or list_mcp_resource_templates.
     resource_rule: Use MCP resources and resource templates for context data, not for discovering deferred tools.
     exposure_rule: Do not assume every MCP tool is directly exposed; large tool sets can be deferred and become available through tool_search.
     naming_rule: Preserve raw server/tool identity internally while relying on sanitized, deduplicated model-visible names.
     parallel_rule: Enable or rely on parallel MCP tool calls only when the server declares support and the called tools are safe to run concurrently.
+    evidence_rule: Configured MCP servers are runtime capability facts only; required MCP routes need append-only mcp_tool_usage_event.v1 evidence or explicit unavailable/not_applicable fallback evidence.
+    authority_rule: MCP outputs are candidate context/evidence only and cannot replace worker/inspector spawn, report, PM decision, Stop, or gate-issued receipt authority.
+    required_usage_policy:
+      installed_or_configured_servers_are_usage_evidence: false
+      mcp_output_authority: candidate_evidence_only
+      finalization_authority: Stop_gate_issued_receipt_only
+      missing_required_mcp_usage_blocks_pretooluse: false
+      missing_required_mcp_usage_blocks_completion_at_Stop: true
+      pretooluse_exception: absolute_safety_risk_only
+    usage_event:
+      ledger_event: mcp_tool_usage_event
+      schema_version: mcp_tool_usage_event.v1
+      authority: candidate_evidence_only
+      required_for_required_mcp_routes: true
+    route_policy:
+      sequential_thinking:
+        use_when:
+          - Class_4_work
+          - repeated_failure
+          - root_cause_analysis
+          - PM_route_table_planning
+          - same_blocker_repeats
+        required_output:
+          - hypothesis
+          - evidence
+          - next_smallest_test
+          - patch_boundary
+          - expected_result
+          - stop_condition
+        record_event: mcp_tool_usage_event
+      context7:
+        use_when:
+          - task_depends_on_external_library_framework_SDK_API_or_version_sensitive_behavior
+        required_sequence:
+          - resolve-library-id
+          - query-docs
+          - summarize_relevant_docs
+          - connect_docs_to_implementation_evidence
+        required_tool_names:
+          - resolve-library-id
+          - query-docs
+        legacy_or_wrapper_tool_names_recommended: false
+        no_external_api_or_framework:
+          decision: NOT_APPLICABLE
+          require_reason: true
+        record_event: mcp_tool_usage_event
+      windows_powershell:
+        use_only_for:
+          - Windows_runtime_diagnostics
+          - App_runtime_diagnostics
+          - CLI_runtime_diagnostics
+          - SSOT_runtime_diagnostics
+          - repo_runtime_diagnostics
+          - hook_runtime_diagnostics
+        allowed:
+          - cwd
+          - CODEX_HOME
+          - project_root
+          - trust_state
+          - config_paths
+          - hook_marker_ledgers
+          - runtime_ledger_inspection
+        forbidden:
+          - destructive_operations
+          - secrets_or_auth
+          - hook_weakening
+          - gate_receipt_or_completion_authority_change
+          - validation_outcome_manipulation
+        record_event: mcp_tool_usage_event
+    configured_servers:
+      - name: context7
+        role: external_library_docs_context
+        required_by_config: false
+        api_key_source: CONTEXT7_API_KEY environment variable name only
+      - name: sequential_thinking
+        role: reasoning_trace_support
+        required_by_config: false
+      - name: windows_powershell
+        role: windows_runtime_diagnostics
+        required_by_config: false
+        enabled_tools:
+          - Show-TextFiles
+        disabled_mutating_tools:
+          - Add-LinesToFile
+          - Update-LinesInFile
+          - Update-MatchInFile
+          - Remove-LinesFromFile
+          - Stop-AllPwsh
     implementation_owner_for_upstream_changes:
       official_instruction: codex-rs/codex-mcp/src/mcp_connection_manager.rs
       actual_current_path: codex-rs/codex-mcp/src/connection_manager.rs
@@ -536,6 +653,8 @@ official_openai_codex_workflows:
       - per-tool approval mode belongs under the server tool entry.
       - tool_search is the required discovery path for deferred MCP tools.
       - resource listing reads context resources and must not be substituted for tool discovery.
+      - mcp_tool_usage_event.v1 is candidate evidence only; gate-issued completion remains the only completion authority.
+      - Context7 secrets are referenced through env_vars and must not be written as literal values into config or reports.
 
   agents_md:
     evidence:

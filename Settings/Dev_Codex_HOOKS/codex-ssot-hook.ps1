@@ -593,6 +593,126 @@ function Get-ActiveHookConfig {
   }
 }
 
+function Get-TomlScalarValue {
+  param(
+    [AllowEmptyString()][string]$Body,
+    [Parameter(Mandatory = $true)][string]$Name
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Body)) {
+    return ''
+  }
+
+  $escapedName = [regex]::Escape($Name)
+  $match = [regex]::Match($Body, "(?m)^\s*$escapedName\s*=\s*(?<value>.+?)\s*(?:#.*)?$")
+  if (-not $match.Success) {
+    return ''
+  }
+
+  $value = $match.Groups['value'].Value.Trim()
+  if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+    $value = $value.Substring(1, $value.Length - 2)
+  }
+  $value
+}
+
+function Get-TomlBoolValue {
+  param(
+    [AllowEmptyString()][string]$Body,
+    [Parameter(Mandatory = $true)][string]$Name,
+    [bool]$Default = $false
+  )
+
+  $value = Get-TomlScalarValue -Body $Body -Name $Name
+  if ([string]::IsNullOrWhiteSpace($value)) {
+    return $Default
+  }
+  [string]$value -eq 'true'
+}
+
+function Get-TomlIntegerValue {
+  param(
+    [AllowEmptyString()][string]$Body,
+    [Parameter(Mandatory = $true)][string]$Name
+  )
+
+  $value = Get-TomlScalarValue -Body $Body -Name $Name
+  $parsed = 0
+  if ([int]::TryParse($value, [ref]$parsed)) {
+    return $parsed
+  }
+  $null
+}
+
+function Get-TomlStringArrayValue {
+  param(
+    [AllowEmptyString()][string]$Body,
+    [Parameter(Mandatory = $true)][string]$Name
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Body)) {
+    return @()
+  }
+
+  $escapedName = [regex]::Escape($Name)
+  $match = [regex]::Match($Body, "(?m)^\s*$escapedName\s*=\s*\[(?<value>.*?)\]\s*(?:#.*)?$")
+  if (-not $match.Success) {
+    return @()
+  }
+
+  $items = @()
+  foreach ($itemMatch in [regex]::Matches($match.Groups['value'].Value, "'(?<single>[^']*)'|""(?<double>[^""]*)""|(?<bare>[A-Za-z0-9_@./:\\-]+)")) {
+    $value = if ($itemMatch.Groups['single'].Success) {
+      $itemMatch.Groups['single'].Value
+    } elseif ($itemMatch.Groups['double'].Success) {
+      $itemMatch.Groups['double'].Value
+    } else {
+      $itemMatch.Groups['bare'].Value
+    }
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+      $items += $value
+    }
+  }
+
+  @($items)
+}
+
+function Get-McpServerRole {
+  param([string]$Name)
+
+  switch -Regex ($Name) {
+    '^context7$' { 'external_library_docs_context'; break }
+    '^sequential_thinking$' { 'reasoning_trace_support'; break }
+    '^windows_powershell$' { 'windows_runtime_diagnostics'; break }
+    default { 'custom_mcp_support' }
+  }
+}
+
+function Get-McpExpectedTools {
+  param([string]$Name)
+
+  switch -Regex ($Name) {
+    '^context7$' { @('resolve-library-id','get-library-docs') }
+    '^sequential_thinking$' { @('sequentialthinking') }
+    '^windows_powershell$' { @('Show-TextFiles') }
+    default { @() }
+  }
+}
+
+function Test-McpCommandAvailable {
+  param([string]$Command)
+
+  if ([string]::IsNullOrWhiteSpace($Command)) {
+    return $false
+  }
+
+  if ([System.IO.Path]::IsPathRooted($Command) -or $Command.Contains('\') -or $Command.Contains('/')) {
+    return (Test-Path -LiteralPath $Command -PathType Leaf)
+  }
+
+  $null -ne (Get-Command $Command -ErrorAction SilentlyContinue)
+}
+
 function Get-ConfiguredMcpServers {
   param([Parameter(Mandatory = $true)][string]$Root)
 
@@ -610,17 +730,49 @@ function Get-ConfiguredMcpServers {
     }
 
     $body = $match.Groups['body'].Value
-    $isEnabled = $true
-    $enabledMatch = [regex]::Match($body, '(?m)^\s*enabled\s*=\s*(?<value>true|false)\s*$')
-    if ($enabledMatch.Success) {
-      $isEnabled = [string]$enabledMatch.Groups['value'].Value -eq 'true'
+    $isEnabled = Get-TomlBoolValue -Body $body -Name 'enabled' -Default $true
+    $isRequired = Get-TomlBoolValue -Body $body -Name 'required' -Default $false
+    $command = Get-TomlScalarValue -Body $body -Name 'command'
+    $args = @(Get-TomlStringArrayValue -Body $body -Name 'args')
+    $envVars = @(Get-TomlStringArrayValue -Body $body -Name 'env_vars')
+    $enabledTools = @(Get-TomlStringArrayValue -Body $body -Name 'enabled_tools')
+    $disabledTools = @(Get-TomlStringArrayValue -Body $body -Name 'disabled_tools')
+    $missingEnvVars = @($envVars | Where-Object {
+      [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable([string]$_, 'Process')) -and
+      [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable([string]$_, 'User')) -and
+      [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable([string]$_, 'Machine'))
+    })
+    $commandAvailable = Test-McpCommandAvailable -Command $command
+    $status = if (-not $isEnabled) {
+      'disabled'
+    } elseif (-not $commandAvailable) {
+      'unavailable'
+    } elseif ($missingEnvVars.Count -gt 0) {
+      'configured_missing_env'
+    } else {
+      'available'
     }
 
     $servers += [ordered]@{
       name = $name
       source = $configPath
-      status = if ($isEnabled) { 'configured' } else { 'disabled' }
+      role = Get-McpServerRole -Name $name
+      status = $status
       enabled = [bool]$isEnabled
+      required = [bool]$isRequired
+      required_by_codex_config = [bool]$isRequired
+      command = if ([string]::IsNullOrWhiteSpace($command)) { $null } else { $command }
+      args = $args
+      startup_timeout_sec = Get-TomlIntegerValue -Body $body -Name 'startup_timeout_sec'
+      tool_timeout_sec = Get-TomlIntegerValue -Body $body -Name 'tool_timeout_sec'
+      env_vars = $envVars
+      missing_env_vars = $missingEnvVars
+      expected_tools = @(Get-McpExpectedTools -Name $name)
+      enabled_tools = $enabledTools
+      disabled_tools = $disabledTools
+      configured_is_not_usage_evidence = $true
+      usage_event_required_for_route_evidence = $true
+      result_authority = 'candidate_evidence_only'
     }
   }
 
@@ -923,6 +1075,7 @@ function Write-RuntimeCapabilityReceipt {
     loaded_agents_md_sources = @(Get-AgentsMdSources -Root $Root -Workdir $Workdir)
     active_hooks = @(Get-ActiveHookConfig -Root $Root)
     codex_config_authority = Get-CodexConfigAuthorityQuickStatus -Root $Root
+    mcp_servers = @(Get-ConfiguredMcpServers -Root $Root)
     available_mcp_servers = @(Get-ConfiguredMcpServers -Root $Root)
     available_skills = @(Get-AvailableSkills -Root $Root)
     configured_subagents = @(Get-ConfiguredSubagents)
@@ -950,6 +1103,9 @@ function Write-RuntimeCapabilityReceipt {
       subagent_inspection_max_threads = 8
       subagent_inspection_max_depth = 1
       installed_configured_available_is_not_completion_evidence = $true
+      mcp_configured_available_is_not_completion_evidence = $true
+      mcp_usage_event_required_for_required_mcp_routes = $true
+      mcp_result_authority = 'candidate_evidence_only'
       task_classification_receipt_required_for_completion_claim = $true
       need_resolution_receipt_required_for_completion_claim = $true
     }
@@ -1227,6 +1383,12 @@ function Get-SkillUsageEventsPath {
   param([Parameter(Mandatory = $true)][string]$Root)
 
   Join-Path $Root 'Settings/Codex_App_RUNTIME/skill_usage_events.jsonl'
+}
+
+function Get-McpToolUsageEventsPath {
+  param([Parameter(Mandatory = $true)][string]$Root)
+
+  Join-Path $Root 'Settings/Codex_App_RUNTIME/mcp_tool_usage_events.jsonl'
 }
 
 function Test-ChildAgentPromptContext {
@@ -1948,6 +2110,29 @@ function Test-PmOrchestrationPreflight {
   }
 }
 
+function Get-RequiredDelegationBootstrapAction {
+  param([AllowEmptyString()][string]$PayloadText = '')
+
+  $allowedActions = @(
+    'create_required_worker_job',
+    'create_required_inspector_job',
+    'spawn_required_worker_subagent',
+    'spawn_required_inspector_subagent',
+    'bridge_app_subagent_session',
+    'write_canonical_worker_spawn_event',
+    'write_canonical_inspector_spawn_event',
+    'write_unmatched_subagent_spawn_observed'
+  )
+
+  foreach ($action in $allowedActions) {
+    if ($PayloadText -match ('(?i)(^|[^A-Za-z0-9_-])' + [regex]::Escape($action) + '([^A-Za-z0-9_-]|$)')) {
+      return $action
+    }
+  }
+
+  ''
+}
+
 function Get-TaskClassificationReceipt {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
@@ -1993,7 +2178,7 @@ function Test-NeedRequirementSatisfied {
 
   $routeId = [string](Get-OptionalPropertyValue -Object $Requirement -Name 'route_id')
   $requirementId = [string](Get-OptionalPropertyValue -Object $Requirement -Name 'requirement_id')
-  $validEvidencePattern = '(?i)\b(tool_usage_event|skill_usage_event|worker_spawn_event|worker_report_event|inspector_spawn_event|inspector_report_event|subagent_job_event|subagent_spawn_event|subagent_report_event|pm_worker_waiver_event|check_evidence|explicit_unavailable|explicit_not_applicable)\b'
+  $validEvidencePattern = '(?i)\b(tool_usage_event|mcp_tool_usage_event|skill_usage_event|worker_spawn_event|worker_report_event|inspector_spawn_event|inspector_report_event|subagent_job_event|subagent_spawn_event|subagent_report_event|pm_worker_waiver_event|check_evidence|explicit_unavailable|explicit_not_applicable)\b'
   $invalidEvidencePattern = '(?i)\b(installed|configured|available|capability_present|route_configured|subagent_configured|skill_installed)\b'
   foreach ($entry in @($ReportEntries)) {
     $entryRouteId = [string](Get-OptionalPropertyValue -Object $entry -Name 'route_id')
@@ -2670,6 +2855,131 @@ function Register-ToolUsageEvent {
   }
 
   Write-InvocationLog -Path (Join-Path $Root 'Settings/Codex_App_RUNTIME/tool_usage_events.jsonl') -Entry $entry
+}
+
+function Get-McpServerNameFromPayload {
+  param(
+    [object]$Payload,
+    [AllowEmptyString()][string]$PayloadText = ''
+  )
+
+  $knownServers = @('context7','sequential_thinking','windows_powershell')
+  $serverName = Get-PayloadString -Object $Payload -Names @('mcp_server','mcpServer','server_name','serverName','server')
+  if ($knownServers -contains $serverName) {
+    return $serverName
+  }
+
+  foreach ($server in $knownServers) {
+    $serverValue = Get-PayloadString -Object $Payload -Names @($server)
+    if (-not [string]::IsNullOrWhiteSpace($serverValue)) {
+      return $server
+    }
+  }
+
+  $toolName = Get-PayloadString -Object $Payload -Names @('tool_name','toolName','tool','name')
+  if ($toolName -match '(?i)\bmcp\b') {
+    foreach ($server in $knownServers) {
+      if ($PayloadText -match "(?i)`"$([regex]::Escape($server))`"") {
+        return $server
+      }
+    }
+  }
+
+  ''
+}
+
+function Register-McpToolUsageObservation {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [object]$Payload,
+    [string]$PayloadText = '',
+    [string]$Workdir = '',
+    [object]$ActiveContract,
+    [object]$Decision,
+    [bool]$NoLog = $false
+  )
+
+  if ($NoLog -or ($null -eq $Payload -and [string]::IsNullOrWhiteSpace($PayloadText))) {
+    return $null
+  }
+
+  $serverName = Get-McpServerNameFromPayload -Payload $Payload -PayloadText $PayloadText
+  if ([string]::IsNullOrWhiteSpace($serverName)) {
+    return $null
+  }
+
+  $toolName = Get-PayloadString -Object $Payload -Names @('mcp_tool','mcpTool','tool_name','toolName','tool','name')
+  if ([string]::IsNullOrWhiteSpace($toolName)) {
+    $toolName = 'unknown_mcp_tool'
+  }
+
+  $configuredServers = @(Get-ConfiguredMcpServers -Root $Root)
+  $configuredServer = $configuredServers | Where-Object { [string](Get-OptionalPropertyValue -Object $_ -Name 'name') -eq $serverName } | Select-Object -First 1
+  $observedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+  $eventNonce = [guid]::NewGuid().ToString('n')
+  $payloadFingerprint = Get-TextFingerprint -Text $PayloadText
+  $turnFingerprint = [string](Get-OptionalPropertyValue -Object $ActiveContract -Name 'turn_fingerprint')
+  $decisionCode = if ($Decision) { [string](Get-OptionalPropertyValue -Object $Decision -Name 'decision') } else { '' }
+  $decisionReason = if ($Decision) { [string](Get-OptionalPropertyValue -Object $Decision -Name 'reason') } else { '' }
+
+  $entry = [ordered]@{
+    schema_version = 'mcp_tool_usage_event.v1'
+    record_type = 'mcp_tool_usage_event'
+    event_id = New-LedgerEventId -ObservedAtUtc $observedAtUtc -EventNonce $eventNonce -TurnFingerprint $turnFingerprint -HookName 'post_tool_use' -HookEventName 'PostToolUse' -ToolName "mcp:$serverName/$toolName" -Command '' -Cwd $Workdir -PayloadFingerprint $payloadFingerprint -Decision $decisionCode -Reason $decisionReason
+    event_nonce = $eventNonce
+    observed_at_utc = $observedAtUtc
+    timestamp_utc = $observedAtUtc
+    turn_fingerprint = $turnFingerprint
+    hook = 'post_tool_use'
+    hook_event_name = 'PostToolUse'
+    observation_layer = 'PostToolUse'
+    server_name = $serverName
+    tool_name = $toolName
+    route_id = Get-PayloadString -Object $Payload -Names @('route_id','routeId')
+    role = if ($configuredServer) { Get-OptionalPropertyValue -Object $configuredServer -Name 'role' } else { Get-McpServerRole -Name $serverName }
+    configured_server_status = if ($configuredServer) { Get-OptionalPropertyValue -Object $configuredServer -Name 'status' } else { 'not_configured' }
+    configured_required = if ($configuredServer) { [bool](Get-OptionalPropertyValue -Object $configuredServer -Name 'required') } else { $false }
+    configured_is_not_usage_evidence = $true
+    usage_observed = $true
+    usage_is_completion_authority = $false
+    result_authority = 'candidate_evidence_only'
+    payload_fingerprint = $payloadFingerprint
+    decision = if ([string]::IsNullOrWhiteSpace($decisionCode)) { $null } else { $decisionCode }
+    reason = if ([string]::IsNullOrWhiteSpace($decisionReason)) { $null } else { $decisionReason }
+    append_only = $true
+  }
+
+  Write-InvocationLog -Path (Get-McpToolUsageEventsPath -Root $Root) -Entry $entry
+  $entry
+}
+
+function Read-McpToolUsageEvents {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [string]$TurnFingerprint = ''
+  )
+
+  $path = Get-McpToolUsageEventsPath -Root $Root
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    return @()
+  }
+
+  $events = @()
+  foreach ($line in Get-Content -LiteralPath $path -ErrorAction SilentlyContinue) {
+    if ([string]::IsNullOrWhiteSpace($line)) {
+      continue
+    }
+    try {
+      $event = $line | ConvertFrom-Json
+      if ([string]::IsNullOrWhiteSpace($TurnFingerprint) -or [string](Get-OptionalPropertyValue -Object $event -Name 'turn_fingerprint') -eq $TurnFingerprint) {
+        $events += $event
+      }
+    } catch {
+      continue
+    }
+  }
+
+  @($events)
 }
 
 function Read-ToolUsageEvents {
@@ -4177,7 +4487,7 @@ function Get-CodexAppSubagentInitialRequestEnvelope {
           }
 
           $agentName = ''
-          foreach ($value in @(Get-RegexGroupValues -Text $decodedText -Pattern '\bagent_name\b\s*["'']?\s*[:=]\s*["'']?(?<value>[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+)' -GroupName 'value')) {
+          foreach ($value in @(Get-RegexGroupValues -Text $decodedText -Pattern '\bagent_name\b\s*["'']?\s*[:=]\s*["'']?(?<value>worker|[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+)' -GroupName 'value')) {
             if (Test-CodexAppAgentName -Value $value) {
               $agentName = $value
               break
@@ -4400,7 +4710,8 @@ function Test-SubagentLifecycleBridgeAlreadyRecorded {
       [string](Get-OptionalPropertyValue -Object $event -Name 'subagent_id') -eq $AppSessionId
     $canonicalSpawn = [string](Get-OptionalPropertyValue -Object $event -Name 'record_type') -in @('worker_spawn_event','inspector_spawn_event') -and
       [string](Get-OptionalPropertyValue -Object $event -Name 'event') -eq 'spawned'
-    if ($sameSession -and $canonicalSpawn) {
+    $unmatchedObservation = [string](Get-OptionalPropertyValue -Object $event -Name 'event_type') -eq 'unmatched_subagent_spawn_observed'
+    if ($sameSession -and ($canonicalSpawn -or $unmatchedObservation)) {
       return $true
     }
   }
@@ -4730,6 +5041,7 @@ function Register-PmWorkerWaiverEvent {
     record_type = 'pm_worker_waiver_event'
     event_id = 'pww_' + ([guid]::NewGuid().ToString('n'))
     turn_id = $turn
+    parent_turn_id = $turn
     attempt_id = $turn
     route_id = $RouteId
     reason = $Reason
@@ -5625,7 +5937,7 @@ function Test-RequiredRouteRequirement {
     if (
       ($status -in @('used','satisfied','checked','unavailable','not_applicable')) -and
       $evidence.Count -gt 0 -and
-      $evidenceText -match '(?i)\b(tool_usage_event|skill_usage_event|subagent_spawn_event|worker_spawn_event|check_evidence|explicit_unavailable|explicit_not_applicable)\b' -and
+      $evidenceText -match '(?i)\b(tool_usage_event|mcp_tool_usage_event|skill_usage_event|subagent_spawn_event|worker_spawn_event|check_evidence|explicit_unavailable|explicit_not_applicable)\b' -and
       $evidenceText -notmatch '(?i)\b(installed|configured|available|capability_present|route_configured)\b'
     ) {
       return [ordered]@{ ok = $true; source = "receipt_report:$status" }
@@ -5693,6 +6005,50 @@ function Register-RequiredToolLoopState {
   $state
 }
 
+function Get-MissingMcpRequirementReasonCode {
+  param(
+    [object[]]$MissingRequirements,
+    [object]$RuntimeCapabilityReceipt
+  )
+
+  $mcpMissing = @($MissingRequirements | Where-Object { [string](Get-OptionalPropertyValue -Object $_ -Name 'type') -eq 'mcp' })
+  if ($mcpMissing.Count -eq 0) {
+    return 'required_tool_not_used'
+  }
+
+  $first = $mcpMissing | Select-Object -First 1
+  $requirementId = [string](Get-OptionalPropertyValue -Object $first -Name 'requirement_id')
+  $serverName = if ($requirementId -match 'context7') {
+    'context7'
+  } elseif ($requirementId -match 'sequential') {
+    'sequential_thinking'
+  } elseif ($requirementId -match 'windows[_-]?powershell|powershell') {
+    'windows_powershell'
+  } else {
+    $requirementId
+  }
+
+  $servers = @()
+  if ($RuntimeCapabilityReceipt) {
+    $servers += @(Get-OptionalPropertyValue -Object $RuntimeCapabilityReceipt -Name 'mcp_servers')
+    $servers += @(Get-OptionalPropertyValue -Object $RuntimeCapabilityReceipt -Name 'available_mcp_servers')
+  }
+  $serverEntry = $servers | Where-Object { [string](Get-OptionalPropertyValue -Object $_ -Name 'name') -eq $serverName } | Select-Object -First 1
+  if ($serverEntry) {
+    $status = [string](Get-OptionalPropertyValue -Object $serverEntry -Name 'status')
+    if ($status -in @('disabled','unavailable','not_configured')) {
+      return 'required_mcp_server_unavailable'
+    }
+  }
+
+  switch ($serverName) {
+    'context7' { 'required_mcp_context7_not_used'; break }
+    'sequential_thinking' { 'required_mcp_sequential_thinking_not_used'; break }
+    'windows_powershell' { 'required_mcp_windows_powershell_not_used'; break }
+    default { 'required_mcp_tool_not_used' }
+  }
+}
+
 function Test-RequiredToolRoutesForCompletion {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
@@ -5711,6 +6067,7 @@ function Test-RequiredToolRoutesForCompletion {
   $receiptEvidence = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $CompletionReceipt -Name 'evidence'))
   $reportEntries = @(Get-RequiredToolRouteReportEntries -CompletionReceipt $CompletionReceipt)
   $events = @(Read-ToolUsageEvents -Root $Root -TurnFingerprint $turn)
+  $mcpEvents = @(Read-McpToolUsageEvents -Root $Root -TurnFingerprint $turn)
   $runtimeCapabilityReceipt = Read-OptionalJsonFile -Path (Join-Path $Root 'Settings/Codex_App_RUNTIME/runtime_capability_receipt.json')
 
   $triggerText = @(
@@ -5723,13 +6080,26 @@ function Test-RequiredToolRoutesForCompletion {
   $corpusParts = @()
   $corpusParts += $receiptEvidence
   $corpusParts += @($reportEntries | ConvertTo-Json -Depth 8 -Compress)
-  $runtimeCapabilityReceipt = $null
   if ($events.Count -gt 0) {
     $corpusParts += 'tool_usage_event_ledger_current_attempt:ok'
   }
   foreach ($event in $events) {
     foreach ($id in @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $event -Name 'capability_ids'))) {
       $corpusParts += "tool_usage:$id"
+    }
+    $corpusParts += ($event | ConvertTo-Json -Depth 6 -Compress)
+  }
+  if ($mcpEvents.Count -gt 0) {
+    $corpusParts += 'mcp_tool_usage_event_ledger_current_attempt:ok'
+  }
+  foreach ($event in $mcpEvents) {
+    $serverName = [string](Get-OptionalPropertyValue -Object $event -Name 'server_name')
+    $toolName = [string](Get-OptionalPropertyValue -Object $event -Name 'tool_name')
+    if (-not [string]::IsNullOrWhiteSpace($serverName)) {
+      $corpusParts += "mcp_tool_usage:$serverName"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($serverName) -and -not [string]::IsNullOrWhiteSpace($toolName)) {
+      $corpusParts += "mcp_tool_usage:$serverName/$toolName"
     }
     $corpusParts += ($event | ConvertTo-Json -Depth 6 -Compress)
   }
@@ -5759,9 +6129,10 @@ function Test-RequiredToolRoutesForCompletion {
 
   if ($missing.Count -gt 0) {
     $loopState = Register-RequiredToolLoopState -Root $Root -ActiveContract $ActiveContract -CompletionReceipt $CompletionReceipt -MissingRequirements $missing -NoLog:$NoLog
+    $reasonCode = Get-MissingMcpRequirementReasonCode -MissingRequirements $missing -RuntimeCapabilityReceipt $runtimeCapabilityReceipt
     return [ordered]@{
       ok = $false
-      reason = 'required_tool_not_used'
+      reason = $reasonCode
       matched_routes = $matchedRoutes
       missing_requirements = $missing
       loop_breaker = [bool](Get-OptionalPropertyValue -Object $loopState -Name 'loop_breaker')
@@ -6133,6 +6504,41 @@ function Test-EnforcementWeakeningText {
     if ($normalized -match $item.pattern) {
       return [ordered]@{ detected = $true; category = $item.category; pattern = $item.pattern }
     }
+  }
+
+  [ordered]@{ detected = $false; category = $null; pattern = $null }
+}
+
+function Test-McpPowerShellUnsafeCommand {
+  param([string]$Text)
+
+  if ([string]::IsNullOrWhiteSpace($Text)) {
+    return [ordered]@{ detected = $false; category = $null; pattern = $null }
+  }
+
+  $normalized = Convert-ToGuardPathText -Text $Text
+  if ($normalized -notmatch '(?i)\b(windows_powershell|powershell\.mcp|mcp.{0,80}powershell|powershell.{0,80}mcp)\b') {
+    return [ordered]@{ detected = $false; category = $null; pattern = $null }
+  }
+
+  $disabledToolPattern = '(?i)\b(add-linestofile|update-linesinfile|update-matchinfile|remove-linesfromfile|stop-allpwsh)\b'
+  if ($normalized -match $disabledToolPattern) {
+    return [ordered]@{ detected = $true; category = 'mcp_powershell_mutating_tool'; pattern = $disabledToolPattern }
+  }
+
+  $destructiveOperation = Test-DestructiveOperationText -Text $Text
+  if ($destructiveOperation.detected) {
+    return [ordered]@{ detected = $true; category = 'mcp_powershell_destructive_command'; pattern = $destructiveOperation.pattern }
+  }
+
+  $privateSurface = Test-PrivateSurfaceTouch -Text $Text
+  if ($privateSurface.detected) {
+    return [ordered]@{ detected = $true; category = 'mcp_powershell_secret_or_auth_touch'; pattern = $privateSurface.pattern }
+  }
+
+  $enforcementWeakening = Test-EnforcementWeakeningText -Text $Text
+  if ($enforcementWeakening.detected) {
+    return [ordered]@{ detected = $true; category = 'mcp_powershell_enforcement_weakening'; pattern = $enforcementWeakening.pattern }
   }
 
   [ordered]@{ detected = $false; category = $null; pattern = $null }
@@ -7004,7 +7410,7 @@ function Get-RuntimeStateMutation {
 
   $normalized = ($combined.ToLowerInvariant().Replace('\', '/') -replace '/+', '/')
   $patterns = @(
-    @{ category = 'turn_runtime_state'; pattern = 'settings/codex_app_runtime/((active_contract|completion_receipt|gate_issued_completion_receipt|task_classification_receipt|need_resolution_receipt|skill_resolution_receipt|runtime_capability_receipt|repo_gate_adoption_receipt|repo_v2_adoption_receipt|stable_lessons|required_tool_loop_state|subagent_inspection_loop_state)\.json|(pm_decisions|tool_usage_events|skill_usage_events|subagent_inspection_jobs|subagent_inspection_reports|subagent_worker_jobs|subagent_worker_reports|subagent_lifecycle_events|heuristic_review_jobs|heuristic_review_reports)\.jsonl)' }
+    @{ category = 'turn_runtime_state'; pattern = 'settings/codex_app_runtime/((active_contract|completion_receipt|gate_issued_completion_receipt|task_classification_receipt|need_resolution_receipt|skill_resolution_receipt|runtime_capability_receipt|repo_gate_adoption_receipt|repo_v2_adoption_receipt|stable_lessons|required_tool_loop_state|subagent_inspection_loop_state)\.json|(pm_decisions|tool_usage_events|mcp_tool_usage_events|skill_usage_events|subagent_inspection_jobs|subagent_inspection_reports|subagent_worker_jobs|subagent_worker_reports|subagent_lifecycle_events|heuristic_review_jobs|heuristic_review_reports)\.jsonl)' }
   )
 
   foreach ($item in $patterns) {
@@ -7356,6 +7762,7 @@ function Test-CommandGuard {
   $rewardHackingTouch = Get-RewardHackingTouch -Text $PayloadText -Workdir $Workdir
   $rewardHackingCleanup = Test-RewardHackingCleanupText -Text $PayloadText
   $destructiveOperation = Test-DestructiveOperationText -Text $PayloadText
+  $mcpPowershellUnsafeCommand = Test-McpPowerShellUnsafeCommand -Text $PayloadText
   $readOnlyInspection = Test-ReadOnlyInspectionText -Text $PayloadText
   $privateSurface = Test-PrivateSurfaceTouch -Text "$PayloadText`n$Workdir"
   $enforcementWeakening = Test-EnforcementWeakeningText -Text $PayloadText
@@ -7403,6 +7810,10 @@ function Test-CommandGuard {
   }
   if ($privateSurface.detected) {
     return [ordered]@{ decision = 'BLOCKED'; reason = 'credential_or_secret_touch'; private_surface = $privateSurface }
+  }
+
+  if ($mcpPowershellUnsafeCommand.detected) {
+    return [ordered]@{ decision = 'BLOCKED'; reason = 'mcp_powershell_unsafe_command'; mcp_powershell = $mcpPowershellUnsafeCommand }
   }
 
   $absoluteRewardManipulation = $rewardHackingTouch.detected -and
@@ -8074,6 +8485,12 @@ function Test-CompletionGate {
     return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = $dynamicReproduction.reason }
   }
 
+  $mcpAuthority = [string](Get-OptionalPropertyValue -Object $CompletionReceipt -Name 'mcp_result_authority')
+  if ((Get-OptionalPropertyValue -Object $CompletionReceipt -Name 'mcp_result_used_as_authority') -eq $true -or
+    (-not [string]::IsNullOrWhiteSpace($mcpAuthority) -and $mcpAuthority -notin @('candidate_evidence_only','candidate_context_only'))) {
+    return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = 'mcp_result_used_as_authority' }
+  }
+
   $evidence = @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $CompletionReceipt -Name 'evidence'))
   if ($evidence.Count -eq 0) {
     return [ordered]@{ decision = 'DO_NOT_CLAIM_COMPLETE'; reason = 'direct_evidence_missing' }
@@ -8234,6 +8651,69 @@ function Get-BlockerDefinitions {
       user_facing_blocker = 'required_tool_not_used'
       why = 'The completion claim matches a required tool route, but the receipt and tool usage ledger do not show matching tool/check evidence or explicit unavailable/not-applicable reporting.'
       safe_next_action = 'Use the required capability or check, or record explicit unavailable/not-applicable reporting in the parent completion receipt. If this repeats without artifact or evidence change, stop retrying and report the missing route to the user.'
+    },
+    [ordered]@{
+      blocker_id = 'CONTRACT.MCP.REQUIRED_SERVER_UNAVAILABLE'
+      reason_code = 'required_mcp_server_unavailable'
+      user_facing_blocker = 'required_mcp_server_unavailable'
+      why = 'A required MCP route matched the task, but the configured server is disabled or unavailable for this runtime.'
+      safe_next_action = 'Make the MCP server available, or record explicit unavailable/not-applicable evidence with a fallback that does not treat MCP as completion authority.'
+    },
+    [ordered]@{
+      blocker_id = 'CONTRACT.MCP.REQUIRED_TOOL_NOT_USED'
+      reason_code = 'required_mcp_tool_not_used'
+      user_facing_blocker = 'required_mcp_tool_not_used'
+      why = 'A required MCP route matched the task, but no append-only mcp_tool_usage_event exists for the route.'
+      safe_next_action = 'Call the required MCP tool through the normal MCP path, then rerun Stop with the mcp_tool_usage_event as candidate evidence only.'
+    },
+    [ordered]@{
+      blocker_id = 'CONTRACT.MCP.CONTEXT7_NOT_USED'
+      reason_code = 'required_mcp_context7_not_used'
+      user_facing_blocker = 'required_mcp_context7_not_used'
+      why = 'The task required Context7 MCP library documentation context, but no Context7 MCP usage event exists.'
+      safe_next_action = 'Use Context7 MCP for the requested external library/API documentation lookup, or record explicit unavailable/not-applicable evidence with fallback.'
+    },
+    [ordered]@{
+      blocker_id = 'CONTRACT.MCP.SEQUENTIAL_THINKING_NOT_USED'
+      reason_code = 'required_mcp_sequential_thinking_not_used'
+      user_facing_blocker = 'required_mcp_sequential_thinking_not_used'
+      why = 'The task required Sequential Thinking MCP for root-cause reasoning support, but no usage event exists.'
+      safe_next_action = 'Use the Sequential Thinking MCP route for the root-cause pass, then keep its output as candidate context only.'
+    },
+    [ordered]@{
+      blocker_id = 'CONTRACT.MCP.WINDOWS_POWERSHELL_NOT_USED'
+      reason_code = 'required_mcp_windows_powershell_not_used'
+      user_facing_blocker = 'required_mcp_windows_powershell_not_used'
+      why = 'The task required Windows PowerShell MCP diagnostics, but no allowed Windows PowerShell MCP usage event exists.'
+      safe_next_action = 'Use the allowed read-only Windows PowerShell MCP diagnostic tool, or record explicit unavailable/not-applicable evidence with fallback.'
+    },
+    [ordered]@{
+      blocker_id = 'CONTRACT.MCP.CONFIGURED_BUT_NOT_USED'
+      reason_code = 'mcp_configured_but_not_used'
+      user_facing_blocker = 'mcp_configured_but_not_used'
+      why = 'MCP configuration was treated as if it were MCP usage evidence.'
+      safe_next_action = 'Keep configuration in runtime capability only and require mcp_tool_usage_event evidence for matched MCP routes.'
+    },
+    [ordered]@{
+      blocker_id = 'CONTRACT.MCP.RESULT_USED_AS_AUTHORITY'
+      reason_code = 'mcp_result_used_as_authority'
+      user_facing_blocker = 'mcp_result_used_as_authority'
+      why = 'An MCP result was treated as completion authority instead of candidate context/evidence.'
+      safe_next_action = 'Use the MCP result only as candidate evidence and let the Stop gate issue the authoritative completion receipt.'
+    },
+    [ordered]@{
+      blocker_id = 'CONTRACT.MCP.ROUTE_UNAVAILABLE_WITHOUT_FALLBACK'
+      reason_code = 'mcp_route_unavailable_without_fallback'
+      user_facing_blocker = 'mcp_route_unavailable_without_fallback'
+      why = 'A required MCP route was unavailable and no explicit fallback evidence was recorded.'
+      safe_next_action = 'Record explicit unavailable evidence plus a scoped fallback, then rerun the same proof.'
+    },
+    [ordered]@{
+      blocker_id = 'CONTRACT.MCP.POWERSHELL_UNSAFE_COMMAND'
+      reason_code = 'mcp_powershell_unsafe_command'
+      user_facing_blocker = 'mcp_powershell_unsafe_command'
+      why = 'The Windows PowerShell MCP request attempts a mutating, destructive, secret-touching, or enforcement-weakening operation.'
+      safe_next_action = 'Use only the configured read-only Windows PowerShell MCP diagnostic tool for this route.'
     },
     [ordered]@{
       blocker_id = 'CONTRACT.PM.ORCHESTRATION_PREFLIGHT_MISSING'
@@ -8834,12 +9314,21 @@ switch ($HookName) {
   'pre_command_guard' {
     $decision = Test-CommandGuard -Source $CommandSource -Surface $TargetSurface -Scoped $ExplicitUserScope.IsPresent -PayloadText $payloadText -Workdir $payloadWorkdir -Root $root -ActiveContract $activeContract -InspectOnly:($NoLog.IsPresent)
     if ([string](Get-OptionalPropertyValue -Object $decision -Name 'decision') -eq 'ALLOW') {
-      $preflight = Test-PmOrchestrationPreflight -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -PayloadText $payloadText -Workdir $payloadWorkdir
-      if (-not $preflight.ok) {
+      $bootstrapAction = Get-RequiredDelegationBootstrapAction -PayloadText $payloadText
+      if (-not [string]::IsNullOrWhiteSpace($bootstrapAction)) {
         $decision = [ordered]@{
-          decision = 'BLOCKED'
-          reason = $preflight.reason
-          pm_orchestration_preflight = $preflight
+          decision = 'ALLOW_BOOTSTRAP'
+          reason = 'required_delegation_bootstrap'
+          bootstrap_action = $bootstrapAction
+        }
+      } else {
+        $preflight = Test-PmOrchestrationPreflight -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -PayloadText $payloadText -Workdir $payloadWorkdir
+        if (-not $preflight.ok) {
+          $decision = [ordered]@{
+            decision = 'BLOCKED'
+            reason = $preflight.reason
+            pm_orchestration_preflight = $preflight
+          }
         }
       }
     }
@@ -8852,7 +9341,7 @@ switch ($HookName) {
     if ((-not $NoLog) -and (Get-OptionalPropertyValue -Object $decision -Name 'reason') -eq 'control_plane_mutation_current_task_scoped') {
       $completionReceipt = Register-ControlPlaneMutationReview -Root $root -ControlPlaneMutation $decisionControlPlane -PayloadText $payloadText -RepairScope $decisionRepairScope -CompletionReceipt $completionReceipt
     }
-    if ((-not $NoLog) -and (-not $DryRun) -and ([string](Get-OptionalPropertyValue -Object $decision -Name 'decision') -eq 'ALLOW') -and (Test-MutatingOperationText -Text $payloadText)) {
+    if ((-not $NoLog) -and (-not $DryRun) -and ([string](Get-OptionalPropertyValue -Object $decision -Name 'decision') -in @('ALLOW','ALLOW_BOOTSTRAP')) -and (Test-MutatingOperationText -Text $payloadText)) {
       $null = Write-TaskNeedReceipts -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -ContextText $payloadText -ActionClass 'write' -CompletionClaim:$false
     }
   }
@@ -8944,6 +9433,7 @@ switch ($HookName) {
     $decision = Test-CompletionGate -State $CompletionState -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -NoLog:($NoLog.IsPresent -or $DryRun.IsPresent)
   }
   'post_tool_use' {
+    $decision = [ordered]@{ decision = 'ALLOW'; reason = 'tool_usage_event_recorded' }
     if (-not $DryRun) {
       $null = Invoke-CodexAppSubagentSpawnBridge -Root $root -ActiveContract $activeContract -NoLog:($NoLog.IsPresent)
       $subagentInspectionJobs = @(Register-SubagentInspectionJobsForContext -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -HookEventName 'PostToolUse' -TriggerText $payloadText -PathText $payloadText -NoLog:($NoLog.IsPresent))
@@ -8951,8 +9441,8 @@ switch ($HookName) {
       $null = Register-SubagentInspectionObservation -Root $root -ActiveContract $activeContract -Payload $payload -PayloadText $payloadText -Workdir $payloadWorkdir -NoLog:($NoLog.IsPresent)
       $null = Register-SubagentWorkerObservation -Root $root -ActiveContract $activeContract -Payload $payload -PayloadText $payloadText -Workdir $payloadWorkdir -NoLog:($NoLog.IsPresent)
       $null = Register-SkillUsageObservation -Root $root -ActiveContract $activeContract -Payload $payload -PayloadText $payloadText -Workdir $payloadWorkdir -NoLog:($NoLog.IsPresent)
+      $null = Register-McpToolUsageObservation -Root $root -ActiveContract $activeContract -Payload $payload -PayloadText $payloadText -Workdir $payloadWorkdir -Decision $decision -NoLog:($NoLog.IsPresent)
     }
-    $decision = [ordered]@{ decision = 'ALLOW'; reason = 'tool_usage_event_recorded' }
   }
 }
 

@@ -295,6 +295,34 @@ test_cases:
       decision: BLOCKED
       reason_code: pm_orchestration_preflight_missing
 
+  - id: bootstrap_spawn_worker_not_blocked_by_missing_preflight
+    event: PreToolUse
+    task_type: control_plane_repair
+    action_class: write
+    class3_or_class4_mutating_action: true
+    pm_orchestration_preflight_missing: true
+    bootstrap_action: spawn_required_worker_subagent
+    target_paths:
+      - C:/Users/anise/.codex/Dev_Codex_App_GlobalSSOT/Settings/Codex_App_RUNTIME/subagent_worker_jobs.jsonl
+    expected:
+      severity: OBSERVE
+      decision: ALLOW_BOOTSTRAP
+      reason_code: required_delegation_bootstrap
+
+  - id: bootstrap_bridge_not_blocked_by_unscheduled_jobs
+    event: PreToolUse
+    task_type: control_plane_repair
+    action_class: write
+    class3_or_class4_mutating_action: true
+    required_subagent_jobs_not_scheduled: true
+    bootstrap_action: bridge_app_subagent_session
+    target_paths:
+      - C:/Users/anise/.codex/Dev_Codex_App_GlobalSSOT/Settings/Codex_App_RUNTIME/subagent_lifecycle_events.jsonl
+    expected:
+      severity: OBSERVE
+      decision: ALLOW_BOOTSTRAP
+      reason_code: required_delegation_bootstrap
+
   - id: control_plane_write_without_scheduled_subagent_jobs_blocks_pretool
     event: PreToolUse
     task_type: control_plane_repair
@@ -629,6 +657,102 @@ test_cases:
       severity: DO_NOT_CLAIM_COMPLETE
       decision: DENY_COMPLETE_CLAIM
       reason_code: direct_evidence_missing
+
+  - id: configured_mcp_is_not_usage_evidence
+    event: Stop
+    task_type: external_docs_lookup
+    action_class: read
+    completion_claim: true
+    mcp_configured_but_not_used: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: mcp_configured_but_not_used
+
+  - id: context7_missing_blocks_external_docs_before_direct_evidence
+    event: Stop
+    task_type: external_docs_lookup
+    action_class: read
+    completion_claim: true
+    required_mcp_context7_not_used: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: required_mcp_context7_not_used
+
+  - id: sequential_thinking_missing_blocks_root_cause_before_direct_evidence
+    event: Stop
+    task_type: root_cause_debugging
+    action_class: read
+    completion_claim: true
+    required_mcp_sequential_thinking_not_used: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: required_mcp_sequential_thinking_not_used
+
+  - id: windows_powershell_mcp_missing_blocks_runtime_identity_before_direct_evidence
+    event: Stop
+    task_type: runtime_diagnostics
+    action_class: read
+    completion_claim: true
+    required_mcp_windows_powershell_not_used: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: required_mcp_windows_powershell_not_used
+
+  - id: required_mcp_tool_missing_blocks_before_direct_evidence
+    event: Stop
+    task_type: mcp_assisted_task
+    action_class: read
+    completion_claim: true
+    required_mcp_tool_not_used: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: required_mcp_tool_not_used
+
+  - id: required_mcp_server_unavailable_blocks_before_direct_evidence
+    event: Stop
+    task_type: external_docs_lookup
+    action_class: read
+    completion_claim: true
+    required_mcp_server_unavailable: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: required_mcp_server_unavailable
+
+  - id: mcp_route_unavailable_without_fallback_blocks_before_direct_evidence
+    event: Stop
+    task_type: external_docs_lookup
+    action_class: read
+    completion_claim: true
+    mcp_route_unavailable_without_fallback: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: mcp_route_unavailable_without_fallback
+
+  - id: mcp_result_is_not_completion_authority
+    event: Stop
+    task_type: external_docs_lookup
+    action_class: read
+    completion_claim: true
+    mcp_result_used_as_authority: true
+    direct_evidence_missing: true
+    expected:
+      severity: DO_NOT_CLAIM_COMPLETE
+      decision: DENY_COMPLETE_CLAIM
+      reason_code: mcp_result_used_as_authority
 
   - id: repo_v2_adoption_receipt_missing_blocks_repo_adoption_completion
     event: Stop
@@ -1422,6 +1546,16 @@ test_cases:
       severity: BLOCKED
       decision: BLOCK
       reason_code: destructive_side_effect_without_explicit_scope
+
+  - id: mcp_powershell_unsafe_command_is_blocked
+    event: PreToolUse
+    task_type: runtime_diagnostics
+    action_class: execute
+    mcp_powershell_unsafe_command: true
+    expected:
+      severity: BLOCKED
+      decision: BLOCK
+      reason_code: mcp_powershell_unsafe_command
 
   - id: evaluator_manipulation_is_blocked
     event: PreToolUse

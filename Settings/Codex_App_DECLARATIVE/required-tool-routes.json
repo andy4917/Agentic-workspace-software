@@ -118,6 +118,60 @@
       ]
     },
     {
+      "route_id": "mcp_context7_library_docs",
+      "description": "External library/API documentation lookups that explicitly request Context7 must use the Context7 MCP route as candidate context only.",
+      "trigger_patterns": [
+        "(?i)\\bcontext7\\b.{0,120}\\b(docs?|documentation|library|api reference|sdk reference)\\b",
+        "(?i)\\b(docs?|documentation|library|api reference|sdk reference)\\b.{0,120}\\bcontext7\\b"
+      ],
+      "requires": [
+        {
+          "type": "mcp",
+          "id": "context7",
+          "evidence_patterns": [
+            "(?i)mcp_tool_usage:context7",
+            "(?i)mcp_tool_usage_event.*context7"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "mcp_sequential_root_cause",
+      "description": "Root-cause passes that explicitly request Sequential Thinking MCP must record MCP usage as candidate context only.",
+      "trigger_patterns": [
+        "(?i)\\b(sequential[_ -]?thinking|sequential mcp)\\b.{0,120}\\b(root[-_ ]?cause|decision tree|same failure repeats)\\b",
+        "(?i)\\b(root[-_ ]?cause|decision tree|same failure repeats)\\b.{0,120}\\b(sequential[_ -]?thinking|sequential mcp)\\b"
+      ],
+      "requires": [
+        {
+          "type": "mcp",
+          "id": "sequential_thinking",
+          "evidence_patterns": [
+            "(?i)mcp_tool_usage:sequential_thinking",
+            "(?i)mcp_tool_usage_event.*sequential_thinking"
+          ]
+        }
+      ]
+    },
+    {
+      "route_id": "mcp_windows_powershell_runtime_identity",
+      "description": "Windows runtime identity diagnostics that explicitly request the Windows PowerShell MCP route must use its read-only MCP diagnostic tool.",
+      "trigger_patterns": [
+        "(?i)\\b(windows[_ -]?powershell|powershell mcp)\\b.{0,120}\\b(runtime identity|diagnostics?|hook marker|ssot ledger)\\b",
+        "(?i)\\b(runtime identity|diagnostics?|hook marker|ssot ledger)\\b.{0,120}\\b(windows[_ -]?powershell|powershell mcp)\\b"
+      ],
+      "requires": [
+        {
+          "type": "mcp",
+          "id": "windows_powershell",
+          "evidence_patterns": [
+            "(?i)mcp_tool_usage:windows_powershell",
+            "(?i)mcp_tool_usage_event.*windows_powershell"
+          ]
+        }
+      ]
+    },
+    {
       "route_id": "explicit_browser_local_target",
       "description": "Explicit browser inspection of local targets requires the Browser Use browser skill/plugin route when available.",
       "trigger_patterns": [
@@ -369,6 +423,29 @@
       ]
     }
   ],
+  "subagent_standing_authorization": {
+    "scope_root": "C:\\Users\\anise\\.codex\\Dev_Codex_App_GlobalSSOT",
+    "enabled": true,
+    "applies_to": [
+      "worker",
+      "subagent",
+      "spawn",
+      "inspector"
+    ],
+    "do_not_ask_again_before_required_in_scope_spawn": true,
+    "protected_actions_still_require_explicit_current_instruction": [
+      "credential_or_secret_access",
+      "destructive_side_effect",
+      "force_push_or_history_rewrite",
+      "out_of_scope_mutation",
+      "repo_external_global_state_mutation"
+    ],
+    "worker_authority": "candidate_artifact_only",
+    "inspector_authority": "candidate_evidence_only",
+    "parent_review_required": true,
+    "completion_authority_unchanged": "gate_issued_completion_receipt",
+    "higher_priority_spawn_agent_use_rule_source": "runtime_provided_tool_description_not_repo_files"
+  },
   "worker_routes": {
     "authority": "candidate_artifact_only",
     "primary_model": "latest-main",
@@ -393,7 +470,9 @@
       "config_worker",
       "control_plane_worker",
       "frontend_worker",
-      "backend_worker"
+      "backend_worker",
+      "runtime_schema_worker",
+      "harness_worker"
     ],
     "reason_codes": {
       "missing_spawn": "required_worker_not_spawned",

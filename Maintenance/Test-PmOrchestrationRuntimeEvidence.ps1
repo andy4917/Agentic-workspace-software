@@ -16,7 +16,8 @@ $routes = Get-Content -LiteralPath $routesPath -Raw | ConvertFrom-Json
 $codexConfig = if (Test-Path -LiteralPath $codexConfigPath -PathType Leaf) { [System.IO.File]::ReadAllText($codexConfigPath) } else { '' }
 
 $parseErrors = $null
-$null = [System.Management.Automation.Language.Parser]::ParseFile($hookPath, [ref]$null, [ref]$parseErrors)
+$parseTokens = $null
+$null = [System.Management.Automation.Language.Parser]::ParseFile($hookPath, [ref]$parseTokens, [ref]$parseErrors)
 
 function Get-FunctionText {
   param(
@@ -68,7 +69,10 @@ $checks = [ordered]@{
   pm_decision_ledger_required = $hook -match 'Read-PmDecisionEvents -Root \$Root -TurnFingerprint \$turn' -and $hook -match "reason = 'pm_decision_missing'"
   stop_orchestration_failures_precede_direct_evidence = $completionGateFunction.IndexOf('Test-TaskClassificationAndNeedForCompletion') -ge 0 -and $completionGateFunction.IndexOf('Test-TaskClassificationAndNeedForCompletion') -lt $completionGateFunction.IndexOf("reason = 'direct_evidence_missing'") -and $completionGateFunction.IndexOf('Test-PmAccountabilityForCompletion') -ge 0 -and $completionGateFunction.IndexOf('Test-PmAccountabilityForCompletion') -lt $completionGateFunction.IndexOf("reason = 'direct_evidence_missing'")
   configured_skill_not_evidence = $hook -match 'installed_skill_not_evidence' -and $hook -match 'skill_usage_event\|explicit_unavailable\|explicit_not_applicable'
-  configured_tool_route_not_evidence = $hook -notmatch '\$corpusParts \+= \$routesDoc\.evidence' -and $hook -match 'tool_usage_event\|skill_usage_event\|subagent_spawn_event\|worker_spawn_event'
+  configured_tool_route_not_evidence = $hook -notmatch '\$corpusParts \+= \$routesDoc\.evidence' -and $hook -match 'tool_usage_event\|mcp_tool_usage_event\|skill_usage_event\|subagent_spawn_event\|worker_spawn_event'
+  mcp_tool_usage_schema_registered = [string]$schema.state_files.mcp_tool_usage_events -match 'mcp_tool_usage_events\.jsonl' -and [string]$schema.mcp_tool_usage_event_schema.schema_version -eq 'mcp_tool_usage_event.v1'
+  mcp_configured_not_evidence = $hook -match 'configured_is_not_usage_evidence' -and $hook -match 'Register-McpToolUsageObservation' -and $hook -match 'mcp_configured_available_is_not_completion_evidence'
+  mcp_powershell_unsafe_guard_present = $hook -match 'Test-McpPowerShellUnsafeCommand' -and $hook -match "reason = 'mcp_powershell_unsafe_command'"
   canonical_lifecycle_schema_has_spawn_and_report = $canonicalRecordTypesPresent.Count -eq 5 -and ([string]$schema.subagent_lifecycle_event_schema.event_type -match 'unmatched_subagent_spawn_observed')
   worker_routes_aligned_in_config_and_schema = $missingWorkerRoutes.Count -eq 0
   max_threads_depth_semantics = $codexConfig -match '(?ms)\[agents\].*?max_threads\s*=\s*8' -and $codexConfig -match '(?ms)\[agents\].*?max_depth\s*=\s*1'

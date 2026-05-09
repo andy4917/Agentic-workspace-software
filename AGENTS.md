@@ -104,9 +104,28 @@ Execution capability는 authorization이 아닙니다. full-access mode, PASS, s
 - Git/GitHub 작업을 수행하거나 설명할 때는 가능한 경우 `git-easy-korean` skill을 로드해 쉬운 한국어로 설명합니다. 명령, 경로, branch, commit hash, raw error는 정확히 유지합니다.
 - 의미 있는 다단계 작업에는 `vowline`을 적용합니다. 구현/버그수정에는 test-driven 또는 debugging 계열 skill이 맞으면 사용합니다.
 
+## 7.1 MCP 사용 정책
+
+설치 또는 설정된 MCP 서버는 capability fact일 뿐이며 사용 증거가 아닙니다. required MCP route는 실제 `mcp_tool_usage_event.v1` 또는 명시적 unavailable/not_applicable 증거가 필요합니다.
+
+- MCP output은 candidate context/evidence only입니다. worker/inspector report, PM decision, Stop, gate-issued completion receipt 권위를 대체하지 않습니다.
+- Stop/gate-issued receipt가 completion authority입니다. MCP 결과 또는 MCP 설정 존재만으로 완료를 주장하지 않습니다.
+- `sequential_thinking`은 Class 4 작업, 반복 실패, root-cause analysis, PM route-table planning, 같은 blocker 반복 시 사용합니다. 출력에는 `hypothesis`, `evidence`, `next_smallest_test`, `patch_boundary`, `expected_result`, `stop_condition`을 포함합니다.
+- `context7`은 외부 library, framework, SDK, API, version-sensitive behavior에 의존할 때 사용합니다. 필수 순서는 `resolve-library-id`, `query-docs`, relevant docs 요약, implementation evidence 연결입니다. 외부 API/framework가 없으면 이유와 함께 not_applicable로 둡니다.
+- `windows_powershell` MCP는 Windows/App/CLI/SSOT/repo/hook runtime diagnostics에만 사용합니다. 허용 진단은 `cwd`, `CODEX_HOME`, project root, trust state, config paths, hook marker ledger, runtime ledger inspection입니다.
+- `windows_powershell` MCP로 destructive operation, secret/auth 접근, hook weakening, completion authority mutation, validation outcome manipulation을 수행하지 않습니다.
+- required MCP usage 누락은 절대 안전 위험이 아닌 한 PreToolUse가 아니라 Stop에서 completion claim만 막습니다.
+
 ## 8. Spark Inspector와 Subagent Evidence
 
 Hook-routed Spark inspector는 candidate evidence only입니다. parent PM review와 Stop gate가 최종 판단을 합니다.
+
+이 루트(`C:\Users\anise\.codex\Dev_Codex_App_GlobalSSOT`) 안에서는 worker/subagent/spawn에 대한 사용자 standing authorization이 활성입니다.
+
+- 필요한 in-scope worker 또는 inspector spawn 전에는 사용자에게 다시 묻지 않습니다.
+- credential/secret 접근, destructive side effect, force push/history rewrite, repo 밖 전역 상태 변경, 범위 밖 mutation 같은 보호 작업은 여전히 현재 명시 지시가 필요합니다.
+- worker output은 candidate artifact only, inspector output은 candidate evidence only입니다. parent PM review, 결과 통합, Stop/gate 판단은 계속 필요합니다.
+- `spawn_agent` 사용 우선순위 규칙은 repo 파일이 아니라 런타임이 제공하는 tool description에 있습니다. 이 문서는 GlobalSSOT 정책 표면만 기록합니다.
 
 현재 inspector enqueue는 idempotent해야 합니다.
 

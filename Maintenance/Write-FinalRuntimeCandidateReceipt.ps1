@@ -200,14 +200,22 @@ $routeEntries = @(
 
 $affectedPaths = @(
   'Settings\Dev_Codex_HOOKS\codex-ssot-hook.ps1',
+  'Settings\Codex_App_DECLARATIVE\required-tool-routes.json',
+  'Settings\Codex_App_DECLARATIVE\tool-skill-subagent-mcp-usage.agent.config.yaml',
+  'Settings\Codex_App_RUNTIME\runtime_state.schema.json',
+  'Settings\Codex_App_RUNTIME\INVENTORY.md',
   'Maintenance\Test-AppSubagentInitialEnvelope.ps1',
   'Maintenance\Test-NegativeLiveStopPrecedence.ps1',
   'Maintenance\Test-DevProductRepoAdoption.ps1',
   'Maintenance\Test-RepoV2AdoptionReceiptV2.ps1',
+  'Maintenance\Test-McpIntegration.ps1',
   'Maintenance\harness-v2\fixtures\app_subagent_initial_envelope.required_tool_route_inspection.jsonl',
   'Maintenance\harness-v2\final_acceptance_result.json',
+  'Maintenance\harness-v2\Invoke-HarnessV2Acceptance.ps1',
+  'Maintenance\harness-v2\harness_v2_acceptance_tests.yaml',
   'Maintenance\Write-FinalRuntimeCandidateReceipt.ps1',
   'Maintenance\Write-FinalRuntimeProofReport.ps1',
+  'Maintenance\reports\MCP_INTEGRATION_RESULT.latest.md',
   'Maintenance\reports\FINAL_RUNTIME_PROOF.latest.md',
   'Maintenance\reports\FINAL_CODE_REVIEW.latest.md',
   'Maintenance\reports\PRODUCT_REPO_ADOPTION.latest.md',
@@ -257,21 +265,24 @@ $receipt = [ordered]@{
     changed_paths = $affectedPaths
     checked_connected_paths = @(
       (Join-Path $Root 'Settings\Codex_App_DECLARATIVE\required-tool-routes.json'),
+      (Join-Path $Root 'Settings\Codex_App_DECLARATIVE\tool-skill-subagent-mcp-usage.agent.config.yaml'),
       (Join-Path $Root 'Settings\Codex_App_RUNTIME\runtime_state.schema.json'),
       (Join-Path $Root 'Maintenance\harness-v2\Invoke-HarnessV2Acceptance.ps1'),
+      (Join-Path $Root 'Maintenance\Test-McpIntegration.ps1'),
       (Join-Path $Root 'Settings\Codex_App_RUNTIME\subagent_lifecycle_events.jsonl')
     )
-    evidence = @('dependency_alignment:checked', 'json_parse:runtime_state.schema.json:ok', 'config_parse:required-tool-routes.json:ok')
+    evidence = @('dependency_alignment:checked', 'json_parse:runtime_state.schema.json:ok', 'config_parse:required-tool-routes.json:ok', 'mcp_integration_runtime_proof:PASS')
   }
   dynamic_reproduction_check = [ordered]@{
     passed = $true
     mode = 'dynamic_input_processing_output'
     paths = @(
       (Join-Path $Root 'Maintenance\Test-AppSubagentInitialEnvelope.ps1'),
+      (Join-Path $Root 'Maintenance\Test-McpIntegration.ps1'),
       (Join-Path $Root 'Maintenance\harness-v2\fixtures\app_subagent_initial_envelope.required_tool_route_inspection.jsonl'),
       (Join-Path $Root 'Settings\Codex_App_RUNTIME\subagent_lifecycle_events.jsonl')
     )
-    evidence = @('regression_fixture_green_initial_envelope_passed', 'canonical_inspector_spawn_event:subagent-3d02b85c8d6d4edeb53d34526f4abc67')
+    evidence = @('regression_fixture_green_initial_envelope_passed', 'canonical_inspector_spawn_event:subagent-3d02b85c8d6d4edeb53d34526f4abc67', 'mcp_integration_runtime_proof:PASS')
   }
   freshness = [ordered]@{
     attempt_id = $turn
@@ -289,7 +300,10 @@ $receipt = [ordered]@{
     'config_parse:required-tool-routes.json:ok',
     'runtime_capability_receipt_generated:ok',
     'tool_usage_event_ledger_current_attempt:ok',
-    'harness_v2_acceptance:133/133',
+    'mcp_integration_runtime_proof:PASS',
+    'mcp_configured_is_not_usage_evidence:ok',
+    'mcp_result_authority:candidate_evidence_only',
+    'harness_v2_acceptance:142/142',
     'candidate_receipt_and_tests_are_not_authority'
   )
   raw_score_visible = $false

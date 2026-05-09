@@ -11,8 +11,9 @@
 - `need_resolution_receipt.json`: current-turn `need_resolution_receipt.v1` from `required_route_resolver`, including REQUIRED/RECOMMENDED/NOT_APPLICABLE/UNAVAILABLE/UNKNOWN route need.
 - `skill_resolution_receipt.json`: current-turn `skill_resolution_receipt.v1` from required skill routes; installed/configured/available skills are not completion evidence.
 - `skill_usage_events.jsonl`: append-only `skill_usage_event.v1` ledger proving actual skill use or explicit unavailable/not_applicable evidence.
-- `runtime_capability_receipt.json`: generated receipt of loaded AGENTS.md sources, active hooks, Codex config authority quick status, available MCP servers, skills, configured subagents, cwd, project root, and trust state.
+- `runtime_capability_receipt.json`: generated receipt of loaded AGENTS.md sources, active hooks, Codex config authority quick status, MCP server configuration/status, skills, configured subagents, cwd, project root, and trust state.
 - `tool_usage_events.jsonl`: append-only `tool_usage_event.v2` observation ledger written from PostToolUse or equivalent PreToolUse observation, including event IDs, nonces, outcome, and parent lineage when present.
+- `mcp_tool_usage_events.jsonl`: append-only `mcp_tool_usage_event.v1` ledger for actual MCP calls; configured MCP servers are not usage evidence and MCP results are candidate-only.
 - `heuristic_review_jobs.jsonl`: append-only queue for reward-hacking keyword hits downgraded to `SUSPECT`.
 - `heuristic_review_reports.jsonl`: append-only candidate-only review reports from `spark_false_positive_reviewer`.
 - `required_tool_loop_state.json`: loop-breaker state for repeated `required_tool_not_used` completion attempts without artifact or evidence change.

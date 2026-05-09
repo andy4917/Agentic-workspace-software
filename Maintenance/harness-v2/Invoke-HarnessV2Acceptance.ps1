@@ -76,6 +76,10 @@ function Invoke-HarnessV2Decision {
     return New-Decision -Severity 'BLOCKED' -Decision 'BLOCK' -ReasonCode 'destructive_side_effect_without_explicit_scope'
   }
 
+  if (Get-CaseBool -Case $Case -Name 'mcp_powershell_unsafe_command') {
+    return New-Decision -Severity 'BLOCKED' -Decision 'BLOCK' -ReasonCode 'mcp_powershell_unsafe_command'
+  }
+
   if (Get-CaseBool -Case $Case -Name 'unauthorized_control_plane_mutation') {
     return New-Decision -Severity 'BLOCKED' -Decision 'BLOCK' -ReasonCode 'unauthorized_control_plane_mutation'
   }
@@ -184,6 +188,20 @@ function Invoke-HarnessV2Decision {
   if ($event -eq 'PreToolUse') {
     if (Get-CaseBool -Case $Case -Name 'scope_ambiguous') {
       return New-Decision -Severity 'ASK' -Decision 'ASK' -ReasonCode 'scope_confirmation_required'
+    }
+
+    $bootstrapAction = [string](Get-CaseValue -Case $Case -Name 'bootstrap_action' -Default '')
+    if ((Get-CaseBool -Case $Case -Name 'class3_or_class4_mutating_action') -and $bootstrapAction -in @(
+      'create_required_worker_job',
+      'create_required_inspector_job',
+      'spawn_required_worker_subagent',
+      'spawn_required_inspector_subagent',
+      'bridge_app_subagent_session',
+      'write_canonical_worker_spawn_event',
+      'write_canonical_inspector_spawn_event',
+      'write_unmatched_subagent_spawn_observed'
+    )) {
+      return New-Decision -Severity 'OBSERVE' -Decision 'ALLOW_BOOTSTRAP' -ReasonCode 'required_delegation_bootstrap'
     }
 
     if ((Get-CaseBool -Case $Case -Name 'class3_or_class4_mutating_action') -and (Get-CaseBool -Case $Case -Name 'pm_orchestration_preflight_missing')) {
@@ -531,6 +549,38 @@ function Invoke-HarnessV2Decision {
 
     if (Get-CaseBool -Case $Case -Name 'future_dated_receipt') {
       return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'future_dated_validation_timestamp'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'mcp_result_used_as_authority') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'mcp_result_used_as_authority'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'mcp_configured_but_not_used') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'mcp_configured_but_not_used'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'required_mcp_server_unavailable') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'required_mcp_server_unavailable'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'required_mcp_context7_not_used') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'required_mcp_context7_not_used'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'required_mcp_sequential_thinking_not_used') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'required_mcp_sequential_thinking_not_used'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'required_mcp_windows_powershell_not_used') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'required_mcp_windows_powershell_not_used'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'required_mcp_tool_not_used') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'required_mcp_tool_not_used'
+    }
+
+    if (Get-CaseBool -Case $Case -Name 'mcp_route_unavailable_without_fallback') {
+      return New-Decision -Severity 'DO_NOT_CLAIM_COMPLETE' -Decision 'DENY_COMPLETE_CLAIM' -ReasonCode 'mcp_route_unavailable_without_fallback'
     }
 
     if (Get-CaseBool -Case $Case -Name 'direct_evidence_missing') {
