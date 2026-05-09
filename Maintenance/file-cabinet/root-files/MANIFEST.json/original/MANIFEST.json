@@ -1,0 +1,30 @@
+{
+  "root": "%USERPROFILE%\\.codex",
+  "active_surfaces": [
+    "AGENTS.md",
+    "AGENT.md",
+    "README.md",
+    "INVENTORY.md",
+    "ROOT_MAP.json",
+    "MANIFEST.json",
+    "Settings",
+    "Maintenance",
+    "Tools"
+  ],
+  "sensitive_policy": {
+    "protected_patterns": [
+      "auth.json",
+      "*.sqlite*",
+      "sessions/",
+      "log/",
+      "logs/",
+      "state/",
+      "cache/",
+      "plugins/"
+    ],
+    "contents_read": false
+  },
+  "codex_home": "%USERPROFILE%\\.codex",
+  "schema_version": "globalssot_manifest.v2",
+  "updated_at": "2026-05-09T19:44:22+09:00"
+}

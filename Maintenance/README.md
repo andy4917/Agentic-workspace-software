@@ -1,9 +1,5 @@
 # Maintenance
 
-Maintenance records for `Dev_Codex_App_GlobalSSOT`.
+Maintenance folder for the active `.codex` GlobalSSOT root.
 
-Use this folder for direct evidence records, audit summaries, and verification notes that belong to this SSOT. Do not store credentials, tokens, external account state, or unrelated workspace data here.
-
-`harness-v2` is an isolated prototype area for the minimal Harness V2 design,
-policy, acceptance tests, and migration notes. It is not wired into production
-hooks unless a later migration step explicitly does so.
+New maintenance reports should describe direct file and command evidence.

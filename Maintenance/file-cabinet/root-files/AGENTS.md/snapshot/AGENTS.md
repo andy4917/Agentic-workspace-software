@@ -8,10 +8,5 @@ Operational source of truth:
 - `%USERPROFILE%\code\Dev-Product` remains outside this GlobalSSOT maintenance scope unless the user explicitly asks to work there.
 - Do not read secrets or credential material unless the user explicitly asks for that specific file.
 
-Naming convention:
-- `AGENTS.md` is the primary file Codex agents should read first for scoped instructions.
-- `agent.md` is a secondary, lower-priority instruction file when both names exist in the same scope.
-- Use the uppercase/lowercase distinction intentionally to communicate priority.
-
 Use Korean polite language for user-facing output.
 When doing Git/GitHub work, use the `git-easy-korean` skill when available.

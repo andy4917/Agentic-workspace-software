@@ -1,0 +1,42 @@
+{
+  "root": "%USERPROFILE%\\.codex",
+  "moved_policy": "non-runtime root documents moved into per-file original folders",
+  "moved": [
+    {
+      "Name": ".personality_migration",
+      "From": "%USERPROFILE%\\.codex\\.personality_migration",
+      "To": "%USERPROFILE%\\.codex\\Maintenance\\file-cabinet\\root-files\\_personality_migration\\original\\.personality_migration",
+      "MovedAt": "2026-05-09T20:03:57.5306487+09:00"
+    },
+    {
+      "Name": "CHANGELOG.md",
+      "From": "%USERPROFILE%\\.codex\\CHANGELOG.md",
+      "To": "%USERPROFILE%\\.codex\\Maintenance\\file-cabinet\\root-files\\CHANGELOG.md\\original\\CHANGELOG.md",
+      "MovedAt": "2026-05-09T20:03:57.5372909+09:00"
+    },
+    {
+      "Name": "INVENTORY.md",
+      "From": "%USERPROFILE%\\.codex\\INVENTORY.md",
+      "To": "%USERPROFILE%\\.codex\\Maintenance\\file-cabinet\\root-files\\INVENTORY.md\\original\\INVENTORY.md",
+      "MovedAt": "2026-05-09T20:03:57.5399784+09:00"
+    },
+    {
+      "Name": "MANIFEST.json",
+      "From": "%USERPROFILE%\\.codex\\MANIFEST.json",
+      "To": "%USERPROFILE%\\.codex\\Maintenance\\file-cabinet\\root-files\\MANIFEST.json\\original\\MANIFEST.json",
+      "MovedAt": "2026-05-09T20:03:57.5419516+09:00"
+    },
+    {
+      "Name": "README.md",
+      "From": "%USERPROFILE%\\.codex\\README.md",
+      "To": "%USERPROFILE%\\.codex\\Maintenance\\file-cabinet\\root-files\\README.md\\original\\README.md",
+      "MovedAt": "2026-05-09T20:03:57.5455302+09:00"
+    },
+    {
+      "Name": "ROOT_MAP.json",
+      "From": "%USERPROFILE%\\.codex\\ROOT_MAP.json",
+      "To": "%USERPROFILE%\\.codex\\Maintenance\\file-cabinet\\root-files\\ROOT_MAP.json\\original\\ROOT_MAP.json",
+      "MovedAt": "2026-05-09T20:03:57.5483180+09:00"
+    }
+  ]
+}
