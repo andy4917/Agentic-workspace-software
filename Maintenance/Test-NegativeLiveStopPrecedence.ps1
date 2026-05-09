@@ -14,6 +14,8 @@ if ([string]::IsNullOrWhiteSpace($Root)) {
 $runtime = Join-Path $Root 'Settings\Codex_App_RUNTIME'
 $activePath = Join-Path $runtime 'active_contract.json'
 $receiptPath = Join-Path $runtime 'completion_receipt.json'
+$taskPath = Join-Path $runtime 'task_classification_receipt.json'
+$needPath = Join-Path $runtime 'need_resolution_receipt.json'
 $hookPath = Join-Path $Root 'Settings\Dev_Codex_HOOKS\codex-ssot-hook.ps1'
 
 function Read-TextLocal {
@@ -49,6 +51,8 @@ function New-HashRecord {
 
 $activeOriginal = Read-TextLocal -Path $activePath
 $receiptOriginal = Read-TextLocal -Path $receiptPath
+$taskOriginal = Read-TextLocal -Path $taskPath
+$needOriginal = Read-TextLocal -Path $needPath
 
 try {
   $turn = 'negative-live-stop-required-worker-not-spawned-20260508'
@@ -124,6 +128,8 @@ try {
 
   Write-JsonLocal -Path $activePath -Value $active
   Write-JsonLocal -Path $receiptPath -Value $receipt
+  Write-JsonLocal -Path $taskPath -Value $task
+  Write-JsonLocal -Path $needPath -Value $need
 
   $payload = @{
     last_assistant_message = '완료했습니다'
@@ -142,4 +148,6 @@ try {
 } finally {
   Write-TextLocal -Path $activePath -Text $activeOriginal
   Write-TextLocal -Path $receiptPath -Text $receiptOriginal
+  Write-TextLocal -Path $taskPath -Text $taskOriginal
+  Write-TextLocal -Path $needPath -Text $needOriginal
 }

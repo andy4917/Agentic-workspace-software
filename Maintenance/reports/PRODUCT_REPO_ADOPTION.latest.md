@@ -1,6 +1,6 @@
 # PRODUCT_REPO_ADOPTION.latest
 
-Status: verified
+Status: blocked
 Receipt: dev-product-6c1167b06e229546
 Product repo: C:\Users\anise\code\Dev-Product\입실퇴실 안내문 생성기
 Project root from App session: C:\Users\anise\code\Dev-Product\입실퇴실 안내문 생성기

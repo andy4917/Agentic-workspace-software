@@ -20,6 +20,7 @@
     "subagent_worker_jobs": "Settings/Codex_App_RUNTIME/subagent_worker_jobs.jsonl",
     "subagent_worker_reports": "Settings/Codex_App_RUNTIME/subagent_worker_reports.jsonl",
     "subagent_lifecycle_events": "Settings/Codex_App_RUNTIME/subagent_lifecycle_events.jsonl",
+    "codex_app_subagent_bridge_cache": "Settings/Codex_App_RUNTIME/codex_app_subagent_bridge_cache.json",
     "subagent_inspection_loop_state": "Settings/Codex_App_RUNTIME/subagent_inspection_loop_state.json",
     "pm_decisions": "Settings/Codex_App_RUNTIME/pm_decisions.jsonl",
     "repo_gate_adoption_receipt": "Settings/Codex_App_RUNTIME/repo_gate_adoption_receipt.json",
@@ -643,6 +644,14 @@
     "close_policy": "auto_close_after_report_accept_reject_terminate_or_route_resolution | null",
     "timestamp_utc": null,
     "append_only": true
+  },
+  "codex_app_subagent_bridge_cache_schema": {
+    "schema_version": "codex_app_subagent_bridge_cache.v1",
+    "updated_at_utc": null,
+    "processed_session_ids": [],
+    "max_entries": 500,
+    "authority": "cache_only_no_completion_authority",
+    "source": "bridge_app_subagent_session"
   },
   "subagent_inspection_loop_state_schema": {
     "schema_version": "subagent_inspection_loop_state.v1",

@@ -3171,6 +3171,13 @@ function Get-SubagentLifecycleEventsPath {
   Join-Path $Root 'Settings/Codex_App_RUNTIME/subagent_lifecycle_events.jsonl'
 }
 
+function Get-CodexAppSubagentBridgeCachePath {
+  param([Parameter(Mandatory = $true)][string]$Root)
+
+  # Cache for bridge_app_subagent_session Stop fast path decisions.
+  Join-Path $Root 'Settings/Codex_App_RUNTIME/codex_app_subagent_bridge_cache.json'
+}
+
 function Get-CodexAppSessionsRoot {
   Join-Path $HOME '.codex\sessions'
 }
@@ -3625,6 +3632,87 @@ function Read-SubagentLifecycleEvents {
   }
 
   $events
+}
+
+function New-SubagentLifecycleBridgeIndex {
+  param([Parameter(Mandatory = $true)][string]$Root)
+
+  $processed = @{}
+  $eventsBySessionId = @{}
+  foreach ($event in @(Read-SubagentLifecycleEvents -Root $Root)) {
+    $canonicalSpawn = [string](Get-OptionalPropertyValue -Object $event -Name 'record_type') -in @('worker_spawn_event','inspector_spawn_event') -and
+      [string](Get-OptionalPropertyValue -Object $event -Name 'event') -eq 'spawned'
+    $unmatchedObservation = [string](Get-OptionalPropertyValue -Object $event -Name 'event_type') -eq 'unmatched_subagent_spawn_observed'
+    if (-not ($canonicalSpawn -or $unmatchedObservation)) {
+      continue
+    }
+
+    foreach ($name in @('app_session_id','source_thread_id','subagent_id')) {
+      $sessionId = [string](Get-OptionalPropertyValue -Object $event -Name $name)
+      if ([string]::IsNullOrWhiteSpace($sessionId)) {
+        continue
+      }
+      $key = $sessionId.ToLowerInvariant()
+      $processed[$key] = $true
+      if (-not $eventsBySessionId.ContainsKey($key)) {
+        $eventsBySessionId[$key] = @()
+      }
+      $eventsBySessionId[$key] = @($eventsBySessionId[$key]) + $event
+    }
+  }
+
+  [ordered]@{
+    schema_version = 'subagent_lifecycle_bridge_index.v1'
+    processed_session_ids = $processed
+    events_by_session_id = $eventsBySessionId
+    source = 'subagent_lifecycle_events.jsonl'
+  }
+}
+
+function Read-CodexAppSubagentBridgeSessionCache {
+  param([Parameter(Mandatory = $true)][string]$Root)
+
+  $cache = @{}
+  $path = Get-CodexAppSubagentBridgeCachePath -Root $Root
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    return $cache
+  }
+
+  try {
+    $doc = Read-JsonFile -Path $path
+    foreach ($sessionId in @(Convert-ToStringArray -Value (Get-OptionalPropertyValue -Object $doc -Name 'processed_session_ids'))) {
+      $cache[$sessionId.ToLowerInvariant()] = $true
+    }
+  } catch {
+  }
+
+  $cache
+}
+
+function Write-CodexAppSubagentBridgeSessionCache {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [string[]]$SessionIds = @()
+  )
+
+  $cache = Read-CodexAppSubagentBridgeSessionCache -Root $Root
+  foreach ($sessionId in @($SessionIds)) {
+    if (-not [string]::IsNullOrWhiteSpace($sessionId)) {
+      $cache[$sessionId.ToLowerInvariant()] = $true
+    }
+  }
+
+  $ids = @($cache.Keys | Sort-Object | Select-Object -Last 500)
+  $doc = [ordered]@{
+    schema_version = 'codex_app_subagent_bridge_cache.v1'
+    updated_at_utc = (Get-Date).ToUniversalTime().ToString('o')
+    processed_session_ids = $ids
+    max_entries = 500
+    authority = 'cache_only_no_completion_authority'
+    source = 'bridge_app_subagent_session'
+  }
+  Write-JsonFile -Path (Get-CodexAppSubagentBridgeCachePath -Root $Root) -Value $doc
+  $doc
 }
 
 function Read-SubagentInspectionReports {
@@ -4696,27 +4784,26 @@ function Get-CodexAppRecentSubagentSessions {
 function Test-SubagentLifecycleBridgeAlreadyRecorded {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
-    [Parameter(Mandatory = $true)][string]$AppSessionId
+    [Parameter(Mandatory = $true)][string]$AppSessionId,
+    [object]$BridgeIndex = $null
   )
 
   if ([string]::IsNullOrWhiteSpace($AppSessionId)) {
     return $true
   }
 
-  $events = @(Read-SubagentLifecycleEvents -Root $Root)
-  foreach ($event in $events) {
-    $sameSession = [string](Get-OptionalPropertyValue -Object $event -Name 'source_thread_id') -eq $AppSessionId -or
-      [string](Get-OptionalPropertyValue -Object $event -Name 'app_session_id') -eq $AppSessionId -or
-      [string](Get-OptionalPropertyValue -Object $event -Name 'subagent_id') -eq $AppSessionId
-    $canonicalSpawn = [string](Get-OptionalPropertyValue -Object $event -Name 'record_type') -in @('worker_spawn_event','inspector_spawn_event') -and
-      [string](Get-OptionalPropertyValue -Object $event -Name 'event') -eq 'spawned'
-    $unmatchedObservation = [string](Get-OptionalPropertyValue -Object $event -Name 'event_type') -eq 'unmatched_subagent_spawn_observed'
-    if ($sameSession -and ($canonicalSpawn -or $unmatchedObservation)) {
-      return $true
-    }
+  if (-not $BridgeIndex) {
+    $BridgeIndex = New-SubagentLifecycleBridgeIndex -Root $Root
   }
 
-  $false
+  $processed = Get-OptionalPropertyValue -Object $BridgeIndex -Name 'processed_session_ids'
+  if (-not $processed) {
+    return $false
+  }
+
+  # bridge_app_subagent_session uses normalized session id lookup from the shared index.
+  $AppSessionId = $AppSessionId.ToLowerInvariant()
+  $processed.ContainsKey($AppSessionId)
 }
 
 function Test-CodexAppSessionWithinJobWindow {
@@ -4967,18 +5054,31 @@ function Invoke-CodexAppSubagentSpawnBridge {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][object]$ActiveContract,
+    [switch]$RecentCacheOnly,
     [bool]$NoLog = $false
   )
 
   $events = @()
+  if ($RecentCacheOnly) {
+    $null = Read-CodexAppSubagentBridgeSessionCache -Root $Root
+    return $events
+  }
+
+  $bridgeIndex = New-SubagentLifecycleBridgeIndex -Root $Root
+  $processedSessionIds = @()
   foreach ($session in @(Get-CodexAppRecentSubagentSessions -Root $Root)) {
     $sessionId = [string](Get-OptionalPropertyValue -Object $session -Name 'app_session_id')
-    if (Test-SubagentLifecycleBridgeAlreadyRecorded -Root $Root -AppSessionId $sessionId) {
+    if (Test-SubagentLifecycleBridgeAlreadyRecorded -Root $Root -AppSessionId $sessionId -BridgeIndex $bridgeIndex) {
       continue
     }
 
     $job = Find-CodexAppSubagentSpawnJobMatch -Root $Root -ActiveContract $ActiveContract -Session $session
     $events += Write-CodexAppSubagentSpawnBridgeLifecycleEvent -Root $Root -ActiveContract $ActiveContract -Session $session -Job $job -NoLog:$NoLog
+    $processedSessionIds += $sessionId
+  }
+
+  if ((-not $NoLog) -and $processedSessionIds.Count -gt 0) {
+    $null = Write-CodexAppSubagentBridgeSessionCache -Root $Root -SessionIds $processedSessionIds
   }
 
   $events
@@ -9346,6 +9446,9 @@ switch ($HookName) {
     }
   }
   'user_prompt_submit' {
+    if ((-not $NoLog) -and (-not $DryRun)) {
+      $null = Invoke-CodexAppSubagentSpawnBridge -Root $root -ActiveContract $activeContract -NoLog:($NoLog.IsPresent)
+    }
     $pmPreflight = $null
     if (Test-ChildAgentPromptContext -Payload $payload -PromptText $PromptText -PayloadText $payloadText) {
       $turnStateUpdate = [ordered]@{
@@ -9398,9 +9501,7 @@ switch ($HookName) {
     $decision = Test-CompletionGate -State $CompletionState -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -NoLog:($NoLog.IsPresent -or $DryRun.IsPresent)
   }
   'stop_checks' {
-    if (-not $DryRun) {
-      $null = Invoke-CodexAppSubagentSpawnBridge -Root $root -ActiveContract $activeContract -NoLog:($NoLog.IsPresent)
-    }
+    $null = Invoke-CodexAppSubagentSpawnBridge -Root $root -ActiveContract $activeContract -RecentCacheOnly -NoLog:($NoLog.IsPresent -or $DryRun.IsPresent)
     $gateDecision = Test-CompletionGate -State $CompletionState -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -NoLog:($NoLog.IsPresent -or $DryRun.IsPresent)
     $gateReason = [string](Get-OptionalPropertyValue -Object $gateDecision -Name 'reason')
     $hasCompletionClaim = Test-CompletionClaimText -Text $lastAssistantMessage
@@ -9436,6 +9537,8 @@ switch ($HookName) {
     $decision = [ordered]@{ decision = 'ALLOW'; reason = 'tool_usage_event_recorded' }
     if (-not $DryRun) {
       $null = Invoke-CodexAppSubagentSpawnBridge -Root $root -ActiveContract $activeContract -NoLog:($NoLog.IsPresent)
+    }
+    if (-not $DryRun) {
       $subagentInspectionJobs = @(Register-SubagentInspectionJobsForContext -Root $root -ActiveContract $activeContract -CompletionReceipt $completionReceipt -HookEventName 'PostToolUse' -TriggerText $payloadText -PathText $payloadText -NoLog:($NoLog.IsPresent))
       $null = Register-HeuristicReviewObservation -Root $root -ActiveContract $activeContract -Payload $payload -PayloadText $payloadText -Workdir $payloadWorkdir -NoLog:($NoLog.IsPresent)
       $null = Register-SubagentInspectionObservation -Root $root -ActiveContract $activeContract -Payload $payload -PayloadText $payloadText -Workdir $payloadWorkdir -NoLog:($NoLog.IsPresent)
