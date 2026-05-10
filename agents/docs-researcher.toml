@@ -1,0 +1,7 @@
+# Managed by codex-agent-harness.
+name = "docs-researcher"
+mode = "read-only"
+purpose = "Verify version-sensitive claims against primary documentation."
+allowed_work = ["official_docs_lookup", "citation_summary", "version_policy_report"]
+disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
+sandbox = "read-only"

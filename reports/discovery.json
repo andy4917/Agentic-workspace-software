@@ -1,0 +1,44 @@
+{
+  "detected_commands": {
+    "build": [],
+    "lint": [],
+    "security": [
+      "python maintenance/scripts/codex_agent_harness.py audit --json"
+    ],
+    "test": [
+      "python maintenance/scripts/codex_agent_harness.py verify"
+    ],
+    "typecheck": []
+  },
+  "existing_harness_instruction_files": [
+    {
+      "bytes": 13549,
+      "path": "AGENTS.md"
+    },
+    {
+      "bytes": 341,
+      "path": "agent.md"
+    }
+  ],
+  "generated_at": "2026-05-10T21:01:17+00:00",
+  "implementation_assumptions": [
+    "C:/Users/anise/.codex is CODEX_HOME and GlobalSSOT root.",
+    "Desktop is user-facing and must not be mutated by harness commands.",
+    "Global config mutation requires backup and explicit apply path.",
+    "Secrets and credential contents are not read."
+  ],
+  "language_runtime": [
+    "PowerShell",
+    "Python",
+    "TOML",
+    "JSON"
+  ],
+  "package_manager": "toolchain shims under toolchains/shims; no repo package manager required",
+  "project_type": "Codex global state and local development-environment harness",
+  "proposed_harness_script_language": "Python engine with PowerShell wrappers",
+  "risks": [
+    "Already-running Codex sessions may not reload newly enabled MCP tools until restart.",
+    "Sentinel blocker files intentionally cause PATH/temp creation warnings for commands that try to create blocked roots.",
+    "SQLite runtime DB files are live and are audited metadata-only."
+  ]
+}

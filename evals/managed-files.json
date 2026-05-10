@@ -1,0 +1,13 @@
+{
+  "eval_id": "managed-files",
+  "grader": "python maintenance/scripts/codex_agent_harness.py doctor --json",
+  "risk_notes": "Only checks files owned by this harness.",
+  "setup": "Run after harness apply.",
+  "success_criteria": [
+    "install-state exists",
+    "managed files exist",
+    "digests match"
+  ],
+  "task": "Verify harness-managed files are present and match install-state digests.",
+  "timeout_seconds": 30
+}

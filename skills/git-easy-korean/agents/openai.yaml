@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Easy Korean"
+  short_description: "Git 작업 상태와 오류를 쉬운 한국어로 바꿔 설명합니다"
+  default_prompt: "Git 상태, 세이브, GitHub 올리기, 받아오기, 작업 사본, 합치기, 충돌을 쉬운 한국어로 설명하세요."

@@ -1,0 +1,457 @@
+{
+  "generated_at": "2026-05-11T05:48:09.6748345+09:00",
+  "command_resolution": [
+    {
+      "Command": "node",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\node.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "npm",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\npm.cmd",
+      "UsesShim": true,
+      "Count": 5
+    },
+    {
+      "Command": "npx",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\npx.cmd",
+      "UsesShim": true,
+      "Count": 5
+    },
+    {
+      "Command": "pnpm",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\pnpm.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "bun",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\bun.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "deno",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\deno.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "tsc",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\tsc.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "tsx",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\tsx.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "eslint",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\eslint.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "prettier",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\prettier.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "biome",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\biome.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "yarn",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\yarn.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "zx",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\zx.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "python",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\python.cmd",
+      "UsesShim": true,
+      "Count": 4
+    },
+    {
+      "Command": "py",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\py.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "pip",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\pip.cmd",
+      "UsesShim": true,
+      "Count": 4
+    },
+    {
+      "Command": "pipx",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\pipx.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "uv",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\uv.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "ruff",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\ruff.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "pytest",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\pytest.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "mypy",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\mypy.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "black",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\black.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "poetry",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\poetry.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "pdm",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\pdm.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "pre-commit",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\pre-commit.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "tox",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\tox.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "nox",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\nox.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "semgrep",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\semgrep.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "git",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\git.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "gh",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\gh.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "rg",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\rg.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "fd",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\fd.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "fzf",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\fzf.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "jq",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\jq.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "es",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\es.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "7z",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\7z.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "code",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\code.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "pwsh",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\pwsh.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "rustc",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\rustc.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "cargo",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\cargo.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "rustup",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\rustup.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "rustfmt",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\rustfmt.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "cargo-nextest",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\cargo-nextest.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "just",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\just.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "rust-analyzer",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\rust-analyzer.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "java",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\java.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "javac",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\javac.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "mvn",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\mvn.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "gradle",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\gradle.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "cmake",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\cmake.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "zig",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\zig.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "cl",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\cl.cmd",
+      "UsesShim": true,
+      "Count": 1
+    },
+    {
+      "Command": "nmake",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\nmake.cmd",
+      "UsesShim": true,
+      "Count": 1
+    },
+    {
+      "Command": "link",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\link.cmd",
+      "UsesShim": true,
+      "Count": 1
+    },
+    {
+      "Command": "lib",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\lib.cmd",
+      "UsesShim": true,
+      "Count": 1
+    },
+    {
+      "Command": "dumpbin",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\dumpbin.cmd",
+      "UsesShim": true,
+      "Count": 1
+    },
+    {
+      "Command": "rc",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\rc.cmd",
+      "UsesShim": true,
+      "Count": 1
+    },
+    {
+      "Command": "scoop",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\scoop.cmd",
+      "UsesShim": true,
+      "Count": 3
+    },
+    {
+      "Command": "winget",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\winget.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "choco",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\choco.cmd",
+      "UsesShim": true,
+      "Count": 2
+    },
+    {
+      "Command": "docker",
+      "First": "C:\\Users\\anise\\.codex\\toolchains\\shims\\docker.cmd",
+      "UsesShim": true,
+      "Count": 3
+    }
+  ],
+  "config_lines": [
+    "2:model = \"gpt-5.5\"",
+    "4:model_reasoning_effort = \"medium\"",
+    "7:[features]",
+    "8:plugins = true",
+    "14:workspace_dependencies = false",
+    "30:[plugins.\"github@openai-curated\"]",
+    "31:enabled = true",
+    "33:[plugins.\"browser-use@openai-bundled\"]",
+    "34:enabled = false",
+    "36:[mcp_servers.sequential_thinking]",
+    "42:enabled = true",
+    "44:[mcp_servers.context7]",
+    "51:enabled = true",
+    "53:[mcp_servers.windows_powershell]",
+    "60:enabled = true",
+    "62:[mcp_servers.openaiDeveloperDocs]",
+    "64:enabled = true"
+  ],
+  "runtime_guards": {
+    "config_readonly": true,
+    "global_state_readonly": true,
+    "features_plugins_enabled": true,
+    "workspace_dependencies_disabled": true,
+    "bundled_marketplace_source_absent": true,
+    "temp_or_bundled_source_absent": true,
+    "bundled_browser_plugin_disabled": true,
+    "curated_github_plugin_enabled": true,
+    "browser_use_auto_install_disabled": true,
+    "site_creator_auto_install_disabled": true,
+    "run_codex_in_wsl_disabled": true
+  },
+  "sentinel_blockers": [
+    {
+      "Path": "C:\\Users\\anise\\.codex\\.tmp",
+      "Type": "file",
+      "ReadOnly": true
+    },
+    {
+      "Path": "C:\\Users\\anise\\.codex\\tmp",
+      "Type": "file",
+      "ReadOnly": true
+    },
+    {
+      "Path": "C:\\Users\\anise\\.codex\\vendor_imports",
+      "Type": "file",
+      "ReadOnly": true
+    },
+    {
+      "Path": "C:\\Users\\anise\\.codex\\plugins\\cache",
+      "Type": "file",
+      "ReadOnly": true
+    },
+    {
+      "Path": "C:\\Users\\anise\\.codex\\plugins\\plugins",
+      "Type": "file",
+      "ReadOnly": true
+    },
+    {
+      "Path": "C:\\Users\\anise\\.codex\\plugins\\local-marketplaces\\openai-bundled",
+      "Type": "file",
+      "ReadOnly": true
+    },
+    {
+      "Path": "C:\\Users\\anise\\.codex\\plugins\\local-marketplaces\\openai-primary-runtime",
+      "Type": "file",
+      "ReadOnly": true
+    }
+  ],
+  "compressed": [
+    {
+      "FullName": "C:\\Users\\anise\\.codex\\maintenance\\compressed\\tmp-arg0-shim-20260511-054602.zip",
+      "Length": 846,
+      "LastWriteTime": "2026-05-11T05:46:03.0811061+09:00"
+    },
+    {
+      "FullName": "C:\\Users\\anise\\.codex\\maintenance\\compressed\\generated_images-20260511-054449.zip",
+      "Length": 11857003,
+      "LastWriteTime": "2026-05-11T05:44:50.3688548+09:00"
+    },
+    {
+      "FullName": "C:\\Users\\anise\\.codex\\maintenance\\compressed\\archived_sessions-20260511-054445.zip",
+      "Length": 63757105,
+      "LastWriteTime": "2026-05-11T05:44:49.6700539+09:00"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "TS Structure Review"
+  short_description: "Structural TypeScript review checklist"
+  default_prompt: "Use $ts-structure-code-review to review this TypeScript code for structural risks, type-contract drift, error handling gaps, duplication, and test abstraction risks."

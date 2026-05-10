@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
-            "timeout": 10,
+            "timeout": 30,
             "statusMessage": "Loading lightweight PM workflow"
           }
         ]
@@ -19,7 +19,7 @@
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
-            "timeout": 10,
+            "timeout": 30,
             "statusMessage": "Classifying workflow"
           }
         ]
@@ -32,7 +32,7 @@
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
-            "timeout": 10,
+            "timeout": 30,
             "statusMessage": "Checking immediate action safety"
           }
         ]
@@ -45,7 +45,7 @@
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
-            "timeout": 10,
+            "timeout": 30,
             "statusMessage": "Checking approval request"
           }
         ]
@@ -58,7 +58,7 @@
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
-            "timeout": 10,
+            "timeout": 30,
             "statusMessage": "Recording lightweight evidence"
           }
         ]
@@ -70,7 +70,7 @@
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1\"",
-            "timeout": 10,
+            "timeout": 30,
             "statusMessage": "Checking final evidence"
           }
         ]

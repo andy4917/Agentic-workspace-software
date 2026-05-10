@@ -1,0 +1,114 @@
+{
+  "checks": [
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "maintenance/scripts/codex_agent_harness.py",
+        "doctor",
+        "--json"
+      ],
+      "duration_seconds": 0.150394,
+      "exit_code": 0,
+      "name": "doctor",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": "{\n  \"checks\": {\n    \"config\": {\n      \"missing_true\": [],\n      \"status\": \"pass\",\n      \"unexpected_true\": []\n    },\n    \"managed_files\": {\n      \"drifted\": [],\n      \"missing\": [],\n      \"status\": \"pass\"\n    },\n    \"sentinel_blockers\": {\n      \"items\": [\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \".tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"vendor_imports\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/cache\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/plugins\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-bundled\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-primary-runtime\",\n          \"readonly\": true\n        }\n      ],\n      \"status\": \"pass\"\n    },\n    \"skill_frontmatter\": {\n      \"missing\": [],\n      \"status\": \"pass\",\n      \"warnings\": [\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/git-easy-korean/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/keep-codex-fast/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/pdf/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ts-structure-code-review/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ui-ux-pro-max/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/warp-auxiliary/SKILL.md\"\n        }\n      ]\n    },\n    \"stale_active_references\": {\n      \"matches\": [],\n      \"status\": \"pass\"\n    }\n  },\n  \"failed\": [],\n  \"generated_at\": \"2026-05-10T21:12:14+00:00\",\n  \"root\": \"C:\\\\Users\\\\anise\\\\.codex\",\n  \"status\": \"pass\"\n}\n"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "maintenance/scripts/codex_agent_harness.py",
+        "global-scan"
+      ],
+      "duration_seconds": 2.708144,
+      "exit_code": 0,
+      "name": "global_scan",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": "C:\\Users\\anise\\.codex\\reports\\global-scan.latest.md\n"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "maintenance/scripts/codex_agent_harness.py",
+        "audit",
+        "--json"
+      ],
+      "duration_seconds": 0.144618,
+      "exit_code": 0,
+      "name": "audit",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": "{\n  \"categories\": [\n    {\n      \"failures\": [],\n      \"name\": \"Tool Coverage\",\n      \"passed\": 4,\n      \"total\": 4\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Context Efficiency\",\n      \"passed\": 4,\n      \"total\": 4\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Quality Gates\",\n      \"passed\": 6,\n      \"total\": 6\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Memory Persistence\",\n      \"passed\": 4,\n      \"total\": 4\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Eval Coverage\",\n      \"passed\": 4,\n      \"total\": 4\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Security Guardrails\",\n      \"passed\": 4,\n      \"total\": 4\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Cost Efficiency\",\n      \"passed\": 4,\n      \"total\": 4\n    }\n  ],\n  \"generated_at\": \"2026-05-10T21:12:16+00:00\",\n  \"rubric_version\": \"codex-harness-audit-v1\",\n  \"score\": 100.0,\n  \"status\": \"pass\",\n  \"top_actions\": []\n}\n"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "-m",
+        "py_compile",
+        "maintenance/scripts/codex_agent_harness.py"
+      ],
+      "duration_seconds": 0.105089,
+      "exit_code": 0,
+      "name": "python_compile",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": ""
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "maintenance/scripts/codex_agent_harness.py",
+        "self-test"
+      ],
+      "duration_seconds": 0.215729,
+      "exit_code": 0,
+      "name": "self_test",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": "Applied harness state: C:\\Users\\anise\\AppData\\Local\\Temp\\tmp893eb3wu\\.codex-harness\\install-state.json\nself-test pass\n"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "maintenance/scripts/codex_agent_harness.py",
+        "repair"
+      ],
+      "duration_seconds": 0.122967,
+      "exit_code": 0,
+      "name": "repair_dry_run",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": "{\n  \"apply\": false,\n  \"repair_targets\": []\n}\n"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "maintenance/scripts/codex_agent_harness.py",
+        "uninstall"
+      ],
+      "duration_seconds": 0.098297,
+      "exit_code": 0,
+      "name": "uninstall_dry_run",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": "{\n  \"dry_run\": true,\n  \"would_remove\": []\n}\n"
+    },
+    {
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-Command",
+        "$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile('hooks/lightweight-codex-hook.ps1',[ref]$tokens,[ref]$errors)>$null; if($errors.Count){$errors | ConvertTo-Json; exit 1}else{'OK'}"
+      ],
+      "duration_seconds": 0.391547,
+      "exit_code": 0,
+      "name": "hook_ast_parse",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": "OK\n"
+    }
+  ],
+  "generated_at": "2026-05-10T21:12:17+00:00",
+  "status": "pass"
+}

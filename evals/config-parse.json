@@ -1,0 +1,12 @@
+{
+  "eval_id": "config-parse",
+  "grader": "python maintenance/scripts/codex_agent_harness.py doctor --json",
+  "risk_notes": "Does not prove app runtime reloaded the config.",
+  "setup": "Run from CODEX_HOME.",
+  "success_criteria": [
+    "config.toml parses",
+    "stable workflow feature keys are present"
+  ],
+  "task": "Parse root config.toml with Python tomllib.",
+  "timeout_seconds": 30
+}

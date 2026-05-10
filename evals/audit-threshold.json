@@ -1,0 +1,12 @@
+{
+  "eval_id": "audit-threshold",
+  "grader": "python maintenance/scripts/codex_agent_harness.py audit --json",
+  "risk_notes": "Score is deterministic but intentionally conservative.",
+  "setup": "Run after harness apply.",
+  "success_criteria": [
+    "audit JSON exists",
+    "overall score is at least 80"
+  ],
+  "task": "Run deterministic harness audit and require no critical failures.",
+  "timeout_seconds": 30
+}

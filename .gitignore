@@ -24,54 +24,55 @@ logs/
 state/
 hooks/state/
 cache/
-plugins/
 sqlite/
 browser/
-bin/
 .sandbox/
 .sandbox-bin/
 .sandbox-secrets/
-local-environments/
 managed-process-locks/
 memories/
 memories_extensions/
 pets/
-profile.d/
-skills/
-agents/
 history.jsonl
 session_index.jsonl
 *.sqlite
 *.sqlite-*
 *.db
 
+# Audit-visible tool/package surfaces.
+# Do not hide these: they are where stale bundled plugins, duplicate skills,
+# abandoned bins, and unmanaged local environments have previously reappeared.
+# plugins/
+# bin/
+# local-environments/
+# profile.d/
+# skills/
+# agents/
+
 # Local scratch and generated files
-.tmp/
-tmp/
-*.tmp
 *.log
 generated_images/
 node_modules/
-Maintenance/**/node_modules/
-Maintenance/**/.cache/
-Maintenance/**/coverage/
+__pycache__/
+*.pyc
+maintenance/**/node_modules/
+maintenance/**/.cache/
+maintenance/**/coverage/
 
 # Large local/reference material
-Maintenance/upstream/
-vendor_imports/
+maintenance/upstream/
+
 
 # Quarantine/archive
 _QUARANTINE/
+maintenance/compressed/
 archived_logs/
 archived_worktrees/
 archived_transient_roots/
 archived_app_tool_caches/
 archived_runtime_state/
 
-# Generated maintenance reports
-Maintenance/reports/*.latest.json
-Maintenance/reports/*.latest.md
-Maintenance/reports/**
+# Generated maintenance reports are intentionally visible for audits.
 
 # OS/editor noise
 Thumbs.db

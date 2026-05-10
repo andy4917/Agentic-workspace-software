@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "applied_operations": {
+      "type": "array"
+    },
+    "installed_at": {
+      "type": "string"
+    },
+    "requested_modules": {
+      "type": "array"
+    },
+    "requested_profile": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "selected_modules": {
+      "type": "array"
+    },
+    "skipped_modules": {
+      "type": "array"
+    },
+    "source": {
+      "type": "object"
+    },
+    "target": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "installed_at",
+    "target",
+    "requested_profile",
+    "selected_modules",
+    "applied_operations"
+  ],
+  "title": "Codex Harness Install State",
+  "type": "object"
+}

@@ -15,8 +15,22 @@
   "subagents": {
     "max_parallel": 8,
     "max_depth": 1,
-    "default_spawn_policy": "conditional",
+    "default_spawn_policy": "conditional_after_explicit_user_authorization",
+    "explicit_user_authorization_required_by_runtime": true,
+    "authorization_phrases": [
+      "subagent",
+      "sub-agent",
+      "multi-agent",
+      "멀티에이전트",
+      "서브에이전트",
+      "병렬 에이전트",
+      "역할 분리",
+      "delegate",
+      "delegation",
+      "PM-led"
+    ],
     "spawn_threshold": "multi_surface_or_parallelizable_or_risk_or_repeated_failure",
+    "must_not_delegate": "immediate_blocking_next_step_or_tightly_coupled_high_risk_work",
     "reuse_policy": "bounded_compatible_objective_surface_risk_repo_context",
     "stale_session_ttl_minutes": 60,
     "no_subagent_for": [

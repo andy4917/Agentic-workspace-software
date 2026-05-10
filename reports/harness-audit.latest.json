@@ -1,0 +1,51 @@
+{
+  "categories": [
+    {
+      "failures": [],
+      "name": "Tool Coverage",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "failures": [],
+      "name": "Context Efficiency",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "failures": [],
+      "name": "Quality Gates",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "failures": [],
+      "name": "Memory Persistence",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "failures": [],
+      "name": "Eval Coverage",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "failures": [],
+      "name": "Security Guardrails",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "failures": [],
+      "name": "Cost Efficiency",
+      "passed": 4,
+      "total": 4
+    }
+  ],
+  "generated_at": "2026-05-10T21:12:24+00:00",
+  "rubric_version": "codex-harness-audit-v1",
+  "score": 100.0,
+  "status": "pass",
+  "top_actions": []
+}

@@ -211,6 +211,12 @@ function Get-TeamPresetHint {
     }
 }
 
+function Test-DelegationAuthorized {
+    param([string]$Prompt)
+
+    return ($Prompt -match "(?i)(subagents?|sub[-_ ]?agent|multi[-_ ]?agent|멀티\s*에이전트|멀티에이전트|서브\s*에이전트|서브에이전트|병렬\s*에이전트|역할\s*분리|delegate|delegation|PM-led|team preset)")
+}
+
 function Get-PromptReminder {
     param(
         [string]$Workflow,
@@ -226,6 +232,11 @@ function Get-PromptReminder {
         $goal = $goal.Substring(0, 280) + "..."
     }
 
+    $delegationAuthorization = "No explicit subagent authorization detected in this prompt; keep work local unless the user asks for subagents, multi-agent, delegation, role separation, or parallel agent work."
+    if (Test-DelegationAuthorized -Prompt $Prompt) {
+        $delegationAuthorization = "Explicit delegation authorization detected; use spawn_agent for bounded non-blocking sidecar work when it materially advances the task, then review and integrate outputs."
+    }
+
     return @"
 Lightweight Codex workflow reminder:
 - Active profile: $($Policy.profile)
@@ -236,6 +247,8 @@ Lightweight Codex workflow reminder:
 - Team preset hint: $TeamPreset
 - Main session acts as PM: classify, assign bounded role work only when useful/allowed, review candidate outputs, integrate, verify.
 - Subagent policy: conditional use, max parallel $($Policy.subagents.max_parallel), max depth $($Policy.subagents.max_depth); user remains reviewer, not operator.
+- Runtime delegation authorization: $delegationAuthorization
+- Critical path rule: do not delegate the immediate next blocker; delegate independent exploration, verification, review, or disjoint file ownership.
 - Role separation: implementation, validation, review, exploration, security, documentation/research, environment diagnostics.
 - Capability pack model: plugin -> capability pack, command -> prompt recipe, skill -> Codex skill, conductor track -> lightweight work track.
 - Delegation rule: define owned files/surfaces, expected output, constraints, and verification; avoid overlapping ownership.
@@ -447,7 +460,7 @@ $state = Read-State
 
 switch ($eventName) {
     "SessionStart" {
-        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Hooks are reminders and narrow safety checks, not completion authority."
+        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Subagents require explicit user authorization by prompt, then should be used only for bounded non-blocking sidecar work. Hooks are reminders and narrow safety checks, not completion authority."
         Write-HookJson @{
             continue = $true
             hookSpecificOutput = @{

@@ -1,0 +1,7 @@
+# Managed by codex-agent-harness.
+name = "reviewer"
+mode = "read-only"
+purpose = "Review correctness, security, behavior, missing tests, and maintainability."
+allowed_work = ["diff_review", "risk_report", "test_gap_report", "security_review"]
+disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
+sandbox = "read-only"

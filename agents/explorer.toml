@@ -1,0 +1,7 @@
+# Managed by codex-agent-harness.
+name = "explorer"
+mode = "read-only"
+purpose = "Gather focused evidence before implementation."
+allowed_work = ["file_search", "file_read", "structure_summary", "evidence_report"]
+disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
+sandbox = "read-only"

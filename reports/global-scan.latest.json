@@ -1,0 +1,210 @@
+{
+  "active_hit_count": 0,
+  "active_hits": [],
+  "content_redacted": true,
+  "desktop_excluded": true,
+  "generated_at": "2026-05-10T21:12:16+00:00",
+  "match_count": 36,
+  "matches_preview": [
+    {
+      "line": "72",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "bundled-marketplaces"
+    },
+    {
+      "line": "235",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "bundled-marketplaces"
+    },
+    {
+      "line": "271",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "bundled-marketplaces"
+    },
+    {
+      "line": "345",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "bundled-marketplaces"
+    },
+    {
+      "line": "433",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "bundled-marketplaces"
+    },
+    {
+      "line": "499",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "bundled-marketplaces"
+    },
+    {
+      "line": "28",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\NAMING_CONVENTION.md",
+      "pattern": "bundled-marketplaces"
+    },
+    {
+      "line": "67",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\AGENT_TOOL_REQUIREMENTS.md",
+      "pattern": "bundled-marketplaces"
+    },
+    {
+      "line": "49",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "bundled-marketplaces"
+    },
+    {
+      "line": "59",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\tests\\smoke_test.py",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "48",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "366",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "72",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "201",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "235",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "434",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "453",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "494",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "499",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "27",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\NAMING_CONVENTION.md",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "60",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\NAMING_CONVENTION.md",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "67",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\AGENT_TOOL_REQUIREMENTS.md",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "331",
+      "path": "C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "72",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "wshobson-agents-scan"
+    },
+    {
+      "line": "35",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\NAMING_CONVENTION.md",
+      "pattern": "wshobson-agents-scan"
+    },
+    {
+      "line": "51",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "wshobson-agents-scan"
+    },
+    {
+      "line": "367",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "wshobson-agents-scan"
+    },
+    {
+      "line": "72",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "plugins\\\\cache"
+    },
+    {
+      "line": "235",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "plugins\\\\cache"
+    },
+    {
+      "line": "50",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "plugins\\\\plugins"
+    },
+    {
+      "line": "72",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "plugins\\\\plugins"
+    },
+    {
+      "line": "435",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "plugins\\\\plugins"
+    },
+    {
+      "line": "235",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "\\\\\\.tmp\\\\"
+    },
+    {
+      "line": "46",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "\\\\tmp\\\\"
+    },
+    {
+      "line": "72",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "\\\\tmp\\\\"
+    },
+    {
+      "line": "235",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "\\\\tmp\\\\"
+    }
+  ],
+  "patterns": [
+    "c:\\\\users\\\\anise\\\\documents\\\\codex\\\\2026-05-09\\\\codex",
+    "bundled-marketplaces",
+    "vendor_imports",
+    "wshobson-agents-scan",
+    "plugins\\\\cache",
+    "plugins\\\\plugins",
+    "\\\\\\.tmp\\\\",
+    "\\\\tmp\\\\",
+    "runCodexInWindowsSubsystemForLinux\\\"\\s*:\\s*true",
+    "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+  ],
+  "scan_roots": [
+    "C:\\Users\\anise\\.codex",
+    "C:\\Users\\anise\\code",
+    "C:\\Users\\anise\\Documents\\Codex",
+    "C:\\Users\\anise\\AppData\\Roaming\\npm",
+    "C:\\Users\\anise\\AppData\\Local\\Programs"
+  ],
+  "status": "pass"
+}

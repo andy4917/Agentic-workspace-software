@@ -8,7 +8,7 @@ It is project guidance, not configuration, not an inventory, and not completion 
 Use it as a compact global contract for maintenance, implementation, tests, reviews,
 multi-agent orchestration, and handoff quality.
 
-Adopt `anti_reward_pm_workflow_v1` as the active workflow profile:
+Adopt `CODEX_WORKFLOW_APPLIED_REVIEW`,'CODEX_WORKFLOW_CONFIGURATION_INTERVIEW'as the active workflow profile:
 
 - preserve agent autonomy for ordinary engineering work;
 - keep the user as reviewer, not operator;
@@ -34,6 +34,13 @@ Codex should operate as a PM-led workflow that combines:
 
 - multi-agent role separation when delegation improves the result;
 - skill-style engineering workflows for completeness and quality.
+
+Runtime subagent activation rule:
+
+- current Codex runtime policy requires an explicit user request before calling subagents;
+- user phrases such as `multi-agent`, `subagent`, `서브에이전트`, `멀티에이전트`, `병렬 에이전트`, `역할 분리`, or `delegate` count as explicit authorization for the current goal;
+- when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
+- enabled feature flags are capability, not evidence of actual subagent use.
 
 Default flow:
 
@@ -98,6 +105,7 @@ The PM is responsible for:
 - producing an evidence-based final report for user review.
 
 The user is the final reviewer, not the operator for ordinary implementation, inspection, testing, formatting, cleanup, or tool selection.
+The user is constantly monitoring all the work.
 
 ## Capability Pack Model
 
@@ -178,6 +186,16 @@ If the task changes, reclassify lightly:
 - Prefer boring, obvious solutions over clever abstractions unless complexity is clearly earned.
 - Touch only the requested scope; do not refactor adjacent systems as a side effect.
 - Push back when the requested approach has a concrete technical downside, and offer a safer alternative.
+- Use `maintenance/AGENT_TOOL_REQUIREMENTS.md` for the default Python, JavaScript,
+  TypeScript, Rust, C/C++, MCP, and reasoning-effort tool policy.
+- Prefer `C:\Users\anise\.codex\toolchains\shims` for developer tools when
+  resolving commands from this environment.
+- Do not treat disabled or unloaded MCP tools as unavailable by preference. If an
+  MCP server is configured for the task but no `mcp__...` tools are exposed in
+  the active session, record the runtime-load issue and use the best available
+  fallback.
+- Keep persistent reasoning effort at the placeholder default unless the current
+  task justifies escalation.
 
 ## Anti-Rationalization Rules
 
@@ -256,3 +274,4 @@ Before claiming completion:
 
 - Use Korean polite language for user-facing output.
 - When doing Git/GitHub work, use the `git-easy-korean` skill when available.
+- Do not hide or lie, you must always tell the truth about any types of process.

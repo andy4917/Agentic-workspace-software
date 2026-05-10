@@ -1,0 +1,26 @@
+{
+  "benchmarking": {
+    "purpose": "Small deterministic eval and benchmark harness"
+  },
+  "codex-baseline": {
+    "purpose": "Codex baseline config, global instructions, and role agents"
+  },
+  "mcp-baseline": {
+    "purpose": "Safe MCP recommendations and loading diagnostics"
+  },
+  "orchestration": {
+    "purpose": "Multi-agent role routing and iterative retrieval guidance"
+  },
+  "rules-core": {
+    "purpose": "Durable instruction and context-loading rules"
+  },
+  "security": {
+    "purpose": "Secret hygiene and external action boundaries"
+  },
+  "skills-core": {
+    "purpose": "Compact repo-local skill index and draft isolation"
+  },
+  "workflow-quality": {
+    "purpose": "Verification, compaction, learning, and report workflows"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "core": [
+    "codex-baseline",
+    "rules-core",
+    "skills-core",
+    "workflow-quality",
+    "mcp-baseline"
+  ],
+  "developer": [
+    "codex-baseline",
+    "rules-core",
+    "skills-core",
+    "workflow-quality",
+    "mcp-baseline",
+    "benchmarking",
+    "orchestration"
+  ],
+  "full": [
+    "codex-baseline",
+    "rules-core",
+    "skills-core",
+    "workflow-quality",
+    "security",
+    "orchestration",
+    "mcp-baseline",
+    "benchmarking"
+  ],
+  "minimal": [
+    "codex-baseline",
+    "rules-core"
+  ],
+  "security": [
+    "codex-baseline",
+    "rules-core",
+    "skills-core",
+    "workflow-quality",
+    "security"
+  ]
+}
