@@ -62,10 +62,16 @@ vendor_imports/
 
 # Quarantine/archive
 _QUARANTINE/
+archived_logs/
+archived_worktrees/
+archived_transient_roots/
+archived_app_tool_caches/
+archived_runtime_state/
 
 # Generated maintenance reports
 Maintenance/reports/*.latest.json
 Maintenance/reports/*.latest.md
+Maintenance/reports/**
 
 # OS/editor noise
 Thumbs.db

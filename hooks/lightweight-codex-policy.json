@@ -152,5 +152,12 @@
     "copy_archive_sensitive_files": "blocked_by_default",
     "scope_expansion_policy": "explicit_user_instruction_required",
     "product_repo_boundary": "do_not_mutate_unless_current_task_targets_that_repo"
+  },
+  "toolchain_integrity": {
+    "blocked_app_connector_tool_patterns": [
+      "^mcp__codex_apps__supabase($|[._])",
+      "^mcp__codex_apps__hugging_face($|[._])"
+    ],
+    "blocked_app_connector_reason": "Unintended Codex Apps connector tool is blocked. Remove or re-authorize the connector intentionally before use."
   }
 }

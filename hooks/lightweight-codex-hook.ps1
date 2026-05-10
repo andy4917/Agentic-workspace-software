@@ -276,12 +276,16 @@ function Test-SecretContentAccess {
     param([string]$Text)
 
     $readVerb = "(?i)(Get-Content|gc\b|type\b|cat\b|Select-String|more\b)"
-    $sensitivePath = "(?i)(auth\.json|\.env(\.|$)|id_rsa|id_ed25519|\.pem\b|token|secret|credential|password|api[_-]?key|cookie)"
+    $sensitivePath = "(?i)(auth\.json|\.env(\.|$)|id_rsa|id_ed25519|\.pem\b|(^|[\\/._-])(token|secret|credential|password|api[_-]?key|cookie)([\\/._-]|$))"
     return ($Text -match $readVerb -and $Text -match $sensitivePath)
 }
 
 function Test-DestructiveAction {
     param([string]$Text)
+
+    if (Test-ScopedTemporaryRootCleanup -Text $Text) {
+        return $false
+    }
 
     $patterns = @(
         "(?i)\bgit\s+reset\s+--hard\b",
@@ -301,6 +305,36 @@ function Test-DestructiveAction {
     return $false
 }
 
+function Test-ScopedTemporaryRootCleanup {
+    param([string]$Text)
+
+    if ($Text -notmatch "(?i)\bRemove-Item\b" -or
+        $Text -notmatch "(?i)\s-(Recurse|r)\b" -or
+        $Text -notmatch "(?i)\s-(Force|f)\b") {
+        return $false
+    }
+
+    $codexRootPattern = [regex]::Escape("C:\Users\anise\.codex")
+    $allowedRootPattern = "(?i)$codexRootPattern\\(\.tmp|tmp|vendor_imports)(['`"\s;]|$)"
+    if ($Text -notmatch $allowedRootPattern) {
+        return $false
+    }
+
+    $guardSignals = @(
+        "Resolve-Path",
+        "Split-Path\s+-Parent",
+        "Refusing unexpected target",
+        "Resolved path mismatch"
+    )
+    foreach ($signal in $guardSignals) {
+        if ($Text -notmatch $signal) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
 function Test-HookWeakening {
     param([string]$Text)
 
@@ -317,6 +351,35 @@ function Test-HookWeakening {
             return $true
         }
     }
+    return $false
+}
+
+function Test-BlockedAppConnectorTool {
+    param(
+        $InputObject,
+        $Policy
+    )
+
+    $toolName = [string]$InputObject.tool_name
+    if ([string]::IsNullOrWhiteSpace($toolName)) {
+        return $false
+    }
+
+    $patterns = @(
+        "^mcp__codex_apps__supabase($|[._])",
+        "^mcp__codex_apps__hugging_face($|[._])"
+    )
+
+    if ($null -ne $Policy.toolchain_integrity -and $null -ne $Policy.toolchain_integrity.blocked_app_connector_tool_patterns) {
+        $patterns = @($Policy.toolchain_integrity.blocked_app_connector_tool_patterns)
+    }
+
+    foreach ($pattern in $patterns) {
+        if ($toolName -match $pattern) {
+            return $true
+        }
+    }
+
     return $false
 }
 
@@ -403,7 +466,10 @@ switch ($eventName) {
         $teamPreset = Get-TeamPresetHint -Workflow $workflow
         $state.currentGoal = if ($prompt.Length -gt 500) { $prompt.Substring(0, 500) + "..." } else { $prompt }
         $state.workflow = $workflow
+        $state.changedSurfaces = @()
+        $state.checksRun = @()
         $state.requiredReminders = @()
+        $state.toolEvents = @()
         Save-State -State $state
 
         $reminder = Get-PromptReminder -Workflow $workflow -Prompt $prompt -Phase $phase -SkillRoute $skillRoute -TeamPreset $teamPreset -Policy $policy
@@ -420,6 +486,14 @@ switch ($eventName) {
     "PreToolUse" {
         $text = Get-ToolText -InputObject $inputObject
 
+        if (Test-BlockedAppConnectorTool -InputObject $inputObject -Policy $policy) {
+            $reason = "Unintended Codex Apps connector tool is blocked. Remove or re-authorize the connector intentionally before use."
+            if ($null -ne $policy.toolchain_integrity -and -not [string]::IsNullOrWhiteSpace([string]$policy.toolchain_integrity.blocked_app_connector_reason)) {
+                $reason = [string]$policy.toolchain_integrity.blocked_app_connector_reason
+            }
+            Deny-PreTool -Reason $reason
+            break
+        }
         if (Test-SecretContentAccess -Text $text) {
             Deny-PreTool -Reason "Secret or credential content access is blocked. Use metadata-only inspection unless the user explicitly requested that exact file."
             break
@@ -444,6 +518,14 @@ switch ($eventName) {
     "PermissionRequest" {
         $text = Get-ToolText -InputObject $inputObject
 
+        if (Test-BlockedAppConnectorTool -InputObject $inputObject -Policy $policy) {
+            $reason = "Unintended Codex Apps connector tool is blocked. Remove or re-authorize the connector intentionally before use."
+            if ($null -ne $policy.toolchain_integrity -and -not [string]::IsNullOrWhiteSpace([string]$policy.toolchain_integrity.blocked_app_connector_reason)) {
+                $reason = [string]$policy.toolchain_integrity.blocked_app_connector_reason
+            }
+            Deny-Permission -Reason $reason
+            break
+        }
         if (Test-SecretContentAccess -Text $text) {
             Deny-Permission -Reason "Secret or credential content access is blocked. Use metadata-only inspection unless the user explicitly requested that exact file."
             break
