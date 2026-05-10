@@ -3,191 +3,253 @@
     {
       "action": "unchanged",
       "digest": "167b1c5d1e59e4168972740d2f55e1d83196a911714750bb1947e8cb0d99d68d",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": ".codex-harness/manifests/modules.json"
+      "path": ".codex-harness/manifests/modules.json",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "fb475c8ce8a743cc0e5d57b5a8e928d69f17e6d127e1393a368b0c9486dcf4a0",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": ".codex-harness/manifests/profiles.json"
+      "path": ".codex-harness/manifests/profiles.json",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "2aa613b29c8eccb8f473817a9935e445149d1bbe8ff0b3c39cfdcff2581f296c",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": ".codex-harness/schemas/install-state.schema.json"
+      "path": ".codex-harness/schemas/install-state.schema.json",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "827d4851a9984e2cbd71827b24d0ff1848818640da34c59decf36da2eb4bec6d",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "agents/docs-researcher.toml"
+      "path": "agents/docs-researcher.toml",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "e1385745898f3dc7baa3e5af09f78a8a86379887c1934892795d66f5f8107d68",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "agents/explorer.toml"
+      "path": "agents/explorer.toml",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "87cdf14a70d9c5d4d0c0c31757f226b059753c17b53ab4ab4c246d0fc99e00fe",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "agents/reviewer.toml"
+      "path": "agents/reviewer.toml",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "477fbe5ad1616f5d5e133d18e866fc1806d613c5207c7cfcc780f64d6e0a3427",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "artifacts/compact-summaries/README.md"
+      "path": "artifacts/compact-summaries/README.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "208c8a938a84144a9b0a7ef78cf6afda10b7730ae68685cbb58f5ba94086e2d5",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "artifacts/tool-results/README.md"
+      "path": "artifacts/tool-results/README.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "34f5061a4665e9ff05010eed4beac2d89461ab2da72e5a96b19d61828e19961c",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "evals/audit-threshold.json"
+      "path": "evals/audit-threshold.json",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "070a7835ac02f11e980a80bd821582fcd1d12dcbe8fa437bb743aa45d11505e5",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "evals/config-parse.json"
+      "path": "evals/config-parse.json",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "fb906e859e3b73d9b4f71ca009ea583e6376fc8b000e3e0b0c3fb02fa51618d5",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "evals/managed-files.json"
+      "path": "evals/managed-files.json",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "fe43e791e312a3be08218197d34b82a5b96ff2f6f633f2cfe2a7d37e30fe2610",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "learning/README.md"
+      "path": "learning/README.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "dbc6b4f0c9c27c9f767dc99e6c1740e36e02173fd33fc362147a79dabc7f48a5",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-eval.ps1"
+      "path": "maintenance/scripts/codex-eval.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "706259a07f2f6348f956d56cd79bb5931e63c9cf81a0031e8596cd4566805d5a",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-global-scan.ps1"
+      "path": "maintenance/scripts/codex-global-scan.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "5dc7ea880429b19c4df95b76c0ad7252471dfa073126253dd4229690dfd2d4bc",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-harness-apply.ps1"
+      "path": "maintenance/scripts/codex-harness-apply.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "29e42af32348cb4ab971eda22862f12d673cf385fb4e5814b3e98d43a82e6378",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-harness-audit.ps1"
+      "path": "maintenance/scripts/codex-harness-audit.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "6abfad690f814baae91e3daa20d0924495c2165c7fde9ada812759f53419a643",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-harness-doctor.ps1"
+      "path": "maintenance/scripts/codex-harness-doctor.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "f894fc53302524c0bec6bbc50ce819a831537f8d94428c3f6aa0f7e85e26b0d9",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-harness-plan.ps1"
+      "path": "maintenance/scripts/codex-harness-plan.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "1cbcff858c84b9e276330875abb237fffbbadab70de541c35162ef22057b6f73",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-harness-repair.ps1"
+      "path": "maintenance/scripts/codex-harness-repair.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "45b46b5fe2c3250555a266e56f6ba43d192900ca0c61ab4f8c43e700fa930d1e",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-harness-uninstall.ps1"
+      "path": "maintenance/scripts/codex-harness-uninstall.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "0875aa3dc9a336f43069469c1dea03fa8b31c77f3fa87bd86c2db9b708742849",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-merge-config.ps1"
+      "path": "maintenance/scripts/codex-merge-config.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "bb56addf877918282f932813cc8b5c0a71e3132ea2672aedadc5481380676976",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "maintenance/scripts/codex-verify.ps1"
+      "path": "maintenance/scripts/codex-verify.ps1",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "501536114483f6f00cd4ab5a5d6b45fe1beb742561bf70fca1e83b0d6aff47ab",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "reports/README.md"
+      "path": "reports/README.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "db890edb3d9ea76d0bc3a0cf1cfa23d94b44b1f7ad6bf4323d5bc1994f9af6a4",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "reports/context-inspection.template.md"
+      "path": "reports/context-inspection.template.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "8faef671b2e96745a1e0ac3e9905a393e38722b62bca0ef063c946bdf3cba4d1",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "reports/retrieval-report.template.md"
+      "path": "reports/retrieval-report.template.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "9419a8d079a5620f1b3c15447e7ac6160587eac7cd20b32e4c1cdd7c3950dc5a",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "skills/SKILL_INDEX.md"
+      "path": "skills/SKILL_INDEX.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "ce18f84bbce1ec70e781e25df55fdb900dc88d18d501f6977d990245d6bec965",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "skills/_drafts/README.md"
+      "path": "skills/_drafts/README.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "cb7814c105adfba5b06a616c422b123448f078c7e8b25e99d061ce949da58888",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "skills/agent-harness-construction/SKILL.md"
+      "path": "skills/agent-harness-construction/SKILL.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "c1b1d6caa65de4d73a8fe103077e0e2bf57b07504019c188026401c6cdaf1758",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "skills/iterative-retrieval/SKILL.md"
+      "path": "skills/iterative-retrieval/SKILL.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "0d146d773b6aed5fcf13e64a070d7a01a341871e0a28de120d10c510c5505f17",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "skills/verification-loop/SKILL.md"
+      "path": "skills/verification-loop/SKILL.md",
+      "remove_on_uninstall": true
     },
     {
       "action": "unchanged",
       "digest": "ace20088110c46538e71a3bfe4f149c0498bdbf8c3788dec8a2f9cc36b44fbfd",
+      "managed": true,
       "owner": "codex-agent-harness",
-      "path": "trajectories/README.md"
+      "path": "trajectories/README.md",
+      "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-05-10T21:09:42+00:00",
+  "installed_at": "2026-05-10T21:20:45+00:00",
   "requested_modules": [],
   "requested_profile": "full",
   "schema_version": "1",

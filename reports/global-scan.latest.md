@@ -1,7 +1,7 @@
 # Global Development Environment Scan
 
 - status: pass
-- match_count: 36
+- match_count: 49
 - active_hit_count: 0
 - desktop_excluded: True
 

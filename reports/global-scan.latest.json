@@ -3,9 +3,14 @@
   "active_hits": [],
   "content_redacted": true,
   "desktop_excluded": true,
-  "generated_at": "2026-05-10T21:12:16+00:00",
-  "match_count": 36,
+  "generated_at": "2026-05-10T21:22:16+00:00",
+  "match_count": 49,
   "matches_preview": [
+    {
+      "line": "67",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\AGENT_TOOL_REQUIREMENTS.md",
+      "pattern": "bundled-marketplaces"
+    },
     {
       "line": "72",
       "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
@@ -42,28 +47,13 @@
       "pattern": "bundled-marketplaces"
     },
     {
-      "line": "67",
-      "path": "C:\\Users\\anise\\.codex\\maintenance\\AGENT_TOOL_REQUIREMENTS.md",
-      "pattern": "bundled-marketplaces"
-    },
-    {
       "line": "49",
       "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
       "pattern": "bundled-marketplaces"
     },
     {
-      "line": "59",
-      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\tests\\smoke_test.py",
-      "pattern": "vendor_imports"
-    },
-    {
-      "line": "48",
-      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
-      "pattern": "vendor_imports"
-    },
-    {
-      "line": "366",
-      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "line": "331",
+      "path": "C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1",
       "pattern": "vendor_imports"
     },
     {
@@ -117,8 +107,18 @@
       "pattern": "vendor_imports"
     },
     {
-      "line": "331",
-      "path": "C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1",
+      "line": "59",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\tests\\smoke_test.py",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "48",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "366",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
       "pattern": "vendor_imports"
     },
     {
@@ -172,11 +172,6 @@
       "pattern": "\\\\\\.tmp\\\\"
     },
     {
-      "line": "46",
-      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
-      "pattern": "\\\\tmp\\\\"
-    },
-    {
       "line": "72",
       "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
       "pattern": "\\\\tmp\\\\"
@@ -185,6 +180,76 @@
       "line": "235",
       "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
       "pattern": "\\\\tmp\\\\"
+    },
+    {
+      "line": "46",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "\\\\tmp\\\\"
+    },
+    {
+      "line": "1",
+      "path": "C:\\Users\\anise\\Documents\\Codex\\2026-04-23-ssh-ssh\\ssh-reset-backup-20260423-154433\\windows\\wsl-ssh-proxy.ps1",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "8",
+      "path": "C:\\Users\\anise\\Documents\\Codex\\2026-04-23-ssh-ssh\\ssh-reset-backup-20260423-154433\\windows\\config",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "22",
+      "path": "C:\\Users\\anise\\Documents\\Codex\\2026-04-23-ssh-ssh\\ssh-reset-backup-20260423-154433\\windows\\config",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "4106",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\out\\vs\\workbench\\workbench.desktop.main.js",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "4115",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\out\\vs\\workbench\\workbench.desktop.main.js",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "00",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\out\\main.js:429:`)}async getElementData(e){return this._inspector.getElementData(e)}async getFocusedElementData(){return this._inspector.getFocusedElementData()}async loadURL(e){await this._view.webContents.loadURL(e)}getURL(){return this._view.webContents.getURL()}goBack(){this._view.webContents.navigationHistory.canGoBack()&&this._view.webContents.navigationHistory.goBack()}goForward(){this._view.webContents.navigationHistory.canGoForward()&&this._view.webContents.navigationHistory.goForward()}reload(e){e?this._view.webContents.reloadIgnoringCache():this._view.webContents.reload()}canGoBack(){return this._view.webContents.navigationHistory.canGoBack()}canGoForward(){return this._view.webContents.navigationHistory.canGoForward()}async captureScreenshot(e){this._view.getVisible()||(this._view.setVisible(!0),this._view.setVisible(!1));let t=e?.quality??80;if(e?.pageRect){let a=this._view.webContents.getZoom",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "467",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\out\\main.js",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "3401",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\out\\vs\\sessions\\sessions.desktop.main.js",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "3410",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\out\\vs\\sessions\\sessions.desktop.main.js",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "12",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\extensions\\ms-vscode.js-debug-companion\\out\\extension.js",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "409",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\out\\vs\\platform\\terminal\\node\\ptyHostMain.js",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "422",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\out\\vs\\platform\\terminal\\node\\ptyHostMain.js",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
+    },
+    {
+      "line": "1831",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\extensions\\copilot\\dist\\cli.js",
+      "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
     }
   ],
   "patterns": [

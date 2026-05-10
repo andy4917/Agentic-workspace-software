@@ -14,9 +14,9 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
-import textwrap
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -372,7 +372,7 @@ def command_exists(command: str) -> bool:
     return shutil.which(command) is not None
 
 
-def run_command(command: list[str], cwd: Path, timeout: int = 60) -> dict[str, Any]:
+def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_stdout: bool = False) -> dict[str, Any]:
     started = dt.datetime.now()
     try:
         completed = subprocess.run(
@@ -385,7 +385,7 @@ def run_command(command: list[str], cwd: Path, timeout: int = 60) -> dict[str, A
             timeout=timeout,
         )
         status = "pass" if completed.returncode == 0 else "fail"
-        return {
+        result = {
             "command": command,
             "status": status,
             "exit_code": completed.returncode,
@@ -393,6 +393,9 @@ def run_command(command: list[str], cwd: Path, timeout: int = 60) -> dict[str, A
             "stderr_preview": completed.stderr[-4000:],
             "duration_seconds": (dt.datetime.now() - started).total_seconds(),
         }
+        if include_stdout:
+            result["stdout"] = completed.stdout
+        return result
     except Exception as exc:  # noqa: BLE001 - diagnostics command wrapper
         return {
             "command": command,
@@ -543,17 +546,61 @@ def cmd_apply(args: argparse.Namespace) -> int:
     root = root_path(args)
     modules = selected_modules(args.profile, args.module)
     templates = managed_templates(root, modules)
+    previous_state = load_state(root)
+    previous_ops = {
+        op.get("path"): op
+        for op in previous_state.get("applied_operations", [])
+        if isinstance(op, dict) and op.get("path")
+    }
     operations = []
     for path, content in sorted(templates.items()):
         full = root / path
         digest = sha256_text(content)
+        previous = previous_ops.get(path, {})
+        was_managed = previous.get("managed") is True or previous.get("action") in {"created", "updated", "unchanged"}
+        remove_on_uninstall = bool(previous.get("remove_on_uninstall", was_managed))
         if full.exists():
             current = sha256_file(full)
-            action = "unchanged" if current == digest else "exists_unmanaged_preserved"
-            operations.append({"path": path, "action": action, "digest": current, "owner": OWNER})
+            if current == digest:
+                operations.append(
+                    {
+                        "path": path,
+                        "action": "unchanged",
+                        "digest": digest,
+                        "owner": OWNER,
+                        "managed": was_managed,
+                        "remove_on_uninstall": remove_on_uninstall,
+                    }
+                )
+                continue
+            if was_managed:
+                backup = backup_file(full, root)
+                write_text(full, content)
+                operations.append(
+                    {
+                        "path": path,
+                        "action": "updated",
+                        "digest": digest,
+                        "owner": OWNER,
+                        "managed": True,
+                        "remove_on_uninstall": remove_on_uninstall,
+                        "backup": str(backup),
+                    }
+                )
+                continue
+            operations.append(
+                {
+                    "path": path,
+                    "action": "exists_unmanaged_preserved",
+                    "digest": current,
+                    "owner": OWNER,
+                    "managed": False,
+                    "remove_on_uninstall": False,
+                }
+            )
             continue
         write_text(full, content)
-        operations.append({"path": path, "action": "created", "digest": digest, "owner": OWNER})
+        operations.append({"path": path, "action": "created", "digest": digest, "owner": OWNER, "managed": True, "remove_on_uninstall": True})
     state = {
         "schema_version": SCHEMA_VERSION,
         "installed_at": utc_now(),
@@ -623,12 +670,18 @@ def sentinel_checks(root: Path) -> list[dict[str, Any]]:
     out = []
     for item in targets:
         path = root / item
+        readonly = False
+        if path.exists():
+            try:
+                readonly = bool(path.stat().st_file_attributes & stat.FILE_ATTRIBUTE_READONLY)
+            except AttributeError:
+                readonly = not os.access(path, os.W_OK)
         out.append(
             {
                 "path": item,
                 "exists": path.exists(),
                 "is_file": path.is_file(),
-                "readonly": bool(path.exists() and os.access(path, os.R_OK) and not os.access(path, os.W_OK)),
+                "readonly": readonly,
             }
         )
     return out
@@ -646,7 +699,14 @@ def check_config(root: Path) -> dict[str, Any]:
     expected_true = ["plugins", "codex_hooks", "multi_agent", "child_agents_md", "tool_search", "tool_suggest", "skill_mcp_dependency_install"]
     missing = [key for key in expected_true if features.get(key) is not True]
     unexpected = [key for key in ["enable_fanout", "multi_agent_v2"] if features.get(key) is True]
-    return {"status": "pass" if not missing and not unexpected else "fail", "missing_true": missing, "unexpected_true": unexpected}
+    expected_false = ["workspace_dependencies"]
+    wrong_false = [key for key in expected_false if features.get(key) is not False]
+    return {
+        "status": "pass" if not missing and not unexpected and not wrong_false else "fail",
+        "missing_true": missing,
+        "unexpected_true": unexpected,
+        "missing_false": wrong_false,
+    }
 
 
 def check_managed_files(root: Path) -> dict[str, Any]:
@@ -656,7 +716,7 @@ def check_managed_files(root: Path) -> dict[str, Any]:
     missing = []
     drifted = []
     for op in state.get("applied_operations", []):
-        if op.get("action") not in {"created", "unchanged"}:
+        if op.get("managed") is not True:
             continue
         path = root / op["path"]
         if not path.exists():
@@ -729,7 +789,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
     repaired = []
     for op in state.get("applied_operations", []):
         path = op.get("path")
-        if path not in templates or op.get("action") not in {"created", "unchanged"}:
+        if path not in templates or op.get("managed") is not True:
             continue
         full = root / path
         desired = templates[path]
@@ -754,10 +814,12 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         return 0
     targets = []
     for op in state.get("applied_operations", []):
-        if op.get("action") == "created":
+        if op.get("remove_on_uninstall") is True:
             path = root / op["path"]
             if path.exists() and sha256_file(path) == op.get("digest"):
                 targets.append(op["path"])
+    if install_state_path(root).exists():
+        targets.append(rel(install_state_path(root), root))
     if not args.apply:
         print(json.dumps({"dry_run": True, "would_remove": targets}, ensure_ascii=False, indent=2))
         return 0
@@ -888,7 +950,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
     checks = []
     checks.append({"name": "doctor", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--json"], root)})
     checks.append({"name": "global_scan", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "global-scan"], root, timeout=240)})
-    checks.append({"name": "audit", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "audit", "--json"], root)})
     checks.append({"name": "python_compile", **run_command([sys.executable, "-m", "py_compile", "maintenance/scripts/codex_agent_harness.py"], root)})
     checks.append({"name": "self_test", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "self-test"], root)})
     checks.append({"name": "repair_dry_run", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repair"], root)})
@@ -908,15 +969,22 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 ),
             }
         )
+    pre_audit_status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
+    write_verification_report(root, {"generated_at": utc_now(), "status": pre_audit_status, "checks": checks})
+    checks.append({"name": "audit", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "audit", "--json"], root)})
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
+    write_verification_report(root, report)
+    print(root / "reports" / "verification.latest.md")
+    return 0 if status == "pass" else 1
+
+
+def write_verification_report(root: Path, report: dict[str, Any]) -> None:
     write_json(root / "reports" / "verification.latest.json", report)
     write_text(
         root / "reports" / "verification.latest.md",
-        "# Verification\n\n" + "\n".join(f"- {c['name']}: {c['status']} ({c['exit_code']})" for c in checks) + "\n",
+        "# Verification\n\n" + "\n".join(f"- {c['name']}: {c['status']} ({c['exit_code']})" for c in report["checks"]) + "\n",
     )
-    print(root / "reports" / "verification.latest.md")
-    return 0 if status == "pass" else 1
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
@@ -1000,9 +1068,9 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
             command.extend(globs)
             command.append(pattern)
             command.extend(str(path) for path in scan_roots)
-            result = run_command(command, root, timeout=180)
+            result = run_command(command, root, timeout=180, include_stdout=True)
             if result["exit_code"] in {0, 1}:
-                for line in result["stdout_preview"].splitlines():
+                for line in str(result.get("stdout", "")).splitlines():
                     parsed = re.match(r"^(.+):(\d+):(.*)$", line)
                     if parsed:
                         path_text, line_text, _text = parsed.groups()
@@ -1072,33 +1140,159 @@ def cmd_merge_config(args: argparse.Namespace) -> int:
     except Exception as exc:  # noqa: BLE001
         print(f"invalid TOML: {exc}", file=sys.stderr)
         return 2
-    missing_lines = []
-    drift = []
-    for key, value in source_data.items():
-        if key not in target_data:
-            missing_lines.append(format_toml_value(key, value))
-        elif target_data[key] != value:
-            drift.append(key)
-    result = {"source": str(source), "target": str(target), "missing_root_keys": len(missing_lines), "drift": drift, "dry_run": not args.apply}
-    if args.apply and missing_lines:
+    additions: list[dict[str, Any]] = []
+    drift: list[str] = []
+    collect_toml_additions(source_data, target_data, [], additions, drift)
+    addition_text = render_toml_additions(additions)
+    result = {
+        "source": str(source),
+        "target": str(target),
+        "missing_items": len(additions),
+        "drift": drift,
+        "dry_run": not args.apply,
+        "additions": [{"table": ".".join(item["table"]), "key": item["key"]} for item in additions],
+    }
+    if args.apply and addition_text:
         backup = backup_file(target, root)
-        with target.open("a", encoding="utf-8", newline="\n") as f:
-            f.write("\n# Added by codex-agent-harness merge-config\n")
-            for line in missing_lines:
-                f.write(line + "\n")
+        merged_text = apply_toml_additions(read_text(target), additions, target_data)
+        write_text(target, merged_text)
         result["backup"] = str(backup)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
+
+
+def apply_toml_additions(text: str, additions: list[dict[str, Any]], target_data: dict[str, Any]) -> str:
+    lines = text.splitlines()
+    root_items: list[dict[str, Any]] = []
+    existing_table_items: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    append_items: list[dict[str, Any]] = []
+
+    for item in additions:
+        table = tuple(item["table"])
+        if not table and not isinstance(item["value"], dict):
+            root_items.append(item)
+        elif table and toml_table_exists(target_data, list(table)):
+            existing_table_items.setdefault(table, []).append(item)
+        else:
+            append_items.append(item)
+
+    if root_items:
+        insertion = next((index for index, line in enumerate(lines) if re.match(r"\s*\[", line)), len(lines))
+        root_lines = [format_toml_value(item["key"], item["value"]) for item in sorted(root_items, key=lambda entry: entry["key"])]
+        lines[insertion:insertion] = ["# Added by codex-agent-harness merge-config", *root_lines, ""]
+
+    insertions: list[tuple[int, list[str]]] = []
+    for table, items in existing_table_items.items():
+        header_index = find_toml_table_header(lines, list(table))
+        if header_index is None:
+            append_items.extend(items)
+            continue
+        insertion = find_toml_table_end(lines, header_index)
+        item_lines = [format_toml_value(item["key"], item["value"]) for item in sorted(items, key=lambda entry: entry["key"])]
+        insertions.append((insertion, ["# Added by codex-agent-harness merge-config", *item_lines]))
+
+    for insertion, item_lines in sorted(insertions, key=lambda pair: pair[0], reverse=True):
+        lines[insertion:insertion] = item_lines
+
+    if append_items:
+        append_text = render_toml_additions(append_items).rstrip()
+        if append_text:
+            if lines and lines[-1].strip():
+                lines.append("")
+            lines.append("# Added by codex-agent-harness merge-config")
+            lines.extend(append_text.splitlines())
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def toml_table_exists(data: dict[str, Any], table: list[str]) -> bool:
+    current: Any = data
+    for part in table:
+        if not isinstance(current, dict) or part not in current:
+            return False
+        current = current[part]
+    return isinstance(current, dict)
+
+
+def find_toml_table_header(lines: list[str], table: list[str]) -> int | None:
+    header = f"[{'.'.join(table)}]"
+    for index, line in enumerate(lines):
+        if line.strip() == header:
+            return index
+    return None
+
+
+def find_toml_table_end(lines: list[str], header_index: int) -> int:
+    for index in range(header_index + 1, len(lines)):
+        if re.match(r"\s*\[", lines[index]):
+            return index
+    return len(lines)
+
+
+def collect_toml_additions(source: dict[str, Any], target: dict[str, Any], table: list[str], additions: list[dict[str, Any]], drift: list[str]) -> None:
+    for key, value in sorted(source.items()):
+        dotted = ".".join([*table, key])
+        if key not in target:
+            additions.append({"table": table, "key": key, "value": value})
+            continue
+        target_value = target[key]
+        if isinstance(value, dict) and isinstance(target_value, dict):
+            collect_toml_additions(value, target_value, [*table, key], additions, drift)
+            continue
+        if target_value != value:
+            drift.append(dotted)
+
+
+def render_toml_additions(additions: list[dict[str, Any]]) -> str:
+    root_lines: list[str] = []
+    table_groups: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for item in additions:
+        table = tuple(item["table"])
+        if table:
+            table_groups.setdefault(table, []).append(item)
+        else:
+            root_lines.extend(format_toml_item(item["key"], item["value"], []))
+
+    sections: list[str] = []
+    if root_lines:
+        sections.extend(root_lines)
+    for table, items in sorted(table_groups.items()):
+        sections.append("")
+        sections.append(f"[{'.'.join(table)}]")
+        for item in sorted(items, key=lambda entry: entry["key"]):
+            sections.extend(format_toml_item(item["key"], item["value"], list(table)))
+    return "\n".join(sections).rstrip() + ("\n" if sections else "")
+
+
+def format_toml_item(key: str, value: Any, table: list[str]) -> list[str]:
+    if isinstance(value, dict):
+        lines = ["" if table else "", f"[{'.'.join([*table, key])}]"]
+        for child_key, child_value in sorted(value.items()):
+            lines.extend(format_toml_item(child_key, child_value, [*table, key]))
+        return [line for line in lines if line != "" or table]
+    return [format_toml_value(key, value)]
 
 
 def format_toml_value(key: str, value: Any) -> str:
     if isinstance(value, bool):
         return f"{key} = {'true' if value else 'false'}"
     if isinstance(value, str):
-        return f'{key} = "{value}"'
+        return f"{key} = {json.dumps(value, ensure_ascii=False)}"
     if isinstance(value, (int, float)):
         return f"{key} = {value}"
+    if isinstance(value, list):
+        return f"{key} = [{', '.join(format_toml_scalar(item) for item in value)}]"
     return f"# {key}: complex table omitted; append manually after review"
+
+
+def format_toml_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(str(value), ensure_ascii=False)
 
 
 def cmd_self_test(args: argparse.Namespace) -> int:
@@ -1116,8 +1310,34 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         write_text(root / "reports" / "eval-results.jsonl", "")
         ns = argparse.Namespace(root=str(root), profile="developer", module=None)
         cmd_apply(ns)
+        state = load_state(root)
+        if not any(op.get("remove_on_uninstall") is True for op in state.get("applied_operations", [])):
+            print("uninstall ownership missing in self-test", file=sys.stderr)
+            return 1
+        write_text(root / "agents" / "explorer.toml", "drifted = true\n")
+        cmd_apply(ns)
         if doctor_data(root)["status"] != "pass":
             print("doctor failed in self-test", file=sys.stderr)
+            return 1
+        source = root / "source.toml"
+        target = root / "target.toml"
+        write_text(source, 'model = "gpt-test"\n[features]\nplugins = true\nmulti_agent = true\n[mcp_servers.docs]\nenabled = true\n')
+        write_text(target, '[features]\nplugins = false\n')
+        merge_ns = argparse.Namespace(root=str(root), source=str(source), target=str(target), apply=True, update_managed=False)
+        if cmd_merge_config(merge_ns) != 0:
+            print("merge-config failed in self-test", file=sys.stderr)
+            return 1
+        merged = read_text(target)
+        if "plugins = false" not in merged or "multi_agent = true" not in merged or "[mcp_servers.docs]" not in merged:
+            print("merge-config did not preserve and append table keys in self-test", file=sys.stderr)
+            return 1
+        try:
+            parsed_merged = tomllib.loads(merged)
+        except Exception as exc:  # noqa: BLE001
+            print(f"merge-config produced invalid TOML in self-test: {exc}", file=sys.stderr)
+            return 1
+        if parsed_merged["features"]["plugins"] is not False or parsed_merged["features"]["multi_agent"] is not True:
+            print("merge-config changed existing values in self-test", file=sys.stderr)
             return 1
         if audit_data(root)["score"] < 80:
             print("audit score too low in self-test", file=sys.stderr)
