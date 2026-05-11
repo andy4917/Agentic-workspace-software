@@ -2,6 +2,8 @@
 name = "explorer"
 mode = "read-only"
 purpose = "Gather focused evidence before implementation."
+nickname_prefix = "EXP"
+nickname_candidates = ["EXP-Scout", "EXP-Mapper", "EXP-Probe"]
 allowed_work = ["file_search", "file_read", "structure_summary", "evidence_report"]
 disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
 sandbox = "read-only"

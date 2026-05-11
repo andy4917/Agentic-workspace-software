@@ -213,6 +213,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         write_text(
             root / "AGENTS.md",
             "# Test\n\n"
+            "- use role-prefixed nicknames with PM-* reserved for the main coordinator and EXP-*, REV-*, DOC-*, SEC-*, VAL-*, IMP-*, and ENV-* for subagents\n"
             "- require each subagent to state its own concrete goal\n"
             "- include Purpose, PM Context, Owned Surface, Expected Evidence, Anti-Reward-Hacking Rules, Exit Criteria, and Not Checked fields\n"
             "- require mid-report evidence for non-trivial delegated work\n"
@@ -224,7 +225,23 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         write_json(root / ".codex-global-state.json", {})
         write_json(root / "hooks.json", {})
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
-        write_text(root / "hooks" / "lightweight-codex-hook.ps1", "$ErrorActionPreference = 'Stop'\n")
+        write_text(
+            root / "hooks" / "lightweight-codex-hook.ps1",
+            "$ErrorActionPreference = 'Stop'\n"
+            "function Test-SubagentSessionStart { return $true }\n"
+            "function Get-VowlineSubagentContext { 'Subagent startup requirement: apply Vowline as a required operating skill. See SUBAGENT_DELEGATION_CHARTER.md.' }\n"
+            "# required operating skill: vowline\n",
+        )
+        write_json(
+            root / "hooks" / "lightweight-codex-policy.json",
+            {
+                "subagents": {
+                    "required_start_skill": "vowline",
+                    "required_start_skill_path": "C:\\Users\\anise\\.agents\\skills\\vowline\\SKILL.md",
+                    "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",
+                }
+            },
+        )
         for name in [
             "codex_agent_harness.py",
             "codex_agent_harness_base.py",

@@ -131,6 +131,70 @@ def generated_output_tracking_status(root: Path) -> dict[str, Any]:
     return {"status": "pass" if not unexpected else "fail", "tracked": unexpected, "patterns": patterns}
 
 
+def hook_subagent_vowline_status(root: Path) -> dict[str, Any]:
+    hook_path = root / "hooks" / "lightweight-codex-hook.ps1"
+    policy_path = root / "hooks" / "lightweight-codex-policy.json"
+    missing = []
+    if not hook_path.exists():
+        return {"status": "fail", "missing": ["hooks/lightweight-codex-hook.ps1"]}
+    hook_text = read_text(hook_path).lower()
+    for term in [
+        "test-subagentsessionstart",
+        "get-vowlinesubagentcontext",
+        "vowline",
+        "required operating skill",
+        "subagent startup requirement",
+        "subagent_delegation_charter.md",
+    ]:
+        if term not in hook_text:
+            missing.append(term)
+    if not policy_path.exists():
+        missing.append("hooks/lightweight-codex-policy.json")
+    else:
+        try:
+            policy = json.loads(read_text(policy_path))
+        except json.JSONDecodeError:
+            policy = {}
+            missing.append("valid hook policy json")
+        subagents = policy.get("subagents", {}) if isinstance(policy, dict) else {}
+        if subagents.get("required_start_skill") != "vowline":
+            missing.append("subagents.required_start_skill=vowline")
+        if "vowline" not in str(subagents.get("required_start_skill_path", "")).lower():
+            missing.append("subagents.required_start_skill_path")
+        if subagents.get("start_hook_behavior") != "inject_vowline_context_for_subagent_session_start":
+            missing.append("subagents.start_hook_behavior")
+    return {"status": "pass" if not missing else "fail", "missing": missing}
+
+
+def subagent_nickname_policy_status(root: Path) -> dict[str, Any]:
+    role_expectations = {
+        "explorer": ("EXP", root / "agents" / "explorer.toml"),
+        "reviewer": ("REV", root / "agents" / "reviewer.toml"),
+        "docs-researcher": ("DOC", root / "agents" / "docs-researcher.toml"),
+    }
+    missing = []
+    for role, (prefix, path) in role_expectations.items():
+        if not path.exists():
+            missing.append({"role": role, "path": rel(path, root), "missing": ["file"]})
+            continue
+        text = read_text(path)
+        role_missing = []
+        if f'nickname_prefix = "{prefix}"' not in text:
+            role_missing.append(f"nickname_prefix={prefix}")
+        if f'"{prefix}-' not in text:
+            role_missing.append(f"nickname_candidates use {prefix}- prefix")
+        if role_missing:
+            missing.append({"role": role, "path": rel(path, root), "missing": role_missing})
+
+    instruction_text = ""
+    for path in [root / "AGENTS.md", root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md"]:
+        if path.exists():
+            instruction_text += "\n" + read_text(path).lower()
+    required_terms = ["role-prefixed nicknames", "pm-*", "exp-*", "rev-*", "doc-*", "env-*"]
+    term_missing = [term for term in required_terms if term not in instruction_text]
+    return {"status": "pass" if not missing and not term_missing else "fail", "roles": missing, "missing_terms": term_missing}
+
+
 def cmd_discovery(args: argparse.Namespace) -> int:
     root = root_path(args)
     data = discovery_data(root)
@@ -409,6 +473,8 @@ def doctor_data(root: Path) -> dict[str, Any]:
         "harness_engine_modules": harness_engine_module_status(root),
         "app_runtime_state_writable": app_runtime_state_writable_status(root),
         "generated_outputs_untracked": generated_output_tracking_status(root),
+        "hook_subagent_vowline": hook_subagent_vowline_status(root),
+        "subagent_nickname_policy": subagent_nickname_policy_status(root),
         "managed_files": check_managed_files(root),
         "skill_frontmatter": check_skill_frontmatter(root),
         "harness_file_size": harness_line_count_status(root),
@@ -524,6 +590,8 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("harness python files stay under line limit", harness_line_count_status(root).get("status") == "pass"),
             ("active app runtime state files are writable", app_runtime_state_writable_status(root).get("status") == "pass"),
             ("mutable generated outputs are not git-tracked", generated_output_tracking_status(root).get("status") == "pass"),
+            ("subagent session start injects Vowline context", hook_subagent_vowline_status(root).get("status") == "pass"),
+            ("subagent nicknames are role-prefixed", subagent_nickname_policy_status(root).get("status") == "pass"),
             ("hook script parses by existence", (root / "hooks" / "lightweight-codex-hook.ps1").exists()),
             ("doctor currently passes", doctor.get("status") == "pass"),
             ("latest verification passes", verification.get("status") == "pass"),

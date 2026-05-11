@@ -211,6 +211,55 @@ function Get-TeamPresetHint {
     }
 }
 
+function Test-SubagentSessionStart {
+    param($InputObject)
+
+    $json = ""
+    try {
+        $json = $InputObject | ConvertTo-Json -Depth 20 -Compress
+    } catch {
+        $json = ""
+    }
+
+    $signals = @(
+        "(?i)subagent",
+        "(?i)sub-agent",
+        "(?i)child_agent",
+        "(?i)child-agent",
+        "(?i)spawn_agent",
+        "(?i)agent_type",
+        "(?i)parent_agent",
+        "(?i)fork_context"
+    )
+
+    foreach ($signal in $signals) {
+        if ($json -match $signal) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Get-VowlineSubagentContext {
+    param($Policy)
+
+    $skillPath = "C:\Users\anise\.agents\skills\vowline\SKILL.md"
+    if ($null -ne $Policy.subagents -and -not [string]::IsNullOrWhiteSpace([string]$Policy.subagents.required_start_skill_path)) {
+        $skillPath = [string]$Policy.subagents.required_start_skill_path
+    }
+
+    return @"
+Subagent startup requirement:
+- Apply the Vowline operating skill for this subagent: $skillPath
+- Treat Vowline as a required operating skill alongside task-specific skills; if the full skill cannot be loaded, apply its operating contract to decomposition, evidence, validation, safety, and reporting.
+- The delegated task must include Goal, Purpose, PM Context, Owned Surface, Expected Evidence, Anti-Reward-Hacking Rules, Mid-Report, Exit Criteria, and Not Checked.
+- Do not optimize for reassuring completion. Produce verifiable evidence, blockers, not-run reasons, and PM verification suggestions.
+- A real blocker with evidence is a useful outcome. Unsupported PASS, stale reports, skipped checks counted as success, hidden fallback, or omitted uncertainty invalidates the handoff.
+- Use the local charter when relevant: C:\Users\anise\.codex\maintenance\SUBAGENT_DELEGATION_CHARTER.md
+"@
+}
+
 function Test-DelegationAuthorized {
     param([string]$Prompt)
 
@@ -461,6 +510,9 @@ $state = Read-State
 switch ($eventName) {
     "SessionStart" {
         $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Subagents require explicit user authorization by prompt, then should be used only for bounded non-blocking sidecar work. Hooks are reminders and narrow safety checks, not completion authority."
+        if (Test-SubagentSessionStart -InputObject $inputObject) {
+            $context = $context + "`n`n" + (Get-VowlineSubagentContext -Policy $policy)
+        }
         Write-HookJson @{
             continue = $true
             hookSpecificOutput = @{

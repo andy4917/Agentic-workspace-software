@@ -150,6 +150,8 @@ Use PM-selected team presets only when the task benefits from them:
 For delegated work:
 
 - define objective, owned files/surfaces, expected output, constraints, and verification expectation;
+- use role-prefixed nicknames so the main PM and subagents are visually distinct in reports and handoffs;
+- reserve `PM-*` names for the main coordinator, and use role prefixes such as `EXP-*`, `REV-*`, `DOC-*`, `SEC-*`, `VAL-*`, `IMP-*`, and `ENV-*` for subagents;
 - require each subagent to state its own concrete goal before work proceeds;
 - include why the task is being delegated: the PM purpose, the risk being reduced, and the decision the result is meant to inform;
 - include the PM context: what is already known, what is not trusted yet, and which assumptions the subagent must challenge;

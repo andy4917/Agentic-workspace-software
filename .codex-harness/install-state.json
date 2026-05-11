@@ -26,8 +26,8 @@
     },
     {
       "action": "updated",
-      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-193851\\agents\\docs-researcher.toml",
-      "digest": "b4ed90a325f16d9db5ae8c95b082cce5df51c745be5612eb262c98a8e5e11c2b",
+      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-194911\\agents\\docs-researcher.toml",
+      "digest": "cceac5942a8c316670a760d15f2790f29e35addb07af0fd524af36fe58599e1a",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/docs-researcher.toml",
@@ -35,8 +35,8 @@
     },
     {
       "action": "updated",
-      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-193851\\agents\\explorer.toml",
-      "digest": "a02646b3bf6b2722c0bf0e482d41de83a56a04e5e3fb4f1c982f9721321f2027",
+      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-194911\\agents\\explorer.toml",
+      "digest": "63fb3054c4e12d49aebb0bed31ce8665766be94e516152619ef3ca6f34252b5b",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/explorer.toml",
@@ -44,8 +44,8 @@
     },
     {
       "action": "updated",
-      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-193851\\agents\\reviewer.toml",
-      "digest": "afa16ced68cf7d1ac1a53cee94c2b11dd91576a8bf92cce2a0d0f4010b7cfa19",
+      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-194911\\agents\\reviewer.toml",
+      "digest": "002e9e7457f205bc1f06218e93e61a213e028eab76d2cb16db6de67a66924573",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/reviewer.toml",
@@ -116,7 +116,8 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "created",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-194911\\maintenance\\SUBAGENT_DELEGATION_CHARTER.md",
       "digest": "f25f48dfaef4b4f521e51b5d2f1de4c48503f76ae81a3ba96521c8a01197a253",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -316,7 +317,7 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-05-11T10:38:51+00:00",
+  "installed_at": "2026-05-11T10:49:11+00:00",
   "requested_modules": [],
   "requested_profile": "developer",
   "schema_version": "1",
