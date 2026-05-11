@@ -9,8 +9,8 @@
     {
       "failures": [],
       "name": "Context Efficiency",
-      "passed": 4,
-      "total": 4
+      "passed": 5,
+      "total": 5
     },
     {
       "failures": [],
@@ -21,14 +21,14 @@
     {
       "failures": [],
       "name": "Memory Persistence",
-      "passed": 4,
-      "total": 4
+      "passed": 6,
+      "total": 6
     },
     {
       "failures": [],
       "name": "Eval Coverage",
-      "passed": 4,
-      "total": 4
+      "passed": 6,
+      "total": 6
     },
     {
       "failures": [],
@@ -39,11 +39,11 @@
     {
       "failures": [],
       "name": "Cost Efficiency",
-      "passed": 4,
-      "total": 4
+      "passed": 7,
+      "total": 7
     }
   ],
-  "generated_at": "2026-05-11T09:42:09+00:00",
+  "generated_at": "2026-05-11T10:06:03+00:00",
   "rubric_version": "codex-harness-audit-v1",
   "score": 100.0,
   "status": "pass",

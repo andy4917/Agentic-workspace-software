@@ -3,14 +3,9 @@
   "active_hits": [],
   "content_redacted": true,
   "desktop_excluded": true,
-  "generated_at": "2026-05-11T09:42:07+00:00",
+  "generated_at": "2026-05-11T10:06:01+00:00",
   "match_count": 49,
   "matches_preview": [
-    {
-      "line": "49",
-      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
-      "pattern": "bundled-marketplaces"
-    },
     {
       "line": "72",
       "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
@@ -52,23 +47,13 @@
       "pattern": "bundled-marketplaces"
     },
     {
+      "line": "49",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "bundled-marketplaces"
+    },
+    {
       "line": "331",
       "path": "C:\\Users\\anise\\.codex\\hooks\\lightweight-codex-hook.ps1",
-      "pattern": "vendor_imports"
-    },
-    {
-      "line": "59",
-      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\tests\\smoke_test.py",
-      "pattern": "vendor_imports"
-    },
-    {
-      "line": "48",
-      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
-      "pattern": "vendor_imports"
-    },
-    {
-      "line": "366",
-      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
       "pattern": "vendor_imports"
     },
     {
@@ -122,14 +107,19 @@
       "pattern": "vendor_imports"
     },
     {
-      "line": "72",
-      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
-      "pattern": "wshobson-agents-scan"
+      "line": "59",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\tests\\smoke_test.py",
+      "pattern": "vendor_imports"
     },
     {
-      "line": "35",
-      "path": "C:\\Users\\anise\\.codex\\maintenance\\NAMING_CONVENTION.md",
-      "pattern": "wshobson-agents-scan"
+      "line": "48",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "vendor_imports"
+    },
+    {
+      "line": "366",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "vendor_imports"
     },
     {
       "line": "51",
@@ -139,6 +129,16 @@
     {
       "line": "367",
       "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "wshobson-agents-scan"
+    },
+    {
+      "line": "72",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
+      "pattern": "wshobson-agents-scan"
+    },
+    {
+      "line": "35",
+      "path": "C:\\Users\\anise\\.codex\\maintenance\\NAMING_CONVENTION.md",
       "pattern": "wshobson-agents-scan"
     },
     {
@@ -172,6 +172,11 @@
       "pattern": "\\\\\\.tmp\\\\"
     },
     {
+      "line": "46",
+      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
+      "pattern": "\\\\tmp\\\\"
+    },
+    {
       "line": "72",
       "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
       "pattern": "\\\\tmp\\\\"
@@ -179,11 +184,6 @@
     {
       "line": "235",
       "path": "C:\\Users\\anise\\.codex\\maintenance\\scripts\\codex-home-maintenance.ps1",
-      "pattern": "\\\\tmp\\\\"
-    },
-    {
-      "line": "46",
-      "path": "C:\\Users\\anise\\.codex\\skills\\keep-codex-fast\\scripts\\keep_codex_fast.py",
       "pattern": "\\\\tmp\\\\"
     },
     {
@@ -232,8 +232,8 @@
       "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
     },
     {
-      "line": "12",
-      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\extensions\\ms-vscode.js-debug-companion\\out\\extension.js",
+      "line": "1831",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\extensions\\copilot\\dist\\cli.js",
       "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
     },
     {
@@ -247,8 +247,8 @@
       "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
     },
     {
-      "line": "1831",
-      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\extensions\\copilot\\dist\\cli.js",
+      "line": "12",
+      "path": "C:\\Users\\anise\\AppData\\Local\\Programs\\Microsoft VS Code\\8b640eef5a\\resources\\app\\extensions\\ms-vscode.js-debug-companion\\out\\extension.js",
       "pattern": "wsl\\.exe|VmmemWSL|\\\\\\\\wsl"
     }
   ],

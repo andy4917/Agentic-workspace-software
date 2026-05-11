@@ -27,6 +27,9 @@ RUBRIC_VERSION = "codex-harness-audit-v1"
 OWNER = "codex-agent-harness"
 DEFAULT_PROFILE = "developer"
 SOURCE_PLAN = Path("C:/Users/anise/Downloads/codex-agent-harness-distillation-plan.md")
+COMMAND_PREVIEW_CHARS = 4000
+COMMAND_ARTIFACT_THRESHOLD_CHARS = 12000
+TRAJECTORY_VERSION = "codex-trajectory-v1"
 
 MODULES: dict[str, dict[str, str]] = {
     "codex-baseline": {"purpose": "Codex baseline config, global instructions, and role agents"},
@@ -158,6 +161,24 @@ EVAL_TEMPLATES = {
         "timeout_seconds": 30,
         "risk_notes": "Score is deterministic but intentionally conservative.",
     },
+    "evals/context-inspection.json": {
+        "eval_id": "context-inspection",
+        "task": "Generate deterministic context selection report.",
+        "setup": "Run from CODEX_HOME.",
+        "success_criteria": ["context report exists", "selected instruction source is explicit"],
+        "grader": "python maintenance/scripts/codex_agent_harness.py context",
+        "timeout_seconds": 30,
+        "risk_notes": "Does not prove the app injected the selected context into a live turn.",
+    },
+    "evals/trajectory-search.json": {
+        "eval_id": "trajectory-search",
+        "task": "Verify trajectory JSONL search path remains usable.",
+        "setup": "Run after at least one verification or benchmark.",
+        "success_criteria": ["trajectory command exits successfully", "recent listing is JSON"],
+        "grader": "python maintenance/scripts/codex_agent_harness.py trajectory --recent 5",
+        "timeout_seconds": 30,
+        "risk_notes": "Checks local harness trajectory records only.",
+    },
 }
 
 
@@ -192,6 +213,12 @@ def write_text(path: Path, content: str) -> None:
 
 def write_json(path: Path, data: Any) -> None:
     write_text(path, json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+
+
+def append_jsonl(path: Path, data: Any) -> None:
+    ensure_dir(path.parent)
+    with path.open("a", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps(data, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def sha256_text(text: str) -> str:
@@ -303,6 +330,11 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
         "codex-eval.ps1": "eval",
         "codex-merge-config.ps1": "merge-config",
         "codex-global-scan.ps1": "global-scan",
+        "codex-context.ps1": "context",
+        "codex-retrieve.ps1": "retrieve",
+        "codex-compact-summary.ps1": "compact-summary",
+        "codex-trajectory.ps1": "trajectory",
+        "codex-benchmark.ps1": "benchmark",
     }
     for name, command in wrappers.items():
         templates[f"maintenance/scripts/{name}"] = wrapper_script(command)
@@ -389,12 +421,20 @@ def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_std
             "command": command,
             "status": status,
             "exit_code": completed.returncode,
-            "stdout_preview": completed.stdout[-4000:],
-            "stderr_preview": completed.stderr[-4000:],
+            "stdout_preview": redact_obvious_secrets(completed.stdout[-COMMAND_PREVIEW_CHARS:]),
+            "stderr_preview": redact_obvious_secrets(completed.stderr[-COMMAND_PREVIEW_CHARS:]),
             "duration_seconds": (dt.datetime.now() - started).total_seconds(),
         }
+        artifacts = []
+        command_name = safe_slug("-".join(Path(part).name if index == 0 else part for index, part in enumerate(command[:4])), "command")
+        if not include_stdout and len(completed.stdout) > COMMAND_ARTIFACT_THRESHOLD_CHARS:
+            artifacts.append({"stream": "stdout", **store_tool_artifact(cwd, f"{command_name}-stdout", completed.stdout)})
+        if not include_stdout and len(completed.stderr) > COMMAND_ARTIFACT_THRESHOLD_CHARS:
+            artifacts.append({"stream": "stderr", **store_tool_artifact(cwd, f"{command_name}-stderr", completed.stderr)})
+        if artifacts:
+            result["artifacts"] = artifacts
         if include_stdout:
-            result["stdout"] = completed.stdout
+            result["stdout"] = redact_obvious_secrets(completed.stdout)
         return result
     except Exception as exc:  # noqa: BLE001 - diagnostics command wrapper
         return {
@@ -423,6 +463,19 @@ def discover_instruction_files(root: Path) -> list[dict[str, Any]]:
         if path.exists():
             result.append({"path": rel(path, root), "bytes": path.stat().st_size})
     return result
+
+
+def instruction_warnings(path: Path) -> list[str]:
+    try:
+        text = read_text(path)
+    except UnicodeDecodeError:
+        return ["non-utf8 instruction file skipped for content inspection"]
+    patterns = [
+        (r"(?i)ignore (all )?(previous|prior|above) instructions", "possible prompt-injection override language"),
+        (r"(?i)(exfiltrate|send|upload).{0,40}(secret|token|credential|password)", "possible credential exfiltration instruction"),
+        (r"(?i)BEGIN (RSA |OPENSSH |EC |DSA |PRIVATE )?PRIVATE KEY", "private key material pattern"),
+    ]
+    return [message for pattern, message in patterns if re.search(pattern, text)]
 
 
 def discovery_data(root: Path) -> dict[str, Any]:
@@ -464,7 +517,11 @@ def iter_files(root: Path, max_files: int = 100000) -> list[Path]:
     ignored = {
         ".git",
         "archived_sessions",
+        "artifacts",
+        "cache",
         "generated_images",
+        "memories",
+        "reports",
         "node_modules",
         ".sandbox",
         ".sandbox-bin",
@@ -473,6 +530,7 @@ def iter_files(root: Path, max_files: int = 100000) -> list[Path]:
         "log",
         "sessions",
         "sqlite",
+        "trajectories",
     }
     result: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -635,6 +693,68 @@ def source_plan_metadata() -> dict[str, Any]:
 def clean_report_string(value: str, limit: int = 500) -> str:
     cleaned = "".join(ch if (ch == "\t" or ord(ch) >= 32) else "?" for ch in value)
     return cleaned[:limit]
+
+
+def redact_obvious_secrets(value: str) -> str:
+    patterns = [
+        r"sk-[A-Za-z0-9_-]{20,}",
+        r"ghp_[A-Za-z0-9_]{20,}",
+        r"github_pat_[A-Za-z0-9_]{20,}",
+        r"xox[baprs]-[A-Za-z0-9-]{20,}",
+        r"AKIA[0-9A-Z]{16}",
+        r"(?i)(api[_-]?key|secret|password|token)\s*[:=]\s*['\"][^'\"]{8,}['\"]",
+    ]
+    redacted = value
+    for pattern in patterns:
+        redacted = re.sub(pattern, "<redacted>", redacted)
+    return redacted
+
+
+def safe_slug(value: str, fallback: str = "artifact") -> str:
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip(".-")
+    return (slug or fallback)[:80]
+
+
+def store_tool_artifact(root: Path, name: str, content: str) -> dict[str, Any]:
+    safe_name = safe_slug(name)
+    digest = sha256_text(content)[:12]
+    path = root / "artifacts" / "tool-results" / f"{local_stamp()}-{digest}-{safe_name}.txt"
+    write_text(path, redact_obvious_secrets(content))
+    return {"path": rel(path, root), "bytes": path.stat().st_size, "sha256": sha256_file(path)}
+
+
+def current_git_state(root: Path) -> dict[str, Any]:
+    def run_git(args: list[str]) -> str:
+        try:
+            completed = subprocess.run(["git", *args], cwd=str(root), text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=15)
+        except Exception:  # noqa: BLE001 - best-effort metadata
+            return ""
+        return completed.stdout.strip() if completed.returncode == 0 else ""
+
+    status = run_git(["status", "--short"])
+    return {"sha": run_git(["rev-parse", "--short", "HEAD"]), "dirty": bool(status), "status_preview": status[:2000]}
+
+
+def append_trajectory(root: Path, task: str, status: str, checks: list[dict[str, Any]], artifacts: list[dict[str, Any]] | None = None, error: str | None = None) -> dict[str, Any]:
+    record = {
+        "version": TRAJECTORY_VERSION,
+        "run_id": f"{dt.datetime.now().strftime('%Y%m%d%H%M%S')}-{sha256_text(task + utc_now())[:8]}",
+        "timestamp": utc_now(),
+        "task": task,
+        "repository": current_git_state(root),
+        "tool_stats": {
+            "commands": len(checks),
+            "artifacts": len(artifacts or []),
+            "failures": sum(1 for item in checks if item.get("status") != "pass"),
+        },
+        "checks": checks,
+        "artifacts": artifacts or [],
+        "verification_result": status,
+        "completed": status == "pass",
+        "error": error,
+    }
+    append_jsonl(root / "trajectories" / "runs.jsonl", record)
+    return record
 
 
 def load_state(root: Path) -> dict[str, Any]:
@@ -848,16 +968,18 @@ def audit_data(root: Path) -> dict[str, Any]:
     global_scan = load_json(root / "reports" / "global-scan.latest.json", {})
     verification = load_json(root / "reports" / "verification.latest.json", {})
     verification_checks = {item.get("name"): item.get("status") for item in verification.get("checks", []) if isinstance(item, dict)}
+    trajectory_records = load_trajectory_records(root)
     checks = {
         "Tool Coverage": [
             ("toolchain shims exist", (root / "toolchains" / "shims").exists()),
             ("codex verify command exists", (root / "maintenance" / "scripts" / "codex-verify.ps1").exists()),
             ("MCP status documented", (root / "maintenance" / "MCP_RUNTIME_STATUS.md").exists()),
-            ("PowerShell wrappers installed", len(list((root / "maintenance" / "scripts").glob("codex-*.ps1"))) >= 3),
+            ("PowerShell wrappers installed", len(list((root / "maintenance" / "scripts").glob("codex-*.ps1"))) >= 8),
         ],
         "Context Efficiency": [
             ("AGENTS.md exists", (root / "AGENTS.md").exists()),
             ("context inspection template exists", (root / "reports" / "context-inspection.template.md").exists()),
+            ("context inspection command produced latest report", (root / "reports" / "context-inspection.latest.json").exists()),
             ("compact summaries directory exists", (root / "artifacts" / "compact-summaries").exists()),
             ("global scan redacts content", global_scan.get("content_redacted") is True),
         ],
@@ -871,13 +993,17 @@ def audit_data(root: Path) -> dict[str, Any]:
         ],
         "Memory Persistence": [
             ("trajectories directory exists", (root / "trajectories").exists()),
+            ("trajectory command wrapper exists", (root / "maintenance" / "scripts" / "codex-trajectory.ps1").exists()),
+            ("trajectory records parse with required fields", trajectory_records_valid(trajectory_records)),
             ("learning drafts directory exists", (root / "learning").exists()),
             ("install-state exists", install_state_path(root).exists()),
             ("source plan metadata recorded", bool(load_state(root).get("source", {}).get("plan"))),
         ],
         "Eval Coverage": [
-            ("at least three eval definitions", len(list((root / "evals").glob("*.json"))) >= 3 if (root / "evals").exists() else False),
+            ("at least five eval definitions", len(list((root / "evals").glob("*.json"))) >= 5 if (root / "evals").exists() else False),
             ("benchmark runner wrapper exists", (root / "maintenance" / "scripts" / "codex-eval.ps1").exists()),
+            ("benchmark command wrapper exists", (root / "maintenance" / "scripts" / "codex-benchmark.ps1").exists()),
+            ("benchmark results are parseable", latest_benchmark_results_valid(root)),
             ("audit command exists", (root / "maintenance" / "scripts" / "codex-harness-audit.ps1").exists()),
             ("eval results exist", (root / "reports" / "eval-results.jsonl").exists()),
         ],
@@ -889,6 +1015,9 @@ def audit_data(root: Path) -> dict[str, Any]:
         ],
         "Cost Efficiency": [
             ("tool result artifact directory exists", (root / "artifacts" / "tool-results").exists()),
+            ("tool output artifact threshold configured", COMMAND_ARTIFACT_THRESHOLD_CHARS > COMMAND_PREVIEW_CHARS),
+            ("retrieval report avoids generated and memory roots", latest_retrieval_report_valid(root)),
+            ("compact summary has required sections", compact_summary_valid(root)),
             ("workspace dependencies disabled in config", check_config(root).get("status") == "pass"),
             ("large-output storage documented", (root / "artifacts" / "tool-results" / "README.md").exists()),
             ("reports directory excluded from global scan recursion", "reports/**" in " ".join(global_scan.get("patterns", [])) or global_scan.get("content_redacted") is True),
@@ -940,18 +1069,29 @@ def cmd_context(args: argparse.Namespace) -> int:
     root = root_path(args)
     files = discover_instruction_files(root)
     selected = files[0]["path"] if files else None
+    warnings = []
+    truncation_decisions = []
+    for item in files:
+        path = root / item["path"]
+        warnings.extend({"path": item["path"], "warning": warning} for warning in instruction_warnings(path))
+        if item["bytes"] > 12000:
+            truncation_decisions.append({"path": item["path"], "strategy": "head-tail", "head_bytes": 6000, "tail_bytes": 3000})
     report = {
         "generated_at": utc_now(),
         "discovered_instruction_files": files,
         "selected_primary_instruction_source": selected,
-        "skipped_instruction_sources": [f["path"] for f in files[1:]],
-        "truncation_decisions": [],
-        "warnings": [],
+        "skipped_instruction_sources": [{"path": f["path"], "reason": "lower-priority instruction source"} for f in files[1:]],
+        "truncation_decisions": truncation_decisions,
+        "warnings": warnings,
         "estimated_context_size_bytes": sum(f["bytes"] for f in files[:2]),
     }
     write_json(root / "reports" / "context-inspection.latest.json", report)
     lines = ["# Context Inspection", "", f"- selected_primary_instruction_source: {selected}", f"- estimated_context_size_bytes: {report['estimated_context_size_bytes']}", "", "## Discovered"]
     lines.extend(f"- {f['path']} ({f['bytes']} bytes)" for f in files)
+    lines.extend(["", "## Warnings"])
+    lines.extend(f"- {item['path']}: {item['warning']}" for item in warnings or [])
+    if not warnings:
+        lines.append("- None")
     write_text(root / "reports" / "context-inspection.latest.md", "\n".join(lines) + "\n")
     print(root / "reports" / "context-inspection.latest.md")
     return 0
@@ -962,6 +1102,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
     checks = []
     checks.append({"name": "doctor", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--json"], root)})
     checks.append({"name": "global_scan", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "global-scan"], root, timeout=240)})
+    checks.append({"name": "context_inspection", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "context"], root)})
+    checks.append({"name": "retrieval_report", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "retrieve", "--query", "codex harness verification workflow", "--limit", "5"], root)})
     checks.append({"name": "python_compile", **run_command([sys.executable, "-m", "py_compile", "maintenance/scripts/codex_agent_harness.py"], root)})
     checks.append({"name": "self_test", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "self-test"], root)})
     checks.append({"name": "repair_dry_run", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repair"], root)})
@@ -983,10 +1125,13 @@ def cmd_verify(args: argparse.Namespace) -> int:
         )
     pre_audit_status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     write_verification_report(root, {"generated_at": utc_now(), "status": pre_audit_status, "checks": checks})
+    append_trajectory(root, "codex-harness verify pre-audit", pre_audit_status, checks)
     checks.append({"name": "audit", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "audit", "--json"], root)})
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
     write_verification_report(root, report)
+    artifacts = [artifact for check in checks for artifact in check.get("artifacts", [])]
+    append_trajectory(root, "codex-harness verify", status, checks, artifacts)
     print(root / "reports" / "verification.latest.md")
     return 0 if status == "pass" else 1
 
@@ -1010,6 +1155,13 @@ def cmd_eval(args: argparse.Namespace) -> int:
             passed = check_managed_files(root).get("status") == "pass"
         elif eval_id == "audit-threshold":
             passed = audit_data(root).get("score", 0) >= 80
+        elif eval_id == "context-inspection":
+            context_ns = argparse.Namespace(root=str(root))
+            passed = cmd_context(context_ns) == 0 and (root / "reports" / "context-inspection.latest.json").exists()
+        elif eval_id == "trajectory-search":
+            records = load_trajectory_records(root)
+            trajectory_ns = argparse.Namespace(root=str(root), search=None, failed=False, recent=5)
+            passed = bool(records) and trajectory_records_valid(records) and cmd_trajectory(trajectory_ns) == 0
         else:
             passed = False
         results.append({"eval_id": eval_id, "status": "pass" if passed else "fail", "timestamp": utc_now()})
@@ -1020,6 +1172,226 @@ def cmd_eval(args: argparse.Namespace) -> int:
             f.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n")
     print(result_path)
     return 0 if all(item["status"] == "pass" for item in results) else 1
+
+
+def load_trajectory_records(root: Path) -> list[dict[str, Any]]:
+    path = root / "trajectories" / "runs.jsonl"
+    if not path.exists():
+        return []
+    records = []
+    for line in read_text(path).splitlines():
+        if not line.strip():
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            records.append({"version": TRAJECTORY_VERSION, "error": "invalid-jsonl-line", "raw_preview": clean_report_string(line)})
+    return records
+
+
+def trajectory_records_valid(records: list[dict[str, Any]], *, require_records: bool = True) -> bool:
+    if require_records and not records:
+        return False
+    required = {"version", "run_id", "timestamp", "task", "verification_result", "completed"}
+    return all(not item.get("error") and required.issubset(item) for item in records)
+
+
+def latest_retrieval_report_valid(root: Path) -> bool:
+    report = load_json(root / "reports" / "retrieval-report.latest.json", {})
+    forbidden = ("artifacts/", "cache/", "memories/", "reports/", "sessions/", "sqlite/", "trajectories/", "node_repl/")
+    selected = report.get("selected_context", [])
+    candidates = report.get("candidate_files", [])
+    if not isinstance(selected, list) or not isinstance(candidates, list):
+        return False
+    paths = [item.get("path", "") for item in [*selected, *candidates] if isinstance(item, dict)]
+    return bool(selected) and all(not any(path.startswith(prefix) for prefix in forbidden) for path in paths)
+
+
+def latest_benchmark_results_valid(root: Path) -> bool:
+    path = root / "reports" / "benchmark-results.jsonl"
+    if not path.exists():
+        return False
+    valid = False
+    for line in read_text(path).splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            return False
+        valid = valid or {"timestamp", "benchmark_id", "status", "success_rate", "checks"}.issubset(item)
+    return valid
+
+
+def compact_summary_valid(root: Path) -> bool:
+    summaries = sorted(path for path in (root / "artifacts" / "compact-summaries").glob("*.md") if path.name.lower() != "readme.md")
+    if not summaries:
+        return False
+    text = read_text(summaries[-1])
+    return all(section in text for section in ["## Goal", "## Test Results", "## Next Steps", "## Risks"])
+
+
+def cmd_trajectory(args: argparse.Namespace) -> int:
+    root = root_path(args)
+    records = load_trajectory_records(root)
+    all_records_valid = trajectory_records_valid(records, require_records=False)
+    if args.failed:
+        records = [item for item in records if not item.get("completed")]
+    if args.search:
+        query = args.search.lower()
+        records = [
+            item
+            for item in records
+            if query in json.dumps(item, ensure_ascii=False).lower()
+        ]
+    records = records[-args.recent :] if args.recent else records
+    output = [
+        {
+            "run_id": item.get("run_id"),
+            "timestamp": item.get("timestamp"),
+            "task": item.get("task"),
+            "completed": item.get("completed"),
+            "verification_result": item.get("verification_result"),
+        }
+        for item in records
+    ]
+    print(json.dumps({"count": len(output), "records": output, "valid_jsonl": all_records_valid}, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if all_records_valid else 1
+
+
+def cmd_compact_summary(args: argparse.Namespace) -> int:
+    root = root_path(args)
+    data = {
+        "goal": args.goal or "unspecified",
+        "constraints": args.constraints or "See AGENTS.md and current user instructions.",
+        "current_plan": args.current_plan or "Not recorded.",
+        "completed_work": args.completed_work or "Not recorded.",
+        "in_progress_work": args.in_progress_work or "Not recorded.",
+        "blockers": args.blockers or "None recorded.",
+        "relevant_files": args.relevant_files or "Not recorded.",
+        "commands_run": args.commands_run or "Not recorded.",
+        "test_results": args.test_results or "Not recorded.",
+        "next_steps": args.next_steps or "Not recorded.",
+        "risks": args.risks or "Not recorded.",
+    }
+    lines = ["# Compact Summary", ""]
+    for key, value in data.items():
+        lines.extend([f"## {key.replace('_', ' ').title()}", "", value, ""])
+    path = root / "artifacts" / "compact-summaries" / f"{local_stamp()}-{safe_slug(data['goal'], 'summary')}.md"
+    write_text(path, "\n".join(lines).rstrip() + "\n")
+    print(path)
+    return 0
+
+
+def score_retrieval_candidate(query_terms: list[str], text: str, path: Path) -> tuple[int, list[str]]:
+    lower = text.lower()
+    path_lower = path.as_posix().lower()
+    reasons = []
+    score = 0
+    for term in query_terms:
+        if term and term in path_lower:
+            score += 5
+            reasons.append(f"path:{term}")
+        count = lower.count(term) if term else 0
+        if count:
+            score += min(count, 10)
+            reasons.append(f"content:{term}x{count}")
+    return score, reasons
+
+
+def retrieval_candidate_files(root: Path) -> list[Path]:
+    allowed = [
+        root / "AGENTS.md",
+        root / "agent.md",
+        root / "maintenance" / "MCP_RUNTIME_STATUS.md",
+        root / "maintenance" / "scripts",
+        root / ".codex-harness",
+        root / "agents",
+        root / "skills",
+        root / "evals",
+        root / "hooks",
+    ]
+    forbidden_parts = {"artifacts", "cache", "memories", "reports", "sessions", "sqlite", "trajectories", "node_repl"}
+    files: list[Path] = []
+    for base in allowed:
+        if base.is_file():
+            files.append(base.relative_to(root))
+            continue
+        if not base.exists():
+            continue
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [name for name in dirnames if name not in forbidden_parts and name not in {".git", "__pycache__", "node_modules"}]
+            current = Path(dirpath)
+            for filename in filenames:
+                path = (current / filename).relative_to(root)
+                if forbidden_parts.intersection(path.parts):
+                    continue
+                files.append(path)
+    return sorted(set(files))
+
+
+def cmd_retrieve(args: argparse.Namespace) -> int:
+    root = root_path(args)
+    query = args.query.strip()
+    query_terms = [term.lower() for term in re.findall(r"[\w.-]+", query) if len(term) > 1]
+    candidates = []
+    for path in retrieval_candidate_files(root):
+        full = root / path
+        if full.suffix.lower() not in {".md", ".toml", ".json", ".jsonl", ".py", ".ps1", ".txt"}:
+            continue
+        try:
+            text = read_text(full)
+        except (UnicodeDecodeError, OSError):
+            continue
+        score, reasons = score_retrieval_candidate(query_terms, text[:50000], path)
+        if score:
+            candidates.append({"path": path.as_posix(), "score": score, "relevance_reasons": reasons[:5]})
+    candidates.sort(key=lambda item: (-item["score"], item["path"]))
+    selected = candidates[: args.limit]
+    report = {
+        "generated_at": utc_now(),
+        "cycles": 1,
+        "query_per_cycle": [query],
+        "candidate_files": candidates[:50],
+        "selected_context": selected,
+        "missing_context": [] if selected else ["No matching files found under allowed harness scan roots."],
+        "refined_query": None,
+        "stop_reason": "sufficient_context" if selected else "no_candidates",
+    }
+    write_json(root / "reports" / "retrieval-report.latest.json", report)
+    lines = ["# Iterative Retrieval Report", "", f"- query: {query}", f"- stop_reason: {report['stop_reason']}", "", "## Selected Context"]
+    lines.extend(f"- {item['path']} score={item['score']} reasons={', '.join(item['relevance_reasons'])}" for item in selected or [])
+    if not selected:
+        lines.append("- None")
+    write_text(root / "reports" / "retrieval-report.latest.md", "\n".join(lines) + "\n")
+    print(root / "reports" / "retrieval-report.latest.md")
+    return 0 if selected else 1
+
+
+def cmd_benchmark(args: argparse.Namespace) -> int:
+    root = root_path(args)
+    eval_ids = [args.eval_id] if args.eval_id else [p.stem for p in sorted((root / "evals").glob("*.json"))]
+    started = dt.datetime.now()
+    checks = []
+    for eval_id in eval_ids:
+        checks.append({"name": f"eval:{eval_id}", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "eval", "--eval-id", eval_id], root, timeout=120)})
+    status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
+    record = {
+        "timestamp": utc_now(),
+        "benchmark_id": args.eval_id or "all",
+        "status": status,
+        "success_rate": round(sum(1 for item in checks if item["status"] == "pass") / len(checks), 4) if checks else 0,
+        "pass_at_1": status == "pass",
+        "duration_seconds": (dt.datetime.now() - started).total_seconds(),
+        "tool_calls": len(checks),
+        "terminal_commands": len(checks),
+        "error_count": sum(1 for item in checks if item["status"] != "pass"),
+        "checks": checks,
+    }
+    append_jsonl(root / "reports" / "benchmark-results.jsonl", record)
+    append_trajectory(root, f"benchmark:{record['benchmark_id']}", status, checks)
+    print(root / "reports" / "benchmark-results.jsonl")
+    return 0 if status == "pass" else 1
 
 
 def cmd_global_scan(args: argparse.Namespace) -> int:
@@ -1050,6 +1422,16 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         "!Desktop/**",
         "--glob",
         "!reports/**",
+        "--glob",
+        "!artifacts/**",
+        "--glob",
+        "!trajectories/**",
+        "--glob",
+        "!memories/**",
+        "--glob",
+        "!cache/**",
+        "--glob",
+        "!node_repl/**",
         "--glob",
         "!maintenance/reports/**",
         "--glob",
@@ -1416,6 +1798,31 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("eval")
     p.add_argument("--eval-id")
     p.set_defaults(func=cmd_eval)
+    p = sub.add_parser("benchmark")
+    p.add_argument("--eval-id")
+    p.set_defaults(func=cmd_benchmark)
+    p = sub.add_parser("trajectory")
+    p.add_argument("--search")
+    p.add_argument("--failed", action="store_true")
+    p.add_argument("--recent", type=int, default=20)
+    p.set_defaults(func=cmd_trajectory)
+    p = sub.add_parser("compact-summary")
+    p.add_argument("--goal")
+    p.add_argument("--constraints")
+    p.add_argument("--current-plan")
+    p.add_argument("--completed-work")
+    p.add_argument("--in-progress-work")
+    p.add_argument("--blockers")
+    p.add_argument("--relevant-files")
+    p.add_argument("--commands-run")
+    p.add_argument("--test-results")
+    p.add_argument("--next-steps")
+    p.add_argument("--risks")
+    p.set_defaults(func=cmd_compact_summary)
+    p = sub.add_parser("retrieve")
+    p.add_argument("--query", required=True)
+    p.add_argument("--limit", type=int, default=8)
+    p.set_defaults(func=cmd_retrieve)
     sub.add_parser("global-scan").set_defaults(func=cmd_global_scan)
     p = sub.add_parser("merge-config")
     p.add_argument("--source", required=True)

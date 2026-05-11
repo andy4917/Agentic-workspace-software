@@ -6,3 +6,6 @@
 ## Discovered
 - AGENTS.md (13549 bytes)
 - agent.md (341 bytes)
+
+## Warnings
+- None

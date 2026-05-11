@@ -1,0 +1,12 @@
+{
+  "eval_id": "context-inspection",
+  "grader": "python maintenance/scripts/codex_agent_harness.py context",
+  "risk_notes": "Does not prove the app injected the selected context into a live turn.",
+  "setup": "Run from CODEX_HOME.",
+  "success_criteria": [
+    "context report exists",
+    "selected instruction source is explicit"
+  ],
+  "task": "Generate deterministic context selection report.",
+  "timeout_seconds": 30
+}

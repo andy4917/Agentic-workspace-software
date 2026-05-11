@@ -82,6 +82,14 @@
     },
     {
       "action": "unchanged",
+      "digest": "a92aa2d8c3c5e85772066a5ecfed226e8791dad7545a96fb94da4f71dc01a1f0",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "evals/context-inspection.json",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
       "digest": "fb906e859e3b73d9b4f71ca009ea583e6376fc8b000e3e0b0c3fb02fa51618d5",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -90,10 +98,42 @@
     },
     {
       "action": "unchanged",
+      "digest": "757efe8fb1b4e621edada5b851f02b38c8d78d42b404b99b73d92abcb04b0405",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "evals/trajectory-search.json",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
       "digest": "fe43e791e312a3be08218197d34b82a5b96ff2f6f633f2cfe2a7d37e30fe2610",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "learning/README.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "6e55330889709b430e0af010bc5af39660fb22b6ff7b04fdbe9a86d61628297a",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/scripts/codex-benchmark.ps1",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "c7650f210d9f8b22409d6b336f3b0a8d52ff39e90c08e77c0f204abb4df15947",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/scripts/codex-compact-summary.ps1",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "0379822be97d2a3f40e4043a03cf723383a2023c8e09456d62c7de48192d67bb",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/scripts/codex-context.ps1",
       "remove_on_uninstall": true
     },
     {
@@ -166,6 +206,22 @@
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-merge-config.ps1",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "5f75733c4d49a80dbd2e770a5c9271075a8b3e93e4d71b6f43947a41cd609fd1",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/scripts/codex-retrieve.ps1",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "2de4611683604fcc334fbfcf6a0c564cc1e38926f73beffcd42686472e341697",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/scripts/codex-trajectory.ps1",
       "remove_on_uninstall": true
     },
     {
@@ -249,7 +305,7 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-05-10T21:20:45+00:00",
+  "installed_at": "2026-05-11T10:00:22+00:00",
   "requested_modules": [],
   "requested_profile": "full",
   "schema_version": "1",

@@ -1,0 +1,12 @@
+{
+  "eval_id": "trajectory-search",
+  "grader": "python maintenance/scripts/codex_agent_harness.py trajectory --recent 5",
+  "risk_notes": "Checks local harness trajectory records only.",
+  "setup": "Run after at least one verification or benchmark.",
+  "success_criteria": [
+    "trajectory command exits successfully",
+    "recent listing is JSON"
+  ],
+  "task": "Verify trajectory JSONL search path remains usable.",
+  "timeout_seconds": 30
+}
