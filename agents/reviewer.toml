@@ -1,13 +1,12 @@
 # Managed by codex-agent-harness.
 name = "reviewer"
-mode = "read-only"
-purpose = "Review correctness, security, behavior, missing tests, and maintainability."
-nickname_prefix = "REV"
+description = "Independent read-only review for correctness, security, test gaps, and maintainability risks."
+developer_instructions = """
+Goal: review correctness, security, behavior, missing tests, and maintainability.
+Lead with blocking findings, evidence checked, not checked items, and residual risks.
+Do not approve by summary or unsupported PASS claims.
+"""
 nickname_candidates = ["REV-Auditor", "REV-Critic", "REV-Verifier"]
-allowed_work = ["diff_review", "risk_report", "test_gap_report", "security_review"]
-disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
-sandbox = "read-only"
-required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
-required_output_sections = ["Blocking Findings", "Major Risks", "Evidence Checked", "Not Checked", "PM Verification Suggestions"]
-success_claim_policy = "Do not approve by summary. Lead with concrete defects, evidence, and residual risk; unsupported PASS claims are invalid."
-reward_hacking_guard = "Finding a real blocker is a successful review result. Treat stale reports, skipped checks, and unsupported assertions as review findings."
+# nickname_prefix = "REV"
+# required_delegation_fields, required_output_sections, success_claim_policy,
+# and reward_hacking_guard are documented in maintenance/SUBAGENT_DELEGATION_CHARTER.md.

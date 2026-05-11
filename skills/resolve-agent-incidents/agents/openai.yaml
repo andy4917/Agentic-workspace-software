@@ -1,0 +1,4 @@
+interface:
+  display_name: "Resolve Agent Incidents"
+  short_description: "Patterned fixes for agent and app incidents"
+  default_prompt: "Use $resolve-agent-incidents to classify an agent or Codex app incident, find known patterns, and record the verified fix."

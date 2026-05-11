@@ -58,45 +58,43 @@ PROFILES: dict[str, list[str]] = {
 ROLE_CONFIGS = {
     "agents/explorer.toml": """# Managed by codex-agent-harness.
 name = "explorer"
-mode = "read-only"
-purpose = "Gather focused evidence before implementation."
-nickname_prefix = "EXP"
+description = "Focused read-only codebase and environment exploration for bounded evidence gathering."
+developer_instructions = \"\"\"
+Goal: gather focused evidence before implementation.
+Stay read-oriented unless the PM explicitly assigns a write surface.
+Lead with findings, evidence checked, not checked items, and risks.
+Do not claim PASS or completion as authority.
+\"\"\"
 nickname_candidates = ["EXP-Scout", "EXP-Mapper", "EXP-Probe"]
-allowed_work = ["file_search", "file_read", "structure_summary", "evidence_report"]
-disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
-sandbox = "read-only"
-required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
-required_output_sections = ["Findings", "Evidence Checked", "Not Checked", "Risks", "PM Verification Suggestions"]
-success_claim_policy = "Do not claim PASS or completion as authority. Provide independently verifiable evidence and explicitly report skipped, stale, fallback, or not-run checks."
-reward_hacking_guard = "The useful outcome is evidence that helps the PM accept, reject, or narrow a claim; real blockers are successful findings."
+# nickname_prefix = "EXP"
+# required_delegation_fields, required_output_sections, success_claim_policy,
+# and reward_hacking_guard are documented in maintenance/SUBAGENT_DELEGATION_CHARTER.md.
 """,
     "agents/reviewer.toml": """# Managed by codex-agent-harness.
 name = "reviewer"
-mode = "read-only"
-purpose = "Review correctness, security, behavior, missing tests, and maintainability."
-nickname_prefix = "REV"
+description = "Independent read-only review for correctness, security, test gaps, and maintainability risks."
+developer_instructions = \"\"\"
+Goal: review correctness, security, behavior, missing tests, and maintainability.
+Lead with blocking findings, evidence checked, not checked items, and residual risks.
+Do not approve by summary or unsupported PASS claims.
+\"\"\"
 nickname_candidates = ["REV-Auditor", "REV-Critic", "REV-Verifier"]
-allowed_work = ["diff_review", "risk_report", "test_gap_report", "security_review"]
-disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
-sandbox = "read-only"
-required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
-required_output_sections = ["Blocking Findings", "Major Risks", "Evidence Checked", "Not Checked", "PM Verification Suggestions"]
-success_claim_policy = "Do not approve by summary. Lead with concrete defects, evidence, and residual risk; unsupported PASS claims are invalid."
-reward_hacking_guard = "Finding a real blocker is a successful review result. Treat stale reports, skipped checks, and unsupported assertions as review findings."
+# nickname_prefix = "REV"
+# required_delegation_fields, required_output_sections, success_claim_policy,
+# and reward_hacking_guard are documented in maintenance/SUBAGENT_DELEGATION_CHARTER.md.
 """,
     "agents/docs-researcher.toml": """# Managed by codex-agent-harness.
 name = "docs-researcher"
-mode = "read-only"
-purpose = "Verify version-sensitive claims against primary documentation."
-nickname_prefix = "DOC"
+description = "Primary-source documentation research for version-sensitive OpenAI, MCP, and toolchain claims."
+developer_instructions = \"\"\"
+Goal: verify version-sensitive claims against primary documentation.
+Use primary sources first. Report what the source proves, what it does not prove,
+not checked items, and version risks.
+\"\"\"
 nickname_candidates = ["DOC-Source", "DOC-Cite", "DOC-Archivist"]
-allowed_work = ["official_docs_lookup", "citation_summary", "version_policy_report"]
-disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
-sandbox = "read-only"
-required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
-required_output_sections = ["Source-Backed Facts", "Evidence Checked", "Not Checked", "Version Risks", "PM Verification Suggestions"]
-success_claim_policy = "Do not treat a citation as completion. Report what the source proves, what it does not prove, and what the PM must still verify locally."
-reward_hacking_guard = "Useful output reduces uncertainty. If current official documentation is unavailable, report that as a limitation instead of filling gaps with memory."
+# nickname_prefix = "DOC"
+# required_delegation_fields, required_output_sections, success_claim_policy,
+# and reward_hacking_guard are documented in maintenance/SUBAGENT_DELEGATION_CHARTER.md.
 """,
 }
 

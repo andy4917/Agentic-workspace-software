@@ -25,27 +25,24 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "updated",
-      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-194911\\agents\\docs-researcher.toml",
-      "digest": "cceac5942a8c316670a760d15f2790f29e35addb07af0fd524af36fe58599e1a",
+      "action": "unchanged",
+      "digest": "6bc9de998d598d4bea01252f7ec08f23cc5b33287d38cd821bf5b713772252c2",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/docs-researcher.toml",
       "remove_on_uninstall": true
     },
     {
-      "action": "updated",
-      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-194911\\agents\\explorer.toml",
-      "digest": "63fb3054c4e12d49aebb0bed31ce8665766be94e516152619ef3ca6f34252b5b",
+      "action": "unchanged",
+      "digest": "547f76fa41e6b544715344ad6627f8f69ec76ffa982fde2a2d6a8d21fdc6abe9",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/explorer.toml",
       "remove_on_uninstall": true
     },
     {
-      "action": "updated",
-      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-194911\\agents\\reviewer.toml",
-      "digest": "002e9e7457f205bc1f06218e93e61a213e028eab76d2cb16db6de67a66924573",
+      "action": "unchanged",
+      "digest": "fbbf219f0948ce1eef236e5d9064435a2b0fa3335d0af8e82042e21fdbf59dda",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/reviewer.toml",
@@ -116,8 +113,7 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "updated",
-      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-194911\\maintenance\\SUBAGENT_DELEGATION_CHARTER.md",
+      "action": "unchanged",
       "digest": "f25f48dfaef4b4f521e51b5d2f1de4c48503f76ae81a3ba96521c8a01197a253",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -317,18 +313,19 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-05-11T10:49:11+00:00",
+  "installed_at": "2026-05-11T11:42:30+00:00",
   "requested_modules": [],
-  "requested_profile": "developer",
+  "requested_profile": "full",
   "schema_version": "1",
   "selected_modules": [
     "codex-baseline",
     "rules-core",
     "skills-core",
     "workflow-quality",
+    "security",
+    "orchestration",
     "mcp-baseline",
-    "benchmarking",
-    "orchestration"
+    "benchmarking"
   ],
   "skipped_modules": [],
   "source": {

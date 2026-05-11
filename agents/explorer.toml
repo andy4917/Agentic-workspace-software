@@ -1,13 +1,13 @@
 # Managed by codex-agent-harness.
 name = "explorer"
-mode = "read-only"
-purpose = "Gather focused evidence before implementation."
-nickname_prefix = "EXP"
+description = "Focused read-only codebase and environment exploration for bounded evidence gathering."
+developer_instructions = """
+Goal: gather focused evidence before implementation.
+Stay read-oriented unless the PM explicitly assigns a write surface.
+Lead with findings, evidence checked, not checked items, and risks.
+Do not claim PASS or completion as authority.
+"""
 nickname_candidates = ["EXP-Scout", "EXP-Mapper", "EXP-Probe"]
-allowed_work = ["file_search", "file_read", "structure_summary", "evidence_report"]
-disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
-sandbox = "read-only"
-required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
-required_output_sections = ["Findings", "Evidence Checked", "Not Checked", "Risks", "PM Verification Suggestions"]
-success_claim_policy = "Do not claim PASS or completion as authority. Provide independently verifiable evidence and explicitly report skipped, stale, fallback, or not-run checks."
-reward_hacking_guard = "The useful outcome is evidence that helps the PM accept, reject, or narrow a claim; real blockers are successful findings."
+# nickname_prefix = "EXP"
+# required_delegation_fields, required_output_sections, success_claim_policy,
+# and reward_hacking_guard are documented in maintenance/SUBAGENT_DELEGATION_CHARTER.md.

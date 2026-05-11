@@ -196,8 +196,6 @@ function Get-SentinelBlockerSummary {
     param([string]$Root)
 
     $targets = @(
-        (Join-Path $Root '.tmp'),
-        (Join-Path $Root 'tmp'),
         (Join-Path $Root 'vendor_imports'),
         (Join-Path $Root 'plugins\plugins')
     )
@@ -228,10 +226,10 @@ function Get-RuntimeGuardSummary {
         global_state_readonly = ($null -ne $stateItem -and $stateItem.IsReadOnly)
         features_plugins_enabled = ($config -match '(?m)^\s*plugins\s*=\s*true\s*$')
         workspace_dependencies_disabled = ($config -match '(?m)^\s*workspace_dependencies\s*=\s*false\s*$')
-        bundled_marketplace_source_absent = ($config -notmatch '(?s)\[marketplaces\.[^\]]*openai-bundled[^\]]*\]')
+        bundled_marketplace_source_is_installed_app_bundle = ($config -match '(?s)\[marketplaces\.[^\]]*openai-bundled[^\]]*\].*?Program Files\\WindowsApps\\OpenAI\.Codex_')
         temp_or_bundled_source_absent = ($config -notmatch '(?i)(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\cache)')
         bundled_browser_plugin_disabled = ($config -match '(?s)\[plugins\."browser-use@openai-bundled"\].*?enabled\s*=\s*false')
-        curated_github_plugin_enabled = ($config -match '(?s)\[plugins\."github@openai-curated"\].*?enabled\s*=\s*true')
+        curated_github_plugin_disabled_to_avoid_temp_marketplace_clone = ($config -match '(?s)\[plugins\."github@openai-curated"\].*?enabled\s*=\s*false')
         browser_use_auto_install_disabled = ($state -match '"browser-use-bundled-plugin-auto-install-disabled"\s*:\s*true')
         site_creator_auto_install_disabled = ($state -match '"site-creator-bundled-plugin-auto-install-disabled"\s*:\s*true')
         run_codex_in_wsl_disabled = ($state -match '"runCodexInWindowsSubsystemForLinux"\s*:\s*false')
@@ -488,13 +486,14 @@ $report = [ordered]@{
     transient_root_moves = $moves
     transient_roots_after = $after
     app_tool_cache = $appToolCache
-    root_cause = 'Codex bundled auto-install and runtime warm paths can write marketplace payloads under .tmp and vendor_imports when stale config/state points at transient bundled sources. Keep plugin support available, allow plugins cache as runtime cache, and block temp paths as active sources.'
+    root_cause = 'Codex bundled marketplace registration uses .tmp/marketplaces as a runtime work directory. File sentinels at .tmp or tmp break plugin loading; guard temp paths by auditing active references and bounded contents instead of blocking directory creation.'
     policy = [ordered]@{
         keep_active_plugin_cache = @('plugins\cache as Codex plugin runtime cache only')
         keep_app_connector_tool_cache = @('cache\codex_apps_tools entries where connector_name is GitHub')
         plugin_feature_allowed = $true
         do_not_use_as_active_source = @('.tmp', 'tmp', 'vendor_imports', 'bundled-marketplaces', 'plugins\cache', 'plugins\plugins')
         remove_native_messaging_hosts_that_point_to_runtime_cache = $true
+        temp_roots_are_not_blocked_by_sentinel = $true
         plugin_cache_roots_are_blocked_by_sentinel_until_runtime_fix = $false
         legacy_cleanup_target = 'Recycle Bin'
     }

@@ -52,11 +52,14 @@ Runtime-generated temporary directories may exist only while the creating proces
 is using them. They must not be persisted in config, native messaging manifests,
 marketplace sources, PATH, or hook policy.
 
-Until the app runtime stops recreating transient marketplace clones, exact
-path-name sentinel blockers may be used for confirmed non-runtime roots only:
+Do not block `.tmp` or `tmp` with sentinel files. Codex uses `.tmp/marketplaces`
+while registering and loading plugin marketplaces, so file sentinels at those
+paths break the plugin UI. Audit these paths for size and active references
+instead.
 
-- `.tmp`
-- `tmp`
+Exact path-name sentinel blockers may be used for confirmed non-runtime roots
+only:
+
 - `vendor_imports`
 - `plugins\plugins`
 
