@@ -7,6 +7,37 @@
       "status": "pass",
       "unexpected_true": []
     },
+    "harness_file_size": {
+      "files": [
+        {
+          "lines": 90,
+          "max_lines": 1000,
+          "path": "maintenance/scripts/codex_agent_harness.py"
+        },
+        {
+          "lines": 606,
+          "max_lines": 1000,
+          "path": "maintenance/scripts/codex_agent_harness_base.py"
+        },
+        {
+          "lines": 546,
+          "max_lines": 1000,
+          "path": "maintenance/scripts/codex_agent_harness_lifecycle.py"
+        },
+        {
+          "lines": 296,
+          "max_lines": 1000,
+          "path": "maintenance/scripts/codex_agent_harness_merge.py"
+        },
+        {
+          "lines": 426,
+          "max_lines": 1000,
+          "path": "maintenance/scripts/codex_agent_harness_workflows.py"
+        }
+      ],
+      "oversized": [],
+      "status": "pass"
+    },
     "managed_files": {
       "drifted": [],
       "missing": [],
@@ -113,7 +144,7 @@
     }
   },
   "failed": [],
-  "generated_at": "2026-05-11T10:05:58+00:00",
+  "generated_at": "2026-05-11T10:12:27+00:00",
   "root": "C:\\Users\\anise\\.codex",
   "status": "pass"
 }

@@ -1,0 +1,296 @@
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import tempfile
+import tomllib
+from pathlib import Path
+from typing import Any
+
+from codex_agent_harness_base import *
+from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, cmd_apply, doctor_data, load_state
+from codex_agent_harness_workflows import cmd_compact_summary, cmd_context, cmd_retrieve, write_verification_report
+
+def cmd_merge_config(args: argparse.Namespace) -> int:
+    root = root_path(args)
+    source = Path(args.source).resolve()
+    target = Path(args.target).resolve()
+    try:
+        source_data = tomllib.loads(read_text(source))
+        target_data = tomllib.loads(read_text(target))
+    except Exception as exc:  # noqa: BLE001
+        print(f"invalid TOML: {exc}", file=sys.stderr)
+        return 2
+    additions: list[dict[str, Any]] = []
+    drift: list[str] = []
+    collect_toml_additions(source_data, target_data, [], additions, drift)
+    addition_text = render_toml_additions(additions)
+    result = {
+        "source": str(source),
+        "target": str(target),
+        "missing_items": len(additions),
+        "drift": drift,
+        "dry_run": not args.apply,
+        "additions": [{"table": ".".join(item["table"]), "key": item["key"]} for item in additions],
+    }
+    if args.apply and addition_text:
+        backup = backup_file(target, root)
+        merged_text = apply_toml_additions(read_text(target), additions, target_data)
+        write_text(target, merged_text)
+        result["backup"] = str(backup)
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+def apply_toml_additions(text: str, additions: list[dict[str, Any]], target_data: dict[str, Any]) -> str:
+    lines = text.splitlines()
+    root_items: list[dict[str, Any]] = []
+    existing_table_items: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    append_items: list[dict[str, Any]] = []
+
+    for item in additions:
+        table = tuple(item["table"])
+        if not table and not isinstance(item["value"], dict):
+            root_items.append(item)
+        elif table and toml_table_exists(target_data, list(table)):
+            existing_table_items.setdefault(table, []).append(item)
+        else:
+            append_items.append(item)
+
+    if root_items:
+        insertion = next((index for index, line in enumerate(lines) if re.match(r"\s*\[", line)), len(lines))
+        root_lines = [format_toml_value(item["key"], item["value"]) for item in sorted(root_items, key=lambda entry: entry["key"])]
+        lines[insertion:insertion] = ["# Added by codex-agent-harness merge-config", *root_lines, ""]
+
+    insertions: list[tuple[int, list[str]]] = []
+    for table, items in existing_table_items.items():
+        header_index = find_toml_table_header(lines, list(table))
+        if header_index is None:
+            append_items.extend(items)
+            continue
+        insertion = find_toml_table_end(lines, header_index)
+        item_lines = [format_toml_value(item["key"], item["value"]) for item in sorted(items, key=lambda entry: entry["key"])]
+        insertions.append((insertion, ["# Added by codex-agent-harness merge-config", *item_lines]))
+
+    for insertion, item_lines in sorted(insertions, key=lambda pair: pair[0], reverse=True):
+        lines[insertion:insertion] = item_lines
+
+    if append_items:
+        append_text = render_toml_additions(append_items).rstrip()
+        if append_text:
+            if lines and lines[-1].strip():
+                lines.append("")
+            lines.append("# Added by codex-agent-harness merge-config")
+            lines.extend(append_text.splitlines())
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def toml_table_exists(data: dict[str, Any], table: list[str]) -> bool:
+    current: Any = data
+    for part in table:
+        if not isinstance(current, dict) or part not in current:
+            return False
+        current = current[part]
+    return isinstance(current, dict)
+
+
+def find_toml_table_header(lines: list[str], table: list[str]) -> int | None:
+    header = f"[{'.'.join(table)}]"
+    for index, line in enumerate(lines):
+        if line.strip() == header:
+            return index
+    return None
+
+
+def find_toml_table_end(lines: list[str], header_index: int) -> int:
+    for index in range(header_index + 1, len(lines)):
+        if re.match(r"\s*\[", lines[index]):
+            return index
+    return len(lines)
+
+
+def collect_toml_additions(source: dict[str, Any], target: dict[str, Any], table: list[str], additions: list[dict[str, Any]], drift: list[str]) -> None:
+    for key, value in sorted(source.items()):
+        dotted = ".".join([*table, key])
+        if key not in target:
+            additions.append({"table": table, "key": key, "value": value})
+            continue
+        target_value = target[key]
+        if isinstance(value, dict) and isinstance(target_value, dict):
+            collect_toml_additions(value, target_value, [*table, key], additions, drift)
+            continue
+        if target_value != value:
+            drift.append(dotted)
+
+
+def render_toml_additions(additions: list[dict[str, Any]]) -> str:
+    root_lines: list[str] = []
+    table_groups: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for item in additions:
+        table = tuple(item["table"])
+        if table:
+            table_groups.setdefault(table, []).append(item)
+        else:
+            root_lines.extend(format_toml_item(item["key"], item["value"], []))
+
+    sections: list[str] = []
+    if root_lines:
+        sections.extend(root_lines)
+    for table, items in sorted(table_groups.items()):
+        sections.append("")
+        sections.append(f"[{'.'.join(table)}]")
+        for item in sorted(items, key=lambda entry: entry["key"]):
+            sections.extend(format_toml_item(item["key"], item["value"], list(table)))
+    return "\n".join(sections).rstrip() + ("\n" if sections else "")
+
+
+def format_toml_item(key: str, value: Any, table: list[str]) -> list[str]:
+    if isinstance(value, dict):
+        lines = ["" if table else "", f"[{'.'.join([*table, key])}]"]
+        for child_key, child_value in sorted(value.items()):
+            lines.extend(format_toml_item(child_key, child_value, [*table, key]))
+        return [line for line in lines if line != "" or table]
+    return [format_toml_value(key, value)]
+
+
+def format_toml_value(key: str, value: Any) -> str:
+    if isinstance(value, bool):
+        return f"{key} = {'true' if value else 'false'}"
+    if isinstance(value, str):
+        return f"{key} = {json.dumps(value, ensure_ascii=False)}"
+    if isinstance(value, (int, float)):
+        return f"{key} = {value}"
+    if isinstance(value, list):
+        return f"{key} = [{', '.join(format_toml_scalar(item) for item in value)}]"
+    return f"# {key}: complex table omitted; append manually after review"
+
+
+def format_toml_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(str(value), ensure_ascii=False)
+
+
+def cmd_self_test(args: argparse.Namespace) -> int:
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        write_text(
+            root / "config.toml",
+            "[features]\n"
+            "plugins = true\n"
+            "codex_hooks = true\n"
+            "multi_agent = true\n"
+            "child_agents_md = true\n"
+            "tool_search = true\n"
+            "tool_suggest = true\n"
+            "skill_mcp_dependency_install = true\n"
+            "workspace_dependencies = false\n"
+            "\n"
+            "[agents]\n"
+            "max_threads = 8\n"
+            "max_depth = 1\n"
+            "\n"
+            "[agents.explorer]\n"
+            'description = "Focused read-only codebase and environment exploration for bounded evidence gathering."\n'
+            'config_file = "agents/explorer.toml"\n'
+            "\n"
+            "[agents.reviewer]\n"
+            'description = "Independent read-only review for correctness, security, test gaps, and maintainability risks."\n'
+            'config_file = "agents/reviewer.toml"\n'
+            "\n"
+            "[agents.docs-researcher]\n"
+            'description = "Primary-source documentation research for version-sensitive OpenAI, MCP, and toolchain claims."\n'
+            'config_file = "agents/docs-researcher.toml"\n',
+        )
+        write_text(root / "AGENTS.md", "# Test\n")
+        write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
+        write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
+        write_text(root / "hooks" / "lightweight-codex-hook.ps1", "$ErrorActionPreference = 'Stop'\n")
+        ensure_dir(root / "toolchains" / "shims")
+        write_json(root / "reports" / "global-scan.latest.json", {"content_redacted": True, "active_hit_count": 0})
+        write_text(root / "reports" / "eval-results.jsonl", "")
+        ns = argparse.Namespace(root=str(root), profile="developer", module=None)
+        cmd_apply(ns)
+        state = load_state(root)
+        if not any(op.get("remove_on_uninstall") is True for op in state.get("applied_operations", [])):
+            print("uninstall ownership missing in self-test", file=sys.stderr)
+            return 1
+        write_text(root / "agents" / "explorer.toml", "drifted = true\n")
+        cmd_apply(ns)
+        if doctor_data(root)["status"] != "pass":
+            print("doctor failed in self-test", file=sys.stderr)
+            return 1
+        source = root / "source.toml"
+        target = root / "target.toml"
+        write_text(source, 'model = "gpt-test"\n[features]\nplugins = true\nmulti_agent = true\n[mcp_servers.docs]\nenabled = true\n')
+        write_text(target, '[features]\nplugins = false\n')
+        merge_ns = argparse.Namespace(root=str(root), source=str(source), target=str(target), apply=True, update_managed=False)
+        if cmd_merge_config(merge_ns) != 0:
+            print("merge-config failed in self-test", file=sys.stderr)
+            return 1
+        merged = read_text(target)
+        if "plugins = false" not in merged or "multi_agent = true" not in merged or "[mcp_servers.docs]" not in merged:
+            print("merge-config did not preserve and append table keys in self-test", file=sys.stderr)
+            return 1
+        try:
+            parsed_merged = tomllib.loads(merged)
+        except Exception as exc:  # noqa: BLE001
+            print(f"merge-config produced invalid TOML in self-test: {exc}", file=sys.stderr)
+            return 1
+        if parsed_merged["features"]["plugins"] is not False or parsed_merged["features"]["multi_agent"] is not True:
+            print("merge-config changed existing values in self-test", file=sys.stderr)
+            return 1
+        cmd_context(argparse.Namespace(root=str(root)))
+        retrieve_ns = argparse.Namespace(root=str(root), query="codex harness verification workflow", limit=5)
+        if cmd_retrieve(retrieve_ns) != 0:
+            print("retrieve failed in self-test", file=sys.stderr)
+            return 1
+        compact_ns = argparse.Namespace(
+            root=str(root),
+            goal="self-test compact summary",
+            constraints=None,
+            current_plan=None,
+            completed_work="self-test generated required harness evidence",
+            in_progress_work=None,
+            blockers=None,
+            relevant_files=None,
+            commands_run=None,
+            test_results="self-test",
+            next_steps="audit",
+            risks="temporary root only",
+        )
+        cmd_compact_summary(compact_ns)
+        verification_checks = [
+            {"name": "self_test", "status": "pass", "exit_code": 0},
+            {"name": "repair_dry_run", "status": "pass", "exit_code": 0},
+            {"name": "uninstall_dry_run", "status": "pass", "exit_code": 0},
+        ]
+        if command_exists("pwsh"):
+            verification_checks.append({"name": "pwsh_wrapper_doctor", "status": "pass", "exit_code": 0})
+        if command_exists("powershell.exe"):
+            verification_checks.append({"name": "windows_powershell_wrapper_doctor", "status": "pass", "exit_code": 0})
+        write_verification_report(root, {"generated_at": utc_now(), "status": "pass", "checks": verification_checks})
+        append_trajectory(root, "self-test trajectory", "pass", verification_checks)
+        append_jsonl(
+            root / "reports" / "benchmark-results.jsonl",
+            {
+                "timestamp": utc_now(),
+                "benchmark_id": "self-test",
+                "status": "pass",
+                "success_rate": 1.0,
+                "checks": verification_checks,
+            },
+        )
+        if audit_data(root)["score"] < 80:
+            print("audit score too low in self-test", file=sys.stderr)
+            return 1
+    print("self-test pass")
+    return 0

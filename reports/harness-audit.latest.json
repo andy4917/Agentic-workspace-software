@@ -15,8 +15,8 @@
     {
       "failures": [],
       "name": "Quality Gates",
-      "passed": 6,
-      "total": 6
+      "passed": 8,
+      "total": 8
     },
     {
       "failures": [],
@@ -43,7 +43,7 @@
       "total": 7
     }
   ],
-  "generated_at": "2026-05-11T10:06:03+00:00",
+  "generated_at": "2026-05-11T10:12:28+00:00",
   "rubric_version": "codex-harness-audit-v1",
   "score": 100.0,
   "status": "pass",

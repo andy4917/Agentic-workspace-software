@@ -1,15 +1,48 @@
 {
   "candidate_files": [
     {
-      "path": "maintenance/scripts/codex_agent_harness.py",
+      "path": "maintenance/scripts/codex_agent_harness_base.py",
       "relevance_reasons": [
         "path:codex",
-        "content:codexx82",
+        "content:codexx55",
         "path:harness",
-        "content:harnessx71",
-        "content:verificationx25"
+        "content:harnessx48",
+        "content:verificationx9"
       ],
-      "score": 48
+      "score": 46
+    },
+    {
+      "path": "maintenance/scripts/codex_agent_harness_workflows.py",
+      "relevance_reasons": [
+        "path:codex",
+        "content:codexx26",
+        "path:harness",
+        "content:harnessx20",
+        "content:verificationx10"
+      ],
+      "score": 46
+    },
+    {
+      "path": "maintenance/scripts/codex_agent_harness_lifecycle.py",
+      "relevance_reasons": [
+        "path:codex",
+        "content:codexx16",
+        "path:harness",
+        "content:harnessx21",
+        "content:verificationx10"
+      ],
+      "score": 40
+    },
+    {
+      "path": "maintenance/scripts/codex_agent_harness_merge.py",
+      "relevance_reasons": [
+        "path:codex",
+        "content:codexx10",
+        "path:harness",
+        "content:harnessx8",
+        "content:verificationx9"
+      ],
+      "score": 39
     },
     {
       "path": ".codex-harness/install-state.json",
@@ -31,6 +64,17 @@
         "content:workflowx29"
       ],
       "score": 29
+    },
+    {
+      "path": "maintenance/scripts/codex_agent_harness.py",
+      "relevance_reasons": [
+        "path:codex",
+        "content:codexx8",
+        "path:harness",
+        "content:harnessx8",
+        "content:workflowx1"
+      ],
+      "score": 27
     },
     {
       "path": "AGENTS.md",
@@ -410,41 +454,10 @@
         "content:harnessx4"
       ],
       "score": 5
-    },
-    {
-      "path": "skills/.system/imagegen/references/image-api.md",
-      "relevance_reasons": [
-        "content:codexx2",
-        "content:workflowx3"
-      ],
-      "score": 5
-    },
-    {
-      "path": "skills/.system/openai-docs/SKILL.md",
-      "relevance_reasons": [
-        "content:codexx3",
-        "content:workflowx2"
-      ],
-      "score": 5
-    },
-    {
-      "path": "skills/.system/skill-installer/scripts/list-skills.py",
-      "relevance_reasons": [
-        "content:codexx5"
-      ],
-      "score": 5
-    },
-    {
-      "path": "evals/audit-threshold.json",
-      "relevance_reasons": [
-        "content:codexx1",
-        "content:harnessx3"
-      ],
-      "score": 4
     }
   ],
   "cycles": 1,
-  "generated_at": "2026-05-11T10:06:01+00:00",
+  "generated_at": "2026-05-11T10:12:25+00:00",
   "missing_context": [],
   "query_per_cycle": [
     "codex harness verification workflow"
@@ -452,15 +465,48 @@
   "refined_query": null,
   "selected_context": [
     {
-      "path": "maintenance/scripts/codex_agent_harness.py",
+      "path": "maintenance/scripts/codex_agent_harness_base.py",
       "relevance_reasons": [
         "path:codex",
-        "content:codexx82",
+        "content:codexx55",
         "path:harness",
-        "content:harnessx71",
-        "content:verificationx25"
+        "content:harnessx48",
+        "content:verificationx9"
       ],
-      "score": 48
+      "score": 46
+    },
+    {
+      "path": "maintenance/scripts/codex_agent_harness_workflows.py",
+      "relevance_reasons": [
+        "path:codex",
+        "content:codexx26",
+        "path:harness",
+        "content:harnessx20",
+        "content:verificationx10"
+      ],
+      "score": 46
+    },
+    {
+      "path": "maintenance/scripts/codex_agent_harness_lifecycle.py",
+      "relevance_reasons": [
+        "path:codex",
+        "content:codexx16",
+        "path:harness",
+        "content:harnessx21",
+        "content:verificationx10"
+      ],
+      "score": 40
+    },
+    {
+      "path": "maintenance/scripts/codex_agent_harness_merge.py",
+      "relevance_reasons": [
+        "path:codex",
+        "content:codexx10",
+        "path:harness",
+        "content:harnessx8",
+        "content:verificationx9"
+      ],
+      "score": 39
     },
     {
       "path": ".codex-harness/install-state.json",
@@ -472,36 +518,6 @@
         "content:verificationx1"
       ],
       "score": 32
-    },
-    {
-      "path": "hooks/lightweight-codex-hook.ps1",
-      "relevance_reasons": [
-        "path:codex",
-        "content:codexx15",
-        "content:verificationx4",
-        "content:workflowx29"
-      ],
-      "score": 29
-    },
-    {
-      "path": "AGENTS.md",
-      "relevance_reasons": [
-        "content:codexx15",
-        "content:harnessx1",
-        "content:verificationx3",
-        "content:workflowx20"
-      ],
-      "score": 24
-    },
-    {
-      "path": ".codex-harness/manifests/profiles.json",
-      "relevance_reasons": [
-        "path:codex",
-        "content:codexx5",
-        "path:harness",
-        "content:workflowx4"
-      ],
-      "score": 19
     }
   ],
   "stop_reason": "sufficient_context"

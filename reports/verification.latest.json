@@ -7,12 +7,12 @@
         "doctor",
         "--json"
       ],
-      "duration_seconds": 0.166944,
+      "duration_seconds": 0.204926,
       "exit_code": 0,
       "name": "doctor",
       "status": "pass",
       "stderr_preview": "",
-      "stdout_preview": "{\n  \"checks\": {\n    \"config\": {\n      \"missing_agent_roles\": [],\n      \"missing_false\": [],\n      \"missing_true\": [],\n      \"status\": \"pass\",\n      \"unexpected_true\": []\n    },\n    \"managed_files\": {\n      \"drifted\": [],\n      \"missing\": [],\n      \"status\": \"pass\"\n    },\n    \"sentinel_blockers\": {\n      \"items\": [\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \".tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"vendor_imports\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/cache\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/plugins\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-bundled\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-primary-runtime\",\n          \"readonly\": true\n        }\n      ],\n      \"status\": \"pass\"\n    },\n    \"skill_frontmatter\": {\n      \"missing\": [],\n      \"status\": \"pass\",\n      \"warnings\": [\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/git-easy-korean/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/keep-codex-fast/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/pdf/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ts-structure-code-review/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ui-ux-pro-max/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/warp-auxiliary/SKILL.md\"\n        }\n      ]\n    },\n    \"stale_active_references\": {\n      \"matches\": [],\n      \"status\": \"pass\"\n    }\n  },\n  \"failed\": [],\n  \"generated_at\": \"2026-05-11T10:05:58+00:00\",\n  \"root\": \"C:\\\\Users\\\\anise\\\\.codex\",\n  \"status\": \"pass\"\n}\n"
+      "stdout_preview": "{\n  \"checks\": {\n    \"config\": {\n      \"missing_agent_roles\": [],\n      \"missing_false\": [],\n      \"missing_true\": [],\n      \"status\": \"pass\",\n      \"unexpected_true\": []\n    },\n    \"harness_file_size\": {\n      \"files\": [\n        {\n          \"lines\": 90,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness.py\"\n        },\n        {\n          \"lines\": 606,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_base.py\"\n        },\n        {\n          \"lines\": 546,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_lifecycle.py\"\n        },\n        {\n          \"lines\": 296,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_merge.py\"\n        },\n        {\n          \"lines\": 426,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_workflows.py\"\n        }\n      ],\n      \"oversized\": [],\n      \"status\": \"pass\"\n    },\n    \"managed_files\": {\n      \"drifted\": [],\n      \"missing\": [],\n      \"status\": \"pass\"\n    },\n    \"sentinel_blockers\": {\n      \"items\": [\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \".tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"vendor_imports\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/cache\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/plugins\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-bundled\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-primary-runtime\",\n          \"readonly\": true\n        }\n      ],\n      \"status\": \"pass\"\n    },\n    \"skill_frontmatter\": {\n      \"missing\": [],\n      \"status\": \"pass\",\n      \"warnings\": [\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/git-easy-korean/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/keep-codex-fast/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/pdf/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ts-structure-code-review/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ui-ux-pro-max/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/warp-auxiliary/SKILL.md\"\n        }\n      ]\n    },\n    \"stale_active_references\": {\n      \"matches\": [],\n      \"status\": \"pass\"\n    }\n  },\n  \"failed\": [],\n  \"generated_at\": \"2026-05-11T10:12:22+00:00\",\n  \"root\": \"C:\\\\Users\\\\anise\\\\.codex\",\n  \"status\": \"pass\"\n}\n"
     },
     {
       "command": [
@@ -20,7 +20,7 @@
         "maintenance/scripts/codex_agent_harness.py",
         "global-scan"
       ],
-      "duration_seconds": 2.830633,
+      "duration_seconds": 2.832759,
       "exit_code": 0,
       "name": "global_scan",
       "status": "pass",
@@ -33,7 +33,7 @@
         "maintenance/scripts/codex_agent_harness.py",
         "context"
       ],
-      "duration_seconds": 0.121343,
+      "duration_seconds": 0.109582,
       "exit_code": 0,
       "name": "context_inspection",
       "status": "pass",
@@ -50,7 +50,7 @@
         "--limit",
         "5"
       ],
-      "duration_seconds": 0.152631,
+      "duration_seconds": 0.11711,
       "exit_code": 0,
       "name": "retrieval_report",
       "status": "pass",
@@ -64,7 +64,7 @@
         "py_compile",
         "maintenance/scripts/codex_agent_harness.py"
       ],
-      "duration_seconds": 0.111158,
+      "duration_seconds": 0.087486,
       "exit_code": 0,
       "name": "python_compile",
       "status": "pass",
@@ -77,12 +77,12 @@
         "maintenance/scripts/codex_agent_harness.py",
         "self-test"
       ],
-      "duration_seconds": 0.349892,
+      "duration_seconds": 0.461951,
       "exit_code": 0,
       "name": "self_test",
       "status": "pass",
       "stderr_preview": "",
-      "stdout_preview": "Applied harness state: C:\\Users\\anise\\AppData\\Local\\Temp\\tmplwxz629a\\.codex-harness\\install-state.json\nApplied harness state: C:\\Users\\anise\\AppData\\Local\\Temp\\tmplwxz629a\\.codex-harness\\install-state.json\n{\n  \"additions\": [\n    {\n      \"key\": \"multi_agent\",\n      \"table\": \"features\"\n    },\n    {\n      \"key\": \"mcp_servers\",\n      \"table\": \"\"\n    },\n    {\n      \"key\": \"model\",\n      \"table\": \"\"\n    }\n  ],\n  \"backup\": \"C:\\\\Users\\\\anise\\\\AppData\\\\Local\\\\Temp\\\\tmplwxz629a\\\\maintenance\\\\backups\\\\codex-harness-20260511-190601\\\\target.toml\",\n  \"drift\": [\n    \"features.plugins\"\n  ],\n  \"dry_run\": false,\n  \"missing_items\": 3,\n  \"source\": \"C:\\\\Users\\\\anise\\\\AppData\\\\Local\\\\Temp\\\\tmplwxz629a\\\\source.toml\",\n  \"target\": \"C:\\\\Users\\\\anise\\\\AppData\\\\Local\\\\Temp\\\\tmplwxz629a\\\\target.toml\"\n}\nself-test pass\n"
+      "stdout_preview": "Applied harness state: C:\\Users\\anise\\AppData\\Local\\Temp\\tmpjiwabbm3\\.codex-harness\\install-state.json\nApplied harness state: C:\\Users\\anise\\AppData\\Local\\Temp\\tmpjiwabbm3\\.codex-harness\\install-state.json\n{\n  \"additions\": [\n    {\n      \"key\": \"multi_agent\",\n      \"table\": \"features\"\n    },\n    {\n      \"key\": \"mcp_servers\",\n      \"table\": \"\"\n    },\n    {\n      \"key\": \"model\",\n      \"table\": \"\"\n    }\n  ],\n  \"backup\": \"C:\\\\Users\\\\anise\\\\AppData\\\\Local\\\\Temp\\\\tmpjiwabbm3\\\\maintenance\\\\backups\\\\codex-harness-20260511-191225\\\\target.toml\",\n  \"drift\": [\n    \"features.plugins\"\n  ],\n  \"dry_run\": false,\n  \"missing_items\": 3,\n  \"source\": \"C:\\\\Users\\\\anise\\\\AppData\\\\Local\\\\Temp\\\\tmpjiwabbm3\\\\source.toml\",\n  \"target\": \"C:\\\\Users\\\\anise\\\\AppData\\\\Local\\\\Temp\\\\tmpjiwabbm3\\\\target.toml\"\n}\nC:\\Users\\anise\\AppData\\Local\\Temp\\tmpjiwabbm3\\reports\\context-inspection.latest.md\nC:\\Users\\anise\\AppData\\Local\\Temp\\tmpjiwabbm3\\reports\\retrieval-report.latest.md\nC:\\Users\\anise\\AppData\\Local\\Temp\\tmpjiwabbm3\\artifacts\\compact-summaries\\20260511-191225-self-test-compact-summary.md\nself-test pass\n"
     },
     {
       "command": [
@@ -90,7 +90,7 @@
         "maintenance/scripts/codex_agent_harness.py",
         "repair"
       ],
-      "duration_seconds": 0.199516,
+      "duration_seconds": 0.159523,
       "exit_code": 0,
       "name": "repair_dry_run",
       "status": "pass",
@@ -103,7 +103,7 @@
         "maintenance/scripts/codex_agent_harness.py",
         "uninstall"
       ],
-      "duration_seconds": 0.223001,
+      "duration_seconds": 0.183594,
       "exit_code": 0,
       "name": "uninstall_dry_run",
       "status": "pass",
@@ -114,10 +114,25 @@
       "command": [
         "pwsh",
         "-NoProfile",
+        "-File",
+        "maintenance/scripts/codex-harness-doctor.ps1",
+        "--json"
+      ],
+      "duration_seconds": 0.695034,
+      "exit_code": 0,
+      "name": "pwsh_wrapper_doctor",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": "{\n  \"checks\": {\n    \"config\": {\n      \"missing_agent_roles\": [],\n      \"missing_false\": [],\n      \"missing_true\": [],\n      \"status\": \"pass\",\n      \"unexpected_true\": []\n    },\n    \"harness_file_size\": {\n      \"files\": [\n        {\n          \"lines\": 90,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness.py\"\n        },\n        {\n          \"lines\": 606,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_base.py\"\n        },\n        {\n          \"lines\": 546,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_lifecycle.py\"\n        },\n        {\n          \"lines\": 296,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_merge.py\"\n        },\n        {\n          \"lines\": 426,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_workflows.py\"\n        }\n      ],\n      \"oversized\": [],\n      \"status\": \"pass\"\n    },\n    \"managed_files\": {\n      \"drifted\": [],\n      \"missing\": [],\n      \"status\": \"pass\"\n    },\n    \"sentinel_blockers\": {\n      \"items\": [\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \".tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"vendor_imports\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/cache\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/plugins\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-bundled\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-primary-runtime\",\n          \"readonly\": true\n        }\n      ],\n      \"status\": \"pass\"\n    },\n    \"skill_frontmatter\": {\n      \"missing\": [],\n      \"status\": \"pass\",\n      \"warnings\": [\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/git-easy-korean/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/keep-codex-fast/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/pdf/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ts-structure-code-review/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ui-ux-pro-max/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/warp-auxiliary/SKILL.md\"\n        }\n      ]\n    },\n    \"stale_active_references\": {\n      \"matches\": [],\n      \"status\": \"pass\"\n    }\n  },\n  \"failed\": [],\n  \"generated_at\": \"2026-05-11T10:12:26+00:00\",\n  \"root\": \"C:\\\\Users\\\\anise\\\\.codex\",\n  \"status\": \"pass\"\n}\n"
+    },
+    {
+      "command": [
+        "pwsh",
+        "-NoProfile",
         "-Command",
         "$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile('hooks/lightweight-codex-hook.ps1',[ref]$tokens,[ref]$errors)>$null; if($errors.Count){$errors | ConvertTo-Json; exit 1}else{'OK'}"
       ],
-      "duration_seconds": 0.508249,
+      "duration_seconds": 0.365042,
       "exit_code": 0,
       "name": "hook_ast_parse",
       "status": "pass",
@@ -126,19 +141,36 @@
     },
     {
       "command": [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "maintenance/scripts/codex-harness-doctor.ps1",
+        "--json"
+      ],
+      "duration_seconds": 0.406698,
+      "exit_code": 0,
+      "name": "windows_powershell_wrapper_doctor",
+      "status": "pass",
+      "stderr_preview": "",
+      "stdout_preview": "{\n  \"checks\": {\n    \"config\": {\n      \"missing_agent_roles\": [],\n      \"missing_false\": [],\n      \"missing_true\": [],\n      \"status\": \"pass\",\n      \"unexpected_true\": []\n    },\n    \"harness_file_size\": {\n      \"files\": [\n        {\n          \"lines\": 90,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness.py\"\n        },\n        {\n          \"lines\": 606,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_base.py\"\n        },\n        {\n          \"lines\": 546,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_lifecycle.py\"\n        },\n        {\n          \"lines\": 296,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_merge.py\"\n        },\n        {\n          \"lines\": 426,\n          \"max_lines\": 1000,\n          \"path\": \"maintenance/scripts/codex_agent_harness_workflows.py\"\n        }\n      ],\n      \"oversized\": [],\n      \"status\": \"pass\"\n    },\n    \"managed_files\": {\n      \"drifted\": [],\n      \"missing\": [],\n      \"status\": \"pass\"\n    },\n    \"sentinel_blockers\": {\n      \"items\": [\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \".tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"tmp\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"vendor_imports\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/cache\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/plugins\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-bundled\",\n          \"readonly\": true\n        },\n        {\n          \"exists\": true,\n          \"is_file\": true,\n          \"path\": \"plugins/local-marketplaces/openai-primary-runtime\",\n          \"readonly\": true\n        }\n      ],\n      \"status\": \"pass\"\n    },\n    \"skill_frontmatter\": {\n      \"missing\": [],\n      \"status\": \"pass\",\n      \"warnings\": [\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/git-easy-korean/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/keep-codex-fast/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/pdf/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ts-structure-code-review/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/ui-ux-pro-max/SKILL.md\"\n        },\n        {\n          \"missing\": [\n            \"version\",\n            \"tags\"\n          ],\n          \"path\": \"skills/warp-auxiliary/SKILL.md\"\n        }\n      ]\n    },\n    \"stale_active_references\": {\n      \"matches\": [],\n      \"status\": \"pass\"\n    }\n  },\n  \"failed\": [],\n  \"generated_at\": \"2026-05-11T10:12:27+00:00\",\n  \"root\": \"C:\\\\Users\\\\anise\\\\.codex\",\n  \"status\": \"pass\"\n}\n"
+    },
+    {
+      "command": [
         "C:\\Python314\\python.exe",
         "maintenance/scripts/codex_agent_harness.py",
         "audit",
         "--json"
       ],
-      "duration_seconds": 0.169055,
+      "duration_seconds": 0.169056,
       "exit_code": 0,
       "name": "audit",
       "status": "pass",
       "stderr_preview": "",
-      "stdout_preview": "{\n  \"categories\": [\n    {\n      \"failures\": [],\n      \"name\": \"Tool Coverage\",\n      \"passed\": 4,\n      \"total\": 4\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Context Efficiency\",\n      \"passed\": 5,\n      \"total\": 5\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Quality Gates\",\n      \"passed\": 6,\n      \"total\": 6\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Memory Persistence\",\n      \"passed\": 6,\n      \"total\": 6\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Eval Coverage\",\n      \"passed\": 6,\n      \"total\": 6\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Security Guardrails\",\n      \"passed\": 4,\n      \"total\": 4\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Cost Efficiency\",\n      \"passed\": 7,\n      \"total\": 7\n    }\n  ],\n  \"generated_at\": \"2026-05-11T10:06:03+00:00\",\n  \"rubric_version\": \"codex-harness-audit-v1\",\n  \"score\": 100.0,\n  \"status\": \"pass\",\n  \"top_actions\": []\n}\n"
+      "stdout_preview": "{\n  \"categories\": [\n    {\n      \"failures\": [],\n      \"name\": \"Tool Coverage\",\n      \"passed\": 4,\n      \"total\": 4\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Context Efficiency\",\n      \"passed\": 5,\n      \"total\": 5\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Quality Gates\",\n      \"passed\": 8,\n      \"total\": 8\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Memory Persistence\",\n      \"passed\": 6,\n      \"total\": 6\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Eval Coverage\",\n      \"passed\": 6,\n      \"total\": 6\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Security Guardrails\",\n      \"passed\": 4,\n      \"total\": 4\n    },\n    {\n      \"failures\": [],\n      \"name\": \"Cost Efficiency\",\n      \"passed\": 7,\n      \"total\": 7\n    }\n  ],\n  \"generated_at\": \"2026-05-11T10:12:27+00:00\",\n  \"rubric_version\": \"codex-harness-audit-v1\",\n  \"score\": 100.0,\n  \"status\": \"pass\",\n  \"top_actions\": []\n}\n"
     }
   ],
-  "generated_at": "2026-05-11T10:06:03+00:00",
+  "generated_at": "2026-05-11T10:12:27+00:00",
   "status": "pass"
 }

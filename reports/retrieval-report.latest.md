@@ -4,8 +4,8 @@
 - stop_reason: sufficient_context
 
 ## Selected Context
-- maintenance/scripts/codex_agent_harness.py score=48 reasons=path:codex, content:codexx82, path:harness, content:harnessx71, content:verificationx25
+- maintenance/scripts/codex_agent_harness_base.py score=46 reasons=path:codex, content:codexx55, path:harness, content:harnessx48, content:verificationx9
+- maintenance/scripts/codex_agent_harness_workflows.py score=46 reasons=path:codex, content:codexx26, path:harness, content:harnessx20, content:verificationx10
+- maintenance/scripts/codex_agent_harness_lifecycle.py score=40 reasons=path:codex, content:codexx16, path:harness, content:harnessx21, content:verificationx10
+- maintenance/scripts/codex_agent_harness_merge.py score=39 reasons=path:codex, content:codexx10, path:harness, content:harnessx8, content:verificationx9
 - .codex-harness/install-state.json score=32 reasons=path:codex, content:codexx60, path:harness, content:harnessx49, content:verificationx1
-- hooks/lightweight-codex-hook.ps1 score=29 reasons=path:codex, content:codexx15, content:verificationx4, content:workflowx29
-- AGENTS.md score=24 reasons=content:codexx15, content:harnessx1, content:verificationx3, content:workflowx20
-- .codex-harness/manifests/profiles.json score=19 reasons=path:codex, content:codexx5, path:harness, content:workflowx4

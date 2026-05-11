@@ -7,7 +7,7 @@
 ## Categories
 - Tool Coverage: 4/4
 - Context Efficiency: 5/5
-- Quality Gates: 6/6
+- Quality Gates: 8/8
 - Memory Persistence: 6/6
 - Eval Coverage: 6/6
 - Security Guardrails: 4/4
