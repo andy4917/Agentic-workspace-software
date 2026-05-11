@@ -701,11 +701,23 @@ def check_config(root: Path) -> dict[str, Any]:
     unexpected = [key for key in ["enable_fanout", "multi_agent_v2"] if features.get(key) is True]
     expected_false = ["workspace_dependencies"]
     wrong_false = [key for key in expected_false if features.get(key) is not False]
+    agents = data.get("agents", {})
+    required_agent_roles = {
+        "explorer": "agents/explorer.toml",
+        "reviewer": "agents/reviewer.toml",
+        "docs-researcher": "agents/docs-researcher.toml",
+    }
+    missing_agent_roles = []
+    for role, config_file in required_agent_roles.items():
+        role_data = agents.get(role, {})
+        if not isinstance(role_data, dict) or role_data.get("config_file") != config_file or not role_data.get("description"):
+            missing_agent_roles.append(role)
     return {
-        "status": "pass" if not missing and not unexpected and not wrong_false else "fail",
+        "status": "pass" if not missing and not unexpected and not wrong_false and not missing_agent_roles else "fail",
         "missing_true": missing,
         "unexpected_true": unexpected,
         "missing_false": wrong_false,
+        "missing_agent_roles": missing_agent_roles,
     }
 
 
@@ -1300,7 +1312,34 @@ def cmd_self_test(args: argparse.Namespace) -> int:
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        write_text(root / "config.toml", "[features]\nplugins = true\ncodex_hooks = true\nmulti_agent = true\nchild_agents_md = true\ntool_search = true\ntool_suggest = true\nskill_mcp_dependency_install = true\nworkspace_dependencies = false\n")
+        write_text(
+            root / "config.toml",
+            "[features]\n"
+            "plugins = true\n"
+            "codex_hooks = true\n"
+            "multi_agent = true\n"
+            "child_agents_md = true\n"
+            "tool_search = true\n"
+            "tool_suggest = true\n"
+            "skill_mcp_dependency_install = true\n"
+            "workspace_dependencies = false\n"
+            "\n"
+            "[agents]\n"
+            "max_threads = 8\n"
+            "max_depth = 1\n"
+            "\n"
+            "[agents.explorer]\n"
+            'description = "Focused read-only codebase and environment exploration for bounded evidence gathering."\n'
+            'config_file = "agents/explorer.toml"\n'
+            "\n"
+            "[agents.reviewer]\n"
+            'description = "Independent read-only review for correctness, security, test gaps, and maintainability risks."\n'
+            'config_file = "agents/reviewer.toml"\n'
+            "\n"
+            "[agents.docs-researcher]\n"
+            'description = "Primary-source documentation research for version-sensitive OpenAI, MCP, and toolchain claims."\n'
+            'config_file = "agents/docs-researcher.toml"\n',
+        )
         write_text(root / "AGENTS.md", "# Test\n")
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
