@@ -66,7 +66,7 @@
     },
     {
       "action": "unchanged",
-      "digest": "34f5061a4665e9ff05010eed4beac2d89461ab2da72e5a96b19d61828e19961c",
+      "digest": "37d6bcd9c202da2eb50924775a9fa1f1a4a93b363a682cb247c89add77301938",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "evals/audit-threshold.json",
@@ -305,19 +305,18 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-05-11T10:00:22+00:00",
+  "installed_at": "2026-05-11T10:25:52+00:00",
   "requested_modules": [],
-  "requested_profile": "full",
+  "requested_profile": "developer",
   "schema_version": "1",
   "selected_modules": [
     "codex-baseline",
     "rules-core",
     "skills-core",
     "workflow-quality",
-    "security",
-    "orchestration",
     "mcp-baseline",
-    "benchmarking"
+    "benchmarking",
+    "orchestration"
   ],
   "skipped_modules": [],
   "source": {

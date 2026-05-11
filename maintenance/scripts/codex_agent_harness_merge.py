@@ -210,12 +210,38 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             'description = "Primary-source documentation research for version-sensitive OpenAI, MCP, and toolchain claims."\n'
             'config_file = "agents/docs-researcher.toml"\n',
         )
-        write_text(root / "AGENTS.md", "# Test\n")
+        write_text(
+            root / "AGENTS.md",
+            "# Test\n\n"
+            "- require each subagent to state its own concrete goal\n"
+            "- require mid-report evidence for non-trivial delegated work\n"
+            "- pm must continue useful non-overlapping work while agents run\n"
+            "- subagent outputs are candidate evidence, not authority\n"
+            "- close and replace agents that produce reward-hacked validation\n",
+        )
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
+        write_json(root / ".codex-global-state.json", {})
+        write_json(root / "hooks.json", {})
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
         write_text(root / "hooks" / "lightweight-codex-hook.ps1", "$ErrorActionPreference = 'Stop'\n")
+        for name in [
+            "codex_agent_harness.py",
+            "codex_agent_harness_base.py",
+            "codex_agent_harness_lifecycle.py",
+            "codex_agent_harness_workflows.py",
+            "codex_agent_harness_merge.py",
+        ]:
+            write_text(root / "maintenance" / "scripts" / name, "# self-test harness source placeholder\n")
         ensure_dir(root / "toolchains" / "shims")
-        write_json(root / "reports" / "global-scan.latest.json", {"content_redacted": True, "active_hit_count": 0})
+        write_json(
+            root / "reports" / "global-scan.latest.json",
+            {
+                "content_redacted": True,
+                "active_hit_count": 0,
+                "scan_error_count": 0,
+                "harness_digest": harness_source_digest(root),
+            },
+        )
         write_text(root / "reports" / "eval-results.jsonl", "")
         ns = argparse.Namespace(root=str(root), profile="developer", module=None)
         cmd_apply(ns)
@@ -285,12 +311,14 @@ def cmd_self_test(args: argparse.Namespace) -> int:
                 "timestamp": utc_now(),
                 "benchmark_id": "self-test",
                 "status": "pass",
+                "harness_digest": harness_source_digest(root),
                 "success_rate": 1.0,
+                "error_count": 0,
                 "checks": verification_checks,
             },
         )
-        if audit_data(root)["score"] < 80:
-            print("audit score too low in self-test", file=sys.stderr)
+        if audit_data(root)["status"] != "pass":
+            print("audit failed in self-test", file=sys.stderr)
             return 1
     print("self-test pass")
     return 0

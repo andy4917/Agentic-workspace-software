@@ -5,7 +5,7 @@
   "setup": "Run after harness apply.",
   "success_criteria": [
     "audit JSON exists",
-    "overall score is at least 80"
+    "overall audit status is pass"
   ],
   "task": "Run deterministic harness audit and require no critical failures.",
   "timeout_seconds": 30

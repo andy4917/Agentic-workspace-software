@@ -12,6 +12,27 @@ from typing import Any
 from codex_agent_harness_base import *
 from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, doctor_data, load_trajectory_records, trajectory_records_valid
 
+
+def load_eval_definition(root: Path, eval_id: str) -> tuple[dict[str, Any], list[str]]:
+    path = root / "evals" / f"{eval_id}.json"
+    errors = []
+    if not path.exists():
+        return {}, [f"missing eval definition: {eval_id}"]
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError as exc:
+        return {}, [f"invalid eval definition JSON: {exc}"]
+    for key in ["eval_id", "grader", "success_criteria", "task", "timeout_seconds"]:
+        if key not in data:
+            errors.append(f"missing {key}")
+    if data.get("eval_id") != eval_id:
+        errors.append("eval_id mismatch")
+    if not isinstance(data.get("success_criteria"), list) or not data.get("success_criteria"):
+        errors.append("success_criteria must be a non-empty list")
+    if not isinstance(data.get("grader"), str) or not data.get("grader"):
+        errors.append("grader must be a non-empty string")
+    return data, errors
+
 def cmd_context(args: argparse.Namespace) -> int:
     root = root_path(args)
     files = discover_instruction_files(root)
@@ -97,6 +118,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 
 def write_verification_report(root: Path, report: dict[str, Any]) -> None:
+    report.setdefault("harness_digest", harness_source_digest(root))
+    report.setdefault("repository", current_git_state(root))
     write_json(root / "reports" / "verification.latest.json", report)
     write_text(
         root / "reports" / "verification.latest.md",
@@ -109,22 +132,35 @@ def cmd_eval(args: argparse.Namespace) -> int:
     eval_ids = [args.eval_id] if args.eval_id else [p.stem for p in sorted((root / "evals").glob("*.json"))]
     results = []
     for eval_id in eval_ids:
-        if eval_id == "config-parse":
+        definition, definition_errors = load_eval_definition(root, eval_id)
+        if definition_errors:
+            passed = False
+        elif eval_id == "config-parse":
             passed = check_config(root).get("status") == "pass"
         elif eval_id == "managed-files":
             passed = check_managed_files(root).get("status") == "pass"
         elif eval_id == "audit-threshold":
-            passed = audit_data(root).get("score", 0) >= 80
+            passed = audit_data(root).get("status") == "pass"
         elif eval_id == "context-inspection":
             context_ns = argparse.Namespace(root=str(root))
-            passed = cmd_context(context_ns) == 0 and (root / "reports" / "context-inspection.latest.json").exists()
+            report = root / "reports" / "context-inspection.latest.json"
+            passed = cmd_context(context_ns) == 0 and bool(load_json(report, {}).get("selected_primary_instruction_source"))
         elif eval_id == "trajectory-search":
             records = load_trajectory_records(root)
             trajectory_ns = argparse.Namespace(root=str(root), search=None, failed=False, recent=5)
             passed = bool(records) and trajectory_records_valid(records) and cmd_trajectory(trajectory_ns) == 0
         else:
             passed = False
-        results.append({"eval_id": eval_id, "status": "pass" if passed else "fail", "timestamp": utc_now()})
+        results.append(
+            {
+                "eval_id": eval_id,
+                "status": "pass" if passed else "fail",
+                "timestamp": utc_now(),
+                "definition_digest": sha256_text(json.dumps(definition, ensure_ascii=False, sort_keys=True)) if definition else None,
+                "definition_errors": definition_errors,
+                "success_criteria_count": len(definition.get("success_criteria", [])) if isinstance(definition, dict) else 0,
+            }
+        )
     ensure_dir(root / "reports")
     result_path = root / "reports" / "eval-results.jsonl"
     with result_path.open("a", encoding="utf-8", newline="\n") as f:
@@ -275,13 +311,36 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
     eval_ids = [args.eval_id] if args.eval_id else [p.stem for p in sorted((root / "evals").glob("*.json"))]
     started = dt.datetime.now()
     checks = []
-    for eval_id in eval_ids:
+    ordered_eval_ids = [eval_id for eval_id in eval_ids if eval_id != "audit-threshold"]
+    if "audit-threshold" in eval_ids:
+        ordered_eval_ids.append("audit-threshold")
+    for eval_id in ordered_eval_ids:
+        if eval_id == "audit-threshold" and checks:
+            provisional_status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
+            append_jsonl(
+                root / "reports" / "benchmark-results.jsonl",
+                {
+                    "timestamp": utc_now(),
+                    "benchmark_id": f"{args.eval_id or 'all'}:pre-audit",
+                    "status": provisional_status,
+                    "harness_digest": harness_source_digest(root),
+                    "success_rate": round(sum(1 for item in checks if item["status"] == "pass") / len(checks), 4),
+                    "pass_at_1": provisional_status == "pass",
+                    "duration_seconds": (dt.datetime.now() - started).total_seconds(),
+                    "tool_calls": len(checks),
+                    "terminal_commands": len(checks),
+                    "error_count": sum(1 for item in checks if item["status"] != "pass"),
+                    "checks": checks,
+                    "provisional_for": "audit-threshold",
+                },
+            )
         checks.append({"name": f"eval:{eval_id}", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "eval", "--eval-id", eval_id], root, timeout=120)})
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     record = {
         "timestamp": utc_now(),
         "benchmark_id": args.eval_id or "all",
         "status": status,
+        "harness_digest": harness_source_digest(root),
         "success_rate": round(sum(1 for item in checks if item["status"] == "pass") / len(checks), 4) if checks else 0,
         "pass_at_1": status == "pass",
         "duration_seconds": (dt.datetime.now() - started).total_seconds(),
@@ -382,6 +441,7 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
     else:
         matches.append({"pattern": "<all>", "path": "<not-run>", "line": "", "error": "rg not available"})
 
+    scan_errors = [match for match in matches if match["path"] in {"<scan-error>", "<not-run>"}]
     active_roots = [str(root / "config.toml"), str(root / ".codex-global-state.json"), str(root / "hooks.json"), str(root / "AGENTS.md")]
     active_hits = []
     for match in matches:
@@ -398,11 +458,14 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         "scan_roots": [str(path) for path in scan_roots],
         "desktop_excluded": True,
         "content_redacted": True,
+        "harness_digest": harness_source_digest(root),
         "patterns": patterns,
         "match_count": len(matches),
         "active_hit_count": len(active_hits),
-        "status": "pass" if not active_hits else "fail",
+        "scan_error_count": len(scan_errors),
+        "status": "pass" if not active_hits and not scan_errors else "fail",
         "active_hits": active_hits,
+        "scan_errors": scan_errors,
         "matches_preview": matches[:200],
     }
     write_json(root / "reports" / "global-scan.latest.json", report)
@@ -412,6 +475,7 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         f"- status: {report['status']}",
         f"- match_count: {report['match_count']}",
         f"- active_hit_count: {report['active_hit_count']}",
+        f"- scan_error_count: {report['scan_error_count']}",
         f"- desktop_excluded: {report['desktop_excluded']}",
         "",
         "## Scan Roots",
@@ -420,6 +484,10 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
     lines.extend(["", "## Active Hits"])
     lines.extend(f"- {hit['path']}:{hit['line']} pattern={hit['pattern']}" for hit in active_hits or [])
     if not active_hits:
+        lines.append("- None")
+    lines.extend(["", "## Scan Errors"])
+    lines.extend(f"- {hit['pattern']}: {hit.get('error', '')}" for hit in scan_errors or [])
+    if not scan_errors:
         lines.append("- None")
     write_text(root / "reports" / "global-scan.latest.md", "\n".join(lines) + "\n")
     print(root / "reports" / "global-scan.latest.md")

@@ -28,6 +28,83 @@ def harness_line_count_status(root: Path) -> dict[str, Any]:
             oversized.append(item)
     return {"status": "pass" if not oversized else "fail", "files": counts, "oversized": oversized}
 
+
+def pm_subagent_protocol_status(root: Path) -> dict[str, Any]:
+    path = root / "AGENTS.md"
+    if not path.exists():
+        return {"status": "fail", "error": "AGENTS.md missing"}
+    text = read_text(path).lower()
+    required = [
+        "require each subagent to state its own concrete goal",
+        "mid-report",
+        "pm must continue useful non-overlapping work",
+        "subagent outputs are candidate evidence",
+        "reward-hacked validation",
+    ]
+    missing = [item for item in required if item not in text]
+    return {"status": "pass" if not missing else "fail", "missing": missing}
+
+
+def harness_engine_module_status(root: Path) -> dict[str, Any]:
+    expected = [
+        "codex_agent_harness.py",
+        "codex_agent_harness_base.py",
+        "codex_agent_harness_lifecycle.py",
+        "codex_agent_harness_workflows.py",
+        "codex_agent_harness_merge.py",
+    ]
+    missing = [name for name in expected if not (root / "maintenance" / "scripts" / name).exists()]
+    return {"status": "pass" if not missing else "fail", "missing": missing}
+
+
+def app_runtime_state_writable_status(root: Path) -> dict[str, Any]:
+    items = []
+    failures = []
+    for name in ["config.toml", ".codex-global-state.json", "hooks.json"]:
+        path = root / name
+        if not path.exists():
+            items.append({"path": name, "exists": False, "writable": False, "readonly": None})
+            failures.append(name)
+            continue
+        try:
+            readonly = bool(path.stat().st_file_attributes & stat.FILE_ATTRIBUTE_READONLY)
+        except AttributeError:
+            readonly = not os.access(path, os.W_OK)
+        writable = os.access(path, os.W_OK) and not readonly
+        items.append({"path": name, "exists": True, "writable": writable, "readonly": readonly})
+        if not writable:
+            failures.append(name)
+    return {"status": "pass" if not failures else "fail", "items": items, "failures": failures}
+
+
+def generated_output_tracking_status(root: Path) -> dict[str, Any]:
+    patterns = [
+        "reports/*.latest.json",
+        "reports/*.latest.md",
+        "reports/*results.jsonl",
+        "trajectories/runs.jsonl",
+        "artifacts/compact-summaries/*.md",
+    ]
+    try:
+        completed = subprocess.run(
+            ["git", "ls-files", "--", *patterns],
+            cwd=str(root),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=15,
+        )
+    except Exception as exc:  # noqa: BLE001 - git may not exist in temp self-test roots.
+        return {"status": "pass", "not_applicable": True, "reason": str(exc), "tracked": []}
+    if completed.returncode != 0:
+        return {"status": "pass", "not_applicable": True, "reason": completed.stderr.strip(), "tracked": []}
+    tracked = [line for line in completed.stdout.splitlines() if line.strip()]
+    allowed = {"artifacts/compact-summaries/README.md"}
+    unexpected = [item for item in tracked if item not in allowed]
+    return {"status": "pass" if not unexpected else "fail", "tracked": unexpected, "patterns": patterns}
+
+
 def cmd_discovery(args: argparse.Namespace) -> int:
     root = root_path(args)
     data = discovery_data(root)
@@ -302,6 +379,10 @@ def check_skill_frontmatter(root: Path) -> dict[str, Any]:
 def doctor_data(root: Path) -> dict[str, Any]:
     checks = {
         "config": check_config(root),
+        "pm_subagent_protocol": pm_subagent_protocol_status(root),
+        "harness_engine_modules": harness_engine_module_status(root),
+        "app_runtime_state_writable": app_runtime_state_writable_status(root),
+        "generated_outputs_untracked": generated_output_tracking_status(root),
         "managed_files": check_managed_files(root),
         "skill_frontmatter": check_skill_frontmatter(root),
         "harness_file_size": harness_line_count_status(root),
@@ -387,6 +468,9 @@ def audit_data(root: Path) -> dict[str, Any]:
     verification = load_json(root / "reports" / "verification.latest.json", {})
     verification_checks = {item.get("name"): item.get("status") for item in verification.get("checks", []) if isinstance(item, dict)}
     trajectory_records = load_trajectory_records(root)
+    current_digest = harness_source_digest(root)
+    global_scan_fresh = global_scan.get("harness_digest") == current_digest
+    verification_fresh = verification.get("harness_digest") == current_digest
     expected_power_shell_checks = []
     if command_exists("pwsh"):
         expected_power_shell_checks.append("pwsh_wrapper_doctor")
@@ -409,10 +493,15 @@ def audit_data(root: Path) -> dict[str, Any]:
         "Quality Gates": [
             ("doctor command exists", (root / "maintenance" / "scripts" / "codex-harness-doctor.ps1").exists()),
             ("verify command exists", (root / "maintenance" / "scripts" / "codex-verify.ps1").exists()),
+            ("PM subagent protocol documented", pm_subagent_protocol_status(root).get("status") == "pass"),
+            ("harness engine modules exist", harness_engine_module_status(root).get("status") == "pass"),
             ("harness python files stay under line limit", harness_line_count_status(root).get("status") == "pass"),
+            ("active app runtime state files are writable", app_runtime_state_writable_status(root).get("status") == "pass"),
+            ("mutable generated outputs are not git-tracked", generated_output_tracking_status(root).get("status") == "pass"),
             ("hook script parses by existence", (root / "hooks" / "lightweight-codex-hook.ps1").exists()),
             ("doctor currently passes", doctor.get("status") == "pass"),
             ("latest verification passes", verification.get("status") == "pass"),
+            ("latest verification matches current harness source", verification_fresh),
             ("latest verification includes lifecycle dry-runs", all(verification_checks.get(name) == "pass" for name in ["self_test", "repair_dry_run", "uninstall_dry_run"])),
             ("PowerShell wrappers execute when shells exist", all(verification_checks.get(name) == "pass" for name in expected_power_shell_checks)),
         ],
@@ -437,6 +526,8 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("security module available", "security" in MODULES),
             ("stale active references absent", not stale_active_references(root)),
             ("global scan active hits absent", global_scan.get("active_hit_count", 0) == 0),
+            ("global scan had no scan errors", global_scan.get("scan_error_count", 1) == 0),
+            ("global scan matches current harness source", global_scan_fresh),
         ],
         "Cost Efficiency": [
             ("tool result artifact directory exists", (root / "artifacts" / "tool-results").exists()),
@@ -526,7 +617,7 @@ def latest_benchmark_results_valid(root: Path) -> bool:
     path = root / "reports" / "benchmark-results.jsonl"
     if not path.exists():
         return False
-    valid = False
+    latest = None
     for line in read_text(path).splitlines():
         if not line.strip():
             continue
@@ -534,8 +625,17 @@ def latest_benchmark_results_valid(root: Path) -> bool:
             item = json.loads(line)
         except json.JSONDecodeError:
             return False
-        valid = valid or {"timestamp", "benchmark_id", "status", "success_rate", "checks"}.issubset(item)
-    return valid
+        latest = item
+    if latest is None:
+        return False
+    if not {"timestamp", "benchmark_id", "status", "success_rate", "checks", "error_count", "harness_digest"}.issubset(latest):
+        return False
+    if latest.get("harness_digest") != harness_source_digest(root):
+        return False
+    if latest.get("status") != "pass" or latest.get("error_count") != 0:
+        return False
+    checks = latest.get("checks")
+    return isinstance(checks, list) and bool(checks) and all(isinstance(item, dict) and item.get("status") == "pass" for item in checks)
 
 
 def compact_summary_valid(root: Path) -> bool:

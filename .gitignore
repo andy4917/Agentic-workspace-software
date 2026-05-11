@@ -26,6 +26,7 @@ hooks/state/
 cache/
 sqlite/
 browser/
+node_repl/
 .sandbox/
 .sandbox-bin/
 .sandbox-secrets/
@@ -72,7 +73,14 @@ archived_transient_roots/
 archived_app_tool_caches/
 archived_runtime_state/
 
-# Generated maintenance reports are intentionally visible for audits.
+# Generated maintenance reports stay local and audit-visible, but mutable run
+# outputs are not tracked because each verification rewrites them.
+reports/*.latest.json
+reports/*.latest.md
+reports/*results.jsonl
+trajectories/runs.jsonl
+artifacts/compact-summaries/*.md
+!artifacts/compact-summaries/README.md
 
 # OS/editor noise
 Thumbs.db

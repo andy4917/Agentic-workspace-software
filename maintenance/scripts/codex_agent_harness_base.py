@@ -153,7 +153,7 @@ EVAL_TEMPLATES = {
         "eval_id": "audit-threshold",
         "task": "Run deterministic harness audit and require no critical failures.",
         "setup": "Run after harness apply.",
-        "success_criteria": ["audit JSON exists", "overall score is at least 80"],
+        "success_criteria": ["audit JSON exists", "overall audit status is pass"],
         "grader": "python maintenance/scripts/codex_agent_harness.py audit --json",
         "timeout_seconds": 30,
         "risk_notes": "Score is deterministic but intentionally conservative.",
@@ -227,6 +227,20 @@ def sha256_file(path: Path) -> str:
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
+    return h.hexdigest()
+
+
+def harness_source_files(root: Path) -> list[Path]:
+    return sorted((root / "maintenance" / "scripts").glob("codex_agent_harness*.py"))
+
+
+def harness_source_digest(root: Path) -> str:
+    h = hashlib.sha256()
+    for path in harness_source_files(root):
+        h.update(rel(path, root).encode("utf-8"))
+        h.update(b"\0")
+        h.update(sha256_file(path).encode("ascii"))
+        h.update(b"\0")
     return h.hexdigest()
 
 

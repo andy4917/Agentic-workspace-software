@@ -150,10 +150,19 @@ Use PM-selected team presets only when the task benefits from them:
 For delegated work:
 
 - define objective, owned files/surfaces, expected output, constraints, and verification expectation;
+- require each subagent to state its own concrete goal before work proceeds;
+- require non-trivial subagent work to provide at least one mid-report with inspected surfaces, preliminary risks, next checks, and blockers;
 - avoid overlapping file ownership between workers;
 - reuse a role session only when objective, surface, risk class, and context remain compatible;
 - shut down or retire stale/confused sessions and collect final outputs before integrating;
 - treat conductor-style tracks as lightweight visibility, not authority.
+
+PM parallel-work rule:
+
+- after delegating, the PM must continue useful non-overlapping work instead of only waiting for results;
+- the PM must keep an independent verification track for delegated claims;
+- subagent outputs are candidate evidence, not authority, and must be adversarially checked before being used for completion claims;
+- if a subagent hides failures, violates explicit rules, claims success without evidence, or produces reward-hacked validation, close that agent, start a new one with a handoff describing the failure, and independently verify the affected surface.
 
 ## Workflow Presets
 
