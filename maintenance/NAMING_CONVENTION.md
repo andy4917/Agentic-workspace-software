@@ -52,18 +52,18 @@ Runtime-generated temporary directories may exist only while the creating proces
 is using them. They must not be persisted in config, native messaging manifests,
 marketplace sources, PATH, or hook policy.
 
-Until the app runtime stops recreating bundled marketplace/cache clones, exact
-path-name sentinel blockers may be used for:
+Until the app runtime stops recreating transient marketplace clones, exact
+path-name sentinel blockers may be used for confirmed non-runtime roots only:
 
 - `.tmp`
 - `tmp`
 - `vendor_imports`
-- `plugins\cache`
 - `plugins\plugins`
-- `plugins\local-marketplaces\openai-bundled`
-- `plugins\local-marketplaces\openai-primary-runtime`
 
 These blockers are files or managed empty directories, not active sources.
+Do not block `plugins\cache` with a sentinel file: Codex loads installed
+plugins from that runtime cache path. Treat `plugins\cache` as an allowed
+runtime cache and audit its contents for unexpected connectors instead.
 
 When blocking a confirmed runtime recontamination path, `config.toml` may be kept
 read-only after verified edits. Remove the read-only bit only for intentional app

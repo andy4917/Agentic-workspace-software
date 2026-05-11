@@ -199,10 +199,7 @@ function Get-SentinelBlockerSummary {
         (Join-Path $Root '.tmp'),
         (Join-Path $Root 'tmp'),
         (Join-Path $Root 'vendor_imports'),
-        (Join-Path $Root 'plugins\cache'),
-        (Join-Path $Root 'plugins\plugins'),
-        (Join-Path $Root 'plugins\local-marketplaces\openai-bundled'),
-        (Join-Path $Root 'plugins\local-marketplaces\openai-primary-runtime')
+        (Join-Path $Root 'plugins\plugins')
     )
 
     return @($targets | ForEach-Object {
@@ -491,14 +488,14 @@ $report = [ordered]@{
     transient_root_moves = $moves
     transient_roots_after = $after
     app_tool_cache = $appToolCache
-    root_cause = 'Codex bundled auto-install and runtime warm paths can write marketplace payloads under .tmp, vendor_imports, and plugins cache paths when stale config/state points at bundled sources. Keep plugin support available, but block bundled/temp/cache paths as active sources.'
+    root_cause = 'Codex bundled auto-install and runtime warm paths can write marketplace payloads under .tmp and vendor_imports when stale config/state points at transient bundled sources. Keep plugin support available, allow plugins cache as runtime cache, and block temp paths as active sources.'
     policy = [ordered]@{
-        keep_active_plugin_cache = @()
+        keep_active_plugin_cache = @('plugins\cache as Codex plugin runtime cache only')
         keep_app_connector_tool_cache = @('cache\codex_apps_tools entries where connector_name is GitHub')
         plugin_feature_allowed = $true
         do_not_use_as_active_source = @('.tmp', 'tmp', 'vendor_imports', 'bundled-marketplaces', 'plugins\cache', 'plugins\plugins')
         remove_native_messaging_hosts_that_point_to_runtime_cache = $true
-        plugin_cache_roots_are_blocked_by_sentinel_until_runtime_fix = $true
+        plugin_cache_roots_are_blocked_by_sentinel_until_runtime_fix = $false
         legacy_cleanup_target = 'Recycle Bin'
     }
 }

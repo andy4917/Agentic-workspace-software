@@ -38,7 +38,7 @@ Codex should operate as a PM-led workflow that combines:
 Runtime subagent activation rule:
 
 - current Codex runtime policy requires an explicit user request before calling subagents;
-- user phrases such as `multi-agent`, `subagent`, `서브에이전트`, `멀티에이전트`, `병렬 에이전트`, `역할 분리`, or `delegate` count as explicit authorization for the current goal;
+- user phrases such as `multi-agent`, `subagent`, `parallel agent`, `role separation`, or `delegate` count as explicit authorization for the current goal; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
 - when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
 - enabled feature flags are capability, not evidence of actual subagent use.
 

@@ -1,4 +1,7 @@
 $ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 $stateDir = Join-Path $PSScriptRoot "state"
 $statePath = Join-Path $stateDir "lightweight-status.json"
@@ -15,6 +18,64 @@ function Read-HookInput {
         return [pscustomobject]@{ hook_event_name = "Unknown" }
     }
     return $raw | ConvertFrom-Json
+}
+
+function Get-PromptText {
+    param($InputObject)
+
+    $promptValue = $null
+    if ($null -ne $InputObject -and $InputObject.PSObject.Properties.Name -contains "prompt") {
+        $promptValue = $InputObject.prompt
+    } elseif ($null -ne $InputObject -and $InputObject.PSObject.Properties.Name -contains "user_prompt") {
+        $promptValue = $InputObject.user_prompt
+    } elseif ($null -ne $InputObject -and $InputObject.PSObject.Properties.Name -contains "message") {
+        $promptValue = $InputObject.message
+    }
+
+    if ($null -eq $promptValue) {
+        return ""
+    }
+    if ($promptValue -is [string]) {
+        return $promptValue
+    }
+    if ($promptValue -is [array]) {
+        $parts = @()
+        foreach ($item in $promptValue) {
+            if ($null -eq $item) {
+                continue
+            }
+            if ($item -is [string]) {
+                $parts += $item
+            } elseif ($item.PSObject.Properties.Name -contains "text") {
+                $parts += [string]$item.text
+            } else {
+                $parts += ($item | ConvertTo-Json -Depth 8 -Compress)
+            }
+        }
+        return ($parts -join "`n")
+    }
+    if ($promptValue.PSObject.Properties.Name -contains "text") {
+        return [string]$promptValue.text
+    }
+
+    return ($promptValue | ConvertTo-Json -Depth 8 -Compress)
+}
+
+function Get-PromptSummary {
+    param([string]$Prompt)
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Prompt)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $digestBytes = $sha.ComputeHash($bytes)
+    $digest = ([System.BitConverter]::ToString($digestBytes)).Replace("-", "").ToLowerInvariant()
+    $hasNonAscii = $false
+    foreach ($ch in $Prompt.ToCharArray()) {
+        if ([int][char]$ch -gt 127) {
+            $hasNonAscii = $true
+            break
+        }
+    }
+    return "prompt_length=$($Prompt.Length); prompt_sha256=$digest; contains_non_ascii=$hasNonAscii"
 }
 
 function Read-Policy {
@@ -110,7 +171,9 @@ function Save-State {
     }
 
     $State.lastUpdated = (Get-Date).ToString("o")
-    $State | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $json = ($State | ConvertTo-Json -Depth 16) + "`n"
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($statePath, $json, $utf8NoBom)
 }
 
 function Add-Unique {
@@ -263,7 +326,24 @@ Subagent startup requirement:
 function Test-DelegationAuthorized {
     param([string]$Prompt)
 
-    return ($Prompt -match "(?i)(subagents?|sub[-_ ]?agent|multi[-_ ]?agent|멀티\s*에이전트|멀티에이전트|서브\s*에이전트|서브에이전트|병렬\s*에이전트|역할\s*분리|delegate|delegation|PM-led|team preset)")
+    if ($Prompt -match "(?i)(subagents?|sub[-_ ]?agent|multi[-_ ]?agent|delegate|delegation|PM-led|team preset|role separation|parallel agent)") {
+        return $true
+    }
+
+    $compact = $Prompt -replace "\s+", ""
+    $koreanSignals = @(
+        (([string][char]0xBA40) + ([string][char]0xD2F0) + ([string][char]0xC5D0) + ([string][char]0xC774) + ([string][char]0xC804) + ([string][char]0xD2B8)),
+        (([string][char]0xC11C) + ([string][char]0xBE0C) + ([string][char]0xC5D0) + ([string][char]0xC774) + ([string][char]0xC804) + ([string][char]0xD2B8)),
+        (([string][char]0xBCD1) + ([string][char]0xB82C) + ([string][char]0xC5D0) + ([string][char]0xC774) + ([string][char]0xC804) + ([string][char]0xD2B8)),
+        (([string][char]0xC5ED) + ([string][char]0xD560) + ([string][char]0xBD84) + ([string][char]0xB9AC))
+    )
+    foreach ($signal in $koreanSignals) {
+        if ($compact.Contains($signal)) {
+            return $true
+        }
+    }
+
+    return $false
 }
 
 function Get-PromptReminder {
@@ -276,10 +356,7 @@ function Get-PromptReminder {
         $Policy
     )
 
-    $goal = $Prompt
-    if ($goal.Length -gt 280) {
-        $goal = $goal.Substring(0, 280) + "..."
-    }
+    $goal = Get-PromptSummary -Prompt $Prompt
 
     $delegationAuthorization = "No explicit subagent authorization detected in this prompt; keep work local unless the user asks for subagents, multi-agent, delegation, role separation, or parallel agent work."
     if (Test-DelegationAuthorized -Prompt $Prompt) {
@@ -507,6 +584,7 @@ $inputObject = Read-HookInput
 $eventName = [string]$inputObject.hook_event_name
 $state = Read-State
 
+try {
 switch ($eventName) {
     "SessionStart" {
         $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Subagents require explicit user authorization by prompt, then should be used only for bounded non-blocking sidecar work. Hooks are reminders and narrow safety checks, not completion authority."
@@ -524,12 +602,12 @@ switch ($eventName) {
     }
 
     "UserPromptSubmit" {
-        $prompt = [string]$inputObject.prompt
+        $prompt = Get-PromptText -InputObject $inputObject
         $workflow = Select-Workflow -Prompt $prompt
         $phase = Select-LifecyclePhase -Prompt $prompt
         $skillRoute = Get-SkillRoute -Prompt $prompt
         $teamPreset = Get-TeamPresetHint -Workflow $workflow
-        $state.currentGoal = if ($prompt.Length -gt 500) { $prompt.Substring(0, 500) + "..." } else { $prompt }
+        $state.currentGoal = Get-PromptSummary -Prompt $prompt
         $state.workflow = $workflow
         $state.changedSurfaces = @()
         $state.checksRun = @()
@@ -679,5 +757,11 @@ switch ($eventName) {
     default {
         Write-HookJson @{ continue = $true }
         break
+    }
+}
+} catch {
+    Write-HookJson @{
+        continue = $true
+        systemMessage = "Lightweight hook internal error in event '$eventName': $($_.Exception.Message). Continue, but verify hook behavior before relying on hook evidence."
     }
 }

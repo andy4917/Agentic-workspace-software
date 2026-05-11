@@ -223,7 +223,17 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         )
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})
-        write_json(root / "hooks.json", {})
+        hook_matcher = "Bash|apply_patch|Edit|Write|functions\\..*|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*"
+        write_json(
+            root / "hooks.json",
+            {
+                "hooks": {
+                    "PreToolUse": [{"matcher": hook_matcher, "hooks": []}],
+                    "PermissionRequest": [{"matcher": hook_matcher, "hooks": []}],
+                    "PostToolUse": [{"matcher": hook_matcher, "hooks": []}],
+                }
+            },
+        )
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
         write_text(
             root / "hooks" / "lightweight-codex-hook.ps1",

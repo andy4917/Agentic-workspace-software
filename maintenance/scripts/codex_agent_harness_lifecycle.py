@@ -366,10 +366,7 @@ def sentinel_checks(root: Path) -> list[dict[str, Any]]:
         ".tmp",
         "tmp",
         "vendor_imports",
-        "plugins/cache",
         "plugins/plugins",
-        "plugins/local-marketplaces/openai-bundled",
-        "plugins/local-marketplaces/openai-primary-runtime",
     ]
     out = []
     for item in targets:
@@ -466,6 +463,34 @@ def check_skill_frontmatter(root: Path) -> dict[str, Any]:
     return {"status": "pass" if not missing else "fail", "missing": missing, "warnings": warnings}
 
 
+def hook_tool_routing_status(root: Path) -> dict[str, Any]:
+    path = root / "hooks.json"
+    if not path.exists():
+        return {"status": "fail", "error": "hooks.json missing"}
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError as exc:
+        return {"status": "fail", "error": str(exc)}
+    hooks = data.get("hooks", {})
+    events = ["PreToolUse", "PermissionRequest", "PostToolUse"]
+    required_fragments = [
+        "apply_patch",
+        "functions\\..*",
+        "mcp__.*",
+        "multi_tool_use\\..*",
+        "tool_search\\..*",
+        "web\\..*",
+        "image_gen\\..*",
+    ]
+    missing: dict[str, list[str]] = {}
+    for event in events:
+        matcher_text = " ".join(str(item.get("matcher", "")) for item in hooks.get(event, []) if isinstance(item, dict))
+        absent = [fragment for fragment in required_fragments if fragment not in matcher_text]
+        if absent:
+            missing[event] = absent
+    return {"status": "pass" if not missing else "fail", "missing": missing}
+
+
 def doctor_data(root: Path) -> dict[str, Any]:
     checks = {
         "config": check_config(root),
@@ -475,6 +500,7 @@ def doctor_data(root: Path) -> dict[str, Any]:
         "generated_outputs_untracked": generated_output_tracking_status(root),
         "hook_subagent_vowline": hook_subagent_vowline_status(root),
         "subagent_nickname_policy": subagent_nickname_policy_status(root),
+        "hook_tool_routing": hook_tool_routing_status(root),
         "managed_files": check_managed_files(root),
         "skill_frontmatter": check_skill_frontmatter(root),
         "harness_file_size": harness_line_count_status(root),
@@ -592,6 +618,7 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("mutable generated outputs are not git-tracked", generated_output_tracking_status(root).get("status") == "pass"),
             ("subagent session start injects Vowline context", hook_subagent_vowline_status(root).get("status") == "pass"),
             ("subagent nicknames are role-prefixed", subagent_nickname_policy_status(root).get("status") == "pass"),
+            ("hook tool routing covers active namespaces", hook_tool_routing_status(root).get("status") == "pass"),
             ("hook script parses by existence", (root / "hooks" / "lightweight-codex-hook.ps1").exists()),
             ("doctor currently passes", doctor.get("status") == "pass"),
             ("latest verification passes", verification.get("status") == "pass"),
