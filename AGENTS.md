@@ -151,7 +151,11 @@ For delegated work:
 
 - define objective, owned files/surfaces, expected output, constraints, and verification expectation;
 - require each subagent to state its own concrete goal before work proceeds;
+- include why the task is being delegated: the PM purpose, the risk being reduced, and the decision the result is meant to inform;
+- include the PM context: what is already known, what is not trusted yet, and which assumptions the subagent must challenge;
+- provide a delegation charter with `Goal`, `Purpose`, `PM Context`, `Owned Surface`, `Expected Evidence`, `Anti-Reward-Hacking Rules`, `Mid-Report`, `Exit Criteria`, and `Not Checked` requirements;
 - require non-trivial subagent work to provide at least one mid-report with inspected surfaces, preliminary risks, next checks, and blockers;
+- require final outputs to lead with findings, evidence, and not-checked items before any summary or completion claim;
 - avoid overlapping file ownership between workers;
 - reuse a role session only when objective, surface, risk class, and context remain compatible;
 - shut down or retire stale/confused sessions and collect final outputs before integrating;
@@ -163,6 +167,14 @@ PM parallel-work rule:
 - the PM must keep an independent verification track for delegated claims;
 - subagent outputs are candidate evidence, not authority, and must be adversarially checked before being used for completion claims;
 - if a subagent hides failures, violates explicit rules, claims success without evidence, or produces reward-hacked validation, close that agent, start a new one with a handoff describing the failure, and independently verify the affected surface.
+
+Delegation anti-reward-hacking contract:
+
+- a subagent is not rewarded for `PASS`, `complete`, or reassuring summaries; it is rewarded for precise evidence that lets the PM accept, reject, or narrow a claim;
+- `not-run`, skipped checks, fallback behavior, stale reports, inaccessible files, and unverified assumptions must be reported as blockers or residual risk, not counted as success;
+- claims that cannot be independently verified from paths, commands, line references, diffs, or reproducible observations are treated as unsupported;
+- finding a blocker is a successful subagent outcome when the blocker is real, scoped, and evidenced;
+- unsupported success claims reduce trust in the entire subagent output and require PM re-verification or replacement.
 
 ## Workflow Presets
 

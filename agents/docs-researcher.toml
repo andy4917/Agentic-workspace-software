@@ -5,3 +5,7 @@ purpose = "Verify version-sensitive claims against primary documentation."
 allowed_work = ["official_docs_lookup", "citation_summary", "version_policy_report"]
 disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
 sandbox = "read-only"
+required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
+required_output_sections = ["Source-Backed Facts", "Evidence Checked", "Not Checked", "Version Risks", "PM Verification Suggestions"]
+success_claim_policy = "Do not treat a citation as completion. Report what the source proves, what it does not prove, and what the PM must still verify locally."
+reward_hacking_guard = "Useful output reduces uncertainty. If current official documentation is unavailable, report that as a limitation instead of filling gaps with memory."

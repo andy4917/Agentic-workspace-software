@@ -63,6 +63,10 @@ purpose = "Gather focused evidence before implementation."
 allowed_work = ["file_search", "file_read", "structure_summary", "evidence_report"]
 disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
 sandbox = "read-only"
+required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
+required_output_sections = ["Findings", "Evidence Checked", "Not Checked", "Risks", "PM Verification Suggestions"]
+success_claim_policy = "Do not claim PASS or completion as authority. Provide independently verifiable evidence and explicitly report skipped, stale, fallback, or not-run checks."
+reward_hacking_guard = "The useful outcome is evidence that helps the PM accept, reject, or narrow a claim; real blockers are successful findings."
 """,
     "agents/reviewer.toml": """# Managed by codex-agent-harness.
 name = "reviewer"
@@ -71,6 +75,10 @@ purpose = "Review correctness, security, behavior, missing tests, and maintainab
 allowed_work = ["diff_review", "risk_report", "test_gap_report", "security_review"]
 disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
 sandbox = "read-only"
+required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
+required_output_sections = ["Blocking Findings", "Major Risks", "Evidence Checked", "Not Checked", "PM Verification Suggestions"]
+success_claim_policy = "Do not approve by summary. Lead with concrete defects, evidence, and residual risk; unsupported PASS claims are invalid."
+reward_hacking_guard = "Finding a real blocker is a successful review result. Treat stale reports, skipped checks, and unsupported assertions as review findings."
 """,
     "agents/docs-researcher.toml": """# Managed by codex-agent-harness.
 name = "docs-researcher"
@@ -79,8 +87,63 @@ purpose = "Verify version-sensitive claims against primary documentation."
 allowed_work = ["official_docs_lookup", "citation_summary", "version_policy_report"]
 disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
 sandbox = "read-only"
+required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
+required_output_sections = ["Source-Backed Facts", "Evidence Checked", "Not Checked", "Version Risks", "PM Verification Suggestions"]
+success_claim_policy = "Do not treat a citation as completion. Report what the source proves, what it does not prove, and what the PM must still verify locally."
+reward_hacking_guard = "Useful output reduces uncertainty. If current official documentation is unavailable, report that as a limitation instead of filling gaps with memory."
 """,
 }
+
+DELEGATION_CHARTER = """# Subagent Delegation Charter
+
+Use this charter whenever the PM delegates non-trivial work to a subagent.
+The charter makes reward hacking uneconomical: unsupported completion claims
+do not help the PM, while precise blockers and verifiable evidence do.
+
+## Required Delegation Fields
+
+Every delegated task must include:
+
+- `Goal`: the concrete subtask the subagent owns.
+- `Purpose`: why this subtask matters to the overall PM objective, which risk it reduces, and which decision it informs.
+- `PM Context`: facts the PM already knows, claims the PM does not trust yet, and assumptions the subagent must challenge.
+- `Owned Surface`: files, directories, commands, docs, or runtime surfaces the subagent may inspect or modify.
+- `Out Of Scope`: surfaces the subagent must not touch.
+- `Expected Evidence`: paths, line references, commands, diffs, reproduction steps, or source citations the PM can independently verify.
+- `Anti-Reward-Hacking Rules`: explicit invalid-success cases for this task.
+- `Mid-Report`: inspected surfaces, preliminary findings, next checks, blockers, and not-yet-checked items.
+- `Exit Criteria`: what counts as a useful handoff, including completion and completion-impossible conditions.
+- `Not Checked`: required final disclosure of skipped, inaccessible, stale, fallback, or not-run checks.
+
+## Required Output Order
+
+Subagent final reports must lead with evidence, not reassurance:
+
+1. Blocking findings.
+2. Major risks.
+3. Evidence checked.
+4. Not checked.
+5. PM verification suggestions.
+6. Brief summary only after the sections above.
+
+## Invalid Success Claims
+
+The PM must treat these as unsupported until independently verified:
+
+- `PASS`, `complete`, or `no issues` without direct evidence.
+- Counting `not-run`, skipped, fallback, stale, or inaccessible checks as success.
+- Reporting only files changed without explaining why the task mattered.
+- Omitting the delegated purpose or PM context.
+- Hiding uncertainty to make the result look simpler.
+- Treating a subagent report, MCP result, test pass, or citation as final authority.
+
+## Replacement Rule
+
+If a subagent hides failures, violates the charter, claims success without
+evidence, or optimizes for PM approval rather than truth, the PM must close
+that agent, start a replacement with a handoff that names the failure mode, and
+independently verify the affected surface.
+"""
 
 SKILL_TEMPLATES = {
     "skills/_drafts/README.md": """# Draft Skills
@@ -318,6 +381,7 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
         templates["skills/SKILL_INDEX.md"] = skill_index_content(SKILL_TEMPLATES)
 
     if "workflow-quality" in modules:
+        templates["maintenance/SUBAGENT_DELEGATION_CHARTER.md"] = DELEGATION_CHARTER
         templates["reports/README.md"] = "# Codex Harness Reports\n\nGenerated discovery, context, verification, eval, benchmark, and audit reports live here.\n"
         templates["artifacts/tool-results/README.md"] = "# Tool Result Artifacts\n\nLarge command outputs can be stored here with metadata references from trajectories.\n"
         templates["artifacts/compact-summaries/README.md"] = "# Compact Summaries\n\nStructured phase-boundary summaries live here.\n"

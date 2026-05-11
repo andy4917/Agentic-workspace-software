@@ -5,3 +5,7 @@ purpose = "Gather focused evidence before implementation."
 allowed_work = ["file_search", "file_read", "structure_summary", "evidence_report"]
 disallowed_work = ["file_write", "external_mutation", "secret_content_read"]
 sandbox = "read-only"
+required_delegation_fields = ["Goal", "Purpose", "PM Context", "Owned Surface", "Expected Evidence", "Anti-Reward-Hacking Rules", "Mid-Report", "Exit Criteria", "Not Checked"]
+required_output_sections = ["Findings", "Evidence Checked", "Not Checked", "Risks", "PM Verification Suggestions"]
+success_claim_policy = "Do not claim PASS or completion as authority. Provide independently verifiable evidence and explicitly report skipped, stale, fallback, or not-run checks."
+reward_hacking_guard = "The useful outcome is evidence that helps the PM accept, reject, or narrow a claim; real blockers are successful findings."

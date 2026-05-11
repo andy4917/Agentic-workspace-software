@@ -30,19 +30,45 @@ def harness_line_count_status(root: Path) -> dict[str, Any]:
 
 
 def pm_subagent_protocol_status(root: Path) -> dict[str, Any]:
-    path = root / "AGENTS.md"
-    if not path.exists():
+    agents_path = root / "AGENTS.md"
+    charter_path = root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md"
+    role_paths = [
+        root / "agents" / "explorer.toml",
+        root / "agents" / "reviewer.toml",
+        root / "agents" / "docs-researcher.toml",
+    ]
+    if not agents_path.exists():
         return {"status": "fail", "error": "AGENTS.md missing"}
-    text = read_text(path).lower()
-    required = [
+    agents_text = read_text(agents_path).lower()
+    charter_text = read_text(charter_path).lower() if charter_path.exists() else ""
+    combined_text = agents_text + "\n" + charter_text
+    required_terms = [
         "require each subagent to state its own concrete goal",
+        "purpose",
+        "pm context",
+        "owned surface",
+        "expected evidence",
+        "anti-reward-hacking rules",
         "mid-report",
+        "exit criteria",
+        "not checked",
         "pm must continue useful non-overlapping work",
         "subagent outputs are candidate evidence",
         "reward-hacked validation",
+        "unsupported success claims",
     ]
-    missing = [item for item in required if item not in text]
-    return {"status": "pass" if not missing else "fail", "missing": missing}
+    missing_terms = [item for item in required_terms if item not in combined_text]
+    role_missing = []
+    for path in role_paths:
+        if not path.exists():
+            role_missing.append({"path": rel(path, root), "missing": ["file"]})
+            continue
+        text = read_text(path).lower()
+        missing = [item for item in ["required_delegation_fields", "required_output_sections", "success_claim_policy", "reward_hacking_guard"] if item not in text]
+        if missing:
+            role_missing.append({"path": rel(path, root), "missing": missing})
+    missing = {"terms": missing_terms, "roles": role_missing}
+    return {"status": "pass" if not missing_terms and not role_missing else "fail", "missing": missing}
 
 
 def harness_engine_module_status(root: Path) -> dict[str, Any]:

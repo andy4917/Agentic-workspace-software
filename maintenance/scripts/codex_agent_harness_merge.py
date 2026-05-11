@@ -214,10 +214,11 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             root / "AGENTS.md",
             "# Test\n\n"
             "- require each subagent to state its own concrete goal\n"
+            "- include Purpose, PM Context, Owned Surface, Expected Evidence, Anti-Reward-Hacking Rules, Exit Criteria, and Not Checked fields\n"
             "- require mid-report evidence for non-trivial delegated work\n"
             "- pm must continue useful non-overlapping work while agents run\n"
             "- subagent outputs are candidate evidence, not authority\n"
-            "- close and replace agents that produce reward-hacked validation\n",
+            "- reject unsupported success claims and close and replace agents that produce reward-hacked validation\n",
         )
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})

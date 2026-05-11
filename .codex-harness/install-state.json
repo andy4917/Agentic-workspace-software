@@ -25,24 +25,27 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "827d4851a9984e2cbd71827b24d0ff1848818640da34c59decf36da2eb4bec6d",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-193851\\agents\\docs-researcher.toml",
+      "digest": "b4ed90a325f16d9db5ae8c95b082cce5df51c745be5612eb262c98a8e5e11c2b",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/docs-researcher.toml",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "e1385745898f3dc7baa3e5af09f78a8a86379887c1934892795d66f5f8107d68",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-193851\\agents\\explorer.toml",
+      "digest": "a02646b3bf6b2722c0bf0e482d41de83a56a04e5e3fb4f1c982f9721321f2027",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/explorer.toml",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "87cdf14a70d9c5d4d0c0c31757f226b059753c17b53ab4ab4c246d0fc99e00fe",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260511-193851\\agents\\reviewer.toml",
+      "digest": "afa16ced68cf7d1ac1a53cee94c2b11dd91576a8bf92cce2a0d0f4010b7cfa19",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/reviewer.toml",
@@ -110,6 +113,14 @@
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "learning/README.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "created",
+      "digest": "f25f48dfaef4b4f521e51b5d2f1de4c48503f76ae81a3ba96521c8a01197a253",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/SUBAGENT_DELEGATION_CHARTER.md",
       "remove_on_uninstall": true
     },
     {
@@ -305,7 +316,7 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-05-11T10:25:52+00:00",
+  "installed_at": "2026-05-11T10:38:51+00:00",
   "requested_modules": [],
   "requested_profile": "developer",
   "schema_version": "1",
