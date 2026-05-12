@@ -498,34 +498,19 @@ function Get-PromptReminder {
 
     $goal = Get-PromptSummary -Prompt $Prompt
 
-    $delegationAuthorization = "No explicit subagent authorization detected in this prompt; keep work local unless the user asks for subagents, multi-agent, delegation, role separation, or parallel agent work."
+    $delegationAuthorization = "No subagent authorization detected; keep work local unless the user explicitly asks for delegation."
     if (Test-DelegationAuthorized -Prompt $Prompt) {
-        $delegationAuthorization = "Explicit delegation authorization detected; use spawn_agent for bounded non-blocking sidecar work when it materially advances the task, then review and integrate outputs."
+        $delegationAuthorization = "Delegation authorized; spawn only bounded non-blocking sidecar agents, then verify outputs."
     }
 
     return @"
 Lightweight Codex workflow reminder:
-- Active profile: $($Policy.profile)
-- Current user goal: $goal
-- Workflow preset: $Workflow
-- Lifecycle overlay: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP; current phase hint: $Phase
-- Skill route hint: $SkillRoute
-- Team preset hint: $TeamPreset
-- Main session acts as PM: classify, assign bounded role work only when useful/allowed, review candidate outputs, integrate, verify.
-- Subagent policy: conditional use, max parallel $($Policy.subagents.max_parallel), max depth $($Policy.subagents.max_depth); user remains reviewer, not operator.
-- Runtime delegation authorization: $delegationAuthorization
-- Critical path rule: do not delegate the immediate next blocker; delegate independent exploration, verification, review, or disjoint file ownership.
-- Role separation: implementation, validation, review, exploration, security, documentation/research, environment diagnostics.
-- Capability pack model: plugin -> capability pack, command -> prompt recipe, skill -> Codex skill, conductor track -> lightweight work track.
-- Delegation rule: define owned files/surfaces, expected output, constraints, and verification; avoid overlapping ownership.
-- Quality audit: clear trigger, bounded scope, useful output shape, checkpoint evidence, no hidden authority claim.
-- Skills are workflows, not essays: trigger -> steps -> checkpoint evidence -> exit criteria.
-- Anti-rationalization: simple still needs criteria; tests are not "later"; passing checks are evidence, not completion; do not widen scope while here.
-- Configured/available tools are not evidence of use; invoke required tools or record why not applicable.
-- Completion needs changed behavior plus direct evidence, checks run/not run, and remaining risks.
-- Goal governance: persisted Goal is a tracking marker only. PM owns the parent goal; subagents produce contractual subgoal evidence and cannot complete the parent goal.
-- Final goal audit: when a goal or changed surface exists, completion needs changed surfaces, acceptance checks, checked/not-run items, accepted/rejected subagent evidence, PM independent verification, residual risks, rollback notes, and status complete|blocked|continue.
-- Resume/compaction recovery: restate parent goal, acceptance criteria, accepted evidence, suspect evidence, open risks, changed surfaces, and next direct verification step before continuing.
+- Profile: $($Policy.profile); goal: $goal; preset: $Workflow; phase: $Phase.
+- Skill route: $SkillRoute; team preset: $TeamPreset.
+- PM owns scope, integration, verification, and final status; user remains reviewer, not operator.
+- Subagents: max parallel $($Policy.subagents.max_parallel), max depth $($Policy.subagents.max_depth). $delegationAuthorization
+- Delegate only bounded non-blocking side work with owned surfaces and evidence; keep the immediate blocker local.
+- Completion requires changed/inspected surfaces, direct checks run, checks not run with reasons, PM independent verification, residual risks, rollback notes, and status complete|blocked|continue.
 - Block only real risk: secret content access, irreversible destructive action, hook weakening, evaluator/pass manipulation, or out-of-scope mutation.
 "@
 }
