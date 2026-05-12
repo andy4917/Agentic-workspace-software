@@ -94,6 +94,20 @@ Use one primary type and optional secondary tags.
   3. Use the best available fallback and state the fallback in the final report.
 - Verification: discovered tool list, fallback command output, or explicit not-available evidence.
 
+### MCP Server Enabled But Filtered Or Path-Fragile
+
+- Type: `tool_runtime_error`, `environment_path_issue`
+- Fingerprint: `codex mcp list` shows a server as enabled, but the active session omits its namespace; direct MCP `tools/list` succeeds or shows tool names that do not match `enabled_tools`.
+- Risk: agents may claim "configured" as "usable", or miss that path expansion/filtering caused the app loader to expose zero tools.
+- Likely causes: Windows `%VAR%` or `~` paths in MCP config are not expanded by the loader; `enabled_tools` names are stale after a server version change.
+- Fix playbook:
+  1. Replace fragile paths in `command` and `cwd` with absolute Windows paths.
+  2. Run the server directly and call MCP `tools/list` when practical.
+  3. Align `enabled_tools` with actual server tool names, keeping approval prompts for broad command tools.
+  4. Start a new session or reload the app because existing sessions do not receive newly exposed MCP tool schemas.
+- Verification: `codex mcp get/list` shows the intended absolute paths and filters; direct server startup or `tools/list` succeeds; current session remains not fixed unless the namespace appears in the active tool list.
+- Do not claim: that the current session can call the MCP just because config was fixed.
+
 ### Patch Grammar Failure
 
 - Type: `tool_runtime_error`

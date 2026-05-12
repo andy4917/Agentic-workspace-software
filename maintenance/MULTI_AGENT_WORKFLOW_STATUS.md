@@ -10,7 +10,7 @@ Current higher-priority runtime behavior requires an explicit user request befor
 
 ## Current Config
 
-`C:\Users\anise\.codex\config.toml` now explicitly enables:
+`%USERPROFILE%\.codex\config.toml` now explicitly enables:
 
 - `features.multi_agent = true`
 - `features.child_agents_md = true`

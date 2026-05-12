@@ -149,6 +149,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
             records = load_trajectory_records(root)
             trajectory_ns = argparse.Namespace(root=str(root), search=None, failed=False, recent=5)
             passed = bool(records) and trajectory_records_valid(records) and cmd_trajectory(trajectory_ns) == 0
+        elif eval_id == "orchestration-governance-smoke":
+            passed = check_orchestration_governance_smoke(root).get("status") == "pass"
         else:
             passed = False
         results.append(
@@ -168,6 +170,44 @@ def cmd_eval(args: argparse.Namespace) -> int:
             f.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n")
     print(result_path)
     return 0 if all(item["status"] == "pass" for item in results) else 1
+
+
+def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+
+    def add_check(name: str, passed: bool, detail: str) -> None:
+        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+
+    agents_text = read_text(root / "AGENTS.md")
+    charter_text = read_text(root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md")
+    audit_text = read_text(root / "codex-goals" / "_template" / "FINAL_GOAL_AUDIT.md")
+    hook_text = read_text(root / "hooks" / "lightweight-codex-hook.ps1")
+
+    add_check(
+        "agents_goal_governance",
+        all(term in agents_text for term in ["## Goal Governance", "tracking marker", "final goal audit", "Subagents receive contractual subgoals"]),
+        "AGENTS.md should define parent-goal ownership and audit requirements.",
+    )
+    add_check(
+        "subagent_authority_boundary",
+        all(term in charter_text for term in ["## Authority Boundary", "evidence only", "cannot complete"]),
+        "Delegation charter should prevent subagent parent-goal completion authority.",
+    )
+    add_check(
+        "final_audit_template",
+        all(term in audit_text for term in ["# FINAL_GOAL_AUDIT", "Direct Checks Not Run", "Residual Risks", "PM Independent Verification", "Decision"]),
+        "Final audit template should require checked, not-run, risks, PM verification, and status.",
+    )
+    add_check(
+        "stop_hook_audit_prompt",
+        all(term in hook_text for term in ["function Test-FinalAuditReady", "function Get-ToolEvidenceSummary", "Final preflight", "checked items", "PM independent verification"]),
+        "Stop hook should ask for an audit and keep hook evidence summaries compact.",
+    )
+
+    status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
+    report = {"generated_at": utc_now(), "status": status, "checks": checks}
+    write_json(root / "reports" / "orchestration-governance-smoke.latest.json", report)
+    return report
 
 def cmd_trajectory(args: argparse.Namespace) -> int:
     root = root_path(args)
@@ -367,7 +407,7 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
     ]
     scan_roots = [path for path in candidate_roots if path.exists()]
     patterns = [
-        r"c:\\users\\anise\\documents\\codex\\2026-05-09\\codex",
+        re.escape(str(user_home / "Documents" / "Codex" / "2026-05-09" / "Codex")).lower(),
         r"bundled-marketplaces",
         r"vendor_imports",
         r"wshobson-agents-scan",

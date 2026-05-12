@@ -98,6 +98,14 @@
     },
     {
       "action": "unchanged",
+      "digest": "9e75b52085981608e41c73e19149843c1c75641242c0559d6238204ee71ad326",
+      "managed": false,
+      "owner": "codex-agent-harness",
+      "path": "evals/orchestration-governance-smoke.json",
+      "remove_on_uninstall": false
+    },
+    {
+      "action": "unchanged",
       "digest": "757efe8fb1b4e621edada5b851f02b38c8d78d42b404b99b73d92abcb04b0405",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -114,7 +122,7 @@
     },
     {
       "action": "unchanged",
-      "digest": "f25f48dfaef4b4f521e51b5d2f1de4c48503f76ae81a3ba96521c8a01197a253",
+      "digest": "76b6889be587fbd9158ce76c4f69c76f5914641c1a7efabfc47c479db1db8a90",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/SUBAGENT_DELEGATION_CHARTER.md",
@@ -313,19 +321,18 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-05-11T11:42:30+00:00",
+  "installed_at": "2026-05-11T15:05:36+00:00",
   "requested_modules": [],
-  "requested_profile": "full",
+  "requested_profile": "developer",
   "schema_version": "1",
   "selected_modules": [
     "codex-baseline",
     "rules-core",
     "skills-core",
     "workflow-quality",
-    "security",
-    "orchestration",
     "mcp-baseline",
-    "benchmarking"
+    "benchmarking",
+    "orchestration"
   ],
   "skipped_modules": [],
   "source": {

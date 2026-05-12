@@ -7,6 +7,24 @@ $stateDir = Join-Path $PSScriptRoot "state"
 $statePath = Join-Path $stateDir "lightweight-status.json"
 $policyPath = Join-Path $PSScriptRoot "lightweight-codex-policy.json"
 
+function Get-UserProfilePath {
+    return [Environment]::GetFolderPath("UserProfile")
+}
+
+function Get-CodexHomePath {
+    if (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
+        return $env:CODEX_HOME
+    }
+    return (Join-Path (Get-UserProfilePath) ".codex")
+}
+
+function Get-AgentsHomePath {
+    if (-not [string]::IsNullOrWhiteSpace($env:AGENTS_HOME)) {
+        return $env:AGENTS_HOME
+    }
+    return (Join-Path (Get-UserProfilePath) ".agents")
+}
+
 function Write-HookJson {
     param([hashtable]$Object)
     $Object | ConvertTo-Json -Depth 12 -Compress
@@ -126,6 +144,55 @@ function Get-ToolText {
     return ($toolInput | ConvertTo-Json -Depth 16 -Compress)
 }
 
+function Get-StateDigest {
+    param([string]$Text)
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $digestBytes = $sha.ComputeHash($bytes)
+    return ([System.BitConverter]::ToString($digestBytes)).Replace("-", "").ToLowerInvariant()
+}
+
+function Get-StateSummaryText {
+    param(
+        [string]$Value,
+        [int]$Limit = 240
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ""
+    }
+
+    $singleLine = ($Value -replace "\s+", " ").Trim()
+    if ($singleLine.Length -le $Limit) {
+        return $singleLine
+    }
+
+    $digest = Get-StateDigest -Text $Value
+    return ($singleLine.Substring(0, $Limit) + " ... sha256:" + $digest)
+}
+
+function Get-ToolEvidenceSummary {
+    param(
+        [string]$ToolName,
+        [string]$Text
+    )
+
+    $signals = @()
+    if ($Text -match "(?i)(pytest|cargo test|npm test|pnpm test|yarn test|typecheck|lint|build|py_compile|doctor|audit|eval)") {
+        $signals += "validation"
+    }
+    if ($Text -match "(?i)(apply_patch|Edit|Write|\*\*\* (Add|Update|Delete) File:)") {
+        $signals += "file_edit"
+    }
+    if ($signals.Count -eq 0) {
+        $signals += "tool_use"
+    }
+
+    $digest = Get-StateDigest -Text $Text
+    return "${ToolName}:$($signals -join ','); sha256:$digest"
+}
+
 function Read-State {
     if (-not (Test-Path -LiteralPath $statePath)) {
         return [ordered]@{
@@ -144,10 +211,10 @@ function Read-State {
         return [ordered]@{
             currentGoal = [string]$state.currentGoal
             workflow = [string]$state.workflow
-            changedSurfaces = @($state.changedSurfaces)
-            checksRun = @($state.checksRun)
-            requiredReminders = @($state.requiredReminders)
-            toolEvents = @($state.toolEvents)
+            changedSurfaces = @($state.changedSurfaces | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
+            checksRun = @($state.checksRun | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
+            requiredReminders = @($state.requiredReminders | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
+            toolEvents = @($state.toolEvents | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
             lastUpdated = [string]$state.lastUpdated
         }
     } catch {
@@ -189,6 +256,77 @@ function Add-Unique {
         return @($Items)
     }
     return @($Items + $Value)
+}
+
+function Write-CodexStructuredLog {
+    param(
+        [string]$EventName,
+        [string]$Outcome = "observed",
+        [string]$Reason = "",
+        [string]$ToolName = "",
+        [string[]]$ChangedSurface = @(),
+        [string[]]$ValidationResult = @(),
+        [string[]]$SubagentResult = @(),
+        [string[]]$UserApproval = @(),
+        [string]$NotReadyReason = "",
+        [string]$PromptSummary = ""
+    )
+
+    $toolPath = Join-Path (Get-CodexHomePath) "tools\codex-log-maintenance.ps1"
+    if (-not (Test-Path -LiteralPath $toolPath)) {
+        return $false
+    }
+
+    $args = @(
+        "record-event",
+        "--event", $EventName,
+        "--source", "lightweight-codex-hook",
+        "--outcome", $Outcome
+    )
+    if (-not [string]::IsNullOrWhiteSpace($Reason)) {
+        $args += @("--reason", (Get-StateSummaryText -Value $Reason -Limit 240))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ToolName)) {
+        $args += @("--tool-name", (Get-StateSummaryText -Value $ToolName -Limit 120))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($NotReadyReason)) {
+        $args += @("--not-ready-reason", (Get-StateSummaryText -Value $NotReadyReason -Limit 240))
+    }
+    if ($PromptSummary -match "prompt_length=(\d+);\s*prompt_sha256=([0-9a-f]+);\s*contains_non_ascii=(True|False)") {
+        $args += @("--prompt-length", $matches[1], "--prompt-sha256", $matches[2])
+        if ($matches[3] -eq "True") {
+            $args += "--contains-non-ascii"
+        } else {
+            $args += "--no-contains-non-ascii"
+        }
+    }
+    foreach ($item in $ChangedSurface) {
+        if (-not [string]::IsNullOrWhiteSpace($item)) {
+            $args += @("--changed-surface", (Get-StateSummaryText -Value $item -Limit 120))
+        }
+    }
+    foreach ($item in $ValidationResult) {
+        if (-not [string]::IsNullOrWhiteSpace($item)) {
+            $args += @("--validation-result", (Get-StateSummaryText -Value $item -Limit 240))
+        }
+    }
+    foreach ($item in $SubagentResult) {
+        if (-not [string]::IsNullOrWhiteSpace($item)) {
+            $args += @("--subagent-result", (Get-StateSummaryText -Value $item -Limit 240))
+        }
+    }
+    foreach ($item in $UserApproval) {
+        if (-not [string]::IsNullOrWhiteSpace($item)) {
+            $args += @("--user-approval", (Get-StateSummaryText -Value $item -Limit 240))
+        }
+    }
+
+    try {
+        $null = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toolPath @args 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
 }
 
 function Select-Workflow {
@@ -307,19 +445,21 @@ function Test-SubagentSessionStart {
 function Get-VowlineSubagentContext {
     param($Policy)
 
-    $skillPath = "C:\Users\anise\.agents\skills\vowline\SKILL.md"
+    $skillPath = Join-Path (Get-AgentsHomePath) "skills\vowline\SKILL.md"
     if ($null -ne $Policy.subagents -and -not [string]::IsNullOrWhiteSpace([string]$Policy.subagents.required_start_skill_path)) {
-        $skillPath = [string]$Policy.subagents.required_start_skill_path
+        $skillPath = [Environment]::ExpandEnvironmentVariables([string]$Policy.subagents.required_start_skill_path)
     }
+    $charterPath = Join-Path (Get-CodexHomePath) "maintenance\SUBAGENT_DELEGATION_CHARTER.md"
 
     return @"
 Subagent startup requirement:
 - Apply the Vowline operating skill for this subagent: $skillPath
+- State the bounded subgoal and authority boundary before work: evidence only, no PM parent-goal completion authority.
 - Treat Vowline as a required operating skill alongside task-specific skills; if the full skill cannot be loaded, apply its operating contract to decomposition, evidence, validation, safety, and reporting.
 - The delegated task must include Goal, Purpose, PM Context, Owned Surface, Expected Evidence, Anti-Reward-Hacking Rules, Mid-Report, Exit Criteria, and Not Checked.
 - Do not optimize for reassuring completion. Produce verifiable evidence, blockers, not-run reasons, and PM verification suggestions.
 - A real blocker with evidence is a useful outcome. Unsupported PASS, stale reports, skipped checks counted as success, hidden fallback, or omitted uncertainty invalidates the handoff.
-- Use the local charter when relevant: C:\Users\anise\.codex\maintenance\SUBAGENT_DELEGATION_CHARTER.md
+- Use the local charter when relevant: $charterPath
 "@
 }
 
@@ -383,8 +523,28 @@ Lightweight Codex workflow reminder:
 - Anti-rationalization: simple still needs criteria; tests are not "later"; passing checks are evidence, not completion; do not widen scope while here.
 - Configured/available tools are not evidence of use; invoke required tools or record why not applicable.
 - Completion needs changed behavior plus direct evidence, checks run/not run, and remaining risks.
+- Goal governance: persisted Goal is a tracking marker only. PM owns the parent goal; subagents produce contractual subgoal evidence and cannot complete the parent goal.
+- Final goal audit: when a goal or changed surface exists, completion needs changed surfaces, acceptance checks, checked/not-run items, accepted/rejected subagent evidence, PM independent verification, residual risks, rollback notes, and status complete|blocked|continue.
+- Resume/compaction recovery: restate parent goal, acceptance criteria, accepted evidence, suspect evidence, open risks, changed surfaces, and next direct verification step before continuing.
 - Block only real risk: secret content access, irreversible destructive action, hook weakening, evaluator/pass manipulation, or out-of-scope mutation.
 "@
+}
+
+function Test-FinalAuditReady {
+    param([string]$Message)
+
+    if ([string]::IsNullOrWhiteSpace($Message)) {
+        return $false
+    }
+
+    $hasAuditSignal = $Message -match "(?i)(FINAL_GOAL_AUDIT|final goal audit|goal audit|completion audit)"
+    $hasChecked = $Message -match "(?i)(checked|checks? run|verified|verification|test|lint|typecheck|build|direct checks?)"
+    $hasNotRun = $Message -match "(?i)(not[-_ ]?run|checks? not run|not checked|unable to run|skipped)"
+    $hasRisks = $Message -match "(?i)(risk|risks|residual|remaining)"
+    $hasStatus = $Message -match "(?i)(status|decision|complete|blocked|continue|current status)"
+    $hasPmVerification = $Message -match "(?i)(PM independent|independent verification)"
+
+    return ($hasAuditSignal -and $hasChecked -and $hasNotRun -and $hasRisks -and $hasStatus -and $hasPmVerification)
 }
 
 function Deny-PreTool {
@@ -414,7 +574,7 @@ function Deny-Permission {
 function Test-SecretContentAccess {
     param([string]$Text)
 
-    $readVerb = "(?i)(Get-Content|gc\b|type\b|cat\b|Select-String|more\b)"
+    $readVerb = "(?i)(?:^|[;&|]\s*|\s)(Get-Content|gc|type|cat|Select-String|more)(?:\.exe)?(?=\s|$)"
     $sensitivePath = "(?i)(auth\.json|\.env(\.|$)|id_rsa|id_ed25519|\.pem\b|(^|[\\/._-])(token|secret|credential|password|api[_-]?key|cookie)([\\/._-]|$))"
     return ($Text -match $readVerb -and $Text -match $sensitivePath)
 }
@@ -422,6 +582,9 @@ function Test-SecretContentAccess {
 function Test-DestructiveAction {
     param([string]$Text)
 
+    if (Test-ScopedGeneratedCacheCleanup -Text $Text) {
+        return $false
+    }
     if (Test-ScopedTemporaryRootCleanup -Text $Text) {
         return $false
     }
@@ -444,6 +607,35 @@ function Test-DestructiveAction {
     return $false
 }
 
+function Test-ScopedGeneratedCacheCleanup {
+    param([string]$Text)
+
+    if ($Text -notmatch "(?i)\bRemove-Item\b" -or
+        $Text -notmatch "(?i)\s-(Recurse|r)\b" -or
+        $Text -notmatch "(?i)\s-(Force|f)\b") {
+        return $false
+    }
+
+    $codexRootPattern = [regex]::Escape((Get-CodexHomePath).TrimEnd("\"))
+    $allowedRootPattern = "(?i)$codexRootPattern\\(tools|maintenance\\scripts)\\__pycache__(['`"\s;]|$)"
+    if ($Text -notmatch $allowedRootPattern) {
+        return $false
+    }
+
+    $guardSignals = @(
+        "Resolve-Path",
+        "StartsWith",
+        "Refusing to remove outside CODEX_HOME"
+    )
+    foreach ($signal in $guardSignals) {
+        if ($Text -notmatch $signal) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
 function Test-ScopedTemporaryRootCleanup {
     param([string]$Text)
 
@@ -453,7 +645,7 @@ function Test-ScopedTemporaryRootCleanup {
         return $false
     }
 
-    $codexRootPattern = [regex]::Escape("C:\Users\anise\.codex")
+    $codexRootPattern = [regex]::Escape((Get-CodexHomePath).TrimEnd("\"))
     $allowedRootPattern = "(?i)$codexRootPattern\\(\.tmp|tmp|vendor_imports)(['`"\s;]|$)"
     if ($Text -notmatch $allowedRootPattern) {
         return $false
@@ -579,6 +771,25 @@ function Get-ChangedLineCount {
     return $count
 }
 
+function Invoke-ChromeExtensionOriginRepair {
+    $scriptPath = Join-Path (Get-CodexHomePath) "maintenance\scripts\ensure-chrome-extension-origin.ps1"
+    if (-not (Test-Path -LiteralPath $scriptPath)) {
+        return ""
+    }
+
+    try {
+        $results = @(& $scriptPath -NoNodeCheck 2>&1)
+        $important = @($results | Where-Object { [string]$_ -match "^(patched|failed|error):" })
+        if ($important.Count -gt 0) {
+            return "Chrome extension origin repair: $($important -join '; ')"
+        }
+    } catch {
+        return "Chrome extension origin repair failed: $($_.Exception.Message)"
+    }
+
+    return ""
+}
+
 $policy = Read-Policy
 $inputObject = Read-HookInput
 $eventName = [string]$inputObject.hook_event_name
@@ -587,10 +798,15 @@ $state = Read-State
 try {
 switch ($eventName) {
     "SessionStart" {
-        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Subagents require explicit user authorization by prompt, then should be used only for bounded non-blocking sidecar work. Hooks are reminders and narrow safety checks, not completion authority."
+        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Subagents require explicit user authorization by prompt, then should be used only for bounded non-blocking sidecar work. Goal is a long-running tracking marker only; PM owns parent-goal completion, and subagents produce evidence only. Hooks are reminders and narrow safety checks, not completion authority."
+        $repairContext = Invoke-ChromeExtensionOriginRepair
+        if (-not [string]::IsNullOrWhiteSpace($repairContext)) {
+            $context = $context + "`n`n" + $repairContext
+        }
         if (Test-SubagentSessionStart -InputObject $inputObject) {
             $context = $context + "`n`n" + (Get-VowlineSubagentContext -Policy $policy)
         }
+        Write-CodexStructuredLog -EventName "SessionStart" -Outcome "observed" -Reason "session context injected" | Out-Null
         Write-HookJson @{
             continue = $true
             hookSpecificOutput = @{
@@ -607,7 +823,8 @@ switch ($eventName) {
         $phase = Select-LifecyclePhase -Prompt $prompt
         $skillRoute = Get-SkillRoute -Prompt $prompt
         $teamPreset = Get-TeamPresetHint -Workflow $workflow
-        $state.currentGoal = Get-PromptSummary -Prompt $prompt
+        $promptSummary = Get-PromptSummary -Prompt $prompt
+        $state.currentGoal = $promptSummary
         $state.workflow = $workflow
         $state.changedSurfaces = @()
         $state.checksRun = @()
@@ -615,6 +832,7 @@ switch ($eventName) {
         $state.toolEvents = @()
         Save-State -State $state
 
+        Write-CodexStructuredLog -EventName "UserPromptSubmit" -Outcome "observed" -Reason $workflow -ChangedSurface @("hooks.state") -PromptSummary $promptSummary | Out-Null
         $reminder = Get-PromptReminder -Workflow $workflow -Prompt $prompt -Phase $phase -SkillRoute $skillRoute -TeamPreset $teamPreset -Policy $policy
         Write-HookJson @{
             continue = $true
@@ -627,6 +845,7 @@ switch ($eventName) {
     }
 
     "PreToolUse" {
+        $toolName = [string]$inputObject.tool_name
         $text = Get-ToolText -InputObject $inputObject
 
         if (Test-BlockedAppConnectorTool -InputObject $inputObject -Policy $policy) {
@@ -634,31 +853,42 @@ switch ($eventName) {
             if ($null -ne $policy.toolchain_integrity -and -not [string]::IsNullOrWhiteSpace([string]$policy.toolchain_integrity.blocked_app_connector_reason)) {
                 $reason = [string]$policy.toolchain_integrity.blocked_app_connector_reason
             }
+            Write-CodexStructuredLog -EventName "PreToolUse" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
             Deny-PreTool -Reason $reason
             break
         }
         if (Test-SecretContentAccess -Text $text) {
-            Deny-PreTool -Reason "Secret or credential content access is blocked. Use metadata-only inspection unless the user explicitly requested that exact file."
+            $reason = "Secret or credential content access is blocked. Use metadata-only inspection unless the user explicitly requested that exact file."
+            Write-CodexStructuredLog -EventName "PreToolUse" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
+            Deny-PreTool -Reason $reason
             break
         }
         if (Test-DestructiveAction -Text $text) {
-            Deny-PreTool -Reason "Irreversible destructive action is blocked by the lightweight hook. Ask the user explicitly before proceeding."
+            $reason = "Irreversible destructive action is blocked by the lightweight hook. Ask the user explicitly before proceeding."
+            Write-CodexStructuredLog -EventName "PreToolUse" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
+            Deny-PreTool -Reason $reason
             break
         }
         if (Test-HookWeakening -Text $text) {
-            Deny-PreTool -Reason "Hook, multi-agent, or completion-safety weakening is blocked unless the user explicitly requests that exact change."
+            $reason = "Hook, multi-agent, or completion-safety weakening is blocked unless the user explicitly requests that exact change."
+            Write-CodexStructuredLog -EventName "PreToolUse" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
+            Deny-PreTool -Reason $reason
             break
         }
         if (Test-FakeSuccessInsertion -Text $text) {
-            Deny-PreTool -Reason "Fake-success or evaluator/exit-code manipulation is blocked for product and control-code edits. Use real validation or document a not-run reason."
+            $reason = "Fake-success or evaluator/exit-code manipulation is blocked for product and control-code edits. Use real validation or document a not-run reason."
+            Write-CodexStructuredLog -EventName "PreToolUse" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
+            Deny-PreTool -Reason $reason
             break
         }
 
+        Write-CodexStructuredLog -EventName "PreToolUse" -Outcome "observed" -ToolName $toolName | Out-Null
         Write-HookJson @{ systemMessage = "" }
         break
     }
 
     "PermissionRequest" {
+        $toolName = [string]$inputObject.tool_name
         $text = Get-ToolText -InputObject $inputObject
 
         if (Test-BlockedAppConnectorTool -InputObject $inputObject -Policy $policy) {
@@ -666,26 +896,36 @@ switch ($eventName) {
             if ($null -ne $policy.toolchain_integrity -and -not [string]::IsNullOrWhiteSpace([string]$policy.toolchain_integrity.blocked_app_connector_reason)) {
                 $reason = [string]$policy.toolchain_integrity.blocked_app_connector_reason
             }
+            Write-CodexStructuredLog -EventName "PermissionRequest" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
             Deny-Permission -Reason $reason
             break
         }
         if (Test-SecretContentAccess -Text $text) {
-            Deny-Permission -Reason "Secret or credential content access is blocked. Use metadata-only inspection unless the user explicitly requested that exact file."
+            $reason = "Secret or credential content access is blocked. Use metadata-only inspection unless the user explicitly requested that exact file."
+            Write-CodexStructuredLog -EventName "PermissionRequest" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
+            Deny-Permission -Reason $reason
             break
         }
         if (Test-DestructiveAction -Text $text) {
-            Deny-Permission -Reason "Irreversible destructive action requires an explicit user request."
+            $reason = "Irreversible destructive action requires an explicit user request."
+            Write-CodexStructuredLog -EventName "PermissionRequest" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
+            Deny-Permission -Reason $reason
             break
         }
         if (Test-HookWeakening -Text $text) {
-            Deny-Permission -Reason "Hook or multi-agent workflow weakening requires an explicit user request."
+            $reason = "Hook or multi-agent workflow weakening requires an explicit user request."
+            Write-CodexStructuredLog -EventName "PermissionRequest" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
+            Deny-Permission -Reason $reason
             break
         }
         if (Test-FakeSuccessInsertion -Text $text) {
-            Deny-Permission -Reason "Fake-success or evaluator/exit-code manipulation requires explicit user scope and real validation evidence."
+            $reason = "Fake-success or evaluator/exit-code manipulation requires explicit user scope and real validation evidence."
+            Write-CodexStructuredLog -EventName "PermissionRequest" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
+            Deny-Permission -Reason $reason
             break
         }
 
+        Write-CodexStructuredLog -EventName "PermissionRequest" -Outcome "observed" -ToolName $toolName | Out-Null
         Write-HookJson @{ systemMessage = "" }
         break
     }
@@ -696,10 +936,13 @@ switch ($eventName) {
         $state.toolEvents = Add-Unique -Items $state.toolEvents -Value $toolName
 
         $additional = @()
+        $logChangedSurfaces = @()
+        $logValidationResults = @()
         $changedFileCount = Get-ChangedFileCount -Text $text
         $changedLineCount = Get-ChangedLineCount -Text $text
         if ($toolName -match "apply_patch|Edit|Write") {
             $state.changedSurfaces = Add-Unique -Items $state.changedSurfaces -Value "files"
+            $logChangedSurfaces += "files"
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Run relevant checks or record a precise not-run reason before finalizing."
             $additional += "File edits detected: verify with direct checks or record why checks could not run."
         }
@@ -709,17 +952,21 @@ switch ($eventName) {
         }
         if ($text -match "(?i)(package\.json|pyproject\.toml|Cargo\.toml|requirements\.txt|uv\.lock|package-lock\.json|pnpm-lock\.yaml|Cargo\.lock)") {
             $state.changedSurfaces = Add-Unique -Items $state.changedSurfaces -Value "dependencies"
+            $logChangedSurfaces += "dependencies"
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Dependency metadata changed; align lockfile or record why no sync is needed."
             $additional += "Dependency/config sync may be required."
         }
         if ($text -match "(?i)(test|pytest|cargo test|npm test|pnpm test|yarn test|typecheck|lint|build)") {
-            $state.checksRun = Add-Unique -Items $state.checksRun -Value $text
+            $evidence = Get-ToolEvidenceSummary -ToolName $toolName -Text $text
+            $state.checksRun = Add-Unique -Items $state.checksRun -Value $evidence
+            $logValidationResults += $evidence
         }
         if ($text -match "(?i)(hardcoded pass|fake success|exit 0|PASS)") {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Review changed product/control surfaces for hardcoded or fake-success contamination."
         }
 
         Save-State -State $state
+        Write-CodexStructuredLog -EventName "PostToolUse" -Outcome "observed" -ToolName $toolName -ChangedSurface $logChangedSurfaces -ValidationResult $logValidationResults | Out-Null
 
         if ($additional.Count -gt 0) {
             Write-HookJson @{
@@ -737,16 +984,19 @@ switch ($eventName) {
     "Stop" {
         $lastMessage = [string]$inputObject.last_assistant_message
         $hasChanged = @($state.changedSurfaces).Count -gt 0
-        $mentionsEvidence = $lastMessage -match "(?i)(evidence|verified|verification|check|test|lint|typecheck|build|not run|risk|remaining|git status|diff)"
+        $auditReady = Test-FinalAuditReady -Message $lastMessage
 
-        if ($hasChanged -and -not $mentionsEvidence -and -not [bool]$inputObject.stop_hook_active) {
+        if ($hasChanged -and -not $auditReady -and -not [bool]$inputObject.stop_hook_active) {
+            $reason = "Final evidence missing after changed surfaces were observed."
+            Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) | Out-Null
             Write-HookJson @{
                 decision = "block"
-                reason = "Final preflight: changed surfaces were observed. Before finalizing, report direct checks run, checks not run with reasons, and remaining risks."
+                reason = "Final preflight: changed surfaces were observed. Before finalizing, produce a goal audit with checked items, not-run reasons, residual risks, current status complete|blocked|continue, and PM independent verification."
             }
             break
         }
 
+        Write-CodexStructuredLog -EventName "Stop" -Outcome "observed" -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) | Out-Null
         Write-HookJson @{
             continue = $true
             systemMessage = ""

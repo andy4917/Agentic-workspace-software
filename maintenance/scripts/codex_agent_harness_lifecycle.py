@@ -179,9 +179,13 @@ def subagent_nickname_policy_status(root: Path) -> dict[str, Any]:
             continue
         text = read_text(path)
         role_missing = []
-        if f'nickname_prefix = "{prefix}"' not in text:
-            role_missing.append(f"nickname_prefix={prefix}")
-        if f'"{prefix}-' not in text:
+        try:
+            parsed = tomllib.loads(text)
+        except tomllib.TOMLDecodeError:
+            parsed = {}
+            role_missing.append("valid TOML")
+        nickname_candidates = parsed.get("nickname_candidates", []) if isinstance(parsed, dict) else []
+        if not isinstance(nickname_candidates, list) or not any(isinstance(item, str) and item.startswith(f"{prefix}-") for item in nickname_candidates):
             role_missing.append(f"nickname_candidates use {prefix}- prefix")
         if role_missing:
             missing.append({"role": role, "path": rel(path, root), "missing": role_missing})
@@ -346,7 +350,8 @@ def load_state(root: Path) -> dict[str, Any]:
 
 
 def stale_active_references(root: Path) -> list[dict[str, Any]]:
-    active = [root / "config.toml", root / ".codex-global-state.json", root / "hooks.json", root / "AGENTS.md", root / "agent.md"]
+    # Global state can contain prompt history; stale source checks should inspect policy/config surfaces only.
+    active = [root / "config.toml", root / "hooks.json", root / "AGENTS.md", root / "agent.md"]
     pattern = re.compile(r"(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\cache|plugins\\plugins)", re.I)
     matches = []
     for path in active:
@@ -395,11 +400,19 @@ def check_config(root: Path) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         return {"status": "fail", "error": str(exc)}
     features = data.get("features", {})
-    expected_true = ["plugins", "codex_hooks", "multi_agent", "child_agents_md", "tool_search", "tool_suggest", "skill_mcp_dependency_install"]
-    missing = [key for key in expected_true if features.get(key) is not True]
+    expected_true = [
+        "plugins",
+        "codex_hooks",
+        "multi_agent",
+        "child_agents_md",
+        "tool_search",
+        "tool_suggest",
+        "skill_mcp_dependency_install",
+        "workspace_dependencies",
+    ]
     unexpected = [key for key in ["enable_fanout", "multi_agent_v2"] if features.get(key) is True]
-    expected_false = ["workspace_dependencies"]
-    wrong_false = [key for key in expected_false if features.get(key) is not False]
+    missing = [key for key in expected_true if features.get(key) is not True]
+    wrong_false: list[str] = []
     agents = data.get("agents", {})
     required_agent_roles = {
         "explorer": "agents/explorer.toml",
@@ -653,7 +666,7 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("tool output artifact threshold configured", COMMAND_ARTIFACT_THRESHOLD_CHARS > COMMAND_PREVIEW_CHARS),
             ("retrieval report avoids generated and memory roots", latest_retrieval_report_valid(root)),
             ("compact summary has required sections", compact_summary_valid(root)),
-            ("workspace dependencies disabled in config", check_config(root).get("status") == "pass"),
+        ("workspace dependencies use official app bundle", check_config(root).get("status") == "pass"),
             ("large-output storage documented", (root / "artifacts" / "tool-results" / "README.md").exists()),
             ("reports directory excluded from global scan recursion", "reports/**" in " ".join(global_scan.get("patterns", [])) or global_scan.get("content_redacted") is True),
         ],

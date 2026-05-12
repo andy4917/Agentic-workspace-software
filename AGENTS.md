@@ -27,6 +27,7 @@ Adopt `CODEX_WORKFLOW_APPLIED_REVIEW`,'CODEX_WORKFLOW_CONFIGURATION_INTERVIEW'as
 - `AGENTS.md` is the primary file Codex agents should read first for scoped instructions.
 - `agent.md` is a secondary, lower-priority instruction file when both names exist in the same scope.
 - Use the uppercase/lowercase distinction intentionally to communicate priority.
+- User allowed, recommends to download and use any Tools you need.
 
 ## Default Workflow
 
@@ -57,6 +58,20 @@ Default flow:
 
 Keep simple tasks simple. Do not spawn or route extra work for tiny edits, simple answers, or obvious one-step changes.
 
+## Goal Governance
+
+Use a persisted Codex Goal only for coherent long-running work with a clear stopping condition and validation loop.
+
+Rules:
+
+- The PM owns exactly one parent goal for the user's main objective.
+- Treat Goal as a tracking marker, not as PASS, review approval, test proof, or completion authority.
+- Subagents receive contractual subgoals and produce evidence only; they do not create completion authority for the parent goal.
+- Subagent completion, worker reports, MCP results, documentation citations, and passing checks are evidence candidates only.
+- If an active goal exists and files, config, runtime state, or workflow policy changed, do not claim completion without a final goal audit.
+- A final goal audit must include changed surfaces, acceptance checks, direct checks run, direct checks not run with reasons, accepted and rejected subagent evidence, PM independent verification, residual risks, rollback notes, and status: `complete`, `blocked`, or `continue`.
+- After compaction or resume, restate the parent goal, acceptance criteria, accepted evidence, suspect or rejected evidence, open risks, changed surfaces, and the next direct verification step before proceeding.
+
 ## Main Engineering Lifecycle
 
 Use this lifecycle as the main workflow overlay. Scale the ceremony to the task, but do not silently skip the phase that matters.
@@ -85,10 +100,37 @@ Common skill routing:
 - code/config change across more than one file: incremental implementation;
 - behavior change or bug fix: test-driven or prove-it workflow;
 - external API, library, framework, or version-sensitive work: source-backed documentation lookup;
+- frontend design, redesign, UI implementation, UX/UI review, visual polish, or frontend quality remediation: use the `impeccable` skill workflow when available;
 - unfamiliar, high-stakes, security-sensitive, or irreversible work: doubt/adversarial review;
 - browser/UI behavior: runtime browser verification when practical;
 - completed implementation: code review and quality workflow before shipping;
 - Git/GitHub work: Git workflow guidance.
+
+## Frontend Design Workflow
+
+Before any frontend or UI work, read and follow `docs/codex_frontend_quality_directive.md`. Treat it as the mandatory final deployment administrator directive for frontend quality. If this document conflicts with lighter frontend habits or generic UI-generation defaults, the directive wins within frontend/UI scope.
+
+For frontend design and implementation, Codex must optimize for ordinary end users who have no prior knowledge of the current development architecture, internal agent design, implementation details, or technical vocabulary. Do not design primarily from the developer's or agent's perspective unless the product is explicitly a developer tool and the user audience requires it.
+
+Purpose: reduce the generic, low-quality UI/UX defaults commonly produced by Codex/GPT by forcing project context, design intent, shape-first planning, and post-build critique before claiming the interface is ready.
+
+When the `impeccable` skill is installed and the task touches frontend UI, use this recommended workflow:
+
+1. Project context: run `$impeccable teach` so the project has `PRODUCT.md` and, when possible, `DESIGN.md`.
+2. Existing project documentation: for an existing codebase, run `$impeccable document` to derive `DESIGN.md` from current design tokens, components, colors, and typography.
+3. Shape before code: before creating a new screen or major UI surface, run `$impeccable shape <target>` and settle the UI direction, layout, information architecture, and visual strategy before implementation.
+4. Implement: run `$impeccable craft <target>` only after a user-confirmed shape brief exists. `teach` and `PRODUCT.md` do not count as shape confirmation.
+5. Post-process: after implementation, run the smallest useful set of `$impeccable audit <target>`, `$impeccable critique <target>`, and `$impeccable polish <target>`.
+
+Use targeted Impeccable refinements when the problem is specific:
+
+- Bland or too safe: `$impeccable bolder <target>`.
+- Too loud or overstimulating: `$impeccable quieter <target>`.
+- Layout or spacing failure: `$impeccable layout <target>`.
+- Typography hierarchy failure: `$impeccable typeset <target>`.
+- Weak color strategy: `$impeccable colorize <target>`.
+
+Treat Impeccable output as workflow evidence, not completion authority. Final completion still requires direct verification, browser/runtime checks when practical, and a concise report of checks run, checks not run, and remaining risks.
 
 ## PM Responsibilities
 
@@ -211,14 +253,25 @@ If the task changes, reclassify lightly:
 - Push back when the requested approach has a concrete technical downside, and offer a safer alternative.
 - Use `maintenance/AGENT_TOOL_REQUIREMENTS.md` for the default Python, JavaScript,
   TypeScript, Rust, C/C++, MCP, and reasoning-effort tool policy.
-- Prefer `C:\Users\anise\.codex\toolchains\shims` for developer tools when
+- Prefer `%USERPROFILE%\.codex\toolchains\shims` for developer tools when
   resolving commands from this environment.
+- Use official Codex bundled tools before local duplicates when the tool exists
+  in the Codex Desktop bundle. Current official bundled command-line tools are
+  `node`, `node_repl`, `rg`, and `codex`.
+- Use local toolchains or local MCP servers only for capabilities not bundled by
+  Codex, and route them through explicit wrappers or absolute command paths.
+- Do not call bare commands when both an official bundle and a local install
+  exist. Run `maintenance/scripts/check-toolchain-sources.ps1` when tool source
+  ambiguity or shim failure appears.
 - Do not treat disabled or unloaded MCP tools as unavailable by preference. If an
   MCP server is configured for the task but no `mcp__...` tools are exposed in
   the active session, record the runtime-load issue and use the best available
   fallback.
 - Keep persistent reasoning effort at the placeholder default unless the current
   task justifies escalation.
+- Keep operational files ASCII English when they may be parsed or executed by
+  hooks, shells, MCP loaders, maintenance scripts, config readers, or harness
+  checks. User-facing conversation may still be Korean.
 
 ## Anti-Rationalization Rules
 
@@ -254,6 +307,14 @@ Hooks support the PM workflow; they do not replace PM judgment or user review.
 - Post-tool hooks may record changed surfaces and validation reminders.
 - Stop hooks may ask for missing evidence, but must avoid broad gate cascades.
 - Hook state must remain small, local, and non-authoritative.
+
+## Log Hygiene
+
+- Keep hook and workflow logs small, local, structured, and non-authoritative.
+- Store current operational records in SQLite; archive old raw logs by month.
+- Do not store raw secrets, full prompts, or full tool payloads by default.
+- Before removing old logs, create a manifest, verify the archive, and move originals to Windows Recycle Bin for user review.
+- Never delete SQLite WAL/SHM files directly; use checkpoint/maintenance commands.
 
 ## Ask Or Stop Conditions
 

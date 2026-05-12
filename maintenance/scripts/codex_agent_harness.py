@@ -13,7 +13,6 @@ from codex_agent_harness_base import DEFAULT_PROFILE
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Local Codex harness")
-    parser = argparse.ArgumentParser(description="Local Codex harness")
     parser.add_argument("--root", default=".", help="CODEX_HOME / harness root")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("discovery").set_defaults(func=cmd_discovery)

@@ -192,7 +192,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "tool_search = true\n"
             "tool_suggest = true\n"
             "skill_mcp_dependency_install = true\n"
-            "workspace_dependencies = false\n"
+            "workspace_dependencies = true\n"
             "\n"
             "[agents]\n"
             "max_threads = 8\n"
@@ -247,7 +247,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             {
                 "subagents": {
                     "required_start_skill": "vowline",
-                    "required_start_skill_path": "C:\\Users\\anise\\.agents\\skills\\vowline\\SKILL.md",
+                    "required_start_skill_path": str(Path.home() / ".agents" / "skills" / "vowline" / "SKILL.md"),
                     "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",
                 }
             },

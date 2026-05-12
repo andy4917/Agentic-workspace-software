@@ -18,7 +18,7 @@
     "default_spawn_policy": "conditional_after_explicit_user_authorization",
     "explicit_user_authorization_required_by_runtime": true,
     "required_start_skill": "vowline",
-    "required_start_skill_path": "C:\\Users\\anise\\.agents\\skills\\vowline\\SKILL.md",
+    "required_start_skill_path": "%USERPROFILE%\\.agents\\skills\\vowline\\SKILL.md",
     "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",
     "authorization_phrases": [
       "subagent",
@@ -62,6 +62,33 @@
     ],
     "file_ownership_required": "true_for_parallel_implementation",
     "status_board_required": "true_for_team_preset_runs"
+  },
+  "goal_governance": {
+    "goal_role": "long_running_tracking_marker_only",
+    "pm_parent_goal_owner": "main_session",
+    "subagent_goal_model": "contractual_subgoal_evidence_only",
+    "subagent_completion_is_parent_completion": false,
+    "final_audit_required_when_goal_or_surface_changed": true,
+    "final_audit_required_fields": [
+      "changed_surfaces",
+      "acceptance_checks",
+      "direct_checks_run",
+      "direct_checks_not_run",
+      "accepted_and_rejected_subagent_evidence",
+      "pm_independent_verification",
+      "residual_risks",
+      "rollback_notes",
+      "status_complete_blocked_or_continue"
+    ],
+    "resume_packet_required_fields": [
+      "parent_goal",
+      "acceptance_criteria",
+      "accepted_evidence",
+      "suspect_or_rejected_evidence",
+      "open_risks",
+      "changed_surfaces",
+      "next_direct_verification_step"
+    ]
   },
   "work_size": {
     "tiny_files": 1,

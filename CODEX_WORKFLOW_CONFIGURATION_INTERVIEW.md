@@ -1,4 +1,4 @@
-# Codex Workflow Configuration Interview
+# Codex Workflow Configuration Interview [ARCHIVED / NOT ACTIVE CONFIG]
 
 ## Purpose
 

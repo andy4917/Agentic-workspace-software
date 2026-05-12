@@ -1,0 +1,14 @@
+{
+  "eval_id": "orchestration-governance-smoke",
+  "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id orchestration-governance-smoke",
+  "risk_notes": "Structural smoke test only; it does not prove runtime hook coverage for every tool surface.",
+  "setup": "Run from CODEX_HOME after goal governance policy/template changes.",
+  "success_criteria": [
+    "AGENTS.md records Goal as a tracking marker and PM-owned completion audit",
+    "Subagent delegation charter states evidence-only authority",
+    "Goal templates require checked, not-run, risks, and PM independent verification",
+    "Stop hook synthetic input blocks missing audit and allows audit-present final text"
+  ],
+  "task": "Verify the local Goal governance policy, templates, and Stop hook audit prompt shape.",
+  "timeout_seconds": 30
+}

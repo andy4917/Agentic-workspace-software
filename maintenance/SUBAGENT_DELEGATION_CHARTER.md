@@ -13,11 +13,16 @@ Every delegated task must include:
 - `PM Context`: facts the PM already knows, claims the PM does not trust yet, and assumptions the subagent must challenge.
 - `Owned Surface`: files, directories, commands, docs, or runtime surfaces the subagent may inspect or modify.
 - `Out Of Scope`: surfaces the subagent must not touch.
+- `Authority`: evidence only unless the PM explicitly assigned a bounded write surface; no subagent may mark the PM parent goal complete.
 - `Expected Evidence`: paths, line references, commands, diffs, reproduction steps, or source citations the PM can independently verify.
 - `Anti-Reward-Hacking Rules`: explicit invalid-success cases for this task.
 - `Mid-Report`: inspected surfaces, preliminary findings, next checks, blockers, and not-yet-checked items.
 - `Exit Criteria`: what counts as a useful handoff, including completion and completion-impossible conditions.
 - `Not Checked`: required final disclosure of skipped, inaccessible, stale, fallback, or not-run checks.
+
+## Authority Boundary
+
+The PM owns the parent goal and the completion decision. Subagents own only their bounded subgoal and the evidence package they return. A subagent report may reduce uncertainty, expose a blocker, or recommend PM verification, but it cannot complete, pause, clear, or redefine the PM goal.
 
 ## Required Output Order
 
@@ -40,6 +45,7 @@ The PM must treat these as unsupported until independently verified:
 - Omitting the delegated purpose or PM context.
 - Hiding uncertainty to make the result look simpler.
 - Treating a subagent report, MCP result, test pass, or citation as final authority.
+- Treating a subagent subgoal or thread status as PM parent-goal completion.
 
 ## Replacement Rule
 

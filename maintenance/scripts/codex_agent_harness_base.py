@@ -23,7 +23,7 @@ SCHEMA_VERSION = "1"
 RUBRIC_VERSION = "codex-harness-audit-v1"
 OWNER = "codex-agent-harness"
 DEFAULT_PROFILE = "developer"
-SOURCE_PLAN = Path("C:/Users/anise/Downloads/codex-agent-harness-distillation-plan.md")
+SOURCE_PLAN = Path.home() / "Downloads" / "codex-agent-harness-distillation-plan.md"
 COMMAND_PREVIEW_CHARS = 4000
 COMMAND_ARTIFACT_THRESHOLD_CHARS = 12000
 TRAJECTORY_VERSION = "codex-trajectory-v1"
@@ -113,11 +113,16 @@ Every delegated task must include:
 - `PM Context`: facts the PM already knows, claims the PM does not trust yet, and assumptions the subagent must challenge.
 - `Owned Surface`: files, directories, commands, docs, or runtime surfaces the subagent may inspect or modify.
 - `Out Of Scope`: surfaces the subagent must not touch.
+- `Authority`: evidence only unless the PM explicitly assigned a bounded write surface; no subagent may mark the PM parent goal complete.
 - `Expected Evidence`: paths, line references, commands, diffs, reproduction steps, or source citations the PM can independently verify.
 - `Anti-Reward-Hacking Rules`: explicit invalid-success cases for this task.
 - `Mid-Report`: inspected surfaces, preliminary findings, next checks, blockers, and not-yet-checked items.
 - `Exit Criteria`: what counts as a useful handoff, including completion and completion-impossible conditions.
 - `Not Checked`: required final disclosure of skipped, inaccessible, stale, fallback, or not-run checks.
+
+## Authority Boundary
+
+The PM owns the parent goal and the completion decision. Subagents own only their bounded subgoal and the evidence package they return. A subagent report may reduce uncertainty, expose a blocker, or recommend PM verification, but it cannot complete, pause, clear, or redefine the PM goal.
 
 ## Required Output Order
 
@@ -140,6 +145,7 @@ The PM must treat these as unsupported until independently verified:
 - Omitting the delegated purpose or PM context.
 - Hiding uncertainty to make the result look simpler.
 - Treating a subagent report, MCP result, test pass, or citation as final authority.
+- Treating a subagent subgoal or thread status as PM parent-goal completion.
 
 ## Replacement Rule
 
@@ -242,6 +248,20 @@ EVAL_TEMPLATES = {
         "grader": "python maintenance/scripts/codex_agent_harness.py trajectory --recent 5",
         "timeout_seconds": 30,
         "risk_notes": "Checks local harness trajectory records only.",
+    },
+    "evals/orchestration-governance-smoke.json": {
+        "eval_id": "orchestration-governance-smoke",
+        "task": "Verify the local Goal governance policy, templates, and Stop hook audit prompt shape.",
+        "setup": "Run from CODEX_HOME after goal governance policy/template changes.",
+        "success_criteria": [
+            "AGENTS.md records Goal as a tracking marker and PM-owned completion audit",
+            "Subagent delegation charter states evidence-only authority",
+            "Goal templates require checked, not-run, risks, and PM independent verification",
+            "Stop hook synthetic input blocks missing audit and allows audit-present final text",
+        ],
+        "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id orchestration-governance-smoke",
+        "timeout_seconds": 30,
+        "risk_notes": "Structural smoke test only; it does not prove runtime hook coverage for every tool surface.",
     },
 }
 
@@ -579,7 +599,7 @@ def discovery_data(root: Path) -> dict[str, Any]:
         "existing_harness_instruction_files": discover_instruction_files(root),
         "proposed_harness_script_language": "Python engine with PowerShell wrappers",
         "implementation_assumptions": [
-            "C:/Users/anise/.codex is CODEX_HOME and GlobalSSOT root.",
+            "CODEX_HOME resolves to the user profile .codex directory and is the GlobalSSOT root.",
             "Desktop is user-facing and must not be mutated by harness commands.",
             "Global config mutation requires backup and explicit apply path.",
             "Secrets and credential contents are not read.",

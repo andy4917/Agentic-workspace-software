@@ -1,10 +1,11 @@
 # Codex Workflow Applied Review
+[ACTIVE PROFILE RECORD]
 
 Date: 2026-05-10
 
 Source decision document:
 
-- `C:\Users\anise\Downloads\codex_workflow_configuration_interview_completed_reviewed.md`
+- `%USERPROFILE%\Downloads\codex_workflow_configuration_interview_completed_reviewed.md`
 
 Adopted profile:
 
@@ -40,7 +41,7 @@ Applied locally:
 - `[features].multi_agent = true`
 - `[agents].max_threads = 8`
 - `[agents].max_depth = 1`
-- `[projects.'c:\users\anise\.codex'].trust_level = "trusted"`
+- The user-profile `.codex` project entry has `trust_level = "trusted"`.
 - Existing MCP, plugin, memory, marketplace, model, Windows sandbox, and project trust settings were preserved.
 
 Notes:
@@ -126,6 +127,6 @@ Required for this change:
 
 ## Residual Risk
 
-- Hook trust can still be affected by external app/session trust state, but `config.toml` explicitly marks `C:\Users\anise\.codex` trusted.
+- Hook trust can still be affected by external app/session trust state, but `config.toml` explicitly marks the user-profile `.codex` path trusted.
 - `config.toml` is local ignored state, so this repository commit records the policy and hook implementation, not the private local config file.
 - Unknown future Codex config keys should be rechecked against official docs before being treated as active configuration.
