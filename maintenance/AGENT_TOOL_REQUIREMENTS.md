@@ -102,6 +102,14 @@ repository-specific command, credential source, or policy boundary.
 - Use `node_repl` as a Codex Desktop bundled tool, not as a user-configured
   `[mcp_servers.*]` entry. Discover it with `tool_search` when needed, then call
   `mcp__node_repl__js` for JavaScript execution or browser-plugin setup code.
+- Use Chrome DevTools MCP only as a frontend browser-observation role. Keep it
+  OFF by default and toggle it with
+  `maintenance\scripts\chrome-devtools-mcp-toggle.ps1`; do not hand-edit
+  `config.toml` to enable or disable it. After turning it ON, reload/restart the
+  app if the tool namespace is not visible, verify exposure with tool discovery,
+  use it for the rendered observation, then turn it OFF and confirm `state=off`.
+  Default mode is slim, headless, isolated, telemetry-off, performance CrUX off,
+  and npm-backed through `.codex\toolchains\shims\npx.cmd`.
 
 ## Reasoning Effort Policy
 

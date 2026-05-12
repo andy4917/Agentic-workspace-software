@@ -45,6 +45,54 @@ different command, credential source, or policy boundary.
 - `node_repl`: bundled Codex tool, discovered rather than configured. Use when a
   skill or prompt says `node_repl`, for JavaScript execution, browser-plugin
   setup code, package import checks, and app-bundled Node runtime diagnostics.
+- `chrome_devtools_observe`: frontend-only stdio MCP, intentionally OFF by
+  default. It is added and removed with
+  `maintenance\scripts\chrome-devtools-mcp-toggle.ps1`, not by hand-editing
+  `config.toml`. Use only after a task is confirmed to require rendered browser
+  observation. Default command is the local-chain wrapper
+  `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
+  chrome-devtools-mcp@latest --slim --headless --isolated
+  --no-usage-statistics --no-performance-crux`, with usage statistics and update
+  checks disabled by environment variables. Turn it OFF after the frontend task
+  and verify `state=off`.
+
+## Frontend Browser Observation Toggle
+
+Chrome DevTools MCP is not part of the always-on global MCP set. Its scope is
+Codex-global only while a frontend task needs real rendered observation.
+
+Activation sequence:
+
+1. Confirm the task touches visible frontend UI or browser behavior.
+2. Run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on
+```
+
+3. Reload or restart the Codex app/session before expecting new
+   `mcp__chrome_devtools_observe__...` tools to appear.
+4. Verify active tool exposure with tool discovery, then perform a small browser
+   observation such as navigation plus screenshot or equivalent safe read.
+5. After the frontend verification pass, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 off
+```
+
+6. Confirm:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 status
+```
+
+Expected final state is `state=off`.
+
+Use `-Visible` only when the task specifically requires a visible isolated Chrome
+window. Use `-Full` only when the slim tool surface is insufficient, for example
+when performance, network, accessibility snapshot, or deeper DevTools categories
+are required. Do not connect this MCP to a user's normal Chrome profile or
+logged-in sensitive pages unless the user explicitly asks for that risk boundary.
 
 ## Toolchain Source Rule
 

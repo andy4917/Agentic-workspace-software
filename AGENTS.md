@@ -132,6 +132,15 @@ Use targeted Impeccable refinements when the problem is specific:
 
 Treat Impeccable output as workflow evidence, not completion authority. Final completion still requires direct verification, browser/runtime checks when practical, and a concise report of checks run, checks not run, and remaining risks.
 
+For frontend browser observation, use Chrome DevTools MCP only as a temporary
+role. Keep `chrome_devtools_observe` OFF by default, turn it ON with
+`maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on` only after confirming
+frontend work, reload or restart if the active session does not expose the MCP
+tools, verify with a small rendered observation, then turn it OFF and confirm
+`state=off`. Do not hand-edit `config.toml` for this toggle unless the Codex CLI
+toggle is itself broken and the repair is documented. The managed default is
+slim, headless, isolated, telemetry-off, and performance CrUX off.
+
 ## PM Responsibilities
 
 The main Codex session is the PM.

@@ -51,6 +51,33 @@ Record:
 - Keep unrelated installs out of the active chain. If a tool exists but should
   not be used by Codex, mark it unused by Codex wrappers or quarantine it.
 
+## Frontend-Only MCP Toggle Rule
+
+MCP servers that are expensive, noisy, or only useful for a narrow workflow must
+not be left always-on just because they are useful sometimes.
+
+`chrome_devtools_observe` is the managed frontend browser-observation example:
+
+- `source_class`: `local-chain`.
+- `owner`: user-global Codex MCP config while ON; absent from config while OFF.
+- `exact_path`: `%USERPROFILE%\.codex\toolchains\shims\npx.cmd`.
+- `dependency_chain`: Codex official bundled Node through the `npx.cmd` local
+  wrapper -> npm package `chrome-devtools-mcp@latest` -> Chrome stable.
+- `scope`: Codex-global only during confirmed frontend work.
+- `default_args`: slim, headless, isolated, usage-statistics off, performance
+  CrUX off.
+- `activation`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on`.
+- `deactivation`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 off`.
+- `verification`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 status`,
+  `verify-package`, app tool discovery after reload, and one safe browser
+  observation when the tools are exposed.
+- `rollback`: run `off`; a pre-change config backup is stored under ignored
+  local state at `%USERPROFILE%\.codex\state\mcp-toggle-backups`.
+
+Do not directly edit `config.toml` for this toggle unless the Codex CLI command
+itself is confirmed broken. If manual repair becomes necessary, document the
+exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
+
 ## Handoff Requirement
 
 For every non-trivial workstation maintenance pass, update at least one durable

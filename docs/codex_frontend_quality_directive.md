@@ -367,6 +367,30 @@ At minimum, Codex must inspect:
 
 If browser or screenshot tooling is available, Codex must use it.
 
+### 10.1 Chrome DevTools MCP Observation
+
+Chrome DevTools MCP is the preferred MCP role for real browser observation when
+the task is confirmed frontend work and the Codex session can expose the tools.
+It must not be left always-on.
+
+Use this control sequence:
+
+```text
+CHROME_DEVTOOLS_MCP_CONTROL:
+confirm_frontend_task=yes
+toggle_on=%USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on
+reload_or_restart_if_tools_missing=yes
+tool_exposure_verified=yes|no
+rendered_observation_performed=yes|no
+toggle_off=%USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 off
+final_status=state=off
+```
+
+Default mode is slim, headless, isolated, telemetry-off, performance CrUX off,
+and backed by the `.codex\toolchains\shims\npx.cmd` wrapper. Use `-Visible`
+only when a visible isolated Chrome window is required. Use `-Full` only when
+slim browser observation cannot answer the frontend verification question.
+
 If visual verification is not possible, Codex must state:
 
 ```text
