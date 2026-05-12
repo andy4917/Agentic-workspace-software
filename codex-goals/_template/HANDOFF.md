@@ -24,6 +24,12 @@ Current PM-owned objective:
 
 - 
 
+## Workstation Maintenance State
+
+| Surface | Source Class | Exact Path Or Locator | Owner Config | Dependency Chain | Verification | Rollback |
+|---|---|---|---|---|---|---|
+|  |  |  |  |  |  |  |
+
 ## Next PM Action
 
 - 

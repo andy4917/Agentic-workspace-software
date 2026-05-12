@@ -272,6 +272,17 @@ If the task changes, reclassify lightly:
 - Keep operational files ASCII English when they may be parsed or executed by
   hooks, shells, MCP loaders, maintenance scripts, config readers, or harness
   checks. User-facing conversation may still be Korean.
+- When the user asks to install, configure, enable, disable, upgrade, remove, or
+  repair a workstation tool, package, library, runtime, MCP server, plugin,
+  connector, shim, profile script, or local environment, treat it as a managed
+  workstation-maintenance change. Record its source class, exact path, owning
+  config, dependency chain, verification command, rollback or quarantine note,
+  and handoff update. If the installed item is not related to the active goal,
+  explicitly mark it out of scope instead of silently mixing it into the toolchain.
+- Workstation management is part of the agent's job. The agent should improve
+  performance, hygiene, and maintainability directly when in scope, update the
+  relevant handoff/maintenance record, and leave the workstation in a state a
+  future agent can inspect without guessing.
 
 ## Anti-Rationalization Rules
 

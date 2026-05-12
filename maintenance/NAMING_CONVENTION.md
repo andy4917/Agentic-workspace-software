@@ -37,11 +37,18 @@ Use these terms in maintenance docs, reports, and review notes:
   configured source of truth.
 - `quarantine-archive`: reversible archive or Recycle Bin staging area for
   deprecated local tools, duplicate wrappers, and stale caches.
+- `managed-install-record`: a durable maintenance note that names the exact
+  active path, source class, owner, dependency chain, verification, rollback, and
+  handoff update for a workstation-level install or configuration change.
 
 Do not call a copied official bundle a local-chain package. Do not call a
 package-manager shim an official-bundle tool just because Codex can execute it.
 For bundled tools, local duplicate installs must be removed, quarantined, or
 explicitly marked unused by Codex wrappers.
+
+When a user requests a future installation or configuration, add the resulting
+surface to these source classes instead of leaving it as an unnamed local tool.
+If it is only a support dependency, name the parent dependency chain that owns it.
 
 ## Encoding Rule
 

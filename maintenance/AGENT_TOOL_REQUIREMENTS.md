@@ -29,6 +29,25 @@ Quick check:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
 ```
 
+## Workstation Managed Changes
+
+When a user asks to install, configure, enable, disable, upgrade, remove, or
+repair a workstation-level capability, follow
+`maintenance/WORKSTATION_MAINTENANCE.md`.
+
+Do not leave a new tool as an implicit side effect. Record the source class,
+exact active path, owning config, dependency chain, scope, verification command,
+rollback or quarantine route, and handoff update.
+
+If the tool is unrelated to the active task, mark it out of scope. If it is
+related, tie it to the exact dependency chain that will use it, for example:
+
+- MCP stdio package -> `.codex\toolchains\shims\npx.cmd` -> bundled Node.
+- Python maintenance script -> `.codex\toolchains\shims\python.cmd` or official
+  workspace runtime Python.
+- Browser/plugin runtime -> patched marketplace path plus original official
+  bundle source.
+
 ## Core Stacks
 
 ### Python
