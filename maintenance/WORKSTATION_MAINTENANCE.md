@@ -132,7 +132,7 @@ When hooks, harness, or Codex global policy changed, also run:
 
 ## Completion Rule
 
-Do not claim a workstation maintenance request is complete until the changed
-or inspected surfaces and risk level are named, the changed source is named, the
-active path is explicit when applicable, dependencies are documented,
+Do not claim a workstation maintenance request is complete until inspected and
+changed surfaces are named, the risk level is stated, the changed source is
+named, the active path is explicit when applicable, dependencies are documented,
 verification ran or has a concrete not-run reason, and handoff is current.
