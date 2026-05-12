@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.cargo\bin\cargo-miri.exe" %*
+"%USERPROFILE%\.cargo\bin\cargo-miri.exe" %*

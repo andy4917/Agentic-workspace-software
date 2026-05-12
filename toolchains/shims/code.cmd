@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd" %*
+"%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd" %*

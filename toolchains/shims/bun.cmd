@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\scoop\shims\bun.exe" %*
+"%USERPROFILE%\scoop\shims\bun.exe" %*

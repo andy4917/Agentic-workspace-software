@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\pytest.exe" %*
+"%USERPROFILE%\.local\bin\pytest.exe" %*

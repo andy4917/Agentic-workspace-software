@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\stubgen.exe" %*
+"%USERPROFILE%\.local\bin\stubgen.exe" %*

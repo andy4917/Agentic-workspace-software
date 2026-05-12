@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\AppData\Roaming\npm\eslint.cmd" %*
+"%APPDATA%\npm\eslint.cmd" %*

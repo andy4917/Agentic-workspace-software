@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.cargo\bin\cargo-insta.exe" %*
+"%USERPROFILE%\.cargo\bin\cargo-insta.exe" %*

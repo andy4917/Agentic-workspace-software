@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.cargo\bin\rust-analyzer.exe" %*
+"%USERPROFILE%\.cargo\bin\rust-analyzer.exe" %*

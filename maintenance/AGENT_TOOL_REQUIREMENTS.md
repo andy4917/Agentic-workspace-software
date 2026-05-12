@@ -1,13 +1,33 @@
 # Agent Tool Requirements
 
 This file describes tools the agent should use even when the user does not name
-them explicitly. It is operational guidance for `C:\Users\anise\.codex`.
+them explicitly. It is operational guidance for `%USERPROFILE%\.codex`.
 
 ## Default Resolution
 
-Use `C:\Users\anise\.codex\toolchains\shims` as the first command surface.
-The shims call installer-owned tools by absolute path; do not move package
-manager directories into `.codex`.
+Use `%USERPROFILE%\.codex\toolchains\shims` by explicit path, or use a
+process-local PATH only for a bounded task. Do not add this directory to
+persistent User or Machine PATH.
+
+Source selection rule:
+
+1. If Codex Desktop officially bundles the tool, use the official bundle through
+   the `.codex` wrapper or the bundle path. Current bundled command-line tools
+   are `node`, `node_repl`, `rg`, and `codex`.
+   App workspace dependencies are also official Codex-provided runtime assets;
+   keep `features.workspace_dependencies = true` unless a task explicitly needs
+   a project-local replacement.
+2. If Codex does not bundle the capability, use the local toolchain or local MCP
+   server with an explicit wrapper or absolute command path.
+3. Do not call bare commands when both a bundled tool and a local install exist.
+4. Broken package-manager shims must be quarantined or marked unused; they must
+   not remain the first resolved command.
+
+Quick check:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
+```
 
 ## Core Stacks
 
@@ -47,13 +67,22 @@ app has restarted or otherwise reloaded tool definitions. If a server is enabled
 but no `mcp__...` tools appear in the active tool list, record that as a runtime
 load issue, not as proof the tool is unnecessary.
 
-- Use OpenAI Developer Docs MCP for OpenAI API/model/plugin documentation.
-- Use Context7 only when `CONTEXT7_API_KEY` is available and current library
-  documentation is needed.
+Global MCP server definitions belong in `%USERPROFILE%\.codex\config.toml` when
+the user intent is cross-workspace use. Use project-local MCP config only for a
+repository-specific command, credential source, or policy boundary.
+
+- Use OpenAI Developer Docs MCP for current OpenAI API, model, Codex, plugin,
+  app-server, and ChatGPT Apps documentation.
+- Use Context7 only when `CONTEXT7_API_KEY` is available and current third-party
+  library, framework, SDK, CLI, or cloud-service documentation is needed.
 - Use Sequential Thinking for high-ambiguity debugging or planning, not for
   routine edits.
-- Use Windows PowerShell MCP only when its narrower tool policy is useful; the
-  normal local shell remains the primary Windows diagnostics tool.
+- Use Windows PowerShell MCP when a persistent PowerShell console is useful for
+  Windows diagnostics or command execution. Its `invoke_expression` tool is
+  broad, so keep approval prompting and do not describe this server as read-only.
+- Use `node_repl` as a Codex Desktop bundled tool, not as a user-configured
+  `[mcp_servers.*]` entry. Discover it with `tool_search` when needed, then call
+  `mcp__node_repl__js` for JavaScript execution or browser-plugin setup code.
 
 ## Reasoning Effort Policy
 

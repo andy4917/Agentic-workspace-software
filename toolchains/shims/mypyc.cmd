@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\mypyc.exe" %*
+"%USERPROFILE%\.local\bin\mypyc.exe" %*

@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.cargo\bin\cargo.exe" %*
+"%USERPROFILE%\.cargo\bin\cargo.exe" %*

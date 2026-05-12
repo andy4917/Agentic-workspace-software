@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\tox-to-nox.exe" %*
+"%USERPROFILE%\.local\bin\tox-to-nox.exe" %*

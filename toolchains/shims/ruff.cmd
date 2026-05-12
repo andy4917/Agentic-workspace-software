@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\ruff.exe" %*
+"%USERPROFILE%\.local\bin\ruff.exe" %*

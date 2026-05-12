@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\dmypy.exe" %*
+"%USERPROFILE%\.local\bin\dmypy.exe" %*

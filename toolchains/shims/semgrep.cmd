@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\semgrep.exe" %*
+"%USERPROFILE%\.local\bin\semgrep.exe" %*

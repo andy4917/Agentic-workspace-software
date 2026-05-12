@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.cargo\bin\cargo-fmt.exe" %*
+"%USERPROFILE%\.cargo\bin\cargo-fmt.exe" %*

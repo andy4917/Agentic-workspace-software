@@ -1,2 +1,3 @@
 @echo off
-"C:\Users\anise\AppData\Roaming\npm\npx.cmd" %*
+set "PATH=%LOCALAPPDATA%\OpenAI\Codex\bin;%PATH%"
+"%APPDATA%\npm\npx.cmd" %*

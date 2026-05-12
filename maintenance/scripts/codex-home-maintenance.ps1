@@ -225,7 +225,7 @@ function Get-RuntimeGuardSummary {
         config_readonly = ($null -ne $configItem -and $configItem.IsReadOnly)
         global_state_readonly = ($null -ne $stateItem -and $stateItem.IsReadOnly)
         features_plugins_enabled = ($config -match '(?m)^\s*plugins\s*=\s*true\s*$')
-        workspace_dependencies_disabled = ($config -match '(?m)^\s*workspace_dependencies\s*=\s*false\s*$')
+        workspace_dependencies_enabled = ($config -match '(?m)^\s*workspace_dependencies\s*=\s*true\s*$')
         bundled_marketplace_source_is_installed_app_bundle = ($config -match '(?s)\[marketplaces\.[^\]]*openai-bundled[^\]]*\].*?Program Files\\WindowsApps\\OpenAI\.Codex_')
         temp_or_bundled_source_absent = ($config -notmatch '(?i)(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\cache)')
         bundled_browser_plugin_disabled = ($config -match '(?s)\[plugins\."browser-use@openai-bundled"\].*?enabled\s*=\s*false')
@@ -372,7 +372,7 @@ function Get-EverythingNameSummary {
         $outside = @($all | Where-Object {
             $_ -notlike 'C:\$Recycle.Bin\*' -and
             $_ -notlike 'C:\$SysReset\OldOS\$Recycle.Bin\*' -and
-            $_ -notlike 'C:\Users\anise\Desktop\*'
+            $_ -notlike (Join-Path ([Environment]::GetFolderPath('Desktop')) '*')
         })
         $summaries += [ordered]@{
             query = $query
@@ -416,7 +416,7 @@ function Get-ToolchainInventory {
             'ruff', 'pytest', 'mypy', 'black', 'poetry', 'pdm', 'pre-commit', 'semgrep',
             'rustc', 'cargo', 'rustup', 'rustfmt', 'cargo-nextest', 'just', 'rust-analyzer',
             'java', 'javac', 'mvn', 'gradle', 'cmake', 'zig', 'cl', 'nmake', 'link', 'lib', 'dumpbin', 'rc',
-            'scoop', 'winget', 'choco', 'docker'
+            'scoop', 'winget', 'choco'
         )
         path_hygiene = Get-PathHygieneSummary
         root_summaries = @($rootPaths | ForEach-Object { Get-PathSummary -Path $_ })

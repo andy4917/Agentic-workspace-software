@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.cargo\bin\rust-lldb.exe" %*
+"%USERPROFILE%\.cargo\bin\rust-lldb.exe" %*

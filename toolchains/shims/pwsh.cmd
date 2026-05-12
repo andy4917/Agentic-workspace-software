@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe" %*
+"%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe" %*

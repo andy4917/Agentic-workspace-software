@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.cargo\bin\rustdoc.exe" %*
+"%USERPROFILE%\.cargo\bin\rustdoc.exe" %*

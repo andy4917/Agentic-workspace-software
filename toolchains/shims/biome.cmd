@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\AppData\Roaming\npm\biome.cmd" %*
+"%APPDATA%\npm\biome.cmd" %*

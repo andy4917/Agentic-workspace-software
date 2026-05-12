@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\pipx.exe" %*
+"%USERPROFILE%\.local\bin\pipx.exe" %*

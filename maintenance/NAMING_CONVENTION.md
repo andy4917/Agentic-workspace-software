@@ -1,6 +1,6 @@
 # Codex Home Naming Convention
 
-This document is an audit rule for `C:\Users\anise\.codex`.
+This document is an audit rule for `%USERPROFILE%\.codex`.
 It is not app configuration and it is not a completion gate.
 
 ## Active Names
@@ -17,6 +17,39 @@ Use these names only for live, intentionally managed surfaces:
 - `cache\codex_apps_tools`
 - `local-environments`
 - `profile.d`
+
+## Source Class Names
+
+Use these terms in maintenance docs, reports, and review notes:
+
+- `official-bundle`: files shipped by Codex Desktop, the WindowsApps Codex
+  package, or the Codex primary workspace runtime. These are official runtime
+  assets and should be preferred whenever the requested tool exists there.
+- `app-bundle-bin`: the official Codex command bundle under
+  `%LOCALAPPDATA%\OpenAI\Codex\bin` or the WindowsApps app resources.
+- `workspace-runtime-bundle`: the official Codex primary runtime dependency
+  bundle surfaced by `load_workspace_dependencies`.
+- `local-wrapper`: a small `.cmd` or `.ps1` entry point owned by this `.codex`
+  tree. Wrappers select a source class and must be easy to audit.
+- `local-chain`: user-installed package manager, language runtime, compiler,
+  SDK, or MCP server used because Codex does not bundle that capability.
+- `runtime-cache`: app-generated cache that may be active but must not become a
+  configured source of truth.
+- `quarantine-archive`: reversible archive or Recycle Bin staging area for
+  deprecated local tools, duplicate wrappers, and stale caches.
+
+Do not call a copied official bundle a local-chain package. Do not call a
+package-manager shim an official-bundle tool just because Codex can execute it.
+For bundled tools, local duplicate installs must be removed, quarantined, or
+explicitly marked unused by Codex wrappers.
+
+## Encoding Rule
+
+Operational files that can be parsed or executed by hooks, shells, MCP loaders,
+or maintenance scripts must be ASCII English unless a format explicitly requires
+Unicode data. This includes `hooks`, `toolchains`, `maintenance/scripts`,
+`codex-goals` templates, config snippets, rules, and operational policy docs.
+User-facing final responses may still be Korean.
 
 ## Forbidden Active Names
 

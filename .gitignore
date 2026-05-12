@@ -77,6 +77,8 @@ archived_runtime_state/
 # outputs are not tracked because each verification rewrites them.
 reports/*.latest.json
 reports/*.latest.md
+maintenance/reports/*.latest.json
+maintenance/reports/*.latest.md
 reports/*results.jsonl
 trajectories/runs.jsonl
 artifacts/compact-summaries/*.md

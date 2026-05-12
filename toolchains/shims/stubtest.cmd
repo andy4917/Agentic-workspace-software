@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\stubtest.exe" %*
+"%USERPROFILE%\.local\bin\stubtest.exe" %*

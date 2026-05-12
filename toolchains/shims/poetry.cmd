@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.local\bin\poetry.exe" %*
+"%USERPROFILE%\.local\bin\poetry.exe" %*

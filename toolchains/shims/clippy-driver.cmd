@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\.cargo\bin\clippy-driver.exe" %*
+"%USERPROFILE%\.cargo\bin\clippy-driver.exe" %*

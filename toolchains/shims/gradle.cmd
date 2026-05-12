@@ -1,2 +1,2 @@
 @echo off
-"C:\Users\anise\scoop\apps\gradle\current\bin\gradle.bat" %*
+"%USERPROFILE%\scoop\apps\gradle\current\bin\gradle.bat" %*
