@@ -13,6 +13,29 @@ Apply this protocol when the user asks for any of these:
   cache, local environment, or maintenance automation;
 - performance, cleanup, repair, hygiene, or workstation reliability work.
 
+## First-Pass Classification
+
+Before mutating files, installing tools, changing config, moving logs, or
+publishing externally, classify the request by workstation surface and risk
+level. Use `maintenance/WORKSTATION_CONTROL_RUNBOOK.md` for the full taxonomy.
+
+Required first-pass fields:
+
+- `goal`: what the user is trying to accomplish.
+- `surfaces`: affected surface classes, such as `active-runtime`,
+  `managed-source`, `toolchain`, `logs-records`, `secrets-credentials`,
+  `project-repository`, `cache-generated-state`, or `external-publish`.
+- `risk_level`: `observe`, `draft`, `controlled-change`, or
+  `high-risk-change`.
+- `first_pass`: read-only, draft-only, or scoped mutation.
+- `approval_boundary`: any trust, irreversible, secret, active-runtime,
+  toolchain, deletion, or external-publish decision.
+- `evidence_needed`: direct checks or documented not-run reasons.
+
+Do not turn a meta-prompting plan into hooks, active config, scripts, package
+operations, or deletion behavior unless the user separately requests that
+implementation surface.
+
 ## Required Record
 
 Every managed change must leave enough metadata for a future agent to maintain
@@ -110,5 +133,6 @@ When hooks, harness, or Codex global policy changed, also run:
 ## Completion Rule
 
 Do not claim a workstation maintenance request is complete until the changed
-source is named, the active path is explicit, dependencies are documented,
+or inspected surfaces and risk level are named, the changed source is named, the
+active path is explicit when applicable, dependencies are documented,
 verification ran or has a concrete not-run reason, and handoff is current.

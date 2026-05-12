@@ -292,6 +292,12 @@ If the task changes, reclassify lightly:
   performance, hygiene, and maintainability directly when in scope, update the
   relevant handoff/maintenance record, and leave the workstation in a state a
   future agent can inspect without guessing.
+- For workstation management, start with surface classification and narrow
+  inspection before mutation. Use
+  `maintenance/WORKSTATION_CONTROL_RUNBOOK.md` to distinguish active runtime,
+  managed source, inventory, toolchain, logs, secrets, project repositories,
+  generated state, and external publishing. Apply its risk levels before edits:
+  observe, draft, controlled-change, or high-risk-change.
 
 ## Anti-Rationalization Rules
 
