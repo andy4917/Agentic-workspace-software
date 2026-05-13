@@ -55,6 +55,7 @@ Current shim groups:
   `msvc-x64-shell`, `clang`, `clang++`, `clang-cl`, `gcc`, `g++`, `lld`,
   `lld-link`, `llvm-config`, `pkg-config`, `make`, `mingw32-make`, `gdb`,
   `ucrt64-shell`
+- Windows debugging: `cdb`, `dumpchk`, `symchk`
 - System/package: `scoop`, `winget`, `choco`
 
 Do not place runtime cache, temporary clones, package stores, or bundled
@@ -71,6 +72,12 @@ not use the official Codex bundle.
 
 Last verification:
 
+- 2026-05-13 21:36 KST: `check-toolchain-sources.ps1` returned
+  `status=pass; failures=0; warnings=0` after adding Windows Debugging Tools
+  wrappers.
+- 2026-05-13 21:35 KST: Windows Debugging Tools installed from
+  `Microsoft.WindowsSDK.10.0.26100` with debugger feature only; wrappers point
+  at `C:\Program Files (x86)\Windows Kits\10\Debuggers\x64`.
 - 2026-05-13 20:20 KST: `check-toolchain-sources.ps1` returned
   `status=pass; failures=0; warnings=0`.
 - Tool invocations in Codex workstation maintenance used explicit shim paths

@@ -61,6 +61,7 @@ maintenance/**/node_modules/
 maintenance/**/.cache/
 maintenance/**/coverage/
 maintenance/backups/
+maintenance/diagnostics/
 
 # Large local/reference material
 maintenance/upstream/
