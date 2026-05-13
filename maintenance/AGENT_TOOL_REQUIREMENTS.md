@@ -111,6 +111,12 @@ paths for the work being performed.
 - Use MSVC shims `cl`, `nmake`, `link`, `lib`, `dumpbin`, and `rc`; each shim
   loads `vcvars64.bat` before invoking the tool.
 - Use `msvc-x64-shell` when an interactive MSVC developer shell is needed.
+- Use LLVM/MSYS2 UCRT64 shims `clang`, `clang++`, `gcc`, `g++`, `lld`,
+  `lld-link`, `llvm-config`, `pkg-config`, `make`, `mingw32-make`, and `gdb`
+  for GNU/Clang UCRT builds. These wrappers prepend `C:\msys64\ucrt64\bin` for
+  required runtime DLLs.
+- Use `clang-cl` when an MSVC ABI Clang compile is required; it loads
+  `vcvars64.bat` before invoking the LLVM Windows `clang-cl.exe`.
 
 ## MCP Use Policy
 

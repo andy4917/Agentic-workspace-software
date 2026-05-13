@@ -37,16 +37,24 @@ Current shim groups:
 
 - Official Codex bundle wrappers: `node`, `rg`
 - JavaScript local-chain: `npm`, `npx`, `pnpm`, `bun`, `deno`, `tsc`, `tsserver`,
-  `tsx`, `eslint`, `prettier`, `biome`, `yarn`, `zx`
+  `tsx`, `eslint`, `prettier`, `biome`, `yarn`, `zx`, `next`,
+  `create-next-app`, `vite`, `create-vite`, `create-vue`, `ng`,
+  `sv`, `astro`, `create-astro`, `nuxt`, `nuxi`, `remix`, `express`,
+  `nest`, `electron`, `electron-forge`
 - Python: `python`, `py`, `pip`, `pipx`, `uv`, `ruff`, `pytest`, `mypy`,
-  `black`, `poetry`, `pdm`, `pre-commit`, `tox`, `nox`, `semgrep`
+  `black`, `poetry`, `pdm`, `pre-commit`, `tox`, `nox`, `semgrep`,
+  `fastapi`, `django-admin`, `flask`
 - Git/search/shell utilities: `git`, `gh`, `rg`, `fd`, `fzf`, `jq`, `es`, `7z`,
-  `code`, `pwsh`
+  `code`, `pwsh`, `opa`
 - Rust/JVM/build: `rustc`, `cargo`, `rustup`, `rustfmt`, `cargo-nextest`,
-  `cargo-insta`, `cargo-dylint`, `just`, `rust-analyzer`, `java`, `javac`,
-  `mvn`, `gradle`, `cmake`
+  `cargo-insta`, `cargo-dylint`, `just`, `rust-analyzer`, `cargo-tauri`,
+  `trunk`, `wasm-pack`, `cargo-generate`, `cargo-add`, `cargo-rm`,
+  `cargo-upgrade`, `cargo-set-version`, `java`, `javac`, `mvn`, `gradle`,
+  `cmake`, `dotnet`
 - C/C++: `zig`, `cl`, `nmake`, `link`, `lib`, `dumpbin`, `rc`,
-  `msvc-x64-shell`
+  `msvc-x64-shell`, `clang`, `clang++`, `clang-cl`, `gcc`, `g++`, `lld`,
+  `lld-link`, `llvm-config`, `pkg-config`, `make`, `mingw32-make`, `gdb`,
+  `ucrt64-shell`
 - System/package: `scoop`, `winget`, `choco`
 
 Do not place runtime cache, temporary clones, package stores, or bundled
