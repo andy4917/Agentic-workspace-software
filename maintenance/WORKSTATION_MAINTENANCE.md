@@ -149,6 +149,14 @@ handoff surface:
 The handoff must include accepted evidence, not-run checks, residual risks, and
 the next verification command.
 
+For workflow-governance or multi-agent control-plane changes, also update the
+worker-watcher surfaces when applicable:
+
+- `maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md`
+- `maintenance/GOAL_INTEGRITY_GATE.md`
+- `maintenance/templates/*` handoff and gate templates
+- the matching smoke eval under `evals/`
+
 ## Default Checks
 
 Run the smallest relevant set:

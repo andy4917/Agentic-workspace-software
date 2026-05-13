@@ -186,7 +186,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             root / "config.toml",
             "[features]\n"
             "plugins = true\n"
-            "codex_hooks = true\n"
+            "hooks = true\n"
             "multi_agent = true\n"
             "child_agents_md = true\n"
             "tool_search = true\n"
@@ -208,12 +208,16 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "\n"
             "[agents.docs-researcher]\n"
             'description = "Primary-source documentation research for version-sensitive OpenAI, MCP, and toolchain claims."\n'
-            'config_file = "agents/docs-researcher.toml"\n',
+            'config_file = "agents/docs-researcher.toml"\n'
+            "\n"
+            "[agents.observer]\n"
+            'description = "Independent watcher for worker handoff integrity, goal drift, evidence quality, and instruction compliance."\n'
+            'config_file = "agents/observer.toml"\n',
         )
         write_text(
             root / "AGENTS.md",
             "# Test\n\n"
-            "- use role-prefixed nicknames with PM-* reserved for the main coordinator and EXP-*, REV-*, DOC-*, SEC-*, VAL-*, IMP-*, and ENV-* for subagents\n"
+            "- use role-prefixed nicknames with PM-* reserved for the main coordinator and EXP-*, REV-*, DOC-*, SEC-*, VAL-*, IMP-*, ENV-*, and OBS-* for subagents\n"
             "- require each subagent to state its own concrete goal\n"
             "- include Purpose, PM Context, Owned Surface, Expected Evidence, Anti-Reward-Hacking Rules, Exit Criteria, and Not Checked fields\n"
             "- require mid-report evidence for non-trivial delegated work\n"
@@ -258,6 +262,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "codex_agent_harness_lifecycle.py",
             "codex_agent_harness_workflows.py",
             "codex_agent_harness_merge.py",
+            "worker_watcher_templates.py",
         ]:
             write_text(root / "maintenance" / "scripts" / name, "# self-test harness source placeholder\n")
         ensure_dir(root / "toolchains" / "shims")

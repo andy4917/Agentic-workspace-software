@@ -1,6 +1,8 @@
 ---
 name: dont-even-try
 description: Lightweight read-only adversarial review of the immediately previous Codex turn. Use when the user asks for a skeptical third-party audit of prior work, especially to find hardcoding, legacy residue, hidden fallback, contamination, ignored instructions, bypass commands, reward hacking, fake tests, fake verification, unsupported success claims, or sloppy work that must be removed or corrected.
+version: 0.1.0
+tags: [review, audit, integrity]
 ---
 
 # Don't_Even_Try

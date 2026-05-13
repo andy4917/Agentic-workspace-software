@@ -75,6 +75,17 @@ the evidence. If the risk is ambiguous, stop and ask.
 8. Ship: report changed surfaces, checks run, checks not run, residual risks,
    rollback notes, and status.
 
+## Worker-Watcher Gate
+
+For non-trivial delegated workstation work, use
+`maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md` before PM merge. Worker raw
+output must be converted to `NORMALIZED_WORKER_PACKET`, and an independent
+watcher must return `WATCHER_REPORT` or the PM must record `WATCHER_NOT_USED`.
+
+For long-running goals, use `maintenance/GOAL_INTEGRITY_GATE.md` at midpoint and
+pre-ship. The gate maps `dont-even-try` `CLEAN`/`P0-P3` outcomes to `C0-C4`;
+`CLEAN` is still only evidence, not completion authority.
+
 ## Delegation Prompt Shape
 
 Use this shape for workstation subagents:

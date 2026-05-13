@@ -60,6 +60,7 @@ __pycache__/
 maintenance/**/node_modules/
 maintenance/**/.cache/
 maintenance/**/coverage/
+maintenance/backups/
 
 # Large local/reference material
 maintenance/upstream/

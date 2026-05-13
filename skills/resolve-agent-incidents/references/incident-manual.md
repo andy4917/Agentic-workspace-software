@@ -98,6 +98,20 @@ Use one primary type and optional secondary tags.
   3. If the user asked for terminal state specifically, report that no session is attached.
 - Verification: the terminal inspection tool returns the no-session message or a later session state.
 
+### Codex Windows Read-Only Sandbox Runner Denies Process Creation
+
+- Type: `codex_app_error`, `tool_runtime_error`, `validation_gap`
+- Fingerprint: `codex exec --sandbox read-only` fails before the requested shell command starts with `CreateProcessAsUserW failed: 5`.
+- Risk: agents may misdiagnose a tested command, shim, or repository as broken even though the sandbox runner failed first.
+- Likely cause: Codex Windows sandbox process-creation boundary, not the target command.
+- Fix playbook:
+  1. Preserve the exact `codex exec` command and error text.
+  2. Do not use read-only sandbox exec as a required verification path until a Codex update or confirmed local runtime fix resolves it.
+  3. Use the active local shell or `codex exec --sandbox danger-full-access --disable plugins` with an explicit no-mutation prompt for Codex-internal smoke tests.
+  4. Record read-only sandbox verification as not run, with this runner error as the reason.
+- Verification: alternate command surface runs the intended command; read-only sandbox remains a separate unresolved runtime item.
+- Do not claim: that the target command failed, or that danger-full-access smoke testing proves read-only sandbox behavior.
+
 ### MCP Server Configured But Tools Unloaded
 
 - Type: `tool_runtime_error`, `skill_or_doc_drift`
@@ -134,6 +148,19 @@ Use one primary type and optional secondary tags.
   4. Update the owning maintenance record so future agents do not report "installed" when the user's UI concern is "visible".
 - Verification: `codex mcp list` shows the intended MCP with `Status disabled` or `enabled`; `codex mcp get <name> --json` returns the expected config; the skill path exists when the concern is a Skill.
 - Do not claim: app UI visibility from a package probe alone.
+
+### Hook Overblocks Toolchain Or MCP Maintenance
+
+- Type: `workflow_hook_issue`, `security_boundary`
+- Fingerprint: toolchain, MCP, CLI, package install, or generated setup cleanup work is denied by a broad hook rule even though the user explicitly requested workstation/tool maintenance.
+- Risk: agents leave required tools half-installed, claim configured capability without runtime proof, or ask the user to operate around the harness.
+- Fix playbook:
+  1. Preserve the exact denied command and hook reason.
+  2. Keep hard blocks for secret content access, irreversible destructive action, hook weakening without explicit scope, fake success, and out-of-scope mutation.
+  3. Store prompt-derived authorization as a narrow state flag such as `hook_policy_change` or `toolchain_mcp_cli_maintenance`, not as raw prompt text.
+  4. Allow read-only inspection and ordinary toolchain/MCP/CLI use/install to continue unless the specific action matches a remaining hard-block class.
+- Verification: synthetic `UserPromptSubmit` plus `PreToolUse` samples prove an authorized hook-policy edit is observed, a safe toolchain command is observed, and secret/destructive denial cases still deny.
+- Do not claim: broad hook disabling, blanket `permissionDecision=allow`, or bypassing final evidence checks as a valid fix.
 
 ### Patch Grammar Failure
 

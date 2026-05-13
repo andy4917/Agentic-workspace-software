@@ -23,11 +23,31 @@ Source selection rule:
 4. Broken package-manager shims must be quarantined or marked unused; they must
    not remain the first resolved command.
 
+`rg` has an extra Windows rule: prefer bare `rg` only when `Get-Command rg -All`
+shows a Codex-owned `rg.exe` first, or call the bundled `rg.exe`/`rg.ps1` shim
+explicitly. Do not call `rg.cmd` from PowerShell for search patterns or paths
+that may contain cmd metacharacters such as `|`, `&`, `<`, or `>`; use
+`toolchains\shims\rg.ps1` or the bundled `rg.exe` instead. `rg.cmd` remains a
+cmd.exe compatibility shim for simple arguments and escaped cmd metacharacters.
+
 Quick check:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
 ```
+
+## Temporary Windows Sandbox Restriction
+
+Until a Codex update or a confirmed local runtime fix resolves the Windows
+read-only sandbox runner error `CreateProcessAsUserW failed: 5`, do not use
+`codex exec --sandbox read-only` as a required verification path on this
+workstation. It fails before the requested command starts, so it is not evidence
+for or against the tool being tested.
+
+For Codex-internal command smoke tests, use the active session shell or an
+ephemeral `codex exec --sandbox danger-full-access --disable plugins` command
+with an explicit no-mutation prompt, then record that read-only sandbox
+verification was not run because of the runner error.
 
 ## Workstation Managed Changes
 

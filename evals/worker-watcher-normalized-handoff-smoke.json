@@ -1,0 +1,14 @@
+{
+  "eval_id": "worker-watcher-normalized-handoff-smoke",
+  "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id worker-watcher-normalized-handoff-smoke",
+  "risk_notes": "Structural smoke test only; hook enforcement is separate.",
+  "setup": "Run from CODEX_HOME after worker-watcher managed-source changes.",
+  "success_criteria": [
+    "Non-trivial worker dispatch requires an independent watcher by default",
+    "Worker output must be normalized before PM merge",
+    "Watcher omission requires WATCHER_NOT_USED",
+    "Observer role and result-normalizer skill exist"
+  ],
+  "task": "Verify worker output normalization, watcher coverage, and PM merge evidence artifacts exist.",
+  "timeout_seconds": 30
+}

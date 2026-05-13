@@ -53,3 +53,29 @@ If a subagent hides failures, violates the charter, claims success without
 evidence, or optimizes for PM approval rather than truth, the PM must close
 that agent, start a replacement with a handoff that names the failure mode, and
 independently verify the affected surface.
+
+
+## Worker-Watcher Normalized Handoff
+
+When the PM dispatches a non-trivial worker subagent, at least one independent
+watcher is required by default before PM merge or finalization. The watcher is
+not a second implementer by default.
+
+Worker raw output is source material only. The PM-facing artifact is a
+`NORMALIZED_WORKER_PACKET`, and that packet is candidate evidence rather than
+completion authority.
+
+The watcher uses `dont-even-try` as a read-only adversarial review lens for the
+immediately previous worker or PM turn. A `CLEAN` watcher verdict is not PM
+completion, and `FIX REQUIRED` findings must be mapped to the Goal Integrity
+Gate before merge decisions.
+
+If a watcher is not used, the PM must record `WATCHER_NOT_USED` with reason,
+risk, substitute check, and confidence impact. Omission is not a pass.
+
+Required PM-facing handoff artifacts for non-trivial delegated work:
+
+1. `NORMALIZED_WORKER_PACKET`
+2. `WATCHER_REPORT` or `WATCHER_NOT_USED`
+3. `PM_MERGE_DECISION`
+4. PM independent verification before any parent-goal completion claim

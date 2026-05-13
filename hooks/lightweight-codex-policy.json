@@ -121,6 +121,7 @@
     "secret_content_access": "hard_block",
     "irreversible_destructive_action": "hard_block_unless_explicit",
     "hook_or_multi_agent_weakening": "hard_block_unless_explicit",
+    "toolchain_mcp_cli_use_install": "observe_unless_secret_destructive_hook_weakening_without_explicit_scope_or_fake_success",
     "fake_success_insertion": "hard_block",
     "evaluator_or_exit_code_manipulation": "hard_block",
     "policy_fixture_risky_text": "observe",

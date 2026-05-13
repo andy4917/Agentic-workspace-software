@@ -13,8 +13,9 @@ Source classes:
 - `local-chain`: local package manager or language toolchain used only when the
   tool is not bundled, for example `npm`, `npx`, Python tools, Rust, JVM, Git,
   and package-manager CLIs.
-- `local-wrapper`: a `.codex\toolchains\shims\*.cmd` wrapper that selects one of
-  the classes above. Wrappers must not point at broken package-manager shims.
+- `local-wrapper`: a `.codex\toolchains\shims\*.cmd` or `*.ps1` wrapper that
+  selects one of the classes above. Wrappers must not point at broken
+  package-manager shims.
 
 Do not put `%USERPROFILE%\.codex\toolchains\shims` in persistent User or Machine
 PATH. Use these shims by explicit path or process-local PATH only for a bounded
@@ -23,6 +24,14 @@ task.
 Already-running apps keep their inherited PATH until they restart. Treat
 persistent PATH entries for this directory as contamination to be removed after
 backup and verification.
+
+Windows `rg` note:
+
+- `rg.ps1` is the PowerShell-safe wrapper for search patterns or paths that may
+  contain cmd metacharacters such as `|`, `&`, `<`, or `>`.
+- `rg.cmd` is a cmd.exe compatibility wrapper. Do not call it directly from
+  PowerShell with unescaped cmd metacharacters; use bare `rg`, bundled `rg.exe`,
+  or `rg.ps1`.
 
 Current shim groups:
 

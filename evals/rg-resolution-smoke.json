@@ -1,0 +1,16 @@
+{
+  "eval_id": "rg-resolution-smoke",
+  "grader": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File maintenance/scripts/check-rg-resolution.ps1",
+  "risk_notes": "Windows-specific resolver smoke test; it does not mutate persistent PATH.",
+  "setup": "Run from CODEX_HOME on Windows after toolchain or PATH-related changes.",
+  "success_criteria": [
+    "Persistent User/Machine PATH does not contain the managed shim root",
+    "Bare rg resolves to a Codex-owned source and runs",
+    "Explicit rg.ps1 shim invocation runs and preserves cmd metacharacter arguments",
+    "rg.cmd remains a cmd.exe compatibility shim for simple or escaped arguments",
+    "New pwsh can run rg.ps1 and new cmd can run rg.cmd with process-local PATH",
+    "Bare rg.cmd without process-local PATH and unescaped rg.cmd metacharacters from PowerShell are documented as unsupported"
+  ],
+  "task": "Verify ripgrep resolution uses the Codex bundle and the rg shim is available through supported invocation paths.",
+  "timeout_seconds": 30
+}

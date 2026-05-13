@@ -72,10 +72,44 @@ def cmd_verify(args: argparse.Namespace) -> int:
     checks.append({"name": "global_scan", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "global-scan"], root, timeout=240)})
     checks.append({"name": "context_inspection", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "context"], root)})
     checks.append({"name": "retrieval_report", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "retrieve", "--query", "codex harness verification workflow", "--limit", "5"], root)})
-    checks.append({"name": "python_compile", **run_command([sys.executable, "-m", "py_compile", "maintenance/scripts/codex_agent_harness.py"], root)})
+    checks.append(
+        {
+            "name": "python_compile",
+            **run_command(
+                [
+                    sys.executable,
+                    "-m",
+                    "py_compile",
+                    "maintenance/scripts/codex_agent_harness.py",
+                    "maintenance/scripts/codex_agent_harness_base.py",
+                    "maintenance/scripts/codex_agent_harness_lifecycle.py",
+                    "maintenance/scripts/codex_agent_harness_merge.py",
+                    "maintenance/scripts/codex_agent_harness_workflows.py",
+                    "maintenance/scripts/worker_watcher_templates.py",
+                ],
+                root,
+            ),
+        }
+    )
     checks.append({"name": "self_test", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "self-test"], root)})
     checks.append({"name": "repair_dry_run", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repair"], root)})
     checks.append({"name": "uninstall_dry_run", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "uninstall"], root)})
+    checks.append(
+        {
+            "name": "rg_resolution_smoke",
+            **run_command(
+                [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    "maintenance/scripts/check-rg-resolution.ps1",
+                ],
+                root,
+            ),
+        }
+    )
     if command_exists("pwsh"):
         checks.append(
             {
@@ -151,6 +185,27 @@ def cmd_eval(args: argparse.Namespace) -> int:
             passed = bool(records) and trajectory_records_valid(records) and cmd_trajectory(trajectory_ns) == 0
         elif eval_id == "orchestration-governance-smoke":
             passed = check_orchestration_governance_smoke(root).get("status") == "pass"
+        elif eval_id == "dont-even-try-integration-smoke":
+            passed = check_dont_even_try_integration_smoke(root).get("status") == "pass"
+        elif eval_id == "worker-watcher-normalized-handoff-smoke":
+            passed = check_worker_watcher_normalized_handoff_smoke(root).get("status") == "pass"
+        elif eval_id == "goal-integrity-gate-smoke":
+            passed = check_goal_integrity_gate_smoke(root).get("status") == "pass"
+        elif eval_id == "rg-resolution-smoke":
+            passed = (
+                run_command(
+                    [
+                        "powershell.exe",
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        "maintenance/scripts/check-rg-resolution.ps1",
+                    ],
+                    root,
+                ).get("status")
+                == "pass"
+            )
         else:
             passed = False
         results.append(
@@ -208,6 +263,145 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
     write_json(root / "reports" / "orchestration-governance-smoke.latest.json", report)
     return report
+
+
+def check_terms_file(root: Path, relative_path: str, terms: list[str]) -> tuple[bool, str]:
+    path = root / relative_path
+    if not path.exists():
+        return False, f"missing file: {relative_path}"
+    text = read_text(path).lower()
+    missing = [term for term in terms if term.lower() not in text]
+    if missing:
+        return False, f"{relative_path} missing terms: {', '.join(missing)}"
+    return True, f"{relative_path} contains required terms"
+
+
+def write_smoke_report(root: Path, name: str, checks: list[dict[str, Any]]) -> dict[str, Any]:
+    status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
+    report = {"generated_at": utc_now(), "status": status, "checks": checks}
+    write_json(root / "reports" / f"{name}.latest.json", report)
+    return report
+
+
+def check_dont_even_try_integration_smoke(root: Path) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+
+    def add_file_check(name: str, relative_path: str, terms: list[str]) -> None:
+        passed, detail = check_terms_file(root, relative_path, terms)
+        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+
+    add_file_check(
+        "skill_semantics",
+        "skills/dont-even-try/SKILL.md",
+        ["read-only", "immediately previous", "do not repair", "fix required", "clean", "unsupported success claims"],
+    )
+    add_file_check(
+        "goal_gate_mapping",
+        "maintenance/GOAL_INTEGRITY_GATE.md",
+        ["clean", "c0", "p3", "c1", "p2", "c2", "p1", "c3", "p0", "c4", "clean is not completion authority", "immediately previous"],
+    )
+    add_file_check(
+        "watcher_template_lens",
+        "maintenance/templates/WATCHER_REPORT.md",
+        ["dont-even-try verdict", "fix required", "clean", "defect classes checked", "pm merge recommendation"],
+    )
+    add_file_check(
+        "pre_ship_template_lens",
+        "maintenance/templates/PRE_SHIP_AUDIT_CONTEXT.md",
+        ["immediately previous turn to review", "required review lens", "dont-even-try"],
+    )
+    return write_smoke_report(root, "dont-even-try-integration-smoke", checks)
+
+
+def check_worker_watcher_normalized_handoff_smoke(root: Path) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+
+    def add_file_check(name: str, relative_path: str, terms: list[str]) -> None:
+        passed, detail = check_terms_file(root, relative_path, terms)
+        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+
+    add_file_check(
+        "handoff_policy",
+        "maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md",
+        [
+            "non-trivial worker dispatch requires at least one independent watcher",
+            "raw worker output is not pm-ready until normalized",
+            "watcher_not_used",
+            "normalized_worker_packet",
+            "pm_merge_decision",
+            "worker complete is not pm complete",
+            "watcher clean is not pm complete",
+        ],
+    )
+    add_file_check(
+        "result_normalizer_skill",
+        "skills/result-normalizer/SKILL.md",
+        ["claims rejected or unsupported", "commands not run", "do not upgrade", "completion authority"],
+    )
+    add_file_check(
+        "observer_role",
+        "agents/observer.toml",
+        ["dont-even-try", "read-only", "do not repair", "watcher_report", "pm merge recommendation"],
+    )
+    for template in [
+        "maintenance/templates/NORMALIZED_WORKER_PACKET.md",
+        "maintenance/templates/WATCHER_REPORT.md",
+        "maintenance/templates/WATCHER_NOT_USED.md",
+        "maintenance/templates/PM_MERGE_DECISION.md",
+    ]:
+        add_file_check(f"template:{Path(template).stem}", template, ["# " + Path(template).stem.upper()])
+    add_file_check(
+        "delegation_charter_extension",
+        "maintenance/SUBAGENT_DELEGATION_CHARTER.md",
+        ["worker-watcher normalized handoff", "normalized_worker_packet", "watcher_not_used", "pm_merge_decision"],
+    )
+    return write_smoke_report(root, "worker-watcher-normalized-handoff-smoke", checks)
+
+
+def check_goal_integrity_gate_smoke(root: Path) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+
+    def add_file_check(name: str, relative_path: str, terms: list[str]) -> None:
+        passed, detail = check_terms_file(root, relative_path, terms)
+        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+
+    add_file_check(
+        "gate_policy",
+        "maintenance/GOAL_INTEGRITY_GATE.md",
+        [
+            "pm-only long-running work does not bypass midpoint audit",
+            "midpoint gate",
+            "pre-ship gate",
+            "c2",
+            "reset affected build or verify slice",
+            "c3",
+            "quarantine current result",
+            "c4",
+            "stop and request user approval",
+        ],
+    )
+    add_file_check(
+        "midpoint_context_template",
+        "maintenance/templates/MIDPOINT_AUDIT_CONTEXT.md",
+        ["immediately previous turn to review", "required review lens", "dont-even-try", "reset to define"],
+    )
+    add_file_check(
+        "midpoint_decision_template",
+        "maintenance/templates/MIDPOINT_GATE_DECISION.md",
+        ["contamination score", "c0", "c1", "c2", "c3", "c4", "required reset stage"],
+    )
+    add_file_check(
+        "pre_ship_decision_template",
+        "maintenance/templates/PRE_SHIP_GATE_DECISION.md",
+        ["completion eligible", "contamination score", "c0", "c1", "c2", "c3", "c4"],
+    )
+    add_file_check(
+        "agents_policy",
+        "AGENTS.md",
+        ["midpoint and pre-ship", "c0-c4", "normalized worker packets", "watcher_not_used"],
+    )
+    return write_smoke_report(root, "goal-integrity-gate-smoke", checks)
+
 
 def cmd_trajectory(args: argparse.Namespace) -> int:
     root = root_path(args)

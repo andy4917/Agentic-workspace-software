@@ -42,6 +42,14 @@
     },
     {
       "action": "unchanged",
+      "digest": "ea67f313d78f92e0d4c42097382e2cdb9171a37e7544c49926973c31818a68fa",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "agents/observer.toml",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
       "digest": "fbbf219f0948ce1eef236e5d9064435a2b0fa3335d0af8e82042e21fdbf59dda",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -90,6 +98,22 @@
     },
     {
       "action": "unchanged",
+      "digest": "7ce361572d7601a9504ad2a0b80c659a852a8684d9bda8b2784f2b8e608ee89c",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "evals/dont-even-try-integration-smoke.json",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "8021897274ecd4a46e21307b8aebaeb2f7b104e0ff8a96230922b11bb8175a0f",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "evals/goal-integrity-gate-smoke.json",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
       "digest": "fb906e859e3b73d9b4f71ca009ea583e6376fc8b000e3e0b0c3fb02fa51618d5",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -99,7 +123,7 @@
     {
       "action": "unchanged",
       "digest": "9e75b52085981608e41c73e19149843c1c75641242c0559d6238204ee71ad326",
-      "managed": false,
+      "managed": true,
       "owner": "codex-agent-harness",
       "path": "evals/orchestration-governance-smoke.json",
       "remove_on_uninstall": false
@@ -114,6 +138,14 @@
     },
     {
       "action": "unchanged",
+      "digest": "d25a2fa9a58ee4083c52646e6dc00d47fe8a37c55091eab1e06307d0e90d1534",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "evals/worker-watcher-normalized-handoff-smoke.json",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
       "digest": "fe43e791e312a3be08218197d34b82a5b96ff2f6f633f2cfe2a7d37e30fe2610",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -122,10 +154,26 @@
     },
     {
       "action": "unchanged",
-      "digest": "76b6889be587fbd9158ce76c4f69c76f5914641c1a7efabfc47c479db1db8a90",
+      "digest": "d09fc668a14df11ec6a043df29aa4a542f468fd0d29629e0d69996f5f24a8c1d",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/GOAL_INTEGRITY_GATE.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "95875b3bf2092bc0037740641140aba92e6c72f12f58a0aaad32db0250803b8a",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/SUBAGENT_DELEGATION_CHARTER.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "46fb6900701c350d6527831810ba6ea80fbe667c4e917a8ecd1cacf811f1c853",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md",
       "remove_on_uninstall": true
     },
     {
@@ -250,6 +298,86 @@
     },
     {
       "action": "unchanged",
+      "digest": "6ea20ae965a9426ea3cb82cb3e895acb3d6832d571227b2a2f09c30b707cb1f3",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/GOAL_CAPSULE.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "b52bf88bbb189d72d1e22d5f38b92c391e844fff5e664804c5ffc5587315e62f",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/MIDPOINT_AUDIT_CONTEXT.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "3d916f0a2e52ba5a98bb569bdfcd526f584946478fba5609b215acce88eb726b",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/MIDPOINT_GATE_DECISION.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "0cd01f4d317a836f168456072c22f8c5d4755a033123152626cb05281292bdbc",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/NORMALIZED_WORKER_PACKET.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "ba562edb8e8718aaa6479e7f9d9a38b3958e0e2e4f1f850b0687e82065a332da",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/PM_MERGE_DECISION.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "2bc14f5db8d2abb7ca9ad5cb2c070a4894c581fa9ef27a77c0e01a4101a46103",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/PRE_SHIP_AUDIT_CONTEXT.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "a93bcce5aecc1a067717832a096f7bc2f8e060a12ae1ae79aef4fc46f6941283",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/PRE_SHIP_GATE_DECISION.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "5171c272c5795cdb34672d5df577f8c0bab0ef98abb8924ff7d2b91838967ae4",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/WATCHER_NOT_USED.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "81ded1c1e5e11891d936c0b4d3452d343748adf49088d85347af273d9017d10f",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/WATCHER_REPORT.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "4c342afca3922c8c7ec5a811312b0bbf7ada306a00e481ca33f69862e3d9ff4a",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/templates/WORKER_FINAL.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
       "digest": "501536114483f6f00cd4ab5a5d6b45fe1beb742561bf70fca1e83b0d6aff47ab",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -273,8 +401,9 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "9419a8d079a5620f1b3c15447e7ac6160587eac7cd20b32e4c1cdd7c3950dc5a",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260513-150002\\skills\\SKILL_INDEX.md",
+      "digest": "143f96a975b588170845c3b864a26c8d052f0993e1fdcd0b62b57a80ef57a1b0",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "skills/SKILL_INDEX.md",
@@ -298,10 +427,27 @@
     },
     {
       "action": "unchanged",
+      "digest": "51fcf63cef5dc623364522e4b34b81f7747003d101618dd9b9ea5c36c05bd500",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "skills/dont-even-try/SKILL.md",
+      "remove_on_uninstall": false
+    },
+    {
+      "action": "unchanged",
       "digest": "c1b1d6caa65de4d73a8fe103077e0e2bf57b07504019c188026401c6cdaf1758",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "skills/iterative-retrieval/SKILL.md",
+      "remove_on_uninstall": true
+    },
+    {
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260513-150002\\skills\\result-normalizer\\SKILL.md",
+      "digest": "e21496ba2ccfe4eadb00e0d4d68780642a3322cf95eb70690ff88131ff59c793",
+      "managed": true,
+      "owner": "codex-agent-harness",
+      "path": "skills/result-normalizer/SKILL.md",
       "remove_on_uninstall": true
     },
     {
@@ -321,7 +467,7 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-05-11T15:05:36+00:00",
+  "installed_at": "2026-05-13T06:00:02+00:00",
   "requested_modules": [],
   "requested_profile": "developer",
   "schema_version": "1",

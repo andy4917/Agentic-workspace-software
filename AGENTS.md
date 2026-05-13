@@ -74,6 +74,24 @@ Rules:
 - A final goal audit must include changed surfaces, acceptance checks, direct checks run, direct checks not run with reasons, accepted and rejected subagent evidence, PM independent verification, residual risks, rollback notes, and status: `complete`, `blocked`, or `continue`.
 - After compaction or resume, restate the parent goal, acceptance criteria, accepted evidence, suspect or rejected evidence, open risks, changed surfaces, and the next direct verification step before proceeding.
 
+## Worker-Watcher Integrity Gates
+
+Use `maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md` and
+`maintenance/GOAL_INTEGRITY_GATE.md` for non-trivial delegated work and
+long-running PM-only work.
+
+- PM receives normalized worker packets, not raw worker output, before merge
+  decisions.
+- Non-trivial worker subagent dispatch requires at least one independent watcher
+  by default before PM merge or finalization.
+- Watchers use `dont-even-try` as a read-only adversarial review of the
+  immediately previous worker or PM turn. They do not repair by default.
+- If a watcher is omitted, record `WATCHER_NOT_USED` with reason, risk,
+  substitute check, and confidence impact. Omission is not a pass.
+- Midpoint and pre-ship gates map `dont-even-try` `CLEAN`/`P0-P3` outcomes to
+  `C0-C4` contamination decisions. `CLEAN` is not completion authority.
+- PM-only long-running work does not bypass midpoint and pre-ship gates.
+
 ## Main Engineering Lifecycle
 
 Use this lifecycle as the main workflow overlay. Scale the ceremony to the task, but do not silently skip the phase that matters.
@@ -254,7 +272,7 @@ For delegated work:
 
 - define objective, owned files/surfaces, expected output, constraints, and verification expectation;
 - use role-prefixed nicknames so the main PM and subagents are visually distinct in reports and handoffs;
-- reserve `PM-*` names for the main coordinator, and use role prefixes such as `EXP-*`, `REV-*`, `DOC-*`, `SEC-*`, `VAL-*`, `IMP-*`, and `ENV-*` for subagents;
+- reserve `PM-*` names for the main coordinator, and use role prefixes such as `EXP-*`, `REV-*`, `DOC-*`, `SEC-*`, `VAL-*`, `IMP-*`, `ENV-*`, and `OBS-*` for subagents;
 - require each subagent to state its own concrete goal before work proceeds;
 - include why the task is being delegated: the PM purpose, the risk being reduced, and the decision the result is meant to inform;
 - include the PM context: what is already known, what is not trusted yet, and which assumptions the subagent must challenge;

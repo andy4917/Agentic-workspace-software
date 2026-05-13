@@ -202,6 +202,7 @@ function Read-State {
             checksRun = @()
             requiredReminders = @()
             toolEvents = @()
+            userAuthorizations = @()
             lastUpdated = ""
         }
     }
@@ -215,6 +216,7 @@ function Read-State {
             checksRun = @($state.checksRun | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             requiredReminders = @($state.requiredReminders | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             toolEvents = @($state.toolEvents | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
+            userAuthorizations = @($state.userAuthorizations | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
             lastUpdated = [string]$state.lastUpdated
         }
     } catch {
@@ -225,6 +227,7 @@ function Read-State {
             checksRun = @()
             requiredReminders = @("Hook state could not be parsed; refresh evidence before finalizing.")
             toolEvents = @()
+            userAuthorizations = @()
             lastUpdated = ""
         }
     }
@@ -486,6 +489,61 @@ function Test-DelegationAuthorized {
     return $false
 }
 
+function Test-HookMaintenanceAuthorized {
+    param([string]$Prompt)
+
+    if ($Prompt -match "(?i)(hook|hooks|PreToolUse|PermissionRequest|lightweight-codex-hook|hooks\.json|block|deny|permissionDecision)") {
+        return $true
+    }
+
+    $compact = $Prompt -replace "\s+", ""
+    $signals = @(
+        (([string][char]0xD6C5)),
+        (([string][char]0xCC28) + ([string][char]0xB2E8)),
+        (([string][char]0xCC28) + ([string][char]0xB2E8) + ([string][char]0xC744))
+    )
+    foreach ($signal in $signals) {
+        if ($compact.Contains($signal)) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Test-ToolchainMaintenanceAuthorized {
+    param([string]$Prompt)
+
+    if ($Prompt -match "(?i)(toolchain|mcp|cli|npm|npx|pnpm|yarn|pip|uv|cargo|install|uninstall|upgrade|storybook|shadcn)") {
+        return $true
+    }
+
+    $compact = $Prompt -replace "\s+", ""
+    $signals = @(
+        (([string][char]0xD234) + ([string][char]0xCCB4) + ([string][char]0xC778)),
+        (([string][char]0xC124) + ([string][char]0xCE58)),
+        (([string][char]0xD234) + ([string][char]0xCCB4) + ([string][char]0xC778) + ([string][char]0xC0AC) + ([string][char]0xC6A9)),
+        (([string][char]0xBE4C) + ([string][char]0xB4DC)),
+        (([string][char]0xB7F0) + ([string][char]0xD0C0) + ([string][char]0xC784))
+    )
+    foreach ($signal in $signals) {
+        if ($compact.Contains($signal)) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Test-StateAuthorization {
+    param(
+        $State,
+        [string]$Authorization
+    )
+
+    return (@($State.userAuthorizations) -contains $Authorization)
+}
+
 function Get-PromptReminder {
     param(
         [string]$Workflow,
@@ -511,7 +569,7 @@ Lightweight Codex workflow reminder:
 - Subagents: max parallel $($Policy.subagents.max_parallel), max depth $($Policy.subagents.max_depth). $delegationAuthorization
 - Delegate only bounded non-blocking side work with owned surfaces and evidence; keep the immediate blocker local.
 - Completion requires changed/inspected surfaces, direct checks run, checks not run with reasons, PM independent verification, residual risks, rollback notes, and status complete|blocked|continue.
-- Block only real risk: secret content access, irreversible destructive action, hook weakening, evaluator/pass manipulation, or out-of-scope mutation.
+- Block only real risk: secret content access, irreversible destructive action, hook weakening without explicit user scope, evaluator/pass manipulation, or out-of-scope mutation. Toolchain, MCP, CLI use/install, and read-only inspection should be observed unless they actually perform a blocked action.
 "@
 }
 
@@ -655,6 +713,7 @@ function Test-HookWeakening {
     param([string]$Text)
 
     $patterns = @(
+        "(?i)hooks\s*=\s*false",
         "(?i)codex_hooks\s*=\s*false",
         "(?i)multi_agent\s*=\s*false",
         "(?i)(Remove-Item|rm|del)\b.*(\.codex[\\/]+hooks|hooks\.json|lightweight-codex-hook\.ps1)",
@@ -815,6 +874,13 @@ switch ($eventName) {
         $state.checksRun = @()
         $state.requiredReminders = @()
         $state.toolEvents = @()
+        $state.userAuthorizations = @()
+        if (Test-HookMaintenanceAuthorized -Prompt $prompt) {
+            $state.userAuthorizations = Add-Unique -Items $state.userAuthorizations -Value "hook_policy_change"
+        }
+        if (Test-ToolchainMaintenanceAuthorized -Prompt $prompt) {
+            $state.userAuthorizations = Add-Unique -Items $state.userAuthorizations -Value "toolchain_mcp_cli_maintenance"
+        }
         Save-State -State $state
 
         Write-CodexStructuredLog -EventName "UserPromptSubmit" -Outcome "observed" -Reason $workflow -ChangedSurface @("hooks.state") -PromptSummary $promptSummary | Out-Null
@@ -854,7 +920,7 @@ switch ($eventName) {
             Deny-PreTool -Reason $reason
             break
         }
-        if (Test-HookWeakening -Text $text) {
+        if ((Test-HookWeakening -Text $text) -and -not (Test-StateAuthorization -State $state -Authorization "hook_policy_change")) {
             $reason = "Hook, multi-agent, or completion-safety weakening is blocked unless the user explicitly requests that exact change."
             Write-CodexStructuredLog -EventName "PreToolUse" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
             Deny-PreTool -Reason $reason
@@ -897,7 +963,7 @@ switch ($eventName) {
             Deny-Permission -Reason $reason
             break
         }
-        if (Test-HookWeakening -Text $text) {
+        if ((Test-HookWeakening -Text $text) -and -not (Test-StateAuthorization -State $state -Authorization "hook_policy_change")) {
             $reason = "Hook or multi-agent workflow weakening requires an explicit user request."
             Write-CodexStructuredLog -EventName "PermissionRequest" -Outcome "hard_block" -Reason $reason -ToolName $toolName | Out-Null
             Deny-Permission -Reason $reason

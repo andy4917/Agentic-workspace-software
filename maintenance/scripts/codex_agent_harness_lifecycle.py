@@ -36,6 +36,7 @@ def pm_subagent_protocol_status(root: Path) -> dict[str, Any]:
         root / "agents" / "explorer.toml",
         root / "agents" / "reviewer.toml",
         root / "agents" / "docs-researcher.toml",
+        root / "agents" / "observer.toml",
     ]
     if not agents_path.exists():
         return {"status": "fail", "error": "AGENTS.md missing"}
@@ -78,6 +79,7 @@ def harness_engine_module_status(root: Path) -> dict[str, Any]:
         "codex_agent_harness_lifecycle.py",
         "codex_agent_harness_workflows.py",
         "codex_agent_harness_merge.py",
+        "worker_watcher_templates.py",
     ]
     missing = [name for name in expected if not (root / "maintenance" / "scripts" / name).exists()]
     return {"status": "pass" if not missing else "fail", "missing": missing}
@@ -171,6 +173,7 @@ def subagent_nickname_policy_status(root: Path) -> dict[str, Any]:
         "explorer": ("EXP", root / "agents" / "explorer.toml"),
         "reviewer": ("REV", root / "agents" / "reviewer.toml"),
         "docs-researcher": ("DOC", root / "agents" / "docs-researcher.toml"),
+        "observer": ("OBS", root / "agents" / "observer.toml"),
     }
     missing = []
     for role, (prefix, path) in role_expectations.items():
@@ -194,7 +197,7 @@ def subagent_nickname_policy_status(root: Path) -> dict[str, Any]:
     for path in [root / "AGENTS.md", root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md"]:
         if path.exists():
             instruction_text += "\n" + read_text(path).lower()
-    required_terms = ["role-prefixed nicknames", "pm-*", "exp-*", "rev-*", "doc-*", "env-*"]
+    required_terms = ["role-prefixed nicknames", "pm-*", "exp-*", "rev-*", "doc-*", "env-*", "obs-*"]
     term_missing = [term for term in required_terms if term not in instruction_text]
     return {"status": "pass" if not missing and not term_missing else "fail", "roles": missing, "missing_terms": term_missing}
 
@@ -402,7 +405,7 @@ def check_config(root: Path) -> dict[str, Any]:
     features = data.get("features", {})
     expected_true = [
         "plugins",
-        "codex_hooks",
+        "hooks",
         "multi_agent",
         "child_agents_md",
         "tool_search",
@@ -418,6 +421,7 @@ def check_config(root: Path) -> dict[str, Any]:
         "explorer": "agents/explorer.toml",
         "reviewer": "agents/reviewer.toml",
         "docs-researcher": "agents/docs-researcher.toml",
+        "observer": "agents/observer.toml",
     }
     missing_agent_roles = []
     for role, config_file in required_agent_roles.items():

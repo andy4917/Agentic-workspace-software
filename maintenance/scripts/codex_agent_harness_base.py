@@ -263,9 +263,36 @@ EVAL_TEMPLATES = {
         "timeout_seconds": 30,
         "risk_notes": "Structural smoke test only; it does not prove runtime hook coverage for every tool surface.",
     },
+    "evals/rg-resolution-smoke.json": {
+        "eval_id": "rg-resolution-smoke",
+        "task": "Verify ripgrep resolution uses the Codex bundle and the rg shim is available through supported invocation paths.",
+        "setup": "Run from CODEX_HOME on Windows after toolchain or PATH-related changes.",
+        "success_criteria": [
+            "Persistent User/Machine PATH does not contain the managed shim root",
+            "Bare rg resolves to a Codex-owned source and runs",
+            "Explicit rg.ps1 shim invocation runs and preserves cmd metacharacter arguments",
+            "rg.cmd remains a cmd.exe compatibility shim for simple or escaped arguments",
+            "New pwsh can run rg.ps1 and new cmd can run rg.cmd with process-local PATH",
+            "Bare rg.cmd without process-local PATH and unescaped rg.cmd metacharacters from PowerShell are documented as unsupported"
+        ],
+        "grader": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File maintenance/scripts/check-rg-resolution.ps1",
+        "timeout_seconds": 30,
+        "risk_notes": "Windows-specific resolver smoke test; it does not mutate persistent PATH.",
+    },
 }
 
+from worker_watcher_templates import (
+    DELEGATION_CHARTER as WORKER_WATCHER_DELEGATION_CHARTER,
+    EVAL_TEMPLATES as WORKER_WATCHER_EVAL_TEMPLATES,
+    ROLE_CONFIGS as WORKER_WATCHER_ROLE_CONFIGS,
+    SKILL_TEMPLATES as WORKER_WATCHER_SKILL_TEMPLATES,
+    WORKER_WATCHER_TEMPLATES,
+)
 
+ROLE_CONFIGS.update(WORKER_WATCHER_ROLE_CONFIGS)
+SKILL_TEMPLATES.update(WORKER_WATCHER_SKILL_TEMPLATES)
+EVAL_TEMPLATES.update(WORKER_WATCHER_EVAL_TEMPLATES)
+DELEGATION_CHARTER += WORKER_WATCHER_DELEGATION_CHARTER
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
 
@@ -409,6 +436,7 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
 
     if "workflow-quality" in modules:
         templates["maintenance/SUBAGENT_DELEGATION_CHARTER.md"] = DELEGATION_CHARTER
+        templates.update(WORKER_WATCHER_TEMPLATES)
         templates["reports/README.md"] = "# Codex Harness Reports\n\nGenerated discovery, context, verification, eval, benchmark, and audit reports live here.\n"
         templates["artifacts/tool-results/README.md"] = "# Tool Result Artifacts\n\nLarge command outputs can be stored here with metadata references from trajectories.\n"
         templates["artifacts/compact-summaries/README.md"] = "# Compact Summaries\n\nStructured phase-boundary summaries live here.\n"

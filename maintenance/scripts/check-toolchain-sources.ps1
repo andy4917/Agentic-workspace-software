@@ -51,6 +51,7 @@ $shimDir = Join-Path $CodexHome "toolchains\shims"
 $officialBundleTools = @("node", "rg")
 $jsLocalChainTools = @("npm", "npx")
 $checks = [System.Collections.Generic.List[object]]::new()
+$rgResolutionScript = Join-Path $CodexHome "maintenance\scripts\check-rg-resolution.ps1"
 
 foreach ($tool in $officialBundleTools) {
     $bundlePath = if ($bundleRoot) { Join-Path $bundleRoot "$tool.exe" } else { "" }
@@ -158,6 +159,38 @@ foreach ($shim in Get-ChildItem -LiteralPath $shimDir -Filter "*.cmd" -ErrorActi
             })
         }
     }
+}
+
+if (Test-Path -LiteralPath $rgResolutionScript) {
+    try {
+        $rgResolutionJson = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $rgResolutionScript -CodexHome $CodexHome -Json
+        $rgResolutionExit = $LASTEXITCODE
+        $rgResolution = $rgResolutionJson | ConvertFrom-Json
+        $checks.Add([ordered]@{
+            name = "rg-resolution-smoke"
+            status = if ($rgResolutionExit -eq 0 -and $rgResolution.status -eq "pass") { "pass" } else { "fail" }
+            source_class = "official-bundle"
+            source_of_truth = $rgResolution.source_of_truth
+            supported_invocations = $rgResolution.supported_invocations
+            unsupported_invocations = $rgResolution.unsupported_invocations
+            failures = $rgResolution.failures
+            warnings = $rgResolution.warnings
+        })
+    } catch {
+        $checks.Add([ordered]@{
+            name = "rg-resolution-smoke"
+            status = "fail"
+            source_class = "official-bundle"
+            error = $_.Exception.Message
+        })
+    }
+} else {
+    $checks.Add([ordered]@{
+        name = "rg-resolution-smoke"
+        status = "fail"
+        source_class = "official-bundle"
+        error = "missing check-rg-resolution.ps1"
+    })
 }
 
 $failures = @($checks | Where-Object { $_.status -eq "fail" })
