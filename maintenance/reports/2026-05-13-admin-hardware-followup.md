@@ -8,6 +8,9 @@ staleness review, and IntelConnect crash handling.
 
 ## Changed Surfaces
 
+- Attempted `Microsoft.WinDbg` app installation through winget. The winget
+  process timed out, `Get-AppxPackage Microsoft.WinDbg` returned no registered
+  package, and this path was not used for dump analysis.
 - Installed Windows Debugging Tools through winget package
   `Microsoft.WindowsSDK.10.0.26100` using the Windows SDK installer override
   `/features OptionId.WindowsDesktopDebuggers /quiet /norestart`.
@@ -172,6 +175,9 @@ This directory is local-only and intentionally ignored by Git.
 
 ## Residual Risks
 
+- A partial `Microsoft.WinDbg` WindowsApps payload was observed after the timed
+  out app install attempt, but no registered Appx package was present. It was
+  not used and was not manually removed from `C:\Program Files\WindowsApps`.
 - The 0x13A crash has no single driver culprit in the mini kernel dump.
   Recurrence requires collecting a kernel or complete memory dump and then
   enabling targeted Driver Verifier only if a repeat pattern appears.
