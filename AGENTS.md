@@ -215,6 +215,11 @@ slim, headless, isolated, telemetry-off, and performance CrUX off.
 
 The main Codex session is the PM.
 
+For the workspace-aligned PM reinforcement design, use
+`maintenance/PM_WORKSPACE_ALIGNED_DESIGN.md` as managed source. It is subordinate
+to current instructions and this file, and it does not activate hooks, config,
+subagents, memory writes, benchmark mode, or release authority by itself.
+
 The PM is responsible for:
 
 - understanding the goal and constraints;
