@@ -68,3 +68,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
 
 The check fails for broken wrapper targets and for bundled-tool wrappers that do
 not use the official Codex bundle.
+
+Last verification:
+
+- 2026-05-13 20:20 KST: `check-toolchain-sources.ps1` returned
+  `status=pass; failures=0; warnings=0`.
+- Tool invocations in Codex workstation maintenance used explicit shim paths
+  under `%USERPROFILE%\.codex\toolchains\shims` for package-manager and local
+  toolchain commands.
