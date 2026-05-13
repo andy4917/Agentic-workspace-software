@@ -16,14 +16,16 @@ is left enabled during non-frontend work.
 
 - `name`: `chrome_devtools_observe`
 - `source_class`: `local-chain`
-- `owner`: Codex user-global MCP config while ON; absent from config while OFF
+- `owner`: Codex user-global MCP config; enabled only for confirmed frontend
+  work and otherwise kept disabled for app UI visibility
 - `exact_path`: `%USERPROFILE%\.codex\toolchains\shims\npx.cmd`
-- `config_surface`: `%USERPROFILE%\.codex\config.toml`, managed only through
-  `codex mcp add/remove`
+- `config_surface`: `%USERPROFILE%\.codex\config.toml`, registered through
+  `codex mcp add/remove` and toggled with the supported `enabled` flag
 - `dependency_chain`: official Codex bundled Node selected by
   `.codex\toolchains\shims\npx.cmd` -> local npm package resolution ->
   `chrome-devtools-mcp@latest` -> Chrome stable
-- `scope`: Codex-global only during confirmed frontend work
+- `scope`: visible in Codex-global MCP settings, active only during confirmed
+  frontend work
 - `default_args`: `-y chrome-devtools-mcp@latest --slim --headless --isolated
   --no-usage-statistics --no-performance-crux`
 - `default_env`: `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1`,
@@ -68,7 +70,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
 5. Use the MCP for a small safe rendered observation before relying on it.
 6. Perform the actual frontend observation.
 7. Run the OFF command.
-8. Confirm `status` reports `state=off`.
+8. Confirm `status` reports `state=off` and that the server remains registered
+   with `enabled = false`.
 
 ## Options
 
@@ -93,4 +96,28 @@ sensitive pages unless the user explicitly asks for that risk boundary.
   `chrome-devtools-mcp@latest --help` succeeded through the `.codex` npx
   wrapper and listed the required flags.
 - Local toggle loop on 2026-05-13: ON added the server with the desired command
-  and env, OFF removed it, and final `status` reported `state=off`.
+  and env; OFF now preserves the server entry with `enabled = false` so app
+  settings do not imply the frontend observer is missing.
+
+## UI Visibility Fix
+
+On 2026-05-13, the OFF behavior was changed from removing
+`chrome_devtools_observe` to preserving the MCP entry with `enabled = false`.
+This keeps the frontend observer visible in Codex app MCP settings while
+preventing it from loading as an active tool outside frontend work.
+
+Verification:
+
+- `chrome-devtools-mcp-toggle.ps1 off` registered the server disabled.
+- `chrome-devtools-mcp-toggle.ps1 status` reported `state=off` and returned
+  `enabled=false`.
+- `codex mcp list` showed `chrome_devtools_observe` with `Status disabled`.
+- `chrome-devtools-mcp-toggle.ps1 on; status; off; status` successfully toggled
+  `enabled=true` and then restored `enabled=false`.
+
+Rollback:
+
+- To remove the settings entry completely, run
+  `codex mcp remove chrome_devtools_observe`.
+- Pre-change config backups are under
+  `%USERPROFILE%\.codex\state\mcp-toggle-backups`.

@@ -48,13 +48,15 @@ Default flow:
 1. Understand the user goal.
 2. Surface important assumptions before non-trivial work.
 3. Classify the task and choose the smallest fitting workflow preset.
-4. Select the relevant engineering skill workflow only when its trigger matches.
-5. Gather only the context needed.
-6. Delegate bounded work to role-based subagents when useful and allowed by the active runtime.
-7. Review candidate outputs instead of treating them as authority.
-8. Integrate the result.
-9. Verify with direct evidence.
-10. Report what changed, what was checked, what was not checked, and remaining risks.
+4. Run the project workflow-chain preflight when the request touches a project
+   repository or durable project artifact.
+5. Select the relevant engineering skill workflow only when its trigger matches.
+6. Gather only the context needed.
+7. Delegate bounded work to role-based subagents when useful and allowed by the active runtime.
+8. Review candidate outputs instead of treating them as authority.
+9. Integrate the result.
+10. Verify with direct evidence.
+11. Report what changed, what was checked, what was not checked, and remaining risks.
 
 Keep simple tasks simple. Do not spawn or route extra work for tiny edits, simple answers, or obvious one-step changes.
 
@@ -95,6 +97,8 @@ Progressive disclosure rule:
 Common skill routing:
 
 - vague idea or unclear scope: refine and define before implementation;
+- project repository work with missing or mismatched workflow chain: run the
+  project workflow-chain scaffolding procedure before implementation;
 - new feature, significant change, or architectural choice: spec-driven workflow;
 - existing spec but no implementation order: planning and task breakdown;
 - code/config change across more than one file: incremental implementation;
@@ -106,6 +110,38 @@ Common skill routing:
 - completed implementation: code review and quality workflow before shipping;
 - Git/GitHub work: Git workflow guidance.
 
+## Project Workflow Chain Preflight
+
+This preflight is global. It applies to frontend, backend, data, automation,
+CLI, documentation, integration, extension, infrastructure, and maintenance
+projects. Frontend has extra rules, but it is not the only project type that
+needs a usable workflow chain.
+
+When the user asks Codex to work inside a project repository or durable project
+artifact, inspect the project before implementation and classify the workflow
+chain as:
+
+- `chain_ready`: required project instructions, context, build/test commands,
+  verification path, and domain-specific contracts exist and match the requested
+  work.
+- `chain_partial`: some required chain pieces exist, but the requested work
+  would rely on missing, stale, ambiguous, or mismatched instructions.
+- `chain_missing`: no usable chain exists for the requested work.
+- `chain_not_applicable`: the request is read-only, one-off, outside a project
+  repository, or explicitly limited by the user to no scaffolding.
+
+If the status is `chain_partial` or `chain_missing`, scaffold the smallest
+durable workflow chain needed before modifying product code, unless the user
+explicitly asked for read-only analysis or forbids project edits. This
+scaffolding is in scope for ordinary project work because it prevents hidden
+fallbacks, skipped validation, and unsupported completion claims.
+
+Use `maintenance/PROJECT_WORKFLOW_CHAIN.md` as the canonical checklist for the
+minimum chain, domain-specific additions, acceptance criteria, and not-run
+reporting. Do not treat a frontend-only chain, backend-only chain, installed
+tool, MCP registration, or skill availability as a complete project workflow
+chain for unrelated work.
+
 ## Frontend Design Workflow
 
 Before any frontend or UI work, read and follow `docs/codex_frontend_quality_directive.md`. Treat it as the mandatory final deployment administrator directive for frontend quality. If this document conflicts with lighter frontend habits or generic UI-generation defaults, the directive wins within frontend/UI scope.
@@ -113,6 +149,21 @@ Before any frontend or UI work, read and follow `docs/codex_frontend_quality_dir
 For frontend design and implementation, Codex must optimize for ordinary end users who have no prior knowledge of the current development architecture, internal agent design, implementation details, or technical vocabulary. Do not design primarily from the developer's or agent's perspective unless the product is explicitly a developer tool and the user audience requires it.
 
 Purpose: reduce the generic, low-quality UI/UX defaults commonly produced by Codex/GPT by forcing project context, design intent, shape-first planning, and post-build critique before claiming the interface is ready.
+
+Frontend reference sources have two distinct roles. Use checklist-type sources
+for completeness, launch readiness, accessibility, performance, and design
+handoff gaps. Use UX-pattern sources for choosing or comparing interaction
+patterns, required states, anatomy, alternatives, and accessibility risks. If
+both apply, decide the interaction pattern first, then audit the result with the
+checklist lens. These sources are advisory evidence only and stay subordinate to
+current user instructions, project `AGENTS.md`, `PRODUCT.md`, `DESIGN.md`,
+existing shipped UI, component primitives, and rendered verification.
+
+For projects using shadcn/ui, inspect `components.json` and the project frontend
+component contract before adding or changing primitives. Use the configured
+`shadcn` MCP only after a real read-only tool call proves the active session can
+use it; otherwise use shadcn CLI fallback through
+`%USERPROFILE%\.codex\toolchains\shims\npx.cmd` and report the fallback.
 
 When the `impeccable` skill is installed and the task touches frontend UI, use this recommended workflow:
 
@@ -137,7 +188,8 @@ role. Keep `chrome_devtools_observe` OFF by default, turn it ON with
 `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on` only after confirming
 frontend work, reload or restart if the active session does not expose the MCP
 tools, verify with a small rendered observation, then turn it OFF and confirm
-`state=off`. Do not hand-edit `config.toml` for this toggle unless the Codex CLI
+`state=off` with the server still registered as `enabled = false` for app UI
+visibility. Do not hand-edit `config.toml` for this toggle unless the Codex CLI
 toggle is itself broken and the repair is documented. The managed default is
 slim, headless, isolated, telemetry-off, and performance CrUX off.
 

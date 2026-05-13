@@ -32,6 +32,13 @@ different command, credential source, or policy boundary.
   Codex bundled Node runtime before invoking the local npm package command. Use
   for current third-party library, framework, SDK, CLI, and cloud-service
   documentation. Resolve the library id before querying.
+- `shadcn`: global, stdio via
+  `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y shadcn@latest mcp`. Use for
+  frontend work that needs shadcn/ui registry browsing, searching, component
+  docs, or install planning. It is configured from the official Codex MCP
+  instructions, but active-session usability still requires tool injection and a
+  safe read-only MCP call after the app/session reloads. If MCP tools are not
+  injected, use the shadcn CLI fallback through the same `npx.cmd` wrapper.
 - `sequential_thinking`: global, stdio via
   `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
   @modelcontextprotocol/server-sequential-thinking`. Use only for ambiguous
@@ -46,7 +53,9 @@ different command, credential source, or policy boundary.
   skill or prompt says `node_repl`, for JavaScript execution, browser-plugin
   setup code, package import checks, and app-bundled Node runtime diagnostics.
 - `chrome_devtools_observe`: frontend-only stdio MCP, intentionally OFF by
-  default. It is added and removed with
+  default. It remains registered in config with `enabled = false` so Codex app
+  settings show the capability without loading the tool outside frontend
+  observation work. It is toggled with
   `maintenance\scripts\chrome-devtools-mcp-toggle.ps1`, not by hand-editing
   `config.toml`. Use only after a task is confirmed to require rendered browser
   observation. Default command is the local-chain wrapper
@@ -54,7 +63,7 @@ different command, credential source, or policy boundary.
   chrome-devtools-mcp@latest --slim --headless --isolated
   --no-usage-statistics --no-performance-crux`, with usage statistics and update
   checks disabled by environment variables. Turn it OFF after the frontend task
-  and verify `state=off`.
+  and verify `state=off` with the server still registered as disabled.
 
 ## Frontend Browser Observation Toggle
 

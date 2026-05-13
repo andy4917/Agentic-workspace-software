@@ -34,6 +34,7 @@ managed-process-locks/
 memories/
 memories_extensions/
 pets/
+automations/.run-jitter-salt
 history.jsonl
 session_index.jsonl
 *.sqlite

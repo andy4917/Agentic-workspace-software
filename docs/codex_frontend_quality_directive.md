@@ -10,6 +10,14 @@ Repeated frontend failures have created unnecessary review burden and user stres
 
 This directive is a correction order.
 
+This directive is frontend-specific. It must be used together with the global
+project workflow-chain protocol in
+`maintenance/PROJECT_WORKFLOW_CHAIN.md`. If a project lacks a usable chain,
+Codex must scaffold the general project chain first, then apply this frontend
+directive for UI-specific artifacts such as `PRODUCT.md`, `DESIGN.md`,
+component contracts, shadcn/ui checks, Storybook or equivalent rendered state
+coverage, and browser observation.
+
 From this point forward, any UI-related task must be handled as production product work. Codex is expected to behave like a senior full-stack developer with frontend judgment, not like a backend implementation tool that happens to emit JSX and Tailwind classes.
 
 If the output looks like a demo, a template, a theme-store clone, or generic SaaS filler, it fails.
@@ -223,6 +231,9 @@ FRONTEND_PREFLIGHT:
 product_context=read|missing
 design_context=read|missing
 existing_components=inspected|missing
+components_json=inspected|missing|not_applicable
+components_contract=read|missing|not_applicable
+shadcn_access=MCP_CONFIRMED|MCP_CONFIG_ONLY|MCP_REGISTERED_NOT_INJECTED|CLI_FALLBACK|unavailable|not_applicable
 current_route_or_surface=identified
 states_required=listed
 responsive_targets=defined
@@ -248,7 +259,61 @@ Codex must look for and read, when present:
 
 Do not invent a design direction before reading these files.
 
-### 6.2 Brownfield vs Greenfield Classification
+### 6.2 shadcn/ui Control
+
+For projects that use or should use shadcn/ui, Codex must inspect
+`components.json` before adding or changing UI primitives. Treat
+`components.json` as the project contract for component paths, aliases, Tailwind
+CSS, base library, icon library, and registries.
+
+Before relying on shadcn MCP, classify it:
+
+```text
+SHADCN_ACCESS:
+configured=yes|no
+visible_in_mcp_list=yes|no
+tools_injected=yes|no
+safe_read_call_succeeded=yes|no
+status=MCP_CONFIRMED|MCP_CONFIG_ONLY|MCP_REGISTERED_NOT_INJECTED|CLI_FALLBACK|unavailable
+```
+
+Configuration alone is not capability. If the active session does not expose
+shadcn MCP tools, use the shadcn CLI fallback through the managed `.codex`
+`npx.cmd` wrapper and report the fallback honestly.
+
+For reusable components or blocks, inspect or create:
+
+- `docs/frontend/components-contract.md`
+- `docs/frontend/component-variants.md`
+- Storybook stories for important states when the project has Storybook or the
+  task adds reusable UI.
+
+### 6.3 Reference Source Routing
+
+Do not mix checklist-type references with UX-pattern references.
+
+- Checklist-type sources answer: is this surface complete, production-ready,
+  accessible, performant enough, and sufficiently specified?
+- UX-pattern sources answer: which interaction pattern fits the user problem,
+  what states and anatomy are required, and which alternatives were rejected?
+- If both are relevant, resolve the pattern decision first, then run the
+  checklist audit.
+
+Use compact evidence only:
+
+```text
+FRONTEND_REFERENCE_ROUTING:
+checklist_sources=needed|not_needed|not_checked
+ux_pattern_sources=needed|not_needed|not_checked
+decision_order=pattern_then_checklist|checklist_only|pattern_only|not_applicable
+local_sources_priority=confirmed|missing|not_checked
+```
+
+Checklist and pattern sources are reference systems, not implementation
+commands. They must not override local project rules, product context, design
+tokens, component primitives, or rendered evidence.
+
+### 6.4 Brownfield vs Greenfield Classification
 
 Codex must classify the task before implementation:
 
@@ -383,13 +448,16 @@ reload_or_restart_if_tools_missing=yes
 tool_exposure_verified=yes|no
 rendered_observation_performed=yes|no
 toggle_off=%USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 off
-final_status=state=off
+final_status=state=off; registered_disabled=yes
 ```
 
 Default mode is slim, headless, isolated, telemetry-off, performance CrUX off,
 and backed by the `.codex\toolchains\shims\npx.cmd` wrapper. Use `-Visible`
 only when a visible isolated Chrome window is required. Use `-Full` only when
 slim browser observation cannot answer the frontend verification question.
+The OFF state must keep `chrome_devtools_observe` registered with
+`enabled = false` so Codex app settings remain clear that the frontend observer
+exists but is inactive.
 
 If visual verification is not possible, Codex must state:
 

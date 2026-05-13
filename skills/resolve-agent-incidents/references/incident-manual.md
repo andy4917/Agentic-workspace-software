@@ -44,6 +44,7 @@ Use one primary type and optional secondary tags.
 | Not-run erasure | Skipped checks disappear from the final report or become "validated by inspection." | Restore `not_run` with exact reason and closest substitute evidence. |
 | Stale-context success | Agent reports on old files, old branches, or pre-change state. | Rebuild context from current paths and rerun the relevant check. |
 | Tool-availability illusion | Agent treats configured or installed tools as actual use. | Require a real tool invocation or mark as not applicable. |
+| Project-chain omission | Agent performs project work or claims readiness while the project lacks the relevant workflow chain. | Classify `chain_ready`, `chain_partial`, `chain_missing`, or `chain_not_applicable`; scaffold or report the missing chain before implementation. |
 | Review theater | Reviewer gives a summary before findings and misses concrete line/path evidence. | Ask for findings first, severity, file/line, and not-checked items. |
 | Evidence flooding | Large logs are pasted to imply rigor without isolating the decisive lines. | Extract the minimal failing fragment and the command that produced it. |
 | Worker authority leak | PM accepts worker/subagent completion without independent verification. | Treat worker output as candidate evidence and verify the decisive claim. |
@@ -73,6 +74,19 @@ Use one primary type and optional secondary tags.
   2. Try another available local read surface, such as MCP filesystem resources, Node REPL, app attachment context, or a different non-destructive file read command.
   3. If no alternate read path is available, state that the response is based only on the loaded skill body and mark the reference as not checked.
 - Verification: the reference file is read successfully through an alternate path, or the final report explicitly marks it as not checked.
+
+### Harness Verify Uses Caller CWD As CODEX_HOME
+
+- Type: `environment_path_issue`, `validation_gap`
+- Fingerprint: invoking `%USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py verify` from another directory writes reports under the caller CWD and fails to find `maintenance/scripts/codex_agent_harness.py` or `hooks/lightweight-codex-hook.ps1`.
+- Risk: agents may report harness failure even though the `.codex` harness is healthy, or may require users to manually `cd` into `.codex`.
+- Likely cause: `--root` default resolves to `.` instead of the harness install root.
+- Fix playbook:
+  1. Default the harness root to the script install root when `--root` is omitted.
+  2. Preserve explicit `--root` for intentional alternate roots.
+  3. Re-run verification from a non-`.codex` cwd and confirm reports are written to `%USERPROFILE%\.codex\reports`.
+- Verification: absolute script invocation succeeds from another cwd; `.codex\reports\verification.latest.md` shows all checks pass.
+- Do not claim: the harness is broken solely because a relative-root run failed from a non-root cwd.
 
 ### Missing App Terminal Session
 
@@ -107,6 +121,19 @@ Use one primary type and optional secondary tags.
   4. Start a new session or reload the app because existing sessions do not receive newly exposed MCP tool schemas.
 - Verification: `codex mcp get/list` shows the intended absolute paths and filters; direct server startup or `tools/list` succeeds; current session remains not fixed unless the namespace appears in the active tool list.
 - Do not claim: that the current session can call the MCP just because config was fixed.
+
+### MCP Capability Works But Is Invisible In App Settings
+
+- Type: `codex_app_error`, `skill_or_doc_drift`
+- Fingerprint: a capability is available through local files, scripts, or package probes, but app settings imply it is missing because the MCP entry is removed while inactive, or because the capability is a Skill rather than an MCP server.
+- Likely cause: conflating runtime availability, MCP registration, active tool exposure, and app settings visibility.
+- Fix:
+  1. Classify the capability: MCP server, Skill, plugin, connector, or script.
+  2. For MCP servers that should be discoverable in settings while inactive, keep the MCP entry registered with `enabled = false` instead of removing the entry.
+  3. For Skills, state clearly that they will not appear in MCP settings and document the skill path.
+  4. Update the owning maintenance record so future agents do not report "installed" when the user's UI concern is "visible".
+- Verification: `codex mcp list` shows the intended MCP with `Status disabled` or `enabled`; `codex mcp get <name> --json` returns the expected config; the skill path exists when the concern is a Skill.
+- Do not claim: app UI visibility from a package probe alone.
 
 ### Patch Grammar Failure
 

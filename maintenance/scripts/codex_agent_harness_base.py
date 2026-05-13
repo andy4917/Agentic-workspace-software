@@ -275,7 +275,10 @@ def local_stamp() -> str:
 
 
 def root_path(args: argparse.Namespace) -> Path:
-    return Path(args.root).expanduser().resolve()
+    configured = getattr(args, "root", None)
+    if configured in (None, "", "auto"):
+        return Path(__file__).resolve().parents[2]
+    return Path(configured).expanduser().resolve()
 
 
 def rel(path: Path, root: Path) -> str:

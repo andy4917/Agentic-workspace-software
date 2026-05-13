@@ -1,0 +1,4 @@
+interface:
+  display_name: "Don't_Even_Try"
+  short_description: "Lightweight hostile review of prior work"
+  default_prompt: "Use $dont-even-try to audit the previous turn for unsupported success, hidden fallback, skipped validation, and required fixes."

@@ -48,6 +48,19 @@ related, tie it to the exact dependency chain that will use it, for example:
 - Browser/plugin runtime -> patched marketplace path plus original official
   bundle source.
 
+## Project Workflow Chain
+
+Before changing a project repository or durable project artifact, classify the
+project workflow chain using `maintenance/PROJECT_WORKFLOW_CHAIN.md`. This is a
+global rule, not a frontend-only rule.
+
+If the chain is missing or mismatched for the requested work, scaffold the
+smallest durable project-local chain before implementation unless the user
+explicitly requested read-only analysis or forbids project edits. A tool being
+installed, an MCP being registered, or a skill being available is not enough;
+the project must have usable instructions, commands, contracts, and verification
+paths for the work being performed.
+
 ## Core Stacks
 
 ### Python
@@ -94,6 +107,14 @@ repository-specific command, credential source, or policy boundary.
   app-server, and ChatGPT Apps documentation.
 - Use Context7 only when `CONTEXT7_API_KEY` is available and current third-party
   library, framework, SDK, CLI, or cloud-service documentation is needed.
+- Use shadcn MCP for frontend work that depends on shadcn/ui registry,
+  component, block, or `components.json` knowledge. The global config should
+  expose `shadcn` through `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
+  shadcn@latest mcp`. Do not treat config as capability: after app/session
+  reload, make a safe read-only MCP call before claiming `MCP_CONFIRMED`. If
+  tools are not injected, use shadcn CLI fallback through the same wrapper,
+  including `docs`, `view`, `search --help`, and dry-run add commands as
+  appropriate for the project.
 - Use Sequential Thinking for high-ambiguity debugging or planning, not for
   routine edits.
 - Use Windows PowerShell MCP when a persistent PowerShell console is useful for
@@ -103,13 +124,14 @@ repository-specific command, credential source, or policy boundary.
   `[mcp_servers.*]` entry. Discover it with `tool_search` when needed, then call
   `mcp__node_repl__js` for JavaScript execution or browser-plugin setup code.
 - Use Chrome DevTools MCP only as a frontend browser-observation role. Keep it
-  OFF by default and toggle it with
+  registered but OFF by default, and toggle it with
   `maintenance\scripts\chrome-devtools-mcp-toggle.ps1`; do not hand-edit
   `config.toml` to enable or disable it. After turning it ON, reload/restart the
   app if the tool namespace is not visible, verify exposure with tool discovery,
   use it for the rendered observation, then turn it OFF and confirm `state=off`.
   Default mode is slim, headless, isolated, telemetry-off, performance CrUX off,
-  and npm-backed through `.codex\toolchains\shims\npx.cmd`.
+  and npm-backed through `.codex\toolchains\shims\npx.cmd`. OFF must leave the
+  server visible in app settings as `enabled = false`.
 
 ## Reasoning Effort Policy
 

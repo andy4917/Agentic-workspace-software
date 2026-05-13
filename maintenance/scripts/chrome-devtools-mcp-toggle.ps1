@@ -1,8 +1,10 @@
 # Toggle the frontend-only Chrome DevTools MCP observer.
 #
-# This script intentionally uses `codex mcp add/remove` instead of editing
-# config.toml by hand. OFF means the server entry is absent from config so Codex
-# Desktop does not load the MCP server for non-frontend work.
+# This script keeps the server registered so Codex Desktop settings can show it.
+# OFF means the MCP entry remains visible in config with `enabled = false`.
+# Codex CLI currently has add/remove but no enable/disable subcommands, so the
+# script uses `codex mcp add/remove` for registration and a narrow config edit
+# only for the supported `enabled` flag.
 
 [CmdletBinding()]
 param(
@@ -65,7 +67,7 @@ function Invoke-CodexCli {
     }
 }
 
-function Test-McpServerPresent {
+function Get-McpServerInfo {
     $previousPath = $env:PATH
     $previousErrorActionPreference = $ErrorActionPreference
     try {
@@ -75,12 +77,13 @@ function Test-McpServerPresent {
         $exitCode = $LASTEXITCODE
 
         if ($exitCode -eq 0) {
-            return $true
+            $json = ($output | Out-String).Trim()
+            return $json | ConvertFrom-Json
         }
 
         $message = ($output | Out-String).Trim()
         if ($message -match "No MCP server named") {
-            return $false
+            return $null
         }
 
         throw "codex mcp get failed with code ${exitCode}: $message"
@@ -89,6 +92,10 @@ function Test-McpServerPresent {
         $ErrorActionPreference = $previousErrorActionPreference
         $env:PATH = $previousPath
     }
+}
+
+function Test-McpServerPresent {
+    return ($null -ne (Get-McpServerInfo))
 }
 
 function Save-ConfigBackup {
@@ -150,6 +157,75 @@ function Get-DesiredArgs {
     return $args
 }
 
+function Add-McpServerConfig {
+    if (-not (Test-Path -LiteralPath $NpxWrapper)) {
+        throw "npx wrapper not found: $NpxWrapper"
+    }
+
+    $desiredArgs = Get-DesiredArgs
+    $addArgs = @(
+        "mcp",
+        "add",
+        "--env",
+        "CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1",
+        "--env",
+        "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1",
+        "--env",
+        "SystemRoot=$env:SystemRoot",
+        "--env",
+        "PROGRAMFILES=$env:ProgramFiles",
+        $ServerName,
+        "--",
+        $NpxWrapper
+    ) + $desiredArgs
+
+    Invoke-CodexCli -Arguments $addArgs
+}
+
+function Set-McpServerEnabledInConfig {
+    param([Parameter(Mandatory = $true)][bool] $Enabled)
+
+    if (-not (Test-Path -LiteralPath $ConfigPath)) {
+        throw "config not found: $ConfigPath"
+    }
+
+    $sectionHeader = "[mcp_servers.$ServerName]"
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in (Get-Content -LiteralPath $ConfigPath)) {
+        $lines.Add($line)
+    }
+
+    $sectionIndex = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Trim() -eq $sectionHeader) {
+            $sectionIndex = $i
+            break
+        }
+    }
+
+    if ($sectionIndex -lt 0) {
+        throw "MCP section not found after add: $sectionHeader"
+    }
+
+    $enabledLine = "enabled = " + ($(if ($Enabled) { "true" } else { "false" }))
+    $insertIndex = $sectionIndex + 1
+    for ($i = $sectionIndex + 1; $i -lt $lines.Count; $i++) {
+        $trimmed = $lines[$i].Trim()
+        if ($trimmed.StartsWith("[") -and $trimmed.EndsWith("]")) {
+            break
+        }
+
+        if ($lines[$i] -match "^\s*enabled\s*=") {
+            $lines[$i] = $enabledLine
+            Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding utf8NoBOM
+            return
+        }
+    }
+
+    $lines.Insert($insertIndex, $enabledLine)
+    Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding utf8NoBOM
+}
+
 function Show-HelpText {
     Write-Host "Chrome DevTools MCP observer toggle"
     Write-Host ""
@@ -177,13 +253,19 @@ if ($Action -eq "help") {
 }
 
 if ($Action -eq "status") {
-    if (Test-McpServerPresent) {
+    $serverInfo = Get-McpServerInfo
+    if ($null -ne $serverInfo -and $serverInfo.enabled) {
         Write-Host "state=on"
         Invoke-CodexCli -Arguments @("mcp", "get", $ServerName, "--json")
     }
-    else {
+    elseif ($null -ne $serverInfo) {
         Write-Host "state=off"
-        Write-Host "server=$ServerName is not configured"
+        Write-Host "server=$ServerName is registered and disabled for UI visibility"
+        Invoke-CodexCli -Arguments @("mcp", "get", $ServerName, "--json")
+    }
+    else {
+        Write-Host "state=missing"
+        Write-Host "server=$ServerName is not configured; run off to register disabled or on to enable"
     }
     return
 }
@@ -213,24 +295,8 @@ if ($Action -eq "on") {
             Invoke-CodexCli -Arguments @("mcp", "remove", $ServerName)
         }
 
-        $desiredArgs = Get-DesiredArgs
-        $addArgs = @(
-            "mcp",
-            "add",
-            "--env",
-            "CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1",
-            "--env",
-            "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1",
-            "--env",
-            "SystemRoot=$env:SystemRoot",
-            "--env",
-            "PROGRAMFILES=$env:ProgramFiles",
-            $ServerName,
-            "--",
-            $NpxWrapper
-        ) + $desiredArgs
-
-        Invoke-CodexCli -Arguments $addArgs
+        Add-McpServerConfig
+        Set-McpServerEnabledInConfig -Enabled $true
     }
 
     Write-Host "state=on"
@@ -240,19 +306,18 @@ if ($Action -eq "on") {
 }
 
 if ($Action -eq "off") {
-    if (-not (Test-McpServerPresent)) {
-        Write-Host "state=off"
-        Write-Host "server=$ServerName already absent"
-        return
-    }
-
     Save-ConfigBackup -Reason "before-chrome-devtools-off"
 
     Invoke-WithWritableConfig {
-        Invoke-CodexCli -Arguments @("mcp", "remove", $ServerName)
+        if (-not (Test-McpServerPresent)) {
+            Add-McpServerConfig
+        }
+
+        Set-McpServerEnabledInConfig -Enabled $false
     }
 
     Write-Host "state=off"
-    Write-Host "server=$ServerName removed from MCP config"
+    Write-Host "server=$ServerName registered and disabled for UI visibility"
+    Invoke-CodexCli -Arguments @("mcp", "get", $ServerName, "--json")
     return
 }

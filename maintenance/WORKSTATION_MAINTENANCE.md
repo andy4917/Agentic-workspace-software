@@ -60,6 +60,18 @@ Record:
 - `rollback`: uninstall, restore, quarantine, or Recycle Bin note.
 - `handoff_update`: file or report updated for future maintenance.
 
+## Global Project Chain Rule
+
+Workstation-level tools make capabilities available; they do not by themselves
+make any individual project ready for disciplined work. When a project task
+depends on a workflow chain that is missing, stale, or mismatched, Codex must
+follow `maintenance/PROJECT_WORKFLOW_CHAIN.md` and scaffold the smallest
+project-local chain first.
+
+This rule applies beyond frontend and backend work. It also covers data,
+automation, CLI, browser extension, infrastructure, integration, documentation,
+and maintenance projects.
+
 ## Source And Dependency Rules
 
 - Prefer `official-bundle` and `workspace-runtime-bundle` assets when Codex
@@ -82,11 +94,13 @@ not be left always-on just because they are useful sometimes.
 `chrome_devtools_observe` is the managed frontend browser-observation example:
 
 - `source_class`: `local-chain`.
-- `owner`: user-global Codex MCP config while ON; absent from config while OFF.
+- `owner`: user-global Codex MCP config; registered for app UI visibility and
+  disabled while OFF.
 - `exact_path`: `%USERPROFILE%\.codex\toolchains\shims\npx.cmd`.
 - `dependency_chain`: Codex official bundled Node through the `npx.cmd` local
   wrapper -> npm package `chrome-devtools-mcp@latest` -> Chrome stable.
-- `scope`: Codex-global only during confirmed frontend work.
+- `scope`: visible in Codex-global MCP settings; active only during confirmed
+  frontend observation work.
 - `default_args`: slim, headless, isolated, usage-statistics off, performance
   CrUX off.
 - `activation`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on`.
@@ -94,8 +108,28 @@ not be left always-on just because they are useful sometimes.
 - `verification`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 status`,
   `verify-package`, app tool discovery after reload, and one safe browser
   observation when the tools are exposed.
-- `rollback`: run `off`; a pre-change config backup is stored under ignored
-  local state at `%USERPROFILE%\.codex\state\mcp-toggle-backups`.
+- `rollback`: run `off` to restore `enabled = false`; use `codex mcp remove
+  chrome_devtools_observe` only when the settings entry should disappear
+  completely. A pre-change config backup is stored under ignored local state at
+  `%USERPROFILE%\.codex\state\mcp-toggle-backups`.
+
+`shadcn` is the managed frontend registry MCP:
+
+- `source_class`: `local-chain`.
+- `owner`: user-global Codex MCP config.
+- `exact_path`: `%USERPROFILE%\.codex\toolchains\shims\npx.cmd`.
+- `dependency_chain`: Codex official bundled Node through the `npx.cmd` local
+  wrapper -> npm package `shadcn@latest` -> shadcn/ui registry and project
+  `components.json`.
+- `scope`: Codex-global frontend work; project-specific registry behavior still
+  depends on the confirmed frontend root and its `components.json`.
+- `default_args`: `-y shadcn@latest mcp`.
+- `verification`: `codex mcp list`, `codex mcp get shadcn --json`, active-session
+  MCP tool injection after app/session reload, and one safe read-only registry
+  call. If MCP is not injected, use CLI fallback such as `shadcn docs button` or
+  `shadcn view button` through the `.codex` `npx.cmd` wrapper.
+- `rollback`: `codex mcp remove shadcn` if the global settings entry is no
+  longer wanted.
 
 Do not directly edit `config.toml` for this toggle unless the Codex CLI command
 itself is confirmed broken. If manual repair becomes necessary, document the
@@ -129,6 +163,11 @@ When hooks, harness, or Codex global policy changed, also run:
 ```powershell
 %USERPROFILE%\.codex\toolchains\shims\python.cmd %USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py verify
 ```
+
+The harness defaults to its installed CODEX_HOME root when invoked by absolute
+script path, so this command does not require the shell current directory to be
+`%USERPROFILE%\.codex`. Use `--root` only when intentionally verifying another
+harness root.
 
 ## Completion Rule
 
