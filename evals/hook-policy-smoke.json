@@ -1,0 +1,14 @@
+{
+  "eval_id": "hook-policy-smoke",
+  "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id hook-policy-smoke",
+  "risk_notes": "Synthetic hook smoke test only; it validates local command classification, not every runtime tool payload shape.",
+  "setup": "Run from CODEX_HOME after lightweight hook policy changes.",
+  "success_criteria": [
+    "Staged git diff sensitive-pattern validation is allowed",
+    "Direct auth file reads remain blocked",
+    "Mixed direct protected-file reads plus staged diff scans remain blocked",
+    "The redacted staged-diff scanner is allowed"
+  ],
+  "task": "Verify the lightweight hook distinguishes safe staged diff validation from direct auth file reads.",
+  "timeout_seconds": 30
+}

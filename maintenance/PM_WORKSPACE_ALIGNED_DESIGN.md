@@ -132,6 +132,16 @@ If MemSearch or another index is used, treat it as a derived cache over approved
 source paths. The human-readable Markdown, tracked policy, and direct runtime
 evidence remain the source surfaces.
 
+Normal workstation verification must prove the local memory/RAG support path
+directly instead of leaving it as a residual risk. Use
+`maintenance/scripts/check-memory-rag-status.ps1`, which verifies memory
+metadata without printing raw memory contents and verifies the managed-source
+retrieval path through the active `toolchains/shims/memsearch.cmd` CLI. The
+managed `memsearch` shim is the active dependency surface for local Memory/RAG
+checks; its default mode delegates to `codex_agent_harness.py retrieve`, and
+its `--memory` mode reads `memories/raw_memories.md` locally while emitting only
+redacted previews, line numbers, headings, scores, and digests.
+
 ### PM Reward And Score Alignment
 
 The PM optimizes for gated correctness, not quick closure:
@@ -178,6 +188,12 @@ Use this document as the compact design record for PM workspace alignment:
 4. Keep public GitHub commits free of secrets, raw logs, private runtime state,
    and mutable local evidence.
 5. Keep completion claims tied to acceptance items and direct evidence.
+6. Use `maintenance/scripts/check-staged-sensitive-diff.ps1` for pre-commit
+   staged diff sensitive-pattern checks. It reports file, category, and line
+   digest only; it does not print raw matched lines.
+7. Use `maintenance/scripts/check-worktree-sensitive-diff.ps1` before claiming
+   local dirty worktree changes are sensitive-pattern clean. It scans a
+   temporary Git index and does not mutate the real staging area.
 
 ## Structural Evaluation Checklist
 

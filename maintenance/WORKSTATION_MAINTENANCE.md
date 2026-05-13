@@ -163,6 +163,9 @@ Run the smallest relevant set:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-memory-rag-status.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-staged-sensitive-diff.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-worktree-sensitive-diff.ps1
 git -C %USERPROFILE%\.codex status --short
 ```
 

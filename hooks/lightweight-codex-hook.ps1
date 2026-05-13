@@ -614,8 +614,38 @@ function Deny-Permission {
     }
 }
 
+function Test-StagedDiffSensitiveValidation {
+    param([string]$Text)
+
+    if ($Text -notmatch "(?i)\bgit\b" -or
+        $Text -notmatch "(?i)\bdiff\b" -or
+        $Text -notmatch "(?i)(--cached|--staged)") {
+        return $false
+    }
+
+    $directReadVerb = "(?i)(?:^|[;&|]\s*|\s)(Get-Content|gc|type|cat|more)(?:\.exe)?(?=\s|$)"
+    if ($Text -match $directReadVerb -or $Text -match "(?i)\bSelect-String\b.*\s-(LiteralPath|Path)\b") {
+        return $false
+    }
+
+    if ($Text -notmatch "(?i)(Select-String|grep|rg|findstr|check-staged-sensitive-diff|password|secret|token|credential|api[_-]?key|api\[_-\]\?key|private key)") {
+        return $false
+    }
+
+    $directSensitiveFile = "(?i)(auth\.json|\.env(\.|$|\s)|id_rsa|id_ed25519|\.pem\b)"
+    if ($Text -match $directSensitiveFile) {
+        return $false
+    }
+
+    return $true
+}
+
 function Test-SecretContentAccess {
     param([string]$Text)
+
+    if (Test-StagedDiffSensitiveValidation -Text $Text) {
+        return $false
+    }
 
     $readVerb = "(?i)(?:^|[;&|]\s*|\s)(Get-Content|gc|type|cat|Select-String|more)(?:\.exe)?(?=\s|$)"
     $sensitivePath = "(?i)(auth\.json|\.env(\.|$)|id_rsa|id_ed25519|\.pem\b|(^|[\\/._-])(token|secret|credential|password|api[_-]?key|cookie)([\\/._-]|$))"

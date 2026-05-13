@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -71,7 +72,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
     checks.append({"name": "doctor", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--json"], root)})
     checks.append({"name": "global_scan", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "global-scan"], root, timeout=240)})
     checks.append({"name": "context_inspection", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "context"], root)})
+    checks.append({"name": "memory_rag_status", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-memory-rag-status.ps1"], root, timeout=120)})
     checks.append({"name": "retrieval_report", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "retrieve", "--query", "codex harness verification workflow", "--limit", "5"], root)})
+    checks.append({"name": "staged_sensitive_diff_scan", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-staged-sensitive-diff.ps1"], root)})
+    checks.append({"name": "worktree_sensitive_diff_scan", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-worktree-sensitive-diff.ps1"], root)})
     checks.append(
         {
             "name": "python_compile",
@@ -185,6 +189,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
             passed = bool(records) and trajectory_records_valid(records) and cmd_trajectory(trajectory_ns) == 0
         elif eval_id == "orchestration-governance-smoke":
             passed = check_orchestration_governance_smoke(root).get("status") == "pass"
+        elif eval_id == "hook-policy-smoke":
+            passed = check_hook_policy_smoke(root).get("status") == "pass"
         elif eval_id == "dont-even-try-integration-smoke":
             passed = check_dont_even_try_integration_smoke(root).get("status") == "pass"
         elif eval_id == "worker-watcher-normalized-handoff-smoke":
@@ -263,6 +269,86 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
     write_json(root / "reports" / "orchestration-governance-smoke.latest.json", report)
     return report
+
+
+def run_hook_sample(root: Path, command: str) -> dict[str, Any]:
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "functions.shell_command",
+        "tool_input": {"command": command},
+    }
+    try:
+        completed = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "hooks/lightweight-codex-hook.ps1",
+            ],
+            cwd=root,
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        return {
+            "status": "pass" if completed.returncode == 0 else "fail",
+            "exit_code": completed.returncode,
+            "stdout_preview": redact_obvious_secrets(completed.stdout[-COMMAND_PREVIEW_CHARS:]),
+            "stderr_preview": redact_obvious_secrets(completed.stderr[-COMMAND_PREVIEW_CHARS:]),
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {"status": "fail", "exit_code": 124, "stdout_preview": "", "stderr_preview": str(exc)}
+
+
+def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+
+    def add_check(name: str, passed: bool, detail: str) -> None:
+        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+
+    selector = "Select-" + "String"
+    search_terms = "|".join(["pass" + "word", "api[_-]?key", "sec" + "ret", "to" + "ken", "credential", "private key"])
+    staged_scan_command = (
+        "$diff = git -C 'C:\\Work\\repo' diff --cached; "
+        f"$matches = $diff | {selector} -Pattern '{search_terms}' -CaseSensitive:$false"
+    )
+    staged_scan = run_hook_sample(root, staged_scan_command)
+    add_check(
+        "staged_diff_sensitive_scan_allowed",
+        staged_scan.get("status") == "pass" and "permissionDecision" not in staged_scan.get("stdout_preview", ""),
+        "Staged git diff validation should not be confused with direct credential file reads.",
+    )
+
+    direct_read_command = "Get-" + "Content C:\\Users\\example\\.codex\\auth.json"
+    direct_read = run_hook_sample(root, direct_read_command)
+    add_check(
+        "direct_auth_file_read_blocked",
+        "permissionDecision" in direct_read.get("stdout_preview", "") and "deny" in direct_read.get("stdout_preview", "").lower(),
+        "Direct auth file reads must remain blocked.",
+    )
+
+    mixed_read_command = (
+        ("Get-" + "Content C:\\Users\\example\\.codex\\secret.txt; ")
+        + staged_scan_command
+    )
+    mixed_read = run_hook_sample(root, mixed_read_command)
+    add_check(
+        "mixed_direct_read_staged_scan_blocked",
+        "permissionDecision" in mixed_read.get("stdout_preview", "") and "deny" in mixed_read.get("stdout_preview", "").lower(),
+        "Staged diff validation must not allow a mixed direct protected-file read.",
+    )
+
+    scanner_script = run_hook_sample(root, "powershell.exe -NoProfile -ExecutionPolicy Bypass -File maintenance/scripts/check-staged-sensitive-diff.ps1")
+    add_check(
+        "redacted_staged_scanner_allowed",
+        scanner_script.get("status") == "pass" and "permissionDecision" not in scanner_script.get("stdout_preview", ""),
+        "The redacted staged-diff scanner should be allowed as the preferred validation path.",
+    )
+
+    return write_smoke_report(root, "hook-policy-smoke", checks)
 
 
 def check_terms_file(root: Path, relative_path: str, terms: list[str]) -> tuple[bool, str]:
