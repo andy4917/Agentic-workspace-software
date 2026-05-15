@@ -223,12 +223,19 @@ function Read-State {
         return [ordered]@{
             currentGoal = ""
             workflow = ""
+            taskClass = ""
+            classificationReason = ""
+            delegationAuthorized = $false
+            goalRequired = $false
+            watcherExpected = $false
+            intentFrame = [ordered]@{}
             toolchainHint = ""
             memoryRoute = ""
             changedSurfaces = @()
             checksRun = @()
             requiredReminders = @()
             toolEvents = @()
+            subagentEvents = @()
             userAuthorizations = @()
             lastUpdated = ""
         }
@@ -239,12 +246,19 @@ function Read-State {
         return [ordered]@{
             currentGoal = [string]$state.currentGoal
             workflow = [string]$state.workflow
+            taskClass = [string]$state.taskClass
+            classificationReason = [string]$state.classificationReason
+            delegationAuthorized = [bool]$state.delegationAuthorized
+            goalRequired = [bool]$state.goalRequired
+            watcherExpected = [bool]$state.watcherExpected
+            intentFrame = $state.intentFrame
             toolchainHint = [string]$state.toolchainHint
             memoryRoute = [string]$state.memoryRoute
             changedSurfaces = @($state.changedSurfaces | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
             checksRun = @($state.checksRun | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             requiredReminders = @($state.requiredReminders | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             toolEvents = @($state.toolEvents | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
+            subagentEvents = @($state.subagentEvents | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 180 })
             userAuthorizations = @($state.userAuthorizations | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
             lastUpdated = [string]$state.lastUpdated
         }
@@ -252,12 +266,19 @@ function Read-State {
         return [ordered]@{
             currentGoal = ""
             workflow = ""
+            taskClass = ""
+            classificationReason = ""
+            delegationAuthorized = $false
+            goalRequired = $false
+            watcherExpected = $false
+            intentFrame = [ordered]@{}
             toolchainHint = ""
             memoryRoute = ""
             changedSurfaces = @()
             checksRun = @()
             requiredReminders = @("Hook state could not be parsed; refresh evidence before finalizing.")
             toolEvents = @()
+            subagentEvents = @()
             userAuthorizations = @()
             lastUpdated = ""
         }
@@ -367,14 +388,15 @@ function Select-Workflow {
     param([string]$Prompt)
 
     $p = $Prompt.ToLowerInvariant()
+    $hasRootCauseSignal = Test-RootCauseOrIncidentSignal -Prompt $Prompt
     $isKoreanReview = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
         @([int]0xB9AC, [int]0xBDF0),
         @([int]0xAC80, [int]0xD1A0),
         @([int]0xC810, [int]0xAC80)
     )
-    if ($p -match "debug|bug|fail|error|regression|broken") { return "debug" }
+    if ($p -match "debug|bug|fail|failure|error|regression|broken|root cause|incident|\bp0\b" -or $hasRootCauseSignal) { return "debug" }
     if ($p -match "migrat|upgrade|move|replace|restructure|cleanup|rename") { return "migration" }
-    if ($p -match "security|secret|credential|auth|token|permission|policy") { return "security" }
+    if ($p -match "(?i)(\bsecurity\b|\bsecret\b|\bcredential\b|\bauth\b|\bauthentication\b|\btoken\b|\bpermission\b|policy)") { return "security" }
     if ($p -match "research|docs|document|official|lookup|source") { return "research" }
     if ($p -match "frontend|backend|api|db|full.?stack") { return "full-stack" }
     if ($p -match "review|audit|inspect" -or $isKoreanReview) { return "review" }
@@ -417,6 +439,8 @@ function Get-SkillRoute {
 
     $p = $Prompt.ToLowerInvariant()
     $routes = @()
+    $hasRootCauseSignal = Test-RootCauseOrIncidentSignal -Prompt $Prompt
+    $hasWorkflowGovernanceSignal = Test-WorkflowGovernanceSignal -Prompt $Prompt
     $isKoreanReview = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
         @([int]0xB9AC, [int]0xBDF0),
         @([int]0xAC80, [int]0xD1A0),
@@ -435,6 +459,13 @@ function Get-SkillRoute {
     if ($p -match "vague|idea|brainstorm|unclear|ambiguous") {
         $routes += "idea/spec refinement"
     }
+    if ($hasRootCauseSignal) {
+        $routes += "resolve-agent-incidents"
+        $routes += "debugging/error recovery"
+    }
+    if ($hasWorkflowGovernanceSignal) {
+        $routes += "agent-harness-construction"
+    }
     if ($p -match "new feature|feature|architecture|significant|project|spec|requirements") {
         $routes += "spec-driven workflow"
     }
@@ -444,13 +475,13 @@ function Get-SkillRoute {
     if ($p -match "implement|build|fix|change|edit|create|add|multi-file" -or $isKoreanBuild) {
         $routes += "incremental implementation"
     }
-    if ($p -match "bug|fail|error|regression|behavior|test") {
+    if ($p -match "bug|fail|failure|error|regression|behavior|test|root cause|\bp0\b" -or $hasRootCauseSignal) {
         $routes += "test-driven/prove-it workflow"
     }
     if ($p -match "api|sdk|library|framework|official|docs|version") {
         $routes += "source-backed documentation lookup"
     }
-    if ($p -match "security|secret|credential|auth|token|permission|irreversible|destructive") {
+    if ($p -match "(?i)(\bsecurity\b|\bsecret\b|\bcredential\b|\bauth\b|\bauthentication\b|\btoken\b|\bpermission\b|irreversible|destructive)") {
         $routes += "security/doubt review"
     }
     if ($p -match "ui|browser|frontend|css|layout|visual") {
@@ -486,6 +517,9 @@ function Get-PurposeToolchainHint {
     param([string]$Prompt)
 
     $p = $Prompt.ToLowerInvariant()
+    if (Test-WorkflowGovernanceSignal -Prompt $Prompt) {
+        return "Codex workflow/harness: inspect scoped policy, hooks, harness smoke tests, and logs; patch the smallest enforceable surface and verify with synthetic hook samples"
+    }
     $isKoreanGit = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
         @([int]0xCEE4, [int]0xBC0B),
         @([int]0xD478, [int]0xC2DC),
@@ -516,7 +550,7 @@ function Get-MementoMemoryRoute {
     $routes = @()
 
     $routes += "context at session start when memento tools are exposed"
-    if ($p -match "previous|before|again|regression|error|fail|hook|mcp|toolchain|memory|memento|configuration|config|runtime|install|upgrade") {
+    if ($p -match "previous|before|again|regression|error|fail|failure|hook|mcp|toolchain|memory|memento|configuration|config|runtime|install|upgrade" -or (Test-RootCauseOrIncidentSignal -Prompt $Prompt) -or (Test-WorkflowGovernanceSignal -Prompt $Prompt)) {
         $routes += "recall before acting with topic/workspace/case filters"
     }
     if ($p -match "decide|decision|verified|fixed|resolved|procedure|preference|rollback|handoff|final|complete") {
@@ -603,6 +637,147 @@ function Test-DelegationAuthorized {
     return $false
 }
 
+function Test-RootCauseOrIncidentSignal {
+    param([string]$Prompt)
+
+    if ([string]::IsNullOrWhiteSpace($Prompt)) {
+        return $false
+    }
+
+    if ($Prompt -match "(?i)(\bp0\b|root cause|failure|failed|regression|incident|skipped workflow|cognitive debt|design defect|harness weakness|workflow skip)") {
+        return $true
+    }
+
+    return (Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xC2E4, [int]0xD328),
+        @([int]0xC624, [int]0xB958),
+        @([int]0xBB38, [int]0xC81C),
+        @([int]0xADFC, [int]0xBCF8),
+        @([int]0xC6D0, [int]0xC778),
+        @([int]0xACB0, [int]0xD568),
+        @([int]0xCDE8, [int]0xC57D)
+    ))
+}
+
+function Test-WorkflowGovernanceSignal {
+    param([string]$Prompt)
+
+    if ([string]::IsNullOrWhiteSpace($Prompt)) {
+        return $false
+    }
+
+    if ($Prompt -match "(?i)(hook|hooks|harness|workflow|subagents?|sub[-_ ]?agent|multi[-_ ]?agent|spawn_agent|watcher|worker|delegate|delegation|goal integrity|codex goal|l1/l2/l3/l4|classification)") {
+        return $true
+    }
+
+    return (Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xD6C5),
+        @([int]0xD558, [int]0xB124, [int]0xC2A4),
+        @([int]0xC6CC, [int]0xD06C, [int]0xD50C, [int]0xB85C),
+        @([int]0xC11C, [int]0xBE0C, [int]0xC5D0, [int]0xC774, [int]0xC804, [int]0xD2B8),
+        @([int]0xAC10, [int]0xC2DC),
+        @([int]0xBAA9, [int]0xD45C),
+        @([int]0xBD84, [int]0xB958)
+    ))
+}
+
+function Get-TaskClassification {
+    param(
+        [string]$Prompt,
+        [string]$Workflow,
+        [string]$Phase
+    )
+
+    $reasons = @()
+    $delegationAuthorized = Test-DelegationAuthorized -Prompt $Prompt
+    $hasRootCauseSignal = Test-RootCauseOrIncidentSignal -Prompt $Prompt
+    $hasWorkflowGovernanceSignal = Test-WorkflowGovernanceSignal -Prompt $Prompt
+    $p = $Prompt.ToLowerInvariant()
+
+    if ($Prompt.Length -gt 1200) {
+        $reasons += "long prompt"
+    }
+    if ($delegationAuthorized) {
+        $reasons += "explicit delegation authorization"
+    }
+    if ($hasRootCauseSignal) {
+        $reasons += "P0/repeated-failure/root-cause signal"
+    }
+    if ($hasWorkflowGovernanceSignal) {
+        $reasons += "workflow/harness/subagent governance surface"
+    }
+    if ($p -match "(?i)(\bsecurity\b|\bsecret\b|\bcredential\b|\bauth\b|\bauthentication\b|\bpermission\b|irreversible|destructive)") {
+        $reasons += "sensitive or high-risk boundary"
+    }
+    if ($p -match "(?i)(test|verify|validation|lint|build|commit|push|ship|deploy)") {
+        $reasons += "verification or ship requirement"
+    }
+
+    $level = "L2"
+    if ($hasRootCauseSignal -and ($hasWorkflowGovernanceSignal -or $delegationAuthorized)) {
+        $level = "L4"
+    } elseif ($hasWorkflowGovernanceSignal -or $delegationAuthorized -or $Prompt.Length -gt 1200) {
+        $level = "L3"
+    } elseif ($p -match "(?i)(explain|question|simple|one file|tiny)") {
+        $level = "L1"
+    }
+
+    if ($reasons.Count -eq 0) {
+        $reasons += "bounded implementation or review"
+    }
+
+    return [pscustomobject]@{
+        level = $level
+        reason = (($reasons | Select-Object -Unique) -join "; ")
+        workflow = $Workflow
+        phase = $Phase
+        delegationAuthorized = $delegationAuthorized
+        goalActionRequired = ($level -in @("L3", "L4"))
+        watcherCoverageRequired = ($delegationAuthorized -and $level -eq "L4")
+    }
+}
+
+function Get-IntentFrame {
+    param(
+        [string]$Prompt,
+        [string]$Workflow,
+        [string]$Phase,
+        [string]$ToolchainHint,
+        [string]$MemoryRoute,
+        $Classification
+    )
+
+    $goal = "Satisfy the current user request with the selected workflow and direct evidence."
+    if (Test-WorkflowGovernanceSignal -Prompt $Prompt) {
+        $goal = "Investigate and repair the Codex workflow or harness control-plane behavior described by the user."
+    }
+    if ((Test-RootCauseOrIncidentSignal -Prompt $Prompt) -and (Test-WorkflowGovernanceSignal -Prompt $Prompt)) {
+        $goal = "Find the root cause of the reported Codex workflow/harness incident, patch confirmed enforcement gaps, and verify regression coverage."
+    }
+
+    $evidenceTarget = "Direct inspection plus the smallest relevant command or runtime check."
+    if ($Classification.level -eq "L4") {
+        $evidenceTarget = "Hook sample output, persisted hook state, Stop-hook negative behavior, harness/eval result, subagent/watcher evidence or WATCHER_NOT_USED, and rollback notes."
+    } elseif ($Classification.level -eq "L3") {
+        $evidenceTarget = "Structured plan, direct file/runtime evidence, relevant tests or not-run reason, and final goal audit if surfaces changed."
+    }
+
+    $subagentPolicy = "No delegation unless the user explicitly authorizes it."
+    if ([bool]$Classification.delegationAuthorized) {
+        $subagentPolicy = "Delegation is authorized by the user; spawn only bounded non-blocking sidecar agents and independently verify candidate evidence."
+    }
+
+    return [ordered]@{
+        english_normalized_goal = $goal
+        task_type = "$($Classification.level) $Workflow/$Phase"
+        authority_boundary = "Main PM owns scope, integration, verification, and parent-goal status; subagents produce candidate evidence only."
+        toolchain_purpose = $ToolchainHint
+        evidence_target = $evidenceTarget
+        memory_action = $MemoryRoute
+        subagent_policy = $subagentPolicy
+    }
+}
+
 function Test-HookMaintenanceAuthorized {
     param([string]$Prompt)
 
@@ -671,22 +846,36 @@ function Get-PromptReminder {
     )
 
     $goal = Get-PromptSummary -Prompt $Prompt
+    $classification = Get-TaskClassification -Prompt $Prompt -Workflow $Workflow -Phase $Phase
 
     $delegationAuthorization = "No subagent authorization detected; keep work local unless the user explicitly asks for delegation."
     if (Test-DelegationAuthorized -Prompt $Prompt) {
-        $delegationAuthorization = "Delegation authorized; spawn only bounded non-blocking sidecar agents, then verify outputs."
+        $delegationAuthorization = "Delegation authorized: user has instructed subagent calls as needed. Spawn bounded non-blocking sidecar agents when they reduce risk, then verify outputs."
+    }
+
+    $goalAction = "Goal action: no persisted Codex Goal required unless the task becomes long-running or stateful."
+    if ([bool]$classification.goalActionRequired) {
+        $goalAction = "Goal action required: create or update one Codex Goal before build/repair work, then keep it as tracking only."
+    }
+
+    $watcherAction = "Watcher action: use only if a non-trivial delegated worker or pre-ship integrity risk exists."
+    if ([bool]$classification.watcherCoverageRequired) {
+        $watcherAction = "Watcher action required by default for this L4 delegated incident: spawn an OBS/REV read-only watcher for inspect/adversarial review; if omitted, record WATCHER_NOT_USED with reason, risk, substitute check, and confidence impact."
     }
 
     return @"
 Lightweight Codex workflow reminder:
-- Profile: $($Policy.profile); goal: $goal; preset: $Workflow; phase: $Phase.
+- Profile: $($Policy.profile); goal: $goal; task_class=$($classification.level); classification_reason=$($classification.reason); preset: $Workflow; phase: $Phase.
 - Skill route: $SkillRoute; team preset: $TeamPreset.
-- Internal intent frame: normalize in English before acting as goal, task_type, authority_boundary, toolchain_purpose, evidence_target, memory_action.
+- Required PM startup packet: explicitly state the L1/L2/L3/L4 class, meta-decompose the user text, compile the working intent in English, and continue into the selected workflow instead of stopping at classification.
+- Internal English intent frame: goal, task_type, authority_boundary, toolchain_purpose, evidence_target, memory_action.
+- $goalAction
 - Purpose toolchain: $ToolchainHint
 - Memento memory: $MemoryRoute; memory is support-only, never completion authority. Use tool_feedback after useful or insufficient recall.
 - PM owns scope, integration, verification, and final status; user remains reviewer, not operator.
 - Subagents: max parallel $($Policy.subagents.max_parallel), max depth $($Policy.subagents.max_depth). $delegationAuthorization
 - Delegate only bounded non-blocking side work with owned surfaces and evidence; keep the immediate blocker local.
+- $watcherAction
 - Completion requires changed/inspected surfaces, direct checks run, checks not run with reasons, PM independent verification, residual risks, rollback notes, and status complete|blocked|continue.
 - Block only real risk: secret content access, irreversible destructive action, hook weakening without explicit user scope, evaluator/pass manipulation, or out-of-scope mutation. Toolchain, MCP, CLI use/install, and read-only inspection should be observed unless they actually perform a blocked action.
 "@
@@ -707,6 +896,26 @@ function Test-FinalAuditReady {
     $hasPmVerification = $Message -match "(?i)(PM independent|independent verification)"
 
     return ($hasAuditSignal -and $hasChecked -and $hasNotRun -and $hasRisks -and $hasStatus -and $hasPmVerification)
+}
+
+function Test-WatcherCoverageReady {
+    param(
+        $State,
+        [string]$Message
+    )
+
+    if (-not [bool]$State.watcherExpected) {
+        return $true
+    }
+    if ([string]::IsNullOrWhiteSpace($Message)) {
+        return $false
+    }
+
+    $hasWatcherReport = $Message -match "(?i)(WATCHER_REPORT|OBS-|REV-|watcher report|watcher evidence|adversarial review)"
+    $hasWatcherNotUsed = $Message -match "(?i)(WATCHER_NOT_USED|watcher not used)"
+    $hasAcceptedRejectedEvidence = $Message -match "(?i)(accepted and rejected subagent evidence|accepted/rejected subagent evidence|accepted subagent evidence|rejected subagent evidence|subagent evidence)"
+
+    return ($hasWatcherReport -or $hasWatcherNotUsed -or $hasAcceptedRejectedEvidence)
 }
 
 function Deny-PreTool {
@@ -1053,24 +1262,43 @@ switch ($eventName) {
         $teamPreset = Get-TeamPresetHint -Workflow $workflow
         $toolchainHint = Get-PurposeToolchainHint -Prompt $prompt
         $memoryRoute = Get-MementoMemoryRoute -Prompt $prompt
+        $classification = Get-TaskClassification -Prompt $prompt -Workflow $workflow -Phase $phase
+        $intentFrame = Get-IntentFrame -Prompt $prompt -Workflow $workflow -Phase $phase -ToolchainHint $toolchainHint -MemoryRoute $memoryRoute -Classification $classification
         $state.currentGoal = $promptSummary
         $state.workflow = $workflow
+        $state.taskClass = [string]$classification.level
+        $state.classificationReason = [string]$classification.reason
+        $state.delegationAuthorized = [bool]$classification.delegationAuthorized
+        $state.goalRequired = [bool]$classification.goalActionRequired
+        $state.watcherExpected = [bool]$classification.watcherCoverageRequired
+        $state.intentFrame = $intentFrame
         $state.toolchainHint = $toolchainHint
         $state.memoryRoute = $memoryRoute
         $state.changedSurfaces = @()
         $state.checksRun = @()
         $state.requiredReminders = @()
         $state.toolEvents = @()
+        $state.subagentEvents = @()
         $state.userAuthorizations = @()
+        $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "PM startup packet required: L1/L2/L3/L4 class, English intent frame, workflow continuation, evidence target."
+        if ([bool]$classification.goalActionRequired) {
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Codex Goal required before build/repair work; Goal is tracking only, not completion authority."
+        }
+        if ([bool]$classification.watcherCoverageRequired) {
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Watcher coverage required by default; provide WATCHER_REPORT/subagent evidence or WATCHER_NOT_USED before finalization."
+        }
         if (Test-HookMaintenanceAuthorized -Prompt $prompt) {
             $state.userAuthorizations = Add-Unique -Items $state.userAuthorizations -Value "hook_policy_change"
         }
         if (Test-ToolchainMaintenanceAuthorized -Prompt $prompt) {
             $state.userAuthorizations = Add-Unique -Items $state.userAuthorizations -Value "toolchain_mcp_cli_maintenance"
         }
+        if ([bool]$classification.delegationAuthorized) {
+            $state.userAuthorizations = Add-Unique -Items $state.userAuthorizations -Value "delegation_authorized"
+        }
         Save-State -State $state
 
-        Write-CodexStructuredLog -EventName "UserPromptSubmit" -Outcome "observed" -Reason $workflow -ChangedSurface @("hooks.state") -PromptSummary $promptSummary | Out-Null
+        Write-CodexStructuredLog -EventName "UserPromptSubmit" -Outcome "observed" -Reason "$workflow;$($classification.level);$($classification.reason)" -ChangedSurface @("hooks.state") -PromptSummary $promptSummary -UserApproval @($state.userAuthorizations) | Out-Null
         $reminder = Get-PromptReminder -Workflow $workflow -Prompt $prompt -Phase $phase -SkillRoute $skillRoute -TeamPreset $teamPreset -ToolchainHint $toolchainHint -MemoryRoute $memoryRoute -Policy $policy
         Write-HookJson @{
             continue = $true
@@ -1176,6 +1404,15 @@ switch ($eventName) {
         $additional = @()
         $logChangedSurfaces = @()
         $logValidationResults = @()
+        $logSubagentResults = @()
+        if ($toolName -match "(?i)(spawn_agent|wait_agent|send_input|close_agent|resume_agent)" -or $text -match "(?i)(agent_id|agent_type|WATCHER_REPORT|WATCHER_NOT_USED|NORMALIZED_WORKER_PACKET)") {
+            $evidence = Get-ToolEvidenceSummary -ToolName $toolName -Text $text
+            $state.subagentEvents = Add-Unique -Items $state.subagentEvents -Value $evidence
+            $logSubagentResults += $evidence
+            if ([bool]$state.watcherExpected) {
+                $additional += "Subagent-related activity observed: final audit must accept/reject this evidence and include watcher coverage or WATCHER_NOT_USED."
+            }
+        }
         $changedFileCount = Get-ChangedFileCount -Text $text
         $changedLineCount = Get-ChangedLineCount -Text $text
         if ($toolName -match "apply_patch|Edit|Write") {
@@ -1204,7 +1441,7 @@ switch ($eventName) {
         }
 
         Save-State -State $state
-        Write-CodexStructuredLog -EventName "PostToolUse" -Outcome "observed" -ToolName $toolName -ChangedSurface $logChangedSurfaces -ValidationResult $logValidationResults | Out-Null
+        Write-CodexStructuredLog -EventName "PostToolUse" -Outcome "observed" -ToolName $toolName -ChangedSurface $logChangedSurfaces -ValidationResult $logValidationResults -SubagentResult $logSubagentResults | Out-Null
 
         if ($additional.Count -gt 0) {
             Write-HookJson @{
@@ -1222,11 +1459,23 @@ switch ($eventName) {
     "Stop" {
         $lastMessage = [string]$inputObject.last_assistant_message
         $hasChanged = @($state.changedSurfaces).Count -gt 0
+        $hasSubstantiveActivity = $hasChanged -or @($state.toolEvents).Count -gt 0
         $auditReady = Test-FinalAuditReady -Message $lastMessage
+        $watcherReady = Test-WatcherCoverageReady -State $state -Message $lastMessage
+
+        if ($hasSubstantiveActivity -and -not $watcherReady -and -not [bool]$inputObject.stop_hook_active) {
+            $reason = "Watcher or subagent evidence missing for an L4 delegated workflow incident."
+            Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
+            Write-HookJson @{
+                decision = "block"
+                reason = "Final preflight: this prompt was classified as L4 with delegation authorized. Before finalizing, include accepted/rejected subagent evidence plus WATCHER_REPORT, or record WATCHER_NOT_USED with reason, risk, substitute check, and confidence impact."
+            }
+            break
+        }
 
         if ($hasChanged -and -not $auditReady -and -not [bool]$inputObject.stop_hook_active) {
             $reason = "Final evidence missing after changed surfaces were observed."
-            Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) | Out-Null
+            Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
                 reason = "Final preflight: changed surfaces were observed. Before finalizing, produce a goal audit with checked items, not-run reasons, residual risks, current status complete|blocked|continue, and PM independent verification."
@@ -1234,7 +1483,7 @@ switch ($eventName) {
             break
         }
 
-        Write-CodexStructuredLog -EventName "Stop" -Outcome "observed" -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) | Out-Null
+        Write-CodexStructuredLog -EventName "Stop" -Outcome "observed" -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
         Write-HookJson @{
             continue = $true
             systemMessage = ""

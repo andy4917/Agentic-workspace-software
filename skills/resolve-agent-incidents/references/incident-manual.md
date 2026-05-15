@@ -190,6 +190,20 @@ Use one primary type and optional secondary tags.
 - Verification: synthetic `UserPromptSubmit` plus `PreToolUse` samples prove an authorized hook-policy edit is observed, a safe toolchain command is observed, and secret/destructive denial cases still deny.
 - Do not claim: broad hook disabling, blanket `permissionDecision=allow`, or bypassing final evidence checks as a valid fix.
 
+### Advisory PM Contract Without Verifiable State
+
+- Type: `workflow_hook_issue`, `validation_gap`
+- Fingerprint: `UserPromptSubmit` injects PM workflow text such as delegation authorization, English intent framing, or watcher expectations, but hook state stores only a prompt hash/workflow label and Stop checks do not require subagent evidence, `WATCHER_REPORT`, or `WATCHER_NOT_USED`.
+- Risk: agents can skip the required workflow, omit authorized inspect/watcher subagents, and still satisfy final wording checks.
+- Likely causes: treating hook reminders and structural document smoke tests as enforcement; missing structured state fields for task class, delegation authorization, intent frame, goal requirement, and watcher expectation.
+- Fix playbook:
+  1. Persist structured prompt-derived state: `taskClass`, `delegationAuthorized`, `goalRequired`, `watcherExpected`, and an English intent frame.
+  2. Emit an actionable PM startup packet with L1-L4 classification and selected workflow continuation requirements.
+  3. For L4 delegated incidents, Stop must require accepted/rejected subagent evidence plus watcher coverage, or explicit `WATCHER_NOT_USED` with risk and substitute check.
+  4. Add a behavioral hook smoke test with a P0 delegated workflow prompt; do not rely only on document term checks.
+- Verification: synthetic `UserPromptSubmit` output includes `task_class=L4`, goal action, watcher action, and delegation authorization; hook state contains the structured fields; Stop blocks a final message that omits watcher/subagent evidence for active L4 delegated work.
+- Do not claim: that a reminder sentence or a worker-watcher document proves runtime PM behavior.
+
 ### Patch Grammar Failure
 
 - Type: `tool_runtime_error`

@@ -5,11 +5,13 @@
   "setup": "Run from CODEX_HOME after lightweight hook policy changes.",
   "success_criteria": [
     "Prompt-submitted secret-like values are blocked before model dispatch",
+    "P0 workflow/harness prompts emit an L4 PM contract with English intent, goal action, delegation, and watcher requirements",
+    "P0 workflow/harness prompts persist task class, delegation authorization, goal requirement, watcher expectation, and intent frame in hook state",
     "Staged git diff sensitive-pattern validation is allowed",
     "Direct auth file reads remain blocked",
     "Mixed direct protected-file reads plus staged diff scans remain blocked",
     "The redacted staged-diff scanner is allowed"
   ],
-  "task": "Verify the lightweight hook distinguishes safe staged diff validation from direct auth file reads.",
+  "task": "Verify the lightweight hook distinguishes safe staged diff validation from direct auth file reads and emits enforceable PM workflow state for P0 delegated workflow incidents.",
   "timeout_seconds": 30
 }

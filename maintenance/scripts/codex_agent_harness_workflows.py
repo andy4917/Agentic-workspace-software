@@ -350,6 +350,47 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         "UserPromptSubmit should block secret-like values before they reach the model.",
     )
 
+    korean_failure = "".join(chr(codepoint) for codepoint in [0xC2E4, 0xD328])
+    korean_hook = "".join(chr(codepoint) for codepoint in [0xD6C5])
+    workflow_prompt = (
+        f"{korean_failure} {korean_hook} P0 root cause: user authorized subagent and watcher work. "
+        "Classify L1/L2/L3/L4, compile English intent, set goal, and continue workflow."
+    )
+    workflow_probe = run_prompt_hook_sample(root, workflow_prompt)
+    workflow_stdout = workflow_probe.get("stdout_preview", "").lower()
+    add_check(
+        "workflow_prompt_emits_l4_contract",
+        all(
+            term in workflow_stdout
+            for term in [
+                "task_class=l4",
+                "required pm startup packet",
+                "internal english intent frame",
+                "goal action required",
+                "watcher action required",
+                "delegation authorized",
+            ]
+        ),
+        "UserPromptSubmit should emit an actionable L4 PM contract, not only a generic reminder.",
+    )
+
+    state_path = root / "hooks" / "state" / "lightweight-status.json"
+    try:
+        hook_state = json.loads(read_text(state_path))
+    except (OSError, json.JSONDecodeError) as exc:
+        hook_state = {"_error": str(exc)}
+    add_check(
+        "workflow_prompt_persists_structured_state",
+        hook_state.get("taskClass") == "L4"
+        and hook_state.get("delegationAuthorized") is True
+        and hook_state.get("goalRequired") is True
+        and hook_state.get("watcherExpected") is True
+        and "delegation_authorized" in hook_state.get("userAuthorizations", [])
+        and isinstance(hook_state.get("intentFrame"), dict)
+        and bool(hook_state.get("intentFrame", {}).get("english_normalized_goal")),
+        "Hook state should retain task class, delegation authorization, goal requirement, watcher expectation, and English intent frame.",
+    )
+
     selector = "Select-" + "String"
     search_terms = "|".join(["pass" + "word", "api[_-]?key", "sec" + "ret", "to" + "ken", "credential", "private key"])
     staged_scan_command = (

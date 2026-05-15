@@ -132,6 +132,21 @@
     "threshold_behavior": "warn_plan_and_report_not_hard_block",
     "risky_change_always_high_ceremony": true
   },
+  "work_classification": {
+    "levels": {
+      "L1": "tiny or simple answer/edit with minimal risk",
+      "L2": "bounded ordinary engineering work",
+      "L3": "multi-surface, delegated, workflow-sensitive, or long-running work",
+      "L4": "P0/repeated-failure/root-cause workflow or harness incident, especially with explicit delegation"
+    },
+    "prompt_runtime_contract": [
+      "emit task_class in UserPromptSubmit additionalContext",
+      "store classification and English intent frame in hook state",
+      "record delegation_authorized when the prompt authorizes subagents",
+      "require goal action for L3/L4",
+      "require watcher coverage or WATCHER_NOT_USED for L4 delegated incidents"
+    ]
+  },
   "size_limits": {
     "docs_file_lines": 800,
     "source_file_lines": 500,
