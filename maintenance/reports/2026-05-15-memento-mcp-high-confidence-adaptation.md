@@ -183,6 +183,41 @@ Observed verification on 2026-05-15:
   `memento_working_set_mb=172.1` below managed limit `512` after required MCP
   tool checks; immediate post-restart status was `88.5`.
 
+## Timeout Repair Follow-Up
+
+Observed incident on 2026-05-15:
+
+- `context(workspace="global_pm")` failed with
+  `Connection terminated due to connection timeout`.
+- `/health` returned 503 and `pg_isready` reported
+  `127.0.0.1:55432 - no response` while the port was still listening.
+- PostgreSQL log showed `autovacuum worker ... exception 0xC0000142` followed by
+  repeated `could not reserve shared memory region ... error code 487`.
+
+Repair applied:
+
+- `maintenance\scripts\memento-mcp-runtime.ps1` now has a `repair` action.
+- The runtime script detects a not-ready PostgreSQL process/port for the Memento
+  `pgdata`, stops or force-stops only that scoped process tree, clears stale
+  `postmaster.pid`, and restarts PostgreSQL through `postgres.exe` instead of
+  blocking on `pg_ctl start -w`.
+- MCP HTTP calls in the verifier now have a bounded timeout.
+- The managed Memento HTTP child is launched with
+  `MEMENTO_SEARCH_PARAM_ADAPTOR_ENABLED=false` so PM memory reads do not pay the
+  adaptive-threshold side-effect query path.
+- Local Memento source was patched so `SearchParamAdaptor` honors
+  `MEMENTO_SEARCH_PARAM_ADAPTOR_ENABLED=false`, and `LinkStore.createLinks`
+  no longer writes `fragment_links.accessed_at`, a column not present in the
+  current schema.
+
+Post-repair evidence:
+
+- `memento-mcp-runtime.ps1 repair`: exits 0 after bounded restart.
+- `memento-mcp-runtime.ps1 verify`: pass; `context=pass`, `recall=pass`,
+  `tool_feedback=pass`.
+- `GET http://127.0.0.1:57332/health`: healthy.
+- Live MCP `context(workspace="global_pm")`: success and returns immediately.
+
 ## Residual Risks
 
 - Current Codex sessions may need reload before `mcp__memento__...` tools appear

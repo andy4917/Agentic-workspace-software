@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("status", "start", "stop", "restart", "verify")]
+    [ValidateSet("status", "start", "stop", "restart", "repair", "verify")]
     [string] $Action = "status"
 )
 
@@ -93,6 +93,7 @@ $PgUser = Get-EnvValue -Name "POSTGRES_USER" -Default "memento"
 $InProcessOnnxEnabled = Get-EnvValue -Name "MEMENTO_INPROCESS_ONNX_ENABLED" -Default "false"
 $ManagedEmbeddingProvider = Get-EnvValue -Name "MEMENTO_MANAGED_EMBEDDING_PROVIDER" -Default "none"
 $MaxWorkingSetMb = [double](Get-EnvValue -Name "MEMENTO_MAX_WORKING_SET_MB" -Default "512")
+$HttpTimeoutSec = [int](Get-EnvValue -Name "MEMENTO_HTTP_TIMEOUT_SECONDS" -Default "30")
 
 function Resolve-PostgresBin {
     $scoopPath = Join-PathStrict $env:USERPROFILE "scoop\apps\postgresql\current\bin"
@@ -108,6 +109,7 @@ $PostgresBin = Resolve-PostgresBin
 $PgCtl = Join-PathStrict $PostgresBin "pg_ctl.exe"
 $PgIsReady = Join-PathStrict $PostgresBin "pg_isready.exe"
 $Psql = Join-PathStrict $PostgresBin "psql.exe"
+$PostgresExe = Join-PathStrict $PostgresBin "postgres.exe"
 
 if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) {
     $NodeExe = (Get-Command node.exe -ErrorAction Stop).Source
@@ -184,6 +186,97 @@ function Get-MementoServerProcess {
     return $null
 }
 
+function Convert-ToRuntimeMatchPath {
+    param([string] $Path)
+
+    if ($null -eq $Path) {
+        return ""
+    }
+    return ([string]$Path).Replace("\", "/").ToLowerInvariant()
+}
+
+function Get-PostmasterPidFromFile {
+    $pidPath = Join-PathStrict $PgData "postmaster.pid"
+    if (-not (Test-Path -LiteralPath $pidPath -PathType Leaf)) {
+        return $null
+    }
+
+    $pidText = (Get-Content -LiteralPath $pidPath -TotalCount 1).Trim()
+    $pidValue = 0
+    if ([int]::TryParse($pidText, [ref]$pidValue)) {
+        return $pidValue
+    }
+    return $null
+}
+
+function Get-MementoPostgresProcessIds {
+    $ids = New-Object System.Collections.Generic.List[int]
+    $postmasterPid = Get-PostmasterPidFromFile
+    if ($null -ne $postmasterPid) {
+        $proc = Get-Process -Id $postmasterPid -ErrorAction SilentlyContinue
+        if ($null -ne $proc -and $proc.ProcessName -match "postgres") {
+            $ids.Add([int]$postmasterPid) | Out-Null
+        }
+    }
+
+    $needle = Convert-ToRuntimeMatchPath -Path $PgData
+    $processes = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    foreach ($proc in $processes) {
+        $cmd = Convert-ToRuntimeMatchPath -Path ([string]$proc.CommandLine)
+        if ([string]$proc.Name -match "postgres" -and $cmd.Contains($needle)) {
+            $ids.Add([int]$proc.ProcessId) | Out-Null
+        }
+    }
+
+    $changed = $true
+    while ($changed) {
+        $changed = $false
+        $current = @($ids | Sort-Object -Unique)
+        foreach ($proc in $processes) {
+            if ([string]$proc.Name -match "postgres" -and $current -contains [int]$proc.ParentProcessId -and $current -notcontains [int]$proc.ProcessId) {
+                $ids.Add([int]$proc.ProcessId) | Out-Null
+                $changed = $true
+            }
+        }
+    }
+
+    return @($ids | Sort-Object -Unique)
+}
+
+function Test-PostgresPortListening {
+    try {
+        $listeners = @(Get-NetTCPConnection -LocalPort $PgPort -State Listen -ErrorAction SilentlyContinue)
+        return ($listeners.Count -gt 0)
+    } catch {
+        return $false
+    }
+}
+
+function Wait-PostgresStopped {
+    param([int] $TimeoutSeconds = 15)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (@(Get-MementoPostgresProcessIds).Count -eq 0 -and -not (Test-PostgresPortListening)) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    return (@(Get-MementoPostgresProcessIds).Count -eq 0 -and -not (Test-PostgresPortListening))
+}
+
+function Clear-StalePostmasterPid {
+    $pidPath = Join-PathStrict $PgData "postmaster.pid"
+    if (-not (Test-Path -LiteralPath $pidPath -PathType Leaf)) {
+        return
+    }
+    if (Test-PostgresReady -or @(Get-MementoPostgresProcessIds).Count -gt 0) {
+        return
+    }
+    Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
+    Write-Detail "postgres=removed-stale-postmaster-pid"
+}
+
 function Get-ProcessWorkingSetMb {
     param($Process)
 
@@ -215,12 +308,30 @@ function Start-PostgresRuntime {
     }
 
     New-Item -ItemType Directory -Path $LogRoot -Force | Out-Null
-    $pgLog = Join-PathStrict $LogRoot "postgresql.log"
-    & $PgCtl -D $PgData -l $pgLog -o "-p $PgPort" -w start | Out-Null
+    $existingPostgres = @(Get-MementoPostgresProcessIds)
+    if ($existingPostgres.Count -gt 0 -or (Test-PostgresPortListening)) {
+        Write-Detail ("postgres=stuck-detected pids=" + (($existingPostgres | ForEach-Object { [string]$_ }) -join ","))
+        Stop-PostgresRuntime
+    }
+
+    Clear-StalePostmasterPid
+
+    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $pgLog = Join-PathStrict $LogRoot ("postgresql-" + $timestamp + ".out.log")
+    $pgErrLog = Join-PathStrict $LogRoot ("postgresql-" + $timestamp + ".err.log")
+    $postgresProc = Start-Process -FilePath $PostgresExe -ArgumentList @("-D", $PgData, "-p", [string]$PgPort) -RedirectStandardOutput $pgLog -RedirectStandardError $pgErrLog -WindowStyle Hidden -PassThru
+
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $deadline -and -not (Test-PostgresReady)) {
+        if ($postgresProc.HasExited) {
+            throw "PostgreSQL process exited before readiness; see $pgErrLog"
+        }
+        Start-Sleep -Milliseconds 500
+    }
     if (-not (Test-PostgresReady)) {
         throw "PostgreSQL did not become ready on ${PgHost}:${PgPort}"
     }
-    Write-Detail "postgres=started"
+    Write-Detail ("postgres=started pid=" + [string]$postgresProc.Id + " log=" + $pgLog)
 }
 
 function Stop-PostgresRuntime {
@@ -229,12 +340,37 @@ function Stop-PostgresRuntime {
         return
     }
 
-    if (-not (Test-PostgresReady)) {
+    $runtimePids = @(Get-MementoPostgresProcessIds)
+    if (-not (Test-PostgresReady) -and $runtimePids.Count -eq 0 -and -not (Test-PostgresPortListening)) {
+        Clear-StalePostmasterPid
         Write-Detail "postgres=already-stopped-or-unreachable"
         return
     }
 
-    & $PgCtl -D $PgData -m fast -w stop | Out-Null
+    $stopOutput = @(& $PgCtl -D $PgData -m fast stop 2>&1)
+    if ($LASTEXITCODE -eq 0 -and (Wait-PostgresStopped -TimeoutSeconds 10)) {
+        Clear-StalePostmasterPid
+        Write-Detail "postgres=stopped"
+        return
+    }
+
+    if ($stopOutput.Count -gt 0) {
+        Write-Detail ("postgres=fast-stop-failed " + (($stopOutput | Select-Object -First 1) -replace "\s+", " ").Trim())
+    }
+
+    $runtimePids = @(Get-MementoPostgresProcessIds)
+    if ($runtimePids.Count -gt 0) {
+        foreach ($pidValue in $runtimePids) {
+            Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
+        }
+        Write-Detail ("postgres=forced-stop pids=" + (($runtimePids | ForEach-Object { [string]$_ }) -join ","))
+    }
+
+    if (-not (Wait-PostgresStopped -TimeoutSeconds 15)) {
+        throw "PostgreSQL runtime processes did not stop for data directory: $PgData"
+    }
+
+    Clear-StalePostmasterPid
     Write-Detail "postgres=stopped"
 }
 
@@ -256,6 +392,7 @@ function Start-MementoRuntime {
     $childEnv = @{
         MEMENTO_INPROCESS_ONNX_ENABLED = $InProcessOnnxEnabled
         EMBEDDING_PROVIDER = $ManagedEmbeddingProvider
+        MEMENTO_SEARCH_PARAM_ADAPTOR_ENABLED = "false"
     }
     if ($ManagedEmbeddingProvider -eq "none") {
         $childEnv["EMBEDDING_API_KEY"] = ""
@@ -355,7 +492,7 @@ function Invoke-MementoRpc {
         params = $Params
     } | ConvertTo-Json -Depth 20
 
-    $response = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/mcp" -Method Post -Headers $headers -Body $body -UseBasicParsing
+    $response = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/mcp" -Method Post -Headers $headers -Body $body -UseBasicParsing -TimeoutSec $HttpTimeoutSec
     if ([string]::IsNullOrWhiteSpace([string]$SessionId.Value) -and $response.Headers -and $response.Headers["mcp-session-id"]) {
         $SessionId.Value = [string]($response.Headers["mcp-session-id"] | Select-Object -First 1)
     }
@@ -488,6 +625,14 @@ function Invoke-MementoVerify {
     Write-Output "status=pass"
 }
 
+function Invoke-MementoRepair {
+    Write-Detail "repair=begin"
+    Stop-MementoRuntime -StopPostgres $true
+    Start-MementoRuntime
+    Invoke-MementoVerify
+    Write-Detail "repair=complete"
+}
+
 function Invoke-Status {
     Write-Output "status=observed"
     Write-Detail ("source_root=" + $SourceRoot)
@@ -511,5 +656,6 @@ switch ($Action) {
     "start" { Start-MementoRuntime; Invoke-Status; break }
     "stop" { Stop-MementoRuntime; Invoke-Status; break }
     "restart" { Stop-MementoRuntime -StopPostgres $false; Start-MementoRuntime; Invoke-Status; break }
+    "repair" { Invoke-MementoRepair; break }
     "verify" { Invoke-MementoVerify; break }
 }

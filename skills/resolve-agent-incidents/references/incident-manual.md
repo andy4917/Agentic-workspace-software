@@ -150,6 +150,20 @@ Use one primary type and optional secondary tags.
 - Verification: verifier reports required tools present, `context`/`recall`/`tool_feedback` pass, and `memento_working_set_mb` stays below `MEMENTO_MAX_WORKING_SET_MB`.
 - Do not claim: that all Node processes are safe to kill, or that configured MCP memory is healthy without PID/port/tool verification.
 
+### Memento PostgreSQL Shared-Memory Stuck Runtime
+
+- Type: `tool_runtime_error`, `environment_path_issue`
+- Fingerprint: Memento `context` or `recall` returns `Connection terminated due to connection timeout`; `/health` returns 503; `pg_isready` reports `no response` even though port `55432` is listening; PostgreSQL log includes `autovacuum worker ... exception 0xC0000142` followed by `could not reserve shared memory region ... error code 487`.
+- Risk: agents may misdiagnose the timeout as a thread-local Codex session issue, while the shared Memento PostgreSQL runtime is stuck for every session.
+- Likely causes: Windows PostgreSQL postmaster remains alive after a worker crash, but child backend processes can no longer attach the shared memory region; `pg_ctl start/stop -w` can also hang around this state.
+- Fix playbook:
+  1. Confirm the runtime with `memento-mcp-runtime.ps1 status`, `/health`, `pg_isready`, and the PostgreSQL log fingerprint.
+  2. Use `memento-mcp-runtime.ps1 repair` after the runtime script has bounded non-waiting PostgreSQL stop/start logic.
+  3. Scope any forced process stop to the Memento `pgdata` PID/process tree, not all PostgreSQL processes.
+  4. Keep PM-only Memento runtime with `MEMENTO_SEARCH_PARAM_ADAPTOR_ENABLED=false` unless adaptive search-threshold learning is explicitly needed.
+- Verification: `memento-mcp-runtime.ps1 verify` reports `context=pass`, `recall=pass`, `tool_feedback=pass`, `/health` returns healthy, and a live MCP `context(workspace="global_pm")` returns immediately.
+- Do not claim: that restarting the Codex thread fixes this; the failure is in the shared local Memento backend until PostgreSQL and the Memento HTTP server are repaired.
+
 ### MCP Capability Works But Is Invisible In App Settings
 
 - Type: `codex_app_error`, `skill_or_doc_drift`
