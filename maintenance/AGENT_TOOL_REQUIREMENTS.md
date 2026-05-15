@@ -129,18 +129,24 @@ Global MCP server definitions belong in `%USERPROFILE%\.codex\config.toml` when
 the user intent is cross-workspace use. Use project-local MCP config only for a
 repository-specific command, credential source, or policy boundary.
 
+- Actively choose an MCP when the task matches its evidence surface; do not wait
+  for the user to name it. If a namespace is not already exposed, use
+  `tool_search` first, then call the MCP directly when exposed.
 - Use OpenAI Developer Docs MCP for current OpenAI API, model, Codex, plugin,
-  app-server, and ChatGPT Apps documentation.
-- Use Context7 only when `CONTEXT7_API_KEY` is available and current third-party
+  app-server, and ChatGPT Apps documentation. Prefer it over web search for
+  OpenAI product facts.
+- Use Context7 when `CONTEXT7_API_KEY` is available and current third-party
   library, framework, SDK, CLI, or cloud-service documentation is needed.
+  Prefer it over web search for library documentation; resolve the library id
+  before fetching focused docs.
 - Use shadcn MCP for frontend work that depends on shadcn/ui registry,
-  component, block, or `components.json` knowledge. The global config should
-  expose `shadcn` through `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
-  shadcn@latest mcp`. Do not treat config as capability: after app/session
-  reload, make a safe read-only MCP call before claiming `MCP_CONFIRMED`. If
-  tools are not injected, use shadcn CLI fallback through the same wrapper,
-  including `docs`, `view`, `search --help`, and dry-run add commands as
-  appropriate for the project.
+  component, block, or `components.json` knowledge. The global config exposes
+  `shadcn` through `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
+  shadcn@latest mcp` and should stay enabled for future frontend sessions. Do
+  not treat config as capability: after app/session reload, make a safe
+  read-only MCP call before claiming `MCP_CONFIRMED`. If tools are not injected,
+  use shadcn CLI fallback through the same wrapper, including `docs`, `view`,
+  `search --help`, and dry-run add commands as appropriate for the project.
 - Use Sequential Thinking for high-ambiguity debugging or planning, not for
   routine edits.
 - Use Windows PowerShell MCP when a persistent PowerShell console is useful for

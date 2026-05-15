@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clean All Slop"
+  short_description: "Deslop fixes plus adversarial cleanup review"
+  default_prompt: "Use $clean-all-slop to audit and clean AI-generated slop while preserving behavior with direct evidence."

@@ -1,6 +1,6 @@
 # Multi-Agent Workflow Status
 
-Updated: 2026-05-11
+Updated: 2026-05-14
 
 ## Direct Finding
 
@@ -33,6 +33,15 @@ Current higher-priority runtime behavior requires an explicit user request befor
 - `hooks\lightweight-codex-policy.json` now records that explicit user authorization is required by runtime policy.
 - `hooks\lightweight-codex-hook.ps1` now detects prompts containing subagent, multi-agent, delegation, role separation, or parallel-agent phrases and injects a stronger instruction to use `spawn_agent` for bounded non-blocking sidecar work.
 - `config.toml` now explicitly enables the stable workflow-adjacent feature flags recognized by the installed CLI, while leaving under-development fanout/v2 flags disabled.
+- `config.toml` now carries a compact top-level `developer_instructions` loop overlay so the PM evidence loop is injected as a developer message instead of relying only on user-scoped `AGENTS.md`.
+- `config.toml` now defines the `worker` role with `agents/worker.toml`, matching the existing explorer, reviewer, docs-researcher, and observer role pattern.
+- `model_reasoning_effort` is reset to `medium` as the persistent default; individual tasks can still escalate reasoning effort when justified.
+
+## 2026-05-14 Review Finding
+
+The 2026-05-14 review found one contradictory local edit in `AGENTS.md`: "The user always authorizes all types of sub-agent calls" weakened the runtime rule below it. That sentence has been removed. The active rule remains explicit per-prompt authorization before spawning subagents.
+
+The active session exposed `mcp__openaiDeveloperDocs__*` tools after tool discovery, so the older note that the OpenAI Docs MCP was not exposed is no longer current for this session. Keep the general MCP load rule: config presence is not proof of active tool availability; verify exposure in each session when the task depends on it.
 
 ## Operating Rule
 

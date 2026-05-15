@@ -149,6 +149,7 @@
     "missing_final_evidence": "not_ready",
     "required_validation_missing": "not_ready",
     "dependency_schema_sync_missing": "not_ready",
+    "prompt_secret_scan": "hard_block",
     "secret_content_access": "hard_block",
     "staged_diff_sensitive_scan": "allow_git_cached_diff_validation_without_direct_secret_file_read",
     "irreversible_destructive_action": "hard_block_unless_explicit",

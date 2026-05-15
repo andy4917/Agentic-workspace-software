@@ -96,6 +96,31 @@ function Get-PromptSummary {
     return "prompt_length=$($Prompt.Length); prompt_sha256=$digest; contains_non_ascii=$hasNonAscii"
 }
 
+function Test-PromptSecretLeak {
+    param([string]$Prompt)
+
+    if ([string]::IsNullOrWhiteSpace($Prompt)) {
+        return $false
+    }
+
+    $patterns = @(
+        "sk-[A-Za-z0-9_-]{20,}",
+        "github_pat_[A-Za-z0-9_]{20,}",
+        "gh[pousr]_[A-Za-z0-9_]{20,}",
+        "xox[baprs]-[A-Za-z0-9-]{20,}",
+        "AKIA[0-9A-Z]{16}",
+        "(?i)\b(api[_-]?key|secret|password|token|credential)\b\s*[:=]\s*['""]?[A-Za-z0-9_./+=:-]{12,}"
+    )
+
+    foreach ($pattern in $patterns) {
+        if ($Prompt -match $pattern) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 function Read-Policy {
     $defaultPolicy = @'
 {
@@ -1012,13 +1037,22 @@ switch ($eventName) {
 
     "UserPromptSubmit" {
         $prompt = Get-PromptText -InputObject $inputObject
+        $promptSummary = Get-PromptSummary -Prompt $prompt
+        if (Test-PromptSecretLeak -Prompt $prompt) {
+            $reason = "Prompt appears to contain a secret-like value. Remove the credential from the prompt and reference only metadata, variable names, or a redacted placeholder."
+            Write-CodexStructuredLog -EventName "UserPromptSubmit" -Outcome "hard_block" -Reason $reason -PromptSummary $promptSummary | Out-Null
+            Write-HookJson @{
+                decision = "block"
+                reason = $reason
+            }
+            break
+        }
         $workflow = Select-Workflow -Prompt $prompt
         $phase = Select-LifecyclePhase -Prompt $prompt
         $skillRoute = Get-SkillRoute -Prompt $prompt
         $teamPreset = Get-TeamPresetHint -Workflow $workflow
         $toolchainHint = Get-PurposeToolchainHint -Prompt $prompt
         $memoryRoute = Get-MementoMemoryRoute -Prompt $prompt
-        $promptSummary = Get-PromptSummary -Prompt $prompt
         $state.currentGoal = $promptSummary
         $state.workflow = $workflow
         $state.toolchainHint = $toolchainHint

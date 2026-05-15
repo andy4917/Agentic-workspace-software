@@ -4,6 +4,7 @@
   "risk_notes": "Synthetic hook smoke test only; it validates local command classification, not every runtime tool payload shape.",
   "setup": "Run from CODEX_HOME after lightweight hook policy changes.",
   "success_criteria": [
+    "Prompt-submitted secret-like values are blocked before model dispatch",
     "Staged git diff sensitive-pattern validation is allowed",
     "Direct auth file reads remain blocked",
     "Mixed direct protected-file reads plus staged diff scans remain blocked",

@@ -12,6 +12,8 @@ This is the managed record for the global shadcn/ui MCP server.
 - `dependency_chain`: Codex official bundled Node through `.codex\toolchains\shims\npx.cmd` -> npm package `shadcn@latest` -> shadcn/ui registries and project `components.json`
 - `scope`: Codex-global frontend work; project registry behavior depends on the confirmed frontend root
 - `default_args`: `-y shadcn@latest mcp`
+- `default_status`: enabled in global Codex config; active tool exposure still
+  depends on app/session reload and tool injection
 - `rollback`: `codex mcp remove shadcn`
 
 ## Use Policy
@@ -36,24 +38,28 @@ different argument requirements than the workstation control plan's example.
 
 ## Verification
 
-Last checked on 2026-05-13:
+Last checked on 2026-05-15:
 
+- `codex mcp get shadcn --json` initially returned `enabled=false`; the
+  2026-05-15 MCP active-use refresh changed global config to `enabled=true`.
+- `codex mcp list` through
+  `%USERPROFILE%\.codex\toolchains\shims\codex.cmd` succeeded after the change
+  and showed `shadcn` with `Status enabled`.
 - `codex mcp get shadcn --json` returned `enabled=true`.
-- `codex mcp list` showed `shadcn` with `Status enabled`.
 - `shadcn@latest mcp --help` succeeded through the `.codex` `npx.cmd` wrapper.
 - CLI fallback `shadcn@latest docs button` succeeded and returned the button
   docs and examples summary.
 - CLI fallback `shadcn@latest view button` succeeded and returned the button
   registry item JSON.
-- CLI fallback command `shadcn@latest search @shadcn -q "button"` and the
-  reordered `search --query button @shadcn` form both failed in this environment
-  with `missing required argument 'registries'`; do not claim search fallback is
-  verified until this is rechecked against the active CLI version.
+- CLI fallback `shadcn@latest search --help` succeeded and confirmed the current
+  search syntax requires one or more registry arguments, such as `@shadcn`, plus
+  optional `--query`.
 
 Not checked:
 
-- The current already-running Codex session does not expose newly added shadcn
-  MCP tools. Restart or reload the app/session before expecting active
-  `mcp__shadcn__...` tools.
+- The current already-running Codex session may not expose newly enabled shadcn
+  MCP tools until reload. Restart or reload the app/session before expecting
+  active `mcp__shadcn__...` tools, then perform one safe read-only registry
+  call before claiming `MCP_CONFIRMED`.
 - No project-local `components.json`, Storybook, or frontend observation gate was
   verified from this projectless thread.

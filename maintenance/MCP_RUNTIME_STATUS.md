@@ -1,6 +1,6 @@
 # MCP Runtime Status
 
-Updated for the 2026-05-13 maintenance handoff.
+Updated for the 2026-05-15 MCP active-use refresh.
 
 ## Current Finding
 
@@ -8,6 +8,12 @@ MCP tool loading is working in the current Codex Desktop session after tool
 discovery. The earlier failure was not a broken package install. The confirmed
 causes were path/filter fragility and already-running session tool schemas that
 had not refreshed.
+
+The 2026-05-15 refresh excludes `memento` from optimization changes. It keeps
+Memento as support-only memory and updates the active-use posture for the other
+configured MCPs. `codex.cmd` now exists in `%USERPROFILE%\.codex\toolchains\shims`
+so MCP inventory commands can use the same explicit wrapper pattern as the
+other Codex-owned command-line tools.
 
 `node_repl` is a separate Codex Desktop bundled execution tool, not a user
 `[mcp_servers.*]` entry in `config.toml`. It is surfaced through tool discovery
@@ -35,10 +41,11 @@ different command, credential source, or policy boundary.
 - `shadcn`: global, stdio via
   `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y shadcn@latest mcp`. Use for
   frontend work that needs shadcn/ui registry browsing, searching, component
-  docs, or install planning. It is configured from the official Codex MCP
-  instructions, but active-session usability still requires tool injection and a
-  safe read-only MCP call after the app/session reloads. If MCP tools are not
-  injected, use the shadcn CLI fallback through the same `npx.cmd` wrapper.
+  docs, or install planning. It is enabled in global config for future frontend
+  sessions. Active-session usability still requires tool injection and a safe
+  read-only MCP call after the app/session reloads. If MCP tools are not
+  injected, use the shadcn CLI fallback through the same `npx.cmd` wrapper and
+  report `CLI_FALLBACK`.
 - `sequential_thinking`: global, stdio via
   `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
   @modelcontextprotocol/server-sequential-thinking`. Use only for ambiguous
@@ -197,6 +204,26 @@ When a task matches one of the purposes above:
    issue, inspect `codex mcp list/get`, and use the best available fallback.
 4. For `enabled_tools`, verify the allow-list against the server's actual
    `tools/list` names before concluding the install is broken.
+5. Do not wait for the user to name MCPs when the task clearly requires current
+   docs, registry facts, Windows stateful diagnostics, JavaScript execution, or
+   high-ambiguity planning; choose the matching MCP proactively and report the
+   evidence surface used.
+
+## 2026-05-15 Active-Use Verification
+
+- `codex.cmd` shim added at `%USERPROFILE%\.codex\toolchains\shims\codex.cmd`.
+- `codex mcp list` through the shim succeeded and reported:
+  `context7`, `sequential_thinking`, `windows_powershell`,
+  `openaiDeveloperDocs`, and `memento` enabled; `chrome_devtools_observe` and
+  `shadcn` were disabled before the refresh.
+- `shadcn` was changed to `enabled = true` in global config so future frontend
+  sessions can inject the MCP without a manual config edit. Current already
+  running sessions may still need reload before `mcp__shadcn__...` tools appear.
+- `chrome_devtools_observe` remains disabled by default. This is intentional:
+  it should be toggled on only for rendered frontend/browser observation and
+  turned off after use.
+- Memento was inspected for support-only PM context but was not optimized or
+  reconfigured in this refresh.
 
 ## Delete/Reinstall Guidance
 

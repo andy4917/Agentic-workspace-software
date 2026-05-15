@@ -303,11 +303,52 @@ def run_hook_sample(root: Path, command: str) -> dict[str, Any]:
         return {"status": "fail", "exit_code": 124, "stdout_preview": "", "stderr_preview": str(exc)}
 
 
+def run_prompt_hook_sample(root: Path, prompt: str) -> dict[str, Any]:
+    payload = {
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": prompt,
+        "cwd": str(root),
+        "permission_mode": "default",
+    }
+    try:
+        completed = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "hooks/lightweight-codex-hook.ps1",
+            ],
+            cwd=root,
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        return {
+            "status": "pass" if completed.returncode == 0 else "fail",
+            "exit_code": completed.returncode,
+            "stdout_preview": redact_obvious_secrets(completed.stdout[-COMMAND_PREVIEW_CHARS:]),
+            "stderr_preview": redact_obvious_secrets(completed.stderr[-COMMAND_PREVIEW_CHARS:]),
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {"status": "fail", "exit_code": 124, "stdout_preview": "", "stderr_preview": str(exc)}
+
+
 def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
 
     def add_check(name: str, passed: bool, detail: str) -> None:
         checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+
+    fake_marker = "sk-" + "test-not-real-" + ("0" * 20)
+    prompt_probe = run_prompt_hook_sample(root, f"Please use {fake_marker} for this run.")
+    add_check(
+        "prompt_secret_like_value_blocked",
+        '"decision":"block"' in prompt_probe.get("stdout_preview", ""),
+        "UserPromptSubmit should block secret-like values before they reach the model.",
+    )
 
     selector = "Select-" + "String"
     search_terms = "|".join(["pass" + "word", "api[_-]?key", "sec" + "ret", "to" + "ken", "credential", "private key"])
