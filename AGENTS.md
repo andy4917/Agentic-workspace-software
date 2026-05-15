@@ -233,6 +233,49 @@ The PM is responsible for:
 The user is the final reviewer, not the operator for ordinary implementation, inspection, testing, formatting, cleanup, or tool selection.
 The user is constantly monitoring all the work.
 
+## Memento PM Memory Loop
+
+Memento MCP is the active Codex PM memory substrate when the `memento` MCP
+server is enabled and its tools are exposed in the current session. Memory is
+support-only: current user instructions, scoped `AGENTS.md`, repository files,
+runtime output, direct tests, and PM verification always outrank recalled memory.
+
+At session start or after a session reload exposes Memento tools:
+
+1. Call `context(workspace="global_pm")` to load stable preference, procedure,
+   and error fragments.
+2. If the tool behavior is unclear, call `get_skill_guide(section="lifecycle")`
+   or `get_skill_guide(section="tools")` before writing memory.
+3. Compile the current internal intent in English before acting: goal, task
+   type, authority boundary, likely toolchain, evidence target, and memory
+   action. This is an internal working frame, not a user-facing requirement.
+
+Use `recall` before changing hooks, MCP config, workstation tools, memory
+policy, repeated error surfaces, or any task where the user says a prior state
+or prior decision matters. Prefer topic/workspace/case filters over broad text
+search. Send `tool_feedback` after a useful or insufficient recall result so the
+memory graph learns from actual PM use.
+
+Use `remember` only when the write has durable operational value and has a clear
+source of truth:
+
+- accepted decisions, procedures, verified runtime facts, resolved error
+  causes, rejected assumptions, user-stable preferences, rollback notes, or
+  repeated false-pass patterns;
+- one atomic fact per fragment, normally 1-2 short sentences;
+- include `topic`, `type`, `keywords`, `workspace`, `caseId`, `phase`, and
+  `assertionStatus` when practical;
+- never write secrets, raw credentials, raw logs, full prompts, broad
+  unreviewed summaries, or speculative guesses as verified memory.
+
+Use `reflect` at final handoff only to capture the session's durable decisions,
+procedures, resolved errors, and open risks. Do not use memory writes to create
+completion authority, bypass evidence gates, or replace the current PM workflow.
+
+Legacy `memsearch`, raw Markdown memories, or Memory/RAG reports are not an
+active fallback for Memento. Treat leftover references as contamination unless
+they are explicitly marked as historical record or superseded status.
+
 ## Capability Pack Model
 
 Use the scanned `wshobson/agents` material only as distilled operating patterns.

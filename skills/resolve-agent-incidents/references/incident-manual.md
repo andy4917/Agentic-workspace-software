@@ -136,6 +136,20 @@ Use one primary type and optional secondary tags.
 - Verification: `codex mcp get/list` shows the intended absolute paths and filters; direct server startup or `tools/list` succeeds; current session remains not fixed unless the namespace appears in the active tool list.
 - Do not claim: that the current session can call the MCP just because config was fixed.
 
+### Memento In-Process ONNX Memory Spike
+
+- Type: `tool_runtime_error`, `environment_path_issue`
+- Fingerprint: Windows Task Manager shows a long-lived `node.exe server.js` process from the Codex bundled Node runtime using around 1GB RAM after Codex app restart or after semantic memory use.
+- Risk: agents may misclassify the process as an orphaned Codex app leak, kill the wrong Node process, or leave a managed MCP runtime outside the memory budget.
+- Likely causes: Memento loads Reranker, NLIClassifier, and local transformers embedding models in-process; the server is a global HTTP MCP runtime and does not automatically exit with the Codex app.
+- Fix playbook:
+  1. Identify the process by PID, command line, listening port `57332`, and `memento-mcp-runtime.ps1 status`.
+  2. Prefer `memento-mcp-runtime.ps1 restart` for the HTTP server; do not stop PostgreSQL unless the user asked to take down the whole runtime.
+  3. For Codex PM memory use, start the managed runtime with `MEMENTO_INPROCESS_ONNX_ENABLED=false` and `MEMENTO_MANAGED_EMBEDDING_PROVIDER=none`; keep semantic/local embedding use explicit.
+  4. Verify with `memento-mcp-runtime.ps1 verify` and check `memento_working_set_mb` against the managed limit.
+- Verification: verifier reports required tools present, `context`/`recall`/`tool_feedback` pass, and `memento_working_set_mb` stays below `MEMENTO_MAX_WORKING_SET_MB`.
+- Do not claim: that all Node processes are safe to kill, or that configured MCP memory is healthy without PID/port/tool verification.
+
 ### MCP Capability Works But Is Invisible In App Settings
 
 - Type: `codex_app_error`, `skill_or_doc_drift`

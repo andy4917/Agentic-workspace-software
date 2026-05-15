@@ -198,6 +198,8 @@ function Read-State {
         return [ordered]@{
             currentGoal = ""
             workflow = ""
+            toolchainHint = ""
+            memoryRoute = ""
             changedSurfaces = @()
             checksRun = @()
             requiredReminders = @()
@@ -212,6 +214,8 @@ function Read-State {
         return [ordered]@{
             currentGoal = [string]$state.currentGoal
             workflow = [string]$state.workflow
+            toolchainHint = [string]$state.toolchainHint
+            memoryRoute = [string]$state.memoryRoute
             changedSurfaces = @($state.changedSurfaces | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
             checksRun = @($state.checksRun | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             requiredReminders = @($state.requiredReminders | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
@@ -223,6 +227,8 @@ function Read-State {
         return [ordered]@{
             currentGoal = ""
             workflow = ""
+            toolchainHint = ""
+            memoryRoute = ""
             changedSurfaces = @()
             checksRun = @()
             requiredReminders = @("Hook state could not be parsed; refresh evidence before finalizing.")
@@ -336,13 +342,18 @@ function Select-Workflow {
     param([string]$Prompt)
 
     $p = $Prompt.ToLowerInvariant()
+    $isKoreanReview = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xB9AC, [int]0xBDF0),
+        @([int]0xAC80, [int]0xD1A0),
+        @([int]0xC810, [int]0xAC80)
+    )
     if ($p -match "debug|bug|fail|error|regression|broken") { return "debug" }
     if ($p -match "migrat|upgrade|move|replace|restructure|cleanup|rename") { return "migration" }
     if ($p -match "security|secret|credential|auth|token|permission|policy") { return "security" }
     if ($p -match "research|docs|document|official|lookup|source") { return "research" }
     if ($p -match "frontend|backend|api|db|full.?stack") { return "full-stack" }
+    if ($p -match "review|audit|inspect" -or $isKoreanReview) { return "review" }
     if ($p -match "implement|build|fix|change|edit|create|add|feature|multi-file") { return "feature" }
-    if ($p -match "review|audit|inspect") { return "review" }
     return "feature"
 }
 
@@ -350,10 +361,27 @@ function Select-LifecyclePhase {
     param([string]$Prompt)
 
     $p = $Prompt.ToLowerInvariant()
+    $isKoreanShip = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xCEE4, [int]0xBC0B),
+        @([int]0xD478, [int]0xC2DC),
+        @([int]0xC138, [int]0xC774, [int]0xBE0C)
+    )
+    $isKoreanReview = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xB9AC, [int]0xBDF0),
+        @([int]0xAC80, [int]0xD1A0),
+        @([int]0xC810, [int]0xAC80)
+    )
+    $isKoreanBuild = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xC218, [int]0xC815),
+        @([int]0xC801, [int]0xC6A9)
+    )
     if ($p -match "ship|deploy|release|pr|commit|push") { return "ship" }
+    if ($isKoreanShip) { return "ship" }
     if ($p -match "implement|build|fix|change|edit|create|add") { return "build" }
+    if ($isKoreanBuild) { return "build" }
     if ($p -match "test|verify|prove|validation|check") { return "verify" }
     if ($p -match "review|audit|inspect|quality") { return "review" }
+    if ($isKoreanReview) { return "review" }
     if ($p -match "plan|breakdown|tasks|roadmap") { return "plan" }
     if ($p -match "spec|requirements|scope|acceptance|define") { return "define" }
     return "define-plan-build-verify-review-ship"
@@ -364,6 +392,20 @@ function Get-SkillRoute {
 
     $p = $Prompt.ToLowerInvariant()
     $routes = @()
+    $isKoreanReview = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xB9AC, [int]0xBDF0),
+        @([int]0xAC80, [int]0xD1A0),
+        @([int]0xC810, [int]0xAC80)
+    )
+    $isKoreanBuild = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xC218, [int]0xC815),
+        @([int]0xC801, [int]0xC6A9)
+    )
+    $isKoreanGit = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xCEE4, [int]0xBC0B),
+        @([int]0xD478, [int]0xC2DC),
+        @([int]0xC138, [int]0xC774, [int]0xBE0C)
+    )
 
     if ($p -match "vague|idea|brainstorm|unclear|ambiguous") {
         $routes += "idea/spec refinement"
@@ -374,7 +416,7 @@ function Get-SkillRoute {
     if ($p -match "plan|breakdown|tasks|roadmap") {
         $routes += "planning/task breakdown"
     }
-    if ($p -match "implement|build|fix|change|edit|create|add|multi-file") {
+    if ($p -match "implement|build|fix|change|edit|create|add|multi-file" -or $isKoreanBuild) {
         $routes += "incremental implementation"
     }
     if ($p -match "bug|fail|error|regression|behavior|test") {
@@ -389,7 +431,7 @@ function Get-SkillRoute {
     if ($p -match "ui|browser|frontend|css|layout|visual") {
         $routes += "browser/runtime verification"
     }
-    if ($p -match "review|merge|ship|commit|pr") {
+    if ($p -match "review|merge|ship|commit|pr" -or $isKoreanReview -or $isKoreanGit) {
         $routes += "code review / ship workflow"
     }
 
@@ -413,6 +455,53 @@ function Get-TeamPresetHint {
         "migration" { return "bounded migration tracks with rollback/quarantine notes" }
         default { return "keep single-agent unless delegation clearly improves outcome" }
     }
+}
+
+function Get-PurposeToolchainHint {
+    param([string]$Prompt)
+
+    $p = $Prompt.ToLowerInvariant()
+    $isKoreanGit = Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xCEE4, [int]0xBC0B),
+        @([int]0xD478, [int]0xC2DC),
+        @([int]0xC138, [int]0xC774, [int]0xBE0C)
+    )
+    if ($p -match "memento|memory|memrag|rag|recall|remember") {
+        return "memory/Memento: use MCP tools when exposed; support-only evidence; no legacy Memory/RAG fallback"
+    }
+    if ($p -match "mcp|toolchain|cli|install|uninstall|upgrade|npm|npx|node|postgres|database|runtime") {
+        return "workstation toolchain/MCP: inspect source/config first, prefer managed shims or official bundle, record rollback"
+    }
+    if ($p -match "api|sdk|library|framework|official|docs|version") {
+        return "documentation: use source-backed docs for version-sensitive claims"
+    }
+    if ($p -match "ui|browser|frontend|css|layout|visual") {
+        return "frontend/runtime: use project UI contract and rendered verification when practical"
+    }
+    if ($p -match "git|github|commit|push|pull|merge|pr" -or $isKoreanGit) {
+        return "git/GitHub: inspect status first; scope staging to requested changes"
+    }
+    return "local workspace: use the smallest direct toolchain that can produce verifiable evidence"
+}
+
+function Get-MementoMemoryRoute {
+    param([string]$Prompt)
+
+    $p = $Prompt.ToLowerInvariant()
+    $routes = @()
+
+    $routes += "context at session start when memento tools are exposed"
+    if ($p -match "previous|before|again|regression|error|fail|hook|mcp|toolchain|memory|memento|configuration|config|runtime|install|upgrade") {
+        $routes += "recall before acting with topic/workspace/case filters"
+    }
+    if ($p -match "decide|decision|verified|fixed|resolved|procedure|preference|rollback|handoff|final|complete") {
+        $routes += "remember only durable verified facts through the PM write gate"
+    }
+    if ($p -match "final|complete|handoff|summary|ship|done") {
+        $routes += "reflect durable decisions/procedures/open risks at final handoff"
+    }
+
+    return ($routes | Select-Object -Unique) -join "; "
 }
 
 function Test-SubagentSessionStart {
@@ -551,6 +640,8 @@ function Get-PromptReminder {
         [string]$Phase,
         [string]$SkillRoute,
         [string]$TeamPreset,
+        [string]$ToolchainHint,
+        [string]$MemoryRoute,
         $Policy
     )
 
@@ -565,6 +656,9 @@ function Get-PromptReminder {
 Lightweight Codex workflow reminder:
 - Profile: $($Policy.profile); goal: $goal; preset: $Workflow; phase: $Phase.
 - Skill route: $SkillRoute; team preset: $TeamPreset.
+- Internal intent frame: normalize in English before acting as goal, task_type, authority_boundary, toolchain_purpose, evidence_target, memory_action.
+- Purpose toolchain: $ToolchainHint
+- Memento memory: $MemoryRoute; memory is support-only, never completion authority. Use tool_feedback after useful or insufficient recall.
 - PM owns scope, integration, verification, and final status; user remains reviewer, not operator.
 - Subagents: max parallel $($Policy.subagents.max_parallel), max depth $($Policy.subagents.max_depth). $delegationAuthorization
 - Delegate only bounded non-blocking side work with owned surfaces and evidence; keep the immediate blocker local.
@@ -864,6 +958,31 @@ function Invoke-ChromeExtensionOriginRepair {
     return ""
 }
 
+function Join-CodepointSignal {
+    param([int[]]$Codepoints)
+
+    $chars = foreach ($codepoint in $Codepoints) {
+        [string][char]$codepoint
+    }
+    return ($chars -join "")
+}
+
+function Test-PromptContainsAnyCodepointSignal {
+    param(
+        [string]$Prompt,
+        [object[]]$Signals
+    )
+
+    $compact = $Prompt -replace "\s+", ""
+    foreach ($signal in $Signals) {
+        $word = Join-CodepointSignal -Codepoints @($signal)
+        if (-not [string]::IsNullOrWhiteSpace($word) -and $compact.Contains($word)) {
+            return $true
+        }
+    }
+    return $false
+}
+
 $policy = Read-Policy
 $inputObject = Read-HookInput
 $eventName = [string]$inputObject.hook_event_name
@@ -872,7 +991,7 @@ $state = Read-State
 try {
 switch ($eventName) {
     "SessionStart" {
-        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Subagents require explicit user authorization by prompt, then should be used only for bounded non-blocking sidecar work. Goal is a long-running tracking marker only; PM owns parent-goal completion, and subagents produce evidence only. Hooks are reminders and narrow safety checks, not completion authority."
+        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Subagents require explicit user authorization by prompt, then should be used only for bounded non-blocking sidecar work. Goal is a long-running tracking marker only; PM owns parent-goal completion, and subagents produce evidence only. Hooks are reminders and narrow safety checks, not completion authority. When memento MCP tools are exposed, call context(workspace='global_pm') at session start, read get_skill_guide when tool behavior is unclear, use recall before hook/MCP/toolchain or prior-state work, send tool_feedback for recall results, and write only durable verified atomic memory through the PM write gate. Memento is support-only and legacy Memory/RAG paths are not active fallback."
         $repairContext = Invoke-ChromeExtensionOriginRepair
         if (-not [string]::IsNullOrWhiteSpace($repairContext)) {
             $context = $context + "`n`n" + $repairContext
@@ -897,9 +1016,13 @@ switch ($eventName) {
         $phase = Select-LifecyclePhase -Prompt $prompt
         $skillRoute = Get-SkillRoute -Prompt $prompt
         $teamPreset = Get-TeamPresetHint -Workflow $workflow
+        $toolchainHint = Get-PurposeToolchainHint -Prompt $prompt
+        $memoryRoute = Get-MementoMemoryRoute -Prompt $prompt
         $promptSummary = Get-PromptSummary -Prompt $prompt
         $state.currentGoal = $promptSummary
         $state.workflow = $workflow
+        $state.toolchainHint = $toolchainHint
+        $state.memoryRoute = $memoryRoute
         $state.changedSurfaces = @()
         $state.checksRun = @()
         $state.requiredReminders = @()
@@ -914,7 +1037,7 @@ switch ($eventName) {
         Save-State -State $state
 
         Write-CodexStructuredLog -EventName "UserPromptSubmit" -Outcome "observed" -Reason $workflow -ChangedSurface @("hooks.state") -PromptSummary $promptSummary | Out-Null
-        $reminder = Get-PromptReminder -Workflow $workflow -Prompt $prompt -Phase $phase -SkillRoute $skillRoute -TeamPreset $teamPreset -Policy $policy
+        $reminder = Get-PromptReminder -Workflow $workflow -Prompt $prompt -Phase $phase -SkillRoute $skillRoute -TeamPreset $teamPreset -ToolchainHint $toolchainHint -MemoryRoute $memoryRoute -Policy $policy
         Write-HookJson @{
             continue = $true
             hookSpecificOutput = @{

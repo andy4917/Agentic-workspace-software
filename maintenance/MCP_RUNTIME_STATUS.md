@@ -64,6 +64,18 @@ different command, credential source, or policy boundary.
   --no-usage-statistics --no-performance-crux`, with usage statistics and update
   checks disabled by environment variables. Turn it OFF after the frontend task
   and verify `state=off` with the server still registered as disabled.
+- `memento`: global, streamable HTTP at `http://127.0.0.1:57332/mcp`, bearer
+  token sourced from `MEMENTO_ACCESS_KEY`. Use for PM memory support only:
+  `context` at session start, `get_skill_guide` when behavior is unclear,
+  `recall` before hook/MCP/toolchain/prior-state work, `remember` only through
+  the PM durable-write gate, `reflect` for final durable handoff, and
+  `tool_feedback` after recall. It is not completion authority and must not
+  override current user instructions, scoped `AGENTS.md`, files, tests, runtime
+  output, or direct PM verification. Active source is
+  `%USERPROFILE%\.codex\tools\memento-mcp`; active state is
+  `%USERPROFILE%\.codex\state\memento-mcp`; PostgreSQL listens on local port
+  `55432`; Memento HTTP listens on local port `57332`. Manage and verify with
+  `maintenance\scripts\memento-mcp-runtime.ps1`.
 
 ## Frontend Browser Observation Toggle
 
@@ -102,6 +114,54 @@ window. Use `-Full` only when the slim tool surface is insufficient, for example
 when performance, network, accessibility snapshot, or deeper DevTools categories
 are required. Do not connect this MCP to a user's normal Chrome profile or
 logged-in sensitive pages unless the user explicitly asks for that risk boundary.
+
+## Memento PM Memory Runtime
+
+Memento MCP was installed as a clean Windows-native local-chain runtime. It does
+not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
+`memsearch` as fallback.
+
+- `source_class`: `local-chain`.
+- `active_source`: `%USERPROFILE%\.codex\tools\memento-mcp`.
+- `state_root`: `%USERPROFILE%\.codex\state\memento-mcp`.
+- `postgres_data`: `%USERPROFILE%\.codex\state\memento-mcp\pgdata`.
+- `postgres_port`: `55432`.
+- `memento_url`: `http://127.0.0.1:57332/mcp`.
+- `codex_mcp_name`: `memento`.
+- `credential_source`: user environment variable `MEMENTO_ACCESS_KEY` and the
+  ignored local `.env`; do not print either value.
+- `dependency_chain`: Codex official bundled Node -> local Memento checkout ->
+  Scoop PostgreSQL 18 -> pgvector `0.8.2` -> dedicated `memento_pm` database.
+- `managed_memory_policy`: the Codex-managed runtime starts Memento with
+  `MEMENTO_INPROCESS_ONNX_ENABLED=false` and
+  `MEMENTO_MANAGED_EMBEDDING_PROVIDER=none` unless explicitly overridden. This
+  keeps Reranker, NLI, and local transformers embedding models from loading into
+  the long-lived MCP process while preserving the required PM memory tools for
+  support-only context, topic/keyword recall, durable writes, and feedback. The
+  runtime verifier reports `memento_working_set_mb` and fails above the managed
+  default `MEMENTO_MAX_WORKING_SET_MB=512`.
+- `verification`: run
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\memento-mcp-runtime.ps1 verify`.
+- `restart`: run the same script with `restart` to recycle the Memento HTTP
+  process without stopping PostgreSQL. Use `stop` only when intentionally
+  taking down both Memento HTTP and the dedicated PostgreSQL runtime.
+- `session_reload_note`: current Codex sessions may not expose new
+  `mcp__memento__...` tools until the app/session reloads. Until then, direct
+  HTTP JSON-RPC probes are acceptable runtime evidence and must be reported as
+  fallback verification, not as a hidden tool substitution.
+- `rollback`: run the runtime script with `stop`; restore the saved config backup
+  from `%USERPROFILE%\.codex\state\memento-mcp\config-backups` or remove the
+  `memento` MCP entry only after an explicit user request. Preserve state unless
+  destructive cleanup is explicitly requested.
+
+Legacy Memory/RAG surfaces are contamination boundaries:
+
+- `toolchains\shims\memsearch.*` is retired and must not be used as active
+  fallback.
+- `maintenance\scripts\check-memory-rag-status.ps1` is retired and points to the
+  Memento runtime verifier.
+- `memories\raw_memories.md` is historical data only unless the user explicitly
+  asks for a reviewed import or migration into Memento.
 
 ## Toolchain Source Rule
 

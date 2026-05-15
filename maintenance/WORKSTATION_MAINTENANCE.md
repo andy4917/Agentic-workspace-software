@@ -135,6 +135,27 @@ Do not directly edit `config.toml` for this toggle unless the Codex CLI command
 itself is confirmed broken. If manual repair becomes necessary, document the
 exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
 
+`memento` is the managed Codex PM memory MCP:
+
+- `source_class`: `local-chain`.
+- `owner`: user-global Codex MCP config plus a clean local source checkout.
+- `exact_path`: `%USERPROFILE%\.codex\tools\memento-mcp`.
+- `dependency_chain`: Codex official bundled Node -> local `memento-mcp`
+  checkout -> dedicated PostgreSQL 18 cluster under
+  `%USERPROFILE%\.codex\state\memento-mcp\pgdata` -> pgvector extension.
+- `scope`: Codex-global PM memory support only; not project completion
+  authority and not a replacement for AGENTS, hooks, scorecard, Memento gates,
+  tests, runtime output, or PM verification.
+- `verification`:
+  `maintenance\scripts\memento-mcp-runtime.ps1 verify`.
+- `rollback`: stop with `maintenance\scripts\memento-mcp-runtime.ps1 stop`,
+  remove or disable the `memento` MCP registration with Codex CLI only when the
+  user explicitly asks, and preserve the ignored state directory unless the user
+  explicitly requests destructive cleanup.
+- `legacy_boundary`: `toolchains\shims\memsearch.*` and
+  `maintenance\scripts\check-memory-rag-status.ps1` are retired legacy
+  Memory/RAG surfaces and must not be treated as active fallback.
+
 ## Handoff Requirement
 
 For every non-trivial workstation maintenance pass, update at least one durable
@@ -163,7 +184,7 @@ Run the smallest relevant set:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-memory-rag-status.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\memento-mcp-runtime.ps1 verify
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-staged-sensitive-diff.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-worktree-sensitive-diff.ps1
 git -C %USERPROFILE%\.codex status --short

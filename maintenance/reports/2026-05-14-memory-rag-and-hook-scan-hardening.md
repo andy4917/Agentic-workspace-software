@@ -1,5 +1,13 @@
 # Memory RAG And Hook Scan Hardening - 2026-05-14
 
+## Superseded Status
+
+This is a historical report only. It was superseded on 2026-05-15 by the
+Windows-native Memento MCP runtime and support-only PM memory loop. Do not use
+this document as active runtime guidance: `memsearch`, raw Markdown memories,
+and `check-memory-rag-status.ps1` are retired legacy Memory/RAG surfaces, not
+active fallback.
+
 ## Status
 
 Implemented and verified.

@@ -72,7 +72,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     checks.append({"name": "doctor", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--json"], root)})
     checks.append({"name": "global_scan", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "global-scan"], root, timeout=240)})
     checks.append({"name": "context_inspection", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "context"], root)})
-    checks.append({"name": "memory_rag_status", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-memory-rag-status.ps1"], root, timeout=120)})
+    checks.append({"name": "memento_mcp_status", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/memento-mcp-runtime.ps1", "verify"], root, timeout=180)})
     checks.append({"name": "retrieval_report", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "retrieve", "--query", "codex harness verification workflow", "--limit", "5"], root)})
     checks.append({"name": "staged_sensitive_diff_scan", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-staged-sensitive-diff.ps1"], root)})
     checks.append({"name": "worktree_sensitive_diff_scan", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-worktree-sensitive-diff.ps1"], root)})

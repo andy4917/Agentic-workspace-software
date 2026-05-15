@@ -51,6 +51,12 @@ session_index.jsonl
 # skills/
 # agents/
 
+# Managed external source checkouts used as local workstation runtimes.
+# They are documented and verified by maintenance records, but should not be
+# committed as embedded repositories or vendored package trees.
+tools/memento-mcp/
+tools/pgvector-v0.8.2/
+
 # Local scratch and generated files
 *.log
 generated_images/
