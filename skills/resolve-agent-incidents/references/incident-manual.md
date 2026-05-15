@@ -204,6 +204,48 @@ Use one primary type and optional secondary tags.
 - Verification: synthetic `UserPromptSubmit` output includes `task_class=L4`, goal action, watcher action, and delegation authorization; hook state contains the structured fields; Stop blocks a final message that omits watcher/subagent evidence for active L4 delegated work.
 - Do not claim: that a reminder sentence or a worker-watcher document proves runtime PM behavior.
 
+### Synthetic Hook Smoke Pollutes Live State
+
+- Type: `workflow_hook_issue`, `git_or_state_issue`
+- Fingerprint: a synthetic `UserPromptSubmit` smoke test writes `hooks/state/lightweight-status.json`; a later real Stop hook treats the synthetic `taskClass`, `delegationAuthorized`, or `watcherExpected` as the current user prompt state.
+- Risk: agents may satisfy a stale Stop reminder with final wording instead of tracing the control-plane mismatch, causing false workflow failures or false passes.
+- Likely causes: smoke tests invoke the real hook script against the live CODEX_HOME state path and do not restore the previous state; Stop hook state is singleton and non-authoritative but still drives reminders.
+- Fix playbook:
+  1. Preserve the exact mismatch: original prompt classification, Stop-hook text, state file fields, and the smoke command/report timestamp.
+  2. Make synthetic hook tests snapshot and restore the live state file, or run them against an isolated root/state path.
+  3. Add a regression check that the state file is byte-for-byte restored after synthetic probes.
+  4. Keep Stop-hook reminders narrow; do not treat restored or synthetic state as completion authority.
+- Verification: `hook-policy-smoke` passes and includes `hook_policy_smoke_restores_live_state`; before/after state content is unchanged after the smoke run.
+- Do not claim: that adding `WATCHER_NOT_USED` to final prose fixes a stale-state control-plane mismatch.
+
+### Turn-Based Anomaly Calibration Missing
+
+- Type: `workflow_hook_issue`, `validation_gap`
+- Fingerprint: during one task turn, a hook, tool, report, or user observation contradicts the active workflow, but the agent continues the original build/ship path or patches the final report instead of pausing and tracing the first mismatch.
+- Risk: the user sees process compliance theater: the system appears to satisfy wording while the workflow itself remains uncalibrated.
+- Likely causes: hooks can enforce fixed checkpoints but not broad live judgment; agents do not reliably re-evaluate already-executed same-turn actions without an explicit pause/trace rule.
+- Fix playbook:
+  1. Pause the active path when an anomaly signal appears.
+  2. Preserve the first mismatch and reclassify to debug/incident trace.
+  3. Check overlap with Goal, Worker-Watcher, Stop hook, incident manual, and verification-loop processes before adding new governance.
+  4. Resume only after root cause, bounded correction, direct verification, or blocked/continue status is recorded.
+- Verification: L4 workflow/harness prompt reminders include anomaly calibration; hook state records `anomalyPauseExpected`; Stop requires pause/trace/root-cause and verification or blocked/continue language for active anomaly-calibration incidents.
+- Do not claim: that feature correctness alone proves the user-facing workflow passed.
+
+### Explicit Subagent Call Decision Missing
+
+- Type: `workflow_hook_issue`, `subagent_drift`
+- Fingerprint: the user authorizes or asks for subagents, but the final/status output does not state whether subagents were actually spawned or why they were not used.
+- Risk: the user cannot tell whether delegation authorization changed execution, and agents may hide skipped subagent work behind generic completion language.
+- Likely causes: subagent guidance is tied to task-class reminder text, or Stop only checks watcher coverage for L4 delegated incidents.
+- Fix playbook:
+  1. Persist a prompt-derived `subagentDecisionRequired` flag whenever delegation is authorized, independent of task class.
+  2. Emit a visible `SUBAGENT_CALL used` or `SUBAGENT_CALL not_used` requirement with reason, evidence or substitute check, and residual risk.
+  3. Make Stop require the declaration for substantive work after explicit subagent authorization.
+- Verification: synthetic delegated prompts include `Subagent call declaration required`; hook state records `subagentDecisionRequired`; Stop blocks final output missing exact `SUBAGENT_CALL used` or `SUBAGENT_CALL not_used` plus reason/evidence.
+- Limitation: if Stop receives no usable prior hook state and no prompt text, runtime enforcement cannot reconstruct explicit subagent authorization; the PM-facing AGENTS.md declaration remains the fallback contract.
+- Do not claim: that enabled subagent capability or hook authorization proves subagents were called.
+
 ### Patch Grammar Failure
 
 - Type: `tool_runtime_error`

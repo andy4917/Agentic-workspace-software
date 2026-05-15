@@ -42,6 +42,11 @@ Runtime subagent activation rule:
 - user phrases such as `multi-agent`, `subagent`, `parallel agent`, `role separation`, or `delegate` count as explicit authorization for the current goal; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
 - when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
 - enabled feature flags are capability, not evidence of actual subagent use.
+- when authorization is present, the PM must visibly declare the subagent call
+  decision in status or final evidence as `SUBAGENT_CALL used` or
+  `SUBAGENT_CALL not_used` with reason, direct evidence or substitute check, and
+  residual risk; this declaration is required even if a hook reminder omits or
+  fails to show the task class.
 
 Default flow:
 
@@ -104,6 +109,41 @@ Use this lifecycle as the main workflow overlay. Scale the ceremony to the task,
 6. Ship: summarize the change, evidence, unresolved risks, and any user decisions needed.
 
 Treat skills as workflows, not essays. A useful skill has a trigger, ordered steps, checkpoint evidence, anti-rationalization reminders, and exit criteria.
+
+## Turn-Based Anomaly Calibration
+
+Hooks enforce fixed checkpoints and narrow safety rules. They do not make broad
+judgment calls, and they are not completion authority. The PM agent is
+responsible for judgment, but it cannot reliably repair a just-completed action
+inside the same invisible execution flow after evidence has already changed.
+
+When an anomaly signal appears during a turn, use a turn-based pause/trace
+calibration instead of continuing the original build or compensating with final
+wording:
+
+1. Pause the active build, ship, or cleanup path.
+2. Preserve the exact signal: hook text, state file, command, report, timestamp,
+   changed surface, and expected-versus-actual behavior.
+3. Reclassify the current work as debug/incident trace.
+4. Identify whether the issue is in PM behavior, hook state, harness smoke
+   tests, tool/runtime behavior, docs/skills, or user-facing reporting.
+5. Check for overlap with existing Goal, Worker-Watcher, Stop-hook,
+   incident-manual, and verification-loop processes before adding a new process.
+6. Patch only the smallest confirmed surface, or record a precise not-run
+   reason and residual risk.
+7. Resume the original work only after the anomaly has a root cause, a bounded
+   correction plan, or an explicit blocked/continue decision.
+
+Anomaly signals include conflicting hook classifications, stale or synthetic
+state driving a real Stop hook, validation output contradicting final claims,
+unexpected state mutation during a smoke test, hidden fallback, skipped checks
+being converted into success language, code or process bloat beyond the requested
+scope, and duplicate governance that weakens rather than clarifies behavior.
+
+User-perspective pass requires mapping expected behavior to observed evidence:
+what the user reasonably expected to see, what actually happened, where the
+first mismatch occurred, what changed, which checks prove the correction, and
+which risks remain.
 
 Progressive disclosure rule:
 

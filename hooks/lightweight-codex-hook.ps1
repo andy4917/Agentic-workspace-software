@@ -228,6 +228,8 @@ function Read-State {
             delegationAuthorized = $false
             goalRequired = $false
             watcherExpected = $false
+            anomalyPauseExpected = $false
+            subagentDecisionRequired = $false
             intentFrame = [ordered]@{}
             toolchainHint = ""
             memoryRoute = ""
@@ -251,6 +253,8 @@ function Read-State {
             delegationAuthorized = [bool]$state.delegationAuthorized
             goalRequired = [bool]$state.goalRequired
             watcherExpected = [bool]$state.watcherExpected
+            anomalyPauseExpected = [bool]$state.anomalyPauseExpected
+            subagentDecisionRequired = [bool]$state.subagentDecisionRequired
             intentFrame = $state.intentFrame
             toolchainHint = [string]$state.toolchainHint
             memoryRoute = [string]$state.memoryRoute
@@ -271,6 +275,8 @@ function Read-State {
             delegationAuthorized = $false
             goalRequired = $false
             watcherExpected = $false
+            anomalyPauseExpected = $false
+            subagentDecisionRequired = $false
             intentFrame = [ordered]@{}
             toolchainHint = ""
             memoryRoute = ""
@@ -741,6 +747,8 @@ function Get-TaskClassification {
         delegationAuthorized = $delegationAuthorized
         goalActionRequired = ($level -in @("L3", "L4"))
         watcherCoverageRequired = ($delegationAuthorized -and $level -eq "L4")
+        anomalyPauseExpected = ($level -eq "L4" -and $hasRootCauseSignal -and ($hasWorkflowGovernanceSignal -or $delegationAuthorized))
+        subagentDecisionRequired = $delegationAuthorized
     }
 }
 
@@ -782,6 +790,8 @@ function Get-IntentFrame {
         evidence_target = $evidenceTarget
         memory_action = $MemoryRoute
         subagent_policy = $subagentPolicy
+        subagent_call_declaration = "If the user explicitly authorizes subagents, visible status or final output must state SUBAGENT_CALL used/not_used with reason and evidence, regardless of task-class reminder availability."
+        calibration_action = "If hook state, tool output, validation, or final preflight contradicts the current workflow, pause the active path, preserve evidence, trace the anomaly, and resume only with direct verification or an explicit blocked/continue decision."
     }
 }
 
@@ -860,6 +870,11 @@ function Get-PromptReminder {
         $delegationAuthorization = "Delegation authorized: user has instructed subagent calls as needed. Spawn bounded non-blocking sidecar agents when they reduce risk, then verify outputs."
     }
 
+    $subagentDecisionAction = "Subagent call declaration: not required unless the user explicitly authorizes subagents."
+    if ([bool]$classification.subagentDecisionRequired) {
+        $subagentDecisionAction = "Subagent call declaration required: after this user instruction, visible status/final evidence must state SUBAGENT_CALL used or SUBAGENT_CALL not_used with reason, evidence, and residual risk even if task_class is unavailable."
+    }
+
     $goalAction = "Goal action: no persisted Codex Goal required unless the task becomes long-running or stateful."
     if ([bool]$classification.goalActionRequired) {
         $goalAction = "Goal action required: create or update one Codex Goal before build/repair work, then keep it as tracking only."
@@ -870,6 +885,11 @@ function Get-PromptReminder {
         $watcherAction = "Watcher action required by default for this L4 delegated incident: spawn an OBS/REV read-only watcher for inspect/adversarial review; if omitted, record WATCHER_NOT_USED with reason, risk, substitute check, and confidence impact."
     }
 
+    $calibrationAction = "Calibration: if an unexpected mismatch appears, preserve evidence and switch to debug trace before continuing."
+    if ([bool]$classification.anomalyPauseExpected) {
+        $calibrationAction = "Calibration action required: anomaly signal detected; pause build/ship, preserve evidence, trace the first mismatch, check overlap with existing gates, then resume only with verification or blocked/continue status."
+    }
+
     return @"
 Lightweight Codex workflow reminder:
 - Core brief: task_class=$($classification.level); goal=$goal; preset=$Workflow; phase=$Phase.
@@ -878,7 +898,9 @@ Lightweight Codex workflow reminder:
 - $goalAction
 - Memory: $MemoryRoute; support-only, never completion authority.
 - Subagents: max=$($Policy.subagents.max_parallel), depth=$($Policy.subagents.max_depth). $delegationAuthorization
+- $subagentDecisionAction
 - $watcherAction
+- $calibrationAction
 - Completion: changed surfaces, direct checks, not-run reasons, PM verification, residual risks, rollback, status.
 - Hard blocks: secret access, irreversible destructive action, hook weakening without scope, evaluator/pass manipulation, out-of-scope mutation.
 "@
@@ -919,6 +941,45 @@ function Test-WatcherCoverageReady {
     $hasAcceptedRejectedEvidence = $Message -match "(?i)(accepted and rejected subagent evidence|accepted/rejected subagent evidence|accepted subagent evidence|rejected subagent evidence|subagent evidence)"
 
     return ($hasWatcherReport -or $hasWatcherNotUsed -or $hasAcceptedRejectedEvidence)
+}
+
+function Test-AnomalyTraceReady {
+    param(
+        $State,
+        [string]$Message
+    )
+
+    if (-not [bool]$State.anomalyPauseExpected) {
+        return $true
+    }
+    if ([string]::IsNullOrWhiteSpace($Message)) {
+        return $false
+    }
+
+    $hasPause = $Message -match "(?i)(pause|paused|stop-the-line|anomaly pause|stop active path)"
+    $hasTrace = $Message -match "(?i)(trace|traced|root cause|first mismatch|failure point|mismatch)"
+    $hasOutcome = $Message -match "(?i)(verified|verification|blocked|continue|complete|risk|residual)"
+
+    return ($hasPause -and $hasTrace -and $hasOutcome)
+}
+
+function Test-SubagentDecisionReady {
+    param(
+        $State,
+        [string]$Message
+    )
+
+    if (-not [bool]$State.subagentDecisionRequired) {
+        return $true
+    }
+    if ([string]::IsNullOrWhiteSpace($Message)) {
+        return $false
+    }
+
+    $hasMarker = $Message -match "(?i)SUBAGENT_CALL\s+(used|not_used|not used)"
+    $hasReason = $Message -match "(?i)(reason|because|risk|evidence|verified|substitute check|direct evidence)"
+
+    return ($hasMarker -and $hasReason)
 }
 
 function Deny-PreTool {
@@ -1274,6 +1335,8 @@ switch ($eventName) {
         $state.delegationAuthorized = [bool]$classification.delegationAuthorized
         $state.goalRequired = [bool]$classification.goalActionRequired
         $state.watcherExpected = [bool]$classification.watcherCoverageRequired
+        $state.anomalyPauseExpected = [bool]$classification.anomalyPauseExpected
+        $state.subagentDecisionRequired = [bool]$classification.subagentDecisionRequired
         $state.intentFrame = $intentFrame
         $state.toolchainHint = $toolchainHint
         $state.memoryRoute = $memoryRoute
@@ -1289,6 +1352,12 @@ switch ($eventName) {
         }
         if ([bool]$classification.watcherCoverageRequired) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Watcher coverage required by default; provide WATCHER_REPORT/subagent evidence or WATCHER_NOT_USED before finalization."
+        }
+        if ([bool]$classification.subagentDecisionRequired) {
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Subagent call declaration required: record SUBAGENT_CALL used/not_used with reason, evidence, and residual risk."
+        }
+        if ([bool]$classification.anomalyPauseExpected) {
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Anomaly pause/trace required: preserve the first mismatch, stop the original path, and resume only with verified correction or blocked/continue status."
         }
         if (Test-HookMaintenanceAuthorized -Prompt $prompt) {
             $state.userAuthorizations = Add-Unique -Items $state.userAuthorizations -Value "hook_policy_change"
@@ -1465,6 +1534,28 @@ switch ($eventName) {
         $hasSubstantiveActivity = $hasChanged -or @($state.toolEvents).Count -gt 0
         $auditReady = Test-FinalAuditReady -Message $lastMessage
         $watcherReady = Test-WatcherCoverageReady -State $state -Message $lastMessage
+        $anomalyTraceReady = Test-AnomalyTraceReady -State $state -Message $lastMessage
+        $subagentDecisionReady = Test-SubagentDecisionReady -State $state -Message $lastMessage
+
+        if ($hasSubstantiveActivity -and -not $anomalyTraceReady -and -not [bool]$inputObject.stop_hook_active) {
+            $reason = "Anomaly pause/trace evidence missing for an L4 workflow incident."
+            Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
+            Write-HookJson @{
+                decision = "block"
+                reason = "Final preflight: an anomaly-calibration workflow was active. Before finalizing, state the pause/trace trigger, first mismatch/root cause, verification or blocked/continue status, and residual risk."
+            }
+            break
+        }
+
+        if ($hasSubstantiveActivity -and -not $subagentDecisionReady -and -not [bool]$inputObject.stop_hook_active) {
+            $reason = "Subagent call declaration missing after explicit subagent authorization."
+            Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
+            Write-HookJson @{
+                decision = "block"
+                reason = "Final preflight: subagent use was explicitly authorized. Before finalizing, include SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, even if task_class was unavailable."
+            }
+            break
+        }
 
         if ($hasSubstantiveActivity -and -not $watcherReady -and -not [bool]$inputObject.stop_hook_active) {
             $reason = "Watcher or subagent evidence missing for an L4 delegated workflow incident."
