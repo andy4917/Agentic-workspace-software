@@ -260,8 +260,10 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "codex_agent_harness.py",
             "codex_agent_harness_base.py",
             "codex_agent_harness_lifecycle.py",
-            "codex_agent_harness_workflows.py",
             "codex_agent_harness_merge.py",
+            "codex_agent_harness_smoke.py",
+            "codex_agent_harness_status.py",
+            "codex_agent_harness_workflows.py",
             "worker_watcher_templates.py",
         ]:
             write_text(root / "maintenance" / "scripts" / name, "# self-test harness source placeholder\n")
