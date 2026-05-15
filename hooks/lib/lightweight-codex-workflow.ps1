@@ -361,6 +361,91 @@ function Get-TaskClassification {
     }
 }
 
+function Get-TaskLevelRank {
+    param([string]$Level)
+
+    switch ($Level) {
+        "L1" { return 1 }
+        "L2" { return 2 }
+        "L3" { return 3 }
+        "L4" { return 4 }
+        default { return 0 }
+    }
+}
+
+function Get-ToolTaskAdjustment {
+    param(
+        [string]$Stage,
+        [string]$ToolName,
+        [string]$Text,
+        [int]$ChangedFileCount = 0,
+        [int]$ChangedLineCount = 0,
+        $Policy
+    )
+
+    $reasons = @()
+    $level = ""
+    $largeFiles = [int]$Policy.work_size.large_files
+    $largeLines = [int]$Policy.work_size.large_changed_lines
+    $governancePattern = "(?i)(hook|workflow|harness|toolchain|debugger|mcp|plugins?[\\/]+cache|skills?[\\/].*scripts?|agents\.md|project_workflow_chain|codex_agent_harness|lightweight-codex)"
+    $incidentPattern = "(?i)(root cause|failure|failed|regression|false[- ]?pass|fake success|hidden fallback|stale state|unsupported success|bypass)"
+
+    if ($Text -match $governancePattern) {
+        $level = "L3"
+        $reasons += "$Stage observed workflow/harness/toolchain or skill/plugin-cache surface"
+    }
+    if ($ChangedFileCount -ge $largeFiles -or $ChangedLineCount -ge $largeLines) {
+        $level = "L3"
+        $reasons += "$Stage observed large or multi-surface change"
+    }
+    if (($Text -match $governancePattern) -and ($Text -match $incidentPattern)) {
+        $level = "L4"
+        $reasons += "$Stage observed incident signal intersecting workflow/governance surface"
+    }
+    if ($ToolName -match "(?i)(spawn_agent|send_input|wait_agent|close_agent|resume_agent)") {
+        $level = "L3"
+        $reasons += "$Stage observed subagent tool surface"
+    }
+
+    return [pscustomobject]@{
+        level = $level
+        reason = (($reasons | Select-Object -Unique) -join "; ")
+        compatibilityReviewRequired = ($Text -match $governancePattern -or $ChangedFileCount -gt 1 -or $ChangedLineCount -ge $largeLines)
+        anomalyPauseExpected = (($Text -match $governancePattern) -and ($Text -match $incidentPattern))
+    }
+}
+
+function Apply-TaskLevelAdjustment {
+    param(
+        $State,
+        $Adjustment
+    )
+
+    if ($null -eq $Adjustment -or [string]::IsNullOrWhiteSpace([string]$Adjustment.level)) {
+        return $false
+    }
+
+    $changed = $false
+    if ((Get-TaskLevelRank -Level ([string]$Adjustment.level)) -gt (Get-TaskLevelRank -Level ([string]$State.taskClass))) {
+        $State.taskClass = [string]$Adjustment.level
+        $State.classificationReason = [string]$Adjustment.reason
+        if ($State.taskClass -in @("L3", "L4")) {
+            $State.goalRequired = $true
+        }
+        if ([bool]$Adjustment.anomalyPauseExpected) {
+            $State.anomalyPauseExpected = $true
+        }
+        $changed = $true
+    }
+
+    if ([bool]$Adjustment.compatibilityReviewRequired) {
+        $State.requiredReminders = Add-Unique -Items $State.requiredReminders -Value "Compatibility review required: identify affected hooks, workflows, toolchains, MCPs, skills/plugin cache, overlapping gates, verification, and rollback before finalizing."
+        $changed = $true
+    }
+
+    return $changed
+}
+
 function Get-IntentFrame {
     param(
         [string]$Prompt,

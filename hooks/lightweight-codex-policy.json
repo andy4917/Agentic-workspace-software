@@ -153,6 +153,17 @@
       "record delegation_authorized when the prompt authorizes subagents",
       "require goal action for L3/L4",
       "require watcher coverage or WATCHER_NOT_USED for L4 delegated incidents"
+    ],
+    "tool_runtime_adjustment_contract": [
+      "PreToolUse and PostToolUse may raise stored task_class from direct tool evidence",
+      "never lower task_class from tool evidence",
+      "raise to L3 for workflow, hook, harness, toolchain, debugger-tool, MCP, skill script, plugin cache, large-change, or multi-surface evidence",
+      "raise to L4 when incident, false-pass, hidden-fallback, stale-state, or root-cause evidence intersects workflow or governance surfaces",
+      "tool-stage level adjustment is routing and evidence context only, not completion authority"
+    ],
+    "compatibility_review_contract": [
+      "control-plane changes must identify affected hooks, workflow gates, MCP/toolchain routes, skills, plugin cache boundaries, tests, and rollback paths",
+      "duplicate, weakening, or bypass overlap with existing mechanisms must be repaired or explicitly classified with evidence before finalization"
     ]
   },
   "size_limits": {

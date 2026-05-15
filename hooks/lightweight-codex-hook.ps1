@@ -143,8 +143,21 @@ switch ($eventName) {
             break
         }
 
+        $preChangedFileCount = Get-ChangedFileCount -Text $text
+        $preChangedLineCount = Get-ChangedLineCount -Text $text
+        $preAdjustment = Get-ToolTaskAdjustment -Stage "PreToolUse" -ToolName $toolName -Text $text -ChangedFileCount $preChangedFileCount -ChangedLineCount $preChangedLineCount -Policy $policy
+        $preAdjusted = Apply-TaskLevelAdjustment -State $state -Adjustment $preAdjustment
+        if ($preAdjusted) {
+            Save-State -State $state
+            Write-CodexStructuredLog -EventName "PreToolUse" -Outcome "level_adjusted" -Reason "$($state.taskClass);$($preAdjustment.reason)" -ToolName $toolName | Out-Null
+        }
+
         Write-CodexStructuredLog -EventName "PreToolUse" -Outcome "observed" -ToolName $toolName | Out-Null
-        Write-HookJson @{ systemMessage = "" }
+        if ($preAdjusted) {
+            Write-HookJson @{ systemMessage = "Task level adjusted to $($state.taskClass) from PreToolUse evidence; include compatibility impact review in final verification." }
+        } else {
+            Write-HookJson @{ systemMessage = "" }
+        }
         break
     }
 
@@ -219,6 +232,10 @@ switch ($eventName) {
         if ($changedFileCount -ge [int]$policy.work_size.large_files -or $changedLineCount -ge [int]$policy.work_size.large_changed_lines) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Large or multi-surface change detected; use a visible work-track/status summary and evidence before finalizing."
             $additional += "Large-change threshold reached: summarize work tracks, validation, not-run reasons, and risks before finalizing."
+        }
+        $postAdjustment = Get-ToolTaskAdjustment -Stage "PostToolUse" -ToolName $toolName -Text $text -ChangedFileCount $changedFileCount -ChangedLineCount $changedLineCount -Policy $policy
+        if (Apply-TaskLevelAdjustment -State $state -Adjustment $postAdjustment) {
+            $additional += "Task level adjusted to $($state.taskClass) from PostToolUse evidence; include compatibility impact review."
         }
         if ($text -match "(?i)(package\.json|pyproject\.toml|Cargo\.toml|requirements\.txt|uv\.lock|package-lock\.json|pnpm-lock\.yaml|Cargo\.lock)") {
             $state.changedSurfaces = Add-Unique -Items $state.changedSurfaces -Value "dependencies"

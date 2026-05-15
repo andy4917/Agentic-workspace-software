@@ -21,6 +21,7 @@ from codex_agent_harness_status import (
     hook_subagent_vowline_status,
     pm_subagent_protocol_status,
     subagent_nickname_policy_status,
+    workspace_script_line_count_status,
 )
 def cmd_discovery(args: argparse.Namespace) -> int:
     root = root_path(args)
@@ -510,6 +511,7 @@ def doctor_data(root: Path) -> dict[str, Any]:
         "managed_files": check_managed_files(root),
         "skill_frontmatter": check_skill_frontmatter(root),
         "harness_file_size": harness_line_count_status(root),
+        "workspace_script_file_size": workspace_script_line_count_status(root),
         "memento_runtime": memento_runtime_status(root),
         "stale_active_references": {"status": "pass", "matches": stale_active_references(root)},
         "sentinel_blockers": {"status": "pass", "items": sentinel_checks(root)},

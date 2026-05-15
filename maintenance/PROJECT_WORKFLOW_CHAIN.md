@@ -47,6 +47,9 @@ repo scripts:
   and verify the project using its actual package manager or scripts?
 - `contracts`: What public interfaces, schemas, routes, events, component
   contracts, generated files, migrations, or document formats must stay aligned?
+- `compatibility_impact`: Which existing hooks, workflow gates, toolchain/MCP
+  routes, skills, plugin cache boundaries, scripts, tests, and rollback paths
+  could this change affect, duplicate, weaken, or bypass?
 - `verification`: Which direct checks prove the requested change? Include
   fallback checks and precise not-run reasons.
 - `handoff`: Where should changed behavior, accepted evidence, not-run checks,

@@ -11,6 +11,8 @@ from codex_agent_harness_base import *
 
 
 MAX_HARNESS_FILE_LINES = 800
+MAX_WORKSPACE_SCRIPT_LINES = 800
+WORKSPACE_SCRIPT_SUFFIXES = {".js", ".mjs", ".py", ".ps1", ".ts", ".tsx", ".md"}
 
 
 def harness_line_count_status(root: Path) -> dict[str, Any]:
@@ -28,6 +30,54 @@ def harness_line_count_status(root: Path) -> dict[str, Any]:
         if line_count > MAX_HARNESS_FILE_LINES:
             oversized.append(item)
     return {"status": "pass" if not oversized else "fail", "files": counts, "oversized": oversized}
+
+
+def workspace_script_line_count_status(root: Path) -> dict[str, Any]:
+    skill_root = root / "skills"
+    files = []
+    if skill_root.exists():
+        for path in skill_root.rglob("*"):
+            if "__pycache__" in path.parts or not path.is_file():
+                continue
+            if path.suffix.lower() in WORKSPACE_SCRIPT_SUFFIXES and ("scripts" in path.parts or path.name == "SKILL.md"):
+                files.append(path)
+    counts = []
+    oversized = []
+    for path in sorted(files):
+        line_count = len(read_text(path).splitlines())
+        item = {"path": rel(path, root), "lines": line_count, "max_lines": MAX_WORKSPACE_SCRIPT_LINES}
+        counts.append(item)
+        if line_count > MAX_WORKSPACE_SCRIPT_LINES:
+            oversized.append(item)
+
+    cache_large = []
+    cache_root = root / "plugins" / "cache"
+    seen_cache_paths = set()
+    if cache_root.exists():
+        for path in sorted(cache_root.rglob("*")):
+            if not path.is_file() or path.suffix.lower() not in WORKSPACE_SCRIPT_SUFFIXES:
+                continue
+            if "node_modules" in path.parts:
+                continue
+            normalized = str(path.resolve()).lower()
+            if normalized in seen_cache_paths:
+                continue
+            seen_cache_paths.add(normalized)
+            line_count = len(read_text(path).splitlines())
+            if line_count > MAX_WORKSPACE_SCRIPT_LINES:
+                cache_large.append({
+                    "path": rel(path, root),
+                    "lines": line_count,
+                    "classification": "ignored_runtime_plugin_cache",
+                    "reason": "Plugin cache is ignored runtime material; preserve upstream compatibility and do not force-track cache files.",
+                })
+
+    return {
+        "status": "pass" if not oversized else "fail",
+        "files": counts,
+        "oversized": oversized,
+        "classified_cache_large_files": cache_large,
+    }
 
 
 def pm_subagent_protocol_status(root: Path) -> dict[str, Any]:

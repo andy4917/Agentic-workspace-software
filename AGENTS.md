@@ -429,6 +429,19 @@ If the task changes, reclassify lightly:
 - boundary-crossing changes should split work or use a different role;
 - high-risk changes require user approval.
 
+PreToolUse and PostToolUse hooks may raise, never lower, the stored task level
+when direct tool evidence shows workflow, hook, harness, toolchain, MCP,
+debugger-tool, skill script, plugin cache, large-change, or incident overlap.
+The raised level is a routing and evidence reminder only; completion still
+requires PM verification.
+
+For workflow, hook, toolchain, MCP, skill, plugin cache, or other control-plane
+changes, perform a compatibility impact review before finalizing. State which
+existing hooks, workflow gates, MCP/toolchain routes, skills, cache boundaries,
+tests, and rollback paths are affected. If an apparent cleanup would duplicate,
+weaken, or bypass an existing mechanism, fix the overlap or explicitly classify
+it as out of scope with direct evidence.
+
 ## Core Operating Rules
 
 - Work from the user's goal and the actual files in the current scope.

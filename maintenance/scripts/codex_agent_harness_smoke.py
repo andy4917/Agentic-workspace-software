@@ -274,9 +274,41 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "PM-led/team preset wording alone should not require SUBAGENT_CALL evidence.",
         )
 
+        run_prompt_hook_sample(root, "Tiny local note.")
+        pre_level_probe = run_hook_sample(root, "python skills/ui-ux-pro-max/scripts/design_system.py --help")
+        try:
+            pre_level_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            pre_level_state = {}
+        add_check(
+            "pretooluse_can_raise_level_for_skill_script_surface",
+            pre_level_probe.get("status") == "pass"
+            and pre_level_state.get("taskClass") == "L3"
+            and any("Compatibility review required" in str(item) for item in pre_level_state.get("requiredReminders", [])),
+            "PreToolUse should raise task class and require compatibility review for skill script surfaces.",
+        )
+
+        run_post_tool_hook_sample(
+            root,
+            "apply_patch",
+            "*** Update File: hooks/lightweight-codex-hook.ps1\n+root cause workflow harness adjustment\n",
+        )
+        try:
+            post_level_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            post_level_state = {}
+        add_check(
+            "posttooluse_can_raise_l4_for_incident_governance_surface",
+            post_level_state.get("taskClass") == "L4"
+            and post_level_state.get("anomalyPauseExpected") is True
+            and any("Compatibility review required" in str(item) for item in post_level_state.get("requiredReminders", [])),
+            "PostToolUse should raise to L4 when incident language intersects workflow/harness surfaces.",
+        )
+
         run_post_tool_hook_sample(root, "spawn_agent", '{"agent_type":"reviewer"}')
         event_final_without_marker = (
-            "FINAL_GOAL_AUDIT checked direct subagent event state. checks not run none. "
+            "FINAL_GOAL_AUDIT pause trigger: posttool governance incident. first mismatch/root cause traced. "
+            "checked direct subagent event state. checks not run none. "
             "residual risk low. status complete. PM independent verification complete."
         )
         event_final_with_marker = (
