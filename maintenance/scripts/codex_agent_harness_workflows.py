@@ -336,6 +336,40 @@ def run_prompt_hook_sample(root: Path, prompt: str) -> dict[str, Any]:
         return {"status": "fail", "exit_code": 124, "stdout_preview": "", "stderr_preview": str(exc)}
 
 
+def run_subagent_session_start_sample(root: Path) -> dict[str, Any]:
+    payload = {
+        "hook_event_name": "SessionStart",
+        "agent_type": "reviewer",
+        "parent_agent": "PM-main",
+        "fork_context": True,
+        "spawn_agent": {"agent_type": "reviewer"},
+    }
+    try:
+        completed = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "hooks/lightweight-codex-hook.ps1",
+            ],
+            cwd=root,
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        return {
+            "status": "pass" if completed.returncode == 0 else "fail",
+            "exit_code": completed.returncode,
+            "stdout_preview": redact_obvious_secrets(completed.stdout[-COMMAND_PREVIEW_CHARS:]),
+            "stderr_preview": redact_obvious_secrets(completed.stderr[-COMMAND_PREVIEW_CHARS:]),
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {"status": "fail", "exit_code": 124, "stdout_preview": "", "stderr_preview": str(exc)}
+
+
 def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
 
@@ -364,14 +398,38 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             term in workflow_stdout
             for term in [
                 "task_class=l4",
-                "required pm startup packet",
-                "internal english intent frame",
+                "output rule",
+                "reasoning and internal frames private",
                 "goal action required",
                 "watcher action required",
                 "delegation authorized",
             ]
         ),
-        "UserPromptSubmit should emit an actionable L4 PM contract, not only a generic reminder.",
+        "UserPromptSubmit should emit an actionable concise L4 PM contract without exposing the full reasoning frame.",
+    )
+    add_check(
+        "workflow_prompt_hides_internal_reasoning_labels",
+        "meta-decompose" not in workflow_stdout
+        and "internal english intent frame" not in workflow_stdout
+        and "required pm startup packet" not in workflow_stdout,
+        "UserPromptSubmit should keep decomposition and English intent framing as internal PM state, not user-visible prose.",
+    )
+    session_start_probe = run_subagent_session_start_sample(root)
+    session_start_stdout = session_start_probe.get("stdout_preview", "").lower()
+    add_check(
+        "subagent_session_start_vowline_fixture",
+        session_start_probe.get("status") == "pass"
+        and all(
+            term in session_start_stdout
+            for term in [
+                "subagent startup requirement",
+                "vowline",
+                "agents.md",
+                "agent_tool_requirements.md",
+                "support-only memory",
+            ]
+        ),
+        "SessionStart should inject the current workspace Vowline fixture for subagent sessions.",
     )
 
     state_path = root / "hooks" / "state" / "lightweight-status.json"

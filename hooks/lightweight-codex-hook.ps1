@@ -596,15 +596,22 @@ function Test-SubagentSessionStart {
 function Get-VowlineSubagentContext {
     param($Policy)
 
+    $codexHome = Get-CodexHomePath
     $skillPath = Join-Path (Get-AgentsHomePath) "skills\vowline\SKILL.md"
     if ($null -ne $Policy.subagents -and -not [string]::IsNullOrWhiteSpace([string]$Policy.subagents.required_start_skill_path)) {
         $skillPath = [Environment]::ExpandEnvironmentVariables([string]$Policy.subagents.required_start_skill_path)
     }
-    $charterPath = Join-Path (Get-CodexHomePath) "maintenance\SUBAGENT_DELEGATION_CHARTER.md"
+    $agentsPath = Join-Path $codexHome "AGENTS.md"
+    $toolRequirementsPath = Join-Path $codexHome "maintenance\AGENT_TOOL_REQUIREMENTS.md"
+    $charterPath = Join-Path $codexHome "maintenance\SUBAGENT_DELEGATION_CHARTER.md"
 
     return @"
 Subagent startup requirement:
 - Apply the Vowline operating skill for this subagent: $skillPath
+- Workspace scope: $codexHome. Follow $agentsPath before lower-priority agent.md or recalled memory.
+- Workflow fixture: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP, scaled to the delegated subgoal.
+- Toolchain fixture: use explicit wrappers and source policy from $toolRequirementsPath; do not read secrets unless the user requested that exact file.
+- Memento fixture: support-only memory. When memento tools are exposed, use context(workspace='global_pm') and recall for hook/MCP/toolchain prior-state work, never as completion authority.
 - State the bounded subgoal and authority boundary before work: evidence only, no PM parent-goal completion authority.
 - Treat Vowline as a required operating skill alongside task-specific skills; if the full skill cannot be loaded, apply its operating contract to decomposition, evidence, validation, safety, and reporting.
 - The delegated task must include Goal, Purpose, PM Context, Owned Surface, Expected Evidence, Anti-Reward-Hacking Rules, Mid-Report, Exit Criteria, and Not Checked.
@@ -865,19 +872,15 @@ function Get-PromptReminder {
 
     return @"
 Lightweight Codex workflow reminder:
-- Profile: $($Policy.profile); goal: $goal; task_class=$($classification.level); classification_reason=$($classification.reason); preset: $Workflow; phase: $Phase.
-- Skill route: $SkillRoute; team preset: $TeamPreset.
-- Required PM startup packet: explicitly state the L1/L2/L3/L4 class, meta-decompose the user text, compile the working intent in English, and continue into the selected workflow instead of stopping at classification.
-- Internal English intent frame: goal, task_type, authority_boundary, toolchain_purpose, evidence_target, memory_action.
+- Core brief: task_class=$($classification.level); goal=$goal; preset=$Workflow; phase=$Phase.
+- Output rule: user text should include only request summary, objective, task level, current status/action, direct evidence, and material blockers/risks; keep reasoning and internal frames private.
+- Route: skills=$SkillRoute; team=$TeamPreset; toolchain=$ToolchainHint.
 - $goalAction
-- Purpose toolchain: $ToolchainHint
-- Memento memory: $MemoryRoute; memory is support-only, never completion authority. Use tool_feedback after useful or insufficient recall.
-- PM owns scope, integration, verification, and final status; user remains reviewer, not operator.
-- Subagents: max parallel $($Policy.subagents.max_parallel), max depth $($Policy.subagents.max_depth). $delegationAuthorization
-- Delegate only bounded non-blocking side work with owned surfaces and evidence; keep the immediate blocker local.
+- Memory: $MemoryRoute; support-only, never completion authority.
+- Subagents: max=$($Policy.subagents.max_parallel), depth=$($Policy.subagents.max_depth). $delegationAuthorization
 - $watcherAction
-- Completion requires changed/inspected surfaces, direct checks run, checks not run with reasons, PM independent verification, residual risks, rollback notes, and status complete|blocked|continue.
-- Block only real risk: secret content access, irreversible destructive action, hook weakening without explicit user scope, evaluator/pass manipulation, or out-of-scope mutation. Toolchain, MCP, CLI use/install, and read-only inspection should be observed unless they actually perform a blocked action.
+- Completion: changed surfaces, direct checks, not-run reasons, PM verification, residual risks, rollback, status.
+- Hard blocks: secret access, irreversible destructive action, hook weakening without scope, evaluator/pass manipulation, out-of-scope mutation.
 "@
 }
 

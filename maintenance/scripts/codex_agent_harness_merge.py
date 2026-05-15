@@ -243,7 +243,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             root / "hooks" / "lightweight-codex-hook.ps1",
             "$ErrorActionPreference = 'Stop'\n"
             "function Test-SubagentSessionStart { return $true }\n"
-            "function Get-VowlineSubagentContext { 'Subagent startup requirement: apply Vowline as a required operating skill. See SUBAGENT_DELEGATION_CHARTER.md.' }\n"
+            "function Get-VowlineSubagentContext { 'Subagent startup requirement: apply Vowline as a required operating skill. Follow AGENTS.md, AGENT_TOOL_REQUIREMENTS.md, DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP, support-only memory, and SUBAGENT_DELEGATION_CHARTER.md.' }\n"
             "# required operating skill: vowline\n",
         )
         write_json(

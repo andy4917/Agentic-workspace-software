@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import re
@@ -112,6 +113,7 @@ def generated_output_tracking_status(root: Path) -> dict[str, Any]:
         "reports/*results.jsonl",
         "trajectories/runs.jsonl",
         "artifacts/compact-summaries/*.md",
+        "artifacts/tool-results/*.txt",
     ]
     try:
         completed = subprocess.run(
@@ -146,6 +148,10 @@ def hook_subagent_vowline_status(root: Path) -> dict[str, Any]:
         "vowline",
         "required operating skill",
         "subagent startup requirement",
+        "agents.md",
+        "agent_tool_requirements.md",
+        "define -> plan -> build -> verify -> review -> ship",
+        "support-only memory",
         "subagent_delegation_charter.md",
     ]:
         if term not in hook_text:
@@ -506,6 +512,177 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     return {"status": "pass" if not missing else "fail", "missing": missing}
 
 
+def parse_detail_lines(stdout: str) -> dict[str, str]:
+    details: dict[str, str] = {}
+    for line in stdout.splitlines():
+        if not line.startswith("detail="):
+            continue
+        body = line.removeprefix("detail=")
+        key, separator, value = body.partition("=")
+        if separator:
+            details[key.strip()] = value.strip()
+    return details
+
+
+def parse_status_bool(value: str | None) -> bool | None:
+    if value is None:
+        return None
+    lowered = value.strip().lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    return None
+
+
+def parse_status_float(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def parse_memento_log_timestamp(line: str) -> dt.datetime | None:
+    match = re.match(r"\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})(?:\.\d+)?\s+KST\b", line)
+    if not match:
+        return None
+    try:
+        return dt.datetime.fromisoformat(f"{match.group(1)}T{match.group(2)}")
+    except ValueError:
+        return None
+
+
+def memento_recent_log_risks(root: Path, started_at: str | None) -> dict[str, Any]:
+    log_root = root / "state" / "memento-mcp" / "logs"
+    if not log_root.exists():
+        return {"status": "pass", "warning": "memento log root missing", "matches": []}
+
+    current_start = None
+    if started_at:
+        try:
+            current_start = dt.datetime.fromisoformat(started_at)
+        except ValueError:
+            current_start = None
+
+    patterns = [
+        ("postgres_shared_memory_487", re.compile(r"could not reserve shared memory region|error code 487", re.I)),
+        ("postgres_autovacuum_0xc0000142", re.compile(r"autovacuum.*0xC0000142|exception 0xC0000142", re.I)),
+        ("memento_timeout", re.compile(r"Connection terminated due to connection timeout|no response", re.I)),
+        ("postgres_fatal", re.compile(r"\b(FATAL|PANIC)\b", re.I)),
+    ]
+    log_files = sorted(log_root.glob("*.log"), key=lambda path: path.stat().st_mtime, reverse=True)[:12]
+    matches: list[dict[str, Any]] = []
+    for path in log_files:
+        try:
+            text = read_text(path)[-30000:]
+        except (OSError, UnicodeDecodeError):
+            continue
+        for number, line in enumerate(text.splitlines(), 1):
+            matched = [name for name, pattern in patterns if pattern.search(line)]
+            if not matched:
+                continue
+            event_time = parse_memento_log_timestamp(line)
+            after_current_start = bool(current_start and event_time and event_time >= current_start)
+            matches.append(
+                {
+                    "path": rel(path, root),
+                    "tail_line": number,
+                    "patterns": matched,
+                    "after_current_start": after_current_start,
+                    "text": clean_report_string(line.strip(), 240),
+                }
+            )
+            if len(matches) >= 30:
+                break
+        if len(matches) >= 30:
+            break
+
+    after_current_start_count = sum(1 for item in matches if item["after_current_start"])
+    return {
+        "status": "fail" if after_current_start_count else "pass",
+        "scanned_files": [rel(path, root) for path in log_files],
+        "match_count": len(matches),
+        "after_current_start_count": after_current_start_count,
+        "matches": matches,
+    }
+
+
+def memento_runtime_status(root: Path) -> dict[str, Any]:
+    script = root / "maintenance" / "scripts" / "memento-mcp-runtime.ps1"
+    memento_declared = any(
+        "memento" in read_text(path).lower()
+        for path in [root / "config.toml", root / "maintenance" / "MCP_RUNTIME_STATUS.md"]
+        if path.exists()
+    )
+    if not script.exists():
+        status = "fail" if memento_declared else "pass"
+        return {"status": status, "applicability": "declared" if memento_declared else "not_applicable", "error": "memento runtime script missing"}
+    if not command_exists("powershell.exe"):
+        status = "fail" if memento_declared else "pass"
+        return {"status": status, "applicability": "declared" if memento_declared else "not_applicable", "error": "powershell.exe unavailable"}
+
+    result = run_command(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            "status",
+        ],
+        root,
+        timeout=60,
+        include_stdout=True,
+    )
+    details = parse_detail_lines(str(result.get("stdout", "")))
+    failures = []
+    warnings = []
+
+    if result.get("status") != "pass":
+        failures.append("memento runtime status command failed")
+
+    postgres_ready = parse_status_bool(details.get("postgres_ready"))
+    memento_health = parse_status_bool(details.get("memento_health"))
+    if postgres_ready is not True:
+        failures.append("postgres_ready is not True")
+    if memento_health is not True:
+        failures.append("memento_health is not True")
+
+    working_set = parse_status_float(details.get("memento_working_set_mb"))
+    max_working_set = parse_status_float(details.get("memento_max_working_set_mb"))
+    if working_set is None:
+        warnings.append("memento working set was not reported")
+    elif max_working_set is not None and working_set > max_working_set:
+        failures.append(f"memento working set {working_set}MB exceeds limit {max_working_set}MB")
+
+    if details.get("memento_inprocess_onnx_enabled", "").lower() != "false":
+        warnings.append("MEMENTO_INPROCESS_ONNX_ENABLED is not false")
+    if details.get("memento_managed_embedding_provider", "").lower() != "none":
+        warnings.append("MEMENTO_MANAGED_EMBEDDING_PROVIDER is not none")
+
+    log_risks = memento_recent_log_risks(root, details.get("memento_started_at"))
+    if log_risks.get("status") != "pass":
+        failures.append("memento log risk pattern appeared after current runtime start")
+    elif log_risks.get("match_count"):
+        warnings.append("historical memento log risk patterns are present before current runtime start")
+
+    return {
+        "status": "pass" if not failures else "fail",
+        "failures": failures,
+        "warnings": warnings,
+        "details": details,
+        "status_command": {
+            "exit_code": result.get("exit_code"),
+            "duration_seconds": result.get("duration_seconds"),
+            "stderr_preview": result.get("stderr_preview"),
+        },
+        "log_risks": log_risks,
+    }
+
+
 def doctor_data(root: Path) -> dict[str, Any]:
     checks = {
         "config": check_config(root),
@@ -519,6 +696,7 @@ def doctor_data(root: Path) -> dict[str, Any]:
         "managed_files": check_managed_files(root),
         "skill_frontmatter": check_skill_frontmatter(root),
         "harness_file_size": harness_line_count_status(root),
+        "memento_runtime": memento_runtime_status(root),
         "stale_active_references": {"status": "pass", "matches": stale_active_references(root)},
         "sentinel_blockers": {"status": "pass", "items": sentinel_checks(root)},
     }

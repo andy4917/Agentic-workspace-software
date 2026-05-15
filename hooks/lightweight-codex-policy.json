@@ -140,8 +140,9 @@
       "L4": "P0/repeated-failure/root-cause workflow or harness incident, especially with explicit delegation"
     },
     "prompt_runtime_contract": [
-      "emit task_class in UserPromptSubmit additionalContext",
+      "emit concise task_class and goal summary in UserPromptSubmit additionalContext",
       "store classification and English intent frame in hook state",
+      "keep detailed prompt decomposition and English intent framing out of user-facing prose",
       "record delegation_authorized when the prompt authorizes subagents",
       "require goal action for L3/L4",
       "require watcher coverage or WATCHER_NOT_USED for L4 delegated incidents"

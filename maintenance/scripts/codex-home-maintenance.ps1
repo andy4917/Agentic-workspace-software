@@ -63,10 +63,8 @@ function Get-ActiveReferenceMatches {
 
     $activeFiles = @(
         (Join-Path $Root 'config.toml'),
-        (Join-Path $Root '.codex-global-state.json'),
         (Join-Path $Root 'hooks.json'),
-        (Join-Path $Root 'AGENTS.md'),
-        (Join-Path $Root 'session_index.jsonl')
+        (Join-Path $Root 'AGENTS.md')
     ) | Where-Object { Test-Path -LiteralPath $_ }
 
     $pattern = '\\.tmp|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\plugins|wshobson-agents-scan|cache\\codex_apps_tools|plugins\\cache'
@@ -368,7 +366,33 @@ function Get-EverythingNameSummary {
 
     $summaries = @()
     foreach ($query in $Queries) {
-        $all = @(& $es.Source -path 'C:\' -p $query 2>$null)
+        try {
+            $raw = @(& $es.Source -path 'C:\' -p $query 2>&1)
+            $exitCode = $LASTEXITCODE
+        }
+        catch {
+            $summaries += [ordered]@{
+                query = $query
+                total = 0
+                outside_recycle_and_desktop = 0
+                samples = @()
+                error = $_.Exception.Message
+            }
+            continue
+        }
+
+        if ($exitCode -ne 0) {
+            $summaries += [ordered]@{
+                query = $query
+                total = 0
+                outside_recycle_and_desktop = 0
+                samples = @()
+                error = ("es.exe exit " + [string]$exitCode + ": " + (($raw | Select-Object -First 1) -replace '\s+', ' '))
+            }
+            continue
+        }
+
+        $all = @($raw | ForEach-Object { [string]$_ })
         $outside = @($all | Where-Object {
             $_ -notlike 'C:\$Recycle.Bin\*' -and
             $_ -notlike 'C:\$SysReset\OldOS\$Recycle.Bin\*' -and

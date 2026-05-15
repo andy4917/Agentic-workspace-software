@@ -149,6 +149,15 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
   default `MEMENTO_MAX_WORKING_SET_MB=512`.
 - `verification`: run
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\memento-mcp-runtime.ps1 verify`.
+- `doctor_coverage`: `maintenance\scripts\codex_agent_harness.py doctor --json`
+  now includes a `memento_runtime` check. It runs the managed runtime `status`
+  action, requires `postgres_ready=True` and `memento_health=True`, records the
+  Memento working set against `MEMENTO_MAX_WORKING_SET_MB`, checks that the
+  managed ONNX/local embedding defaults remain disabled, and scans recent
+  Memento/PostgreSQL logs for known Windows failure signatures such as
+  `0xC0000142`, shared-memory reservation `error code 487`, timeout, and
+  `FATAL`/`PANIC` lines. Historical pre-restart matches are warnings; matches
+  after the current managed runtime start fail doctor.
 - `restart`: run the same script with `restart` to recycle the Memento HTTP
   process without stopping PostgreSQL. Use `stop` only when intentionally
   taking down both Memento HTTP and the dedicated PostgreSQL runtime.

@@ -92,6 +92,7 @@ reports/*results.jsonl
 trajectories/runs.jsonl
 artifacts/compact-summaries/*.md
 !artifacts/compact-summaries/README.md
+artifacts/tool-results/*.txt
 
 # OS/editor noise
 Thumbs.db
