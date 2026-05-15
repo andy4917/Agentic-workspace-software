@@ -118,6 +118,30 @@ paths for the work being performed.
 - Use `clang-cl` when an MSVC ABI Clang compile is required; it loads
   `vcvars64.bat` before invoking the LLVM Windows `clang-cl.exe`.
 
+### Debugger Tools
+
+Debugger availability must be reported separately from debugging procedure.
+Presence of a shim is not enough to claim a debugger is usable or was used.
+
+- Use `gdb` through `.codex\toolchains\shims\gdb.cmd` for GNU/UCRT C, C++,
+  and Rust GNU ABI work. Verification command: `gdb.cmd --version`.
+- Use `cdb`, `dumpchk`, and `symchk` through `.codex\toolchains\shims` for
+  Windows crash dump, symbol, and MSVC-native investigations. Verification
+  command: `cdb.cmd -version`.
+- Python has the built-in `pdb` debugger through the managed Python shim.
+  `debugpy` is not a managed installed debugger unless a project environment
+  explicitly provides it; verify with `python.cmd -c "import importlib.util; ..."`
+  before claiming IDE/attach debugging support.
+- `rust-gdb` and `rust-lldb` wrappers are conditional Rustup entry points. On
+  the active `stable-x86_64-pc-windows-msvc` toolchain they currently report
+  `not applicable`; do not present them as active debuggers for MSVC Rust work.
+  Use `cdb`/Windows debugging tools for MSVC-native evidence, or deliberately
+  install/select a Rust GNU or LLDB-capable toolchain before claiming those
+  wrappers are usable.
+- Final reports for toolchain-sensitive work must say one of:
+  `debugger used: <tool> <command evidence>`, `debugger available but not used:
+  <reason>`, or `debugger unavailable/conditional: <tool> <reason>`.
+
 ## MCP Use Policy
 
 MCP servers are only usable in a session after they are enabled in config and the

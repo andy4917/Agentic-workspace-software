@@ -630,7 +630,7 @@ Subagent startup requirement:
 function Test-DelegationAuthorized {
     param([string]$Prompt)
 
-    if ($Prompt -match "(?i)(subagents?|sub[-_ ]?agent|multi[-_ ]?agent|delegate|delegation|PM-led|team preset|role separation|parallel agent)") {
+    if ($Prompt -match "(?i)(subagents?|sub[-_ ]?agent|multi[-_ ]?agent|spawn_agent|parallel agent|role separation|\bdelegate\b|\bdelegation\b|\bdelegated\b)") {
         return $true
     }
 
@@ -679,7 +679,7 @@ function Test-WorkflowGovernanceSignal {
         return $false
     }
 
-    if ($Prompt -match "(?i)(hook|hooks|harness|workflow|subagents?|sub[-_ ]?agent|multi[-_ ]?agent|spawn_agent|watcher|worker|delegate|delegation|goal integrity|codex goal|l1/l2/l3/l4|classification)") {
+    if ($Prompt -match "(?i)(hook|hooks|harness|workflow|toolchain|debugger|debugging tool|level escalation|task level|subagents?|sub[-_ ]?agent|multi[-_ ]?agent|spawn_agent|watcher|worker|delegate|delegation|goal integrity|codex goal|l1/l2/l3/l4|task_class|classification)") {
         return $true
     }
 
@@ -790,7 +790,7 @@ function Get-IntentFrame {
         evidence_target = $evidenceTarget
         memory_action = $MemoryRoute
         subagent_policy = $subagentPolicy
-        subagent_call_declaration = "If the user explicitly authorizes subagents, visible status or final output must state SUBAGENT_CALL used/not_used with reason and evidence, regardless of task-class reminder availability."
+        subagent_call_declaration = "If the user explicitly authorizes subagents or a subagent tool is used, final evidence must repeat SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, regardless of task-class reminder availability."
         calibration_action = "If hook state, tool output, validation, or final preflight contradicts the current workflow, pause the active path, preserve evidence, trace the anomaly, and resume only with direct verification or an explicit blocked/continue decision."
     }
 }
@@ -872,7 +872,7 @@ function Get-PromptReminder {
 
     $subagentDecisionAction = "Subagent call declaration: not required unless the user explicitly authorizes subagents."
     if ([bool]$classification.subagentDecisionRequired) {
-        $subagentDecisionAction = "Subagent call declaration required: after this user instruction, visible status/final evidence must state SUBAGENT_CALL used or SUBAGENT_CALL not_used with reason, evidence, and residual risk even if task_class is unavailable."
+        $subagentDecisionAction = "Subagent call declaration required: after this user instruction, final evidence must repeat SUBAGENT_CALL used or SUBAGENT_CALL not_used with reason, direct evidence, and residual risk even if task_class is unavailable."
     }
 
     $goalAction = "Goal action: no persisted Codex Goal required unless the task becomes long-running or stateful."
@@ -969,7 +969,8 @@ function Test-SubagentDecisionReady {
         [string]$Message
     )
 
-    if (-not [bool]$State.subagentDecisionRequired) {
+    $hasSubagentEvent = @($State.subagentEvents).Count -gt 0
+    if (-not ([bool]$State.subagentDecisionRequired -or $hasSubagentEvent)) {
         return $true
     }
     if ([string]::IsNullOrWhiteSpace($Message)) {
@@ -977,9 +978,11 @@ function Test-SubagentDecisionReady {
     }
 
     $hasMarker = $Message -match "(?i)SUBAGENT_CALL\s+(used|not_used|not used)"
-    $hasReason = $Message -match "(?i)(reason|because|risk|evidence|verified|substitute check|direct evidence)"
+    $hasReason = $Message -match "(?i)(reason|because)"
+    $hasEvidence = $Message -match "(?i)(evidence|verified|direct evidence|substitute check)"
+    $hasRisk = $Message -match "(?i)(risk|residual)"
 
-    return ($hasMarker -and $hasReason)
+    return ($hasMarker -and $hasReason -and $hasEvidence -and $hasRisk)
 }
 
 function Deny-PreTool {
@@ -1354,7 +1357,7 @@ switch ($eventName) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Watcher coverage required by default; provide WATCHER_REPORT/subagent evidence or WATCHER_NOT_USED before finalization."
         }
         if ([bool]$classification.subagentDecisionRequired) {
-            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Subagent call declaration required: record SUBAGENT_CALL used/not_used with reason, evidence, and residual risk."
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Subagent call declaration required: record SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk."
         }
         if ([bool]$classification.anomalyPauseExpected) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Anomaly pause/trace required: preserve the first mismatch, stop the original path, and resume only with verified correction or blocked/continue status."
@@ -1552,7 +1555,7 @@ switch ($eventName) {
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
-                reason = "Final preflight: subagent use was explicitly authorized. Before finalizing, include SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, even if task_class was unavailable."
+                reason = "Final preflight: subagent use was explicitly authorized or a subagent tool event was observed. Before finalizing, include SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, even if task_class was unavailable."
             }
             break
         }

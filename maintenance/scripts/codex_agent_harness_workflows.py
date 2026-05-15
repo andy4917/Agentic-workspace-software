@@ -475,9 +475,40 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         stop_with_subagent = run_stop_hook_sample(root, delegated_final_with_marker)
         add_check(
             "stop_requires_explicit_subagent_call_marker",
-            "subagent use was explicitly authorized" in stop_missing_subagent.get("stdout_preview", "").lower()
+            "subagent use was explicitly authorized or a subagent tool event was observed" in stop_missing_subagent.get("stdout_preview", "").lower()
             and '"continue":true' in stop_with_subagent.get("stdout_preview", "").lower(),
             "Stop should reject delegated finals without SUBAGENT_CALL used/not_used and allow the explicit marker with reason/evidence.",
+        )
+
+        pm_led_probe = run_prompt_hook_sample(root, "Review PM-led team preset workflow routing and level escalation criteria.")
+        try:
+            pm_led_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            pm_led_state = {}
+        add_check(
+            "pm_led_team_preset_not_subagent_authorization",
+            pm_led_probe.get("status") == "pass"
+            and pm_led_state.get("delegationAuthorized") is False
+            and pm_led_state.get("subagentDecisionRequired") is False,
+            "PM-led/team preset wording alone should not require SUBAGENT_CALL evidence.",
+        )
+
+        run_post_tool_hook_sample(root, "spawn_agent", '{"agent_type":"reviewer"}')
+        event_final_without_marker = (
+            "FINAL_GOAL_AUDIT checked direct subagent event state. checks not run none. "
+            "residual risk low. status complete. PM independent verification complete."
+        )
+        event_final_with_marker = (
+            event_final_without_marker
+            + " SUBAGENT_CALL used reason subagent tool event observed direct evidence spawn_agent residual risk low."
+        )
+        event_stop_missing = run_stop_hook_sample(root, event_final_without_marker)
+        event_stop_with_marker = run_stop_hook_sample(root, event_final_with_marker)
+        add_check(
+            "stop_requires_marker_after_actual_subagent_tool_event",
+            "subagent use was explicitly authorized or a subagent tool event was observed" in event_stop_missing.get("stdout_preview", "").lower()
+            and '"continue":true' in event_stop_with_marker.get("stdout_preview", "").lower(),
+            "Stop should require SUBAGENT_CALL evidence when a subagent tool event exists, even without prompt authorization state.",
         )
     finally:
         if original_state_exists:

@@ -28,6 +28,63 @@ function Resolve-ScoopShimTarget {
     return ""
 }
 
+function Invoke-WrapperProbe {
+    param(
+        [string]$WrapperPath,
+        [string[]]$Arguments = @(),
+        [string]$ExpectedPattern = "",
+        [int[]]$AllowedExitCodes = @(0)
+    )
+
+    if (-not (Test-Path -LiteralPath $WrapperPath)) {
+        return [ordered]@{
+            exit_code = -1
+            output = ""
+            target_exists = $false
+            pattern_matched = $false
+            ok = $false
+            error = "missing wrapper"
+        }
+    }
+
+    try {
+        $outputText = (& $WrapperPath @Arguments 2>&1 | Out-String).Trim()
+        $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+        $matched = if ($ExpectedPattern) { $outputText -match $ExpectedPattern } else { $true }
+        return [ordered]@{
+            exit_code = $exitCode
+            output = $outputText
+            target_exists = $true
+            pattern_matched = [bool]$matched
+            ok = ($AllowedExitCodes -contains $exitCode) -and [bool]$matched
+            error = ""
+        }
+    } catch {
+        $errorText = $_.Exception.Message
+        return [ordered]@{
+            exit_code = -1
+            output = $errorText
+            target_exists = $true
+            pattern_matched = $false
+            ok = $false
+            error = $errorText
+        }
+    }
+}
+
+function Get-PreviewText {
+    param(
+        [string]$Value,
+        [int]$Limit = 160
+    )
+
+    $compact = ($Value -replace "\s+", " ").Trim()
+    if ($compact.Length -le $Limit) {
+        return $compact
+    }
+    return $compact.Substring(0, $Limit)
+}
+
 function Test-WrapperUsesBundle {
     param(
         [string]$WrapperPath,
@@ -190,6 +247,87 @@ if (Test-Path -LiteralPath $rgResolutionScript) {
         status = "fail"
         source_class = "official-bundle"
         error = "missing check-rg-resolution.ps1"
+    })
+}
+
+$gdbWrapper = Join-Path $shimDir "gdb.cmd"
+$gdbProbe = Invoke-WrapperProbe -WrapperPath $gdbWrapper -Arguments @("--version") -ExpectedPattern "GNU gdb"
+$checks.Add([ordered]@{
+    name = "debugger-smoke:gdb"
+    status = if ($gdbProbe.ok) { "pass" } else { "fail" }
+    source_class = "local-chain"
+    wrapper = $gdbWrapper
+    availability = if ($gdbProbe.ok) { "active" } else { "unavailable" }
+    target_scope = "GNU/UCRT native debugging"
+    exit_code = $gdbProbe.exit_code
+    output_preview = Get-PreviewText -Value $gdbProbe.output -Limit 160
+    error = $gdbProbe.error
+})
+
+$cdbWrapper = Join-Path $shimDir "cdb.cmd"
+$cdbProbe = Invoke-WrapperProbe -WrapperPath $cdbWrapper -Arguments @("-version") -ExpectedPattern "cdb version"
+$checks.Add([ordered]@{
+    name = "debugger-smoke:cdb"
+    status = if ($cdbProbe.ok) { "pass" } else { "fail" }
+    source_class = "local-chain"
+    wrapper = $cdbWrapper
+    availability = if ($cdbProbe.ok) { "active" } else { "unavailable" }
+    target_scope = "Windows Debugging Tools for dump/MSVC-native investigations"
+    exit_code = $cdbProbe.exit_code
+    output_preview = Get-PreviewText -Value $cdbProbe.output -Limit 160
+    error = $cdbProbe.error
+})
+
+$pythonWrapper = Join-Path $shimDir "python.cmd"
+$pdbProbe = Invoke-WrapperProbe -WrapperPath $pythonWrapper -Arguments @("-c", "import pdb, sys; print('pdb available ' + sys.version.split()[0])") -ExpectedPattern "pdb available"
+$checks.Add([ordered]@{
+    name = "debugger-smoke:python-pdb"
+    status = if ($pdbProbe.ok) { "pass" } else { "fail" }
+    source_class = "local-chain"
+    wrapper = $pythonWrapper
+    availability = if ($pdbProbe.ok) { "active_builtin" } else { "unavailable" }
+    target_scope = "Python built-in debugger"
+    exit_code = $pdbProbe.exit_code
+    output_preview = Get-PreviewText -Value $pdbProbe.output -Limit 160
+    error = $pdbProbe.error
+})
+
+$debugpyProbe = Invoke-WrapperProbe -WrapperPath $pythonWrapper -Arguments @("-c", "import importlib.util; print('debugpy=' + ('available' if importlib.util.find_spec('debugpy') else 'not_installed'))") -ExpectedPattern "debugpy="
+$debugpyAvailable = $debugpyProbe.output -match "debugpy=available"
+$checks.Add([ordered]@{
+    name = "debugger-conditional:debugpy"
+    status = if ($debugpyProbe.ok) { "pass" } else { "fail" }
+    source_class = "local-chain"
+    wrapper = $pythonWrapper
+    availability = if ($debugpyAvailable) { "active" } else { "optional_not_installed" }
+    target_scope = "Python IDE/attach debugger; project-environment optional"
+    exit_code = $debugpyProbe.exit_code
+    output_preview = Get-PreviewText -Value $debugpyProbe.output -Limit 160
+    error = $debugpyProbe.error
+})
+
+$rustupWrapper = Join-Path $shimDir "rustup.cmd"
+$activeRustToolchain = ""
+if (Test-Path -LiteralPath $rustupWrapper) {
+    $activeRustToolchain = (& $rustupWrapper show active-toolchain 2>&1 | Out-String).Trim()
+}
+
+foreach ($rustDebugger in @("rust-gdb", "rust-lldb")) {
+    $wrapper = Join-Path $shimDir "$rustDebugger.cmd"
+    $probe = Invoke-WrapperProbe -WrapperPath $wrapper -Arguments @("--version")
+    $probeText = "$($probe.output) $($probe.error)"
+    $conditionalMsvc = (-not $probe.ok) -and ($probeText -match "not applicable") -and ($activeRustToolchain -match "pc-windows-msvc")
+    $checks.Add([ordered]@{
+        name = "debugger-conditional:$rustDebugger"
+        status = if ($probe.ok -or $conditionalMsvc) { "pass" } else { "fail" }
+        source_class = "local-chain"
+        wrapper = $wrapper
+        availability = if ($probe.ok) { "active" } elseif ($conditionalMsvc) { "conditional_not_active" } else { "unavailable" }
+        active_rust_toolchain = $activeRustToolchain
+        target_scope = "Rustup debugger wrapper; conditional on compatible Rust toolchain"
+        exit_code = $probe.exit_code
+        output_preview = Get-PreviewText -Value $probe.output -Limit 220
+        error = $probe.error
     })
 }
 

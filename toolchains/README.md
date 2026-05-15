@@ -58,6 +58,25 @@ Current shim groups:
 - Windows debugging: `cdb`, `dumpchk`, `symchk`
 - System/package: `scoop`, `winget`, `choco`
 
+Debugger status:
+
+- Active and verified: `gdb.cmd --version` for GNU/UCRT debugging and
+  `cdb.cmd -version` for Windows/MSVC dump or native debugging.
+- Python built-in debugger: `pdb` is available through the managed Python 3.14.5
+  shim. `debugpy` is not currently installed or exposed as a command.
+- Installed wrapper targets: `dumpchk.cmd` and `symchk.cmd` under Windows
+  Debugging Tools.
+- Conditional Rustup wrappers: `rust-gdb.cmd`, `rust-gdbgui.cmd`, and
+  `rust-lldb.cmd` exist, but the active Rust toolchain is
+  `stable-x86_64-pc-windows-msvc`; `rust-gdb.cmd --version` and
+  `rust-lldb.cmd --version` currently report `not applicable`. Treat them as
+  present-but-not-active until a compatible Rust toolchain/debugger path is
+  deliberately selected and verified.
+
+Do not claim a debugger was used unless a debugger command was invoked and the
+command evidence is reported. Otherwise report it as available but not used, or
+conditional/unavailable with the reason.
+
 Do not place runtime cache, temporary clones, package stores, or bundled
 marketplace payloads here.
 
@@ -72,6 +91,11 @@ not use the official Codex bundle.
 
 Last verification:
 
+- 2026-05-16 KST: `check-toolchain-sources.ps1 -Json` returned
+  `status=pass; failures=0; warnings=0`; `gdb` and `cdb` version probes passed,
+  while Rustup `rust-gdb` and `rust-lldb` probes were recorded as conditional
+  under the active MSVC Rust toolchain. Python `pdb` was available through the
+  Python 3.14.5 shim, and `debugpy` was not installed.
 - 2026-05-13 21:36 KST: `check-toolchain-sources.ps1` returned
   `status=pass; failures=0; warnings=0` after adding Windows Debugging Tools
   wrappers.

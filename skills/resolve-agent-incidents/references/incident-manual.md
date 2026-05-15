@@ -240,11 +240,25 @@ Use one primary type and optional secondary tags.
 - Likely causes: subagent guidance is tied to task-class reminder text, or Stop only checks watcher coverage for L4 delegated incidents.
 - Fix playbook:
   1. Persist a prompt-derived `subagentDecisionRequired` flag whenever delegation is authorized, independent of task class.
-  2. Emit a visible `SUBAGENT_CALL used` or `SUBAGENT_CALL not_used` requirement with reason, evidence or substitute check, and residual risk.
-  3. Make Stop require the declaration for substantive work after explicit subagent authorization.
-- Verification: synthetic delegated prompts include `Subagent call declaration required`; hook state records `subagentDecisionRequired`; Stop blocks final output missing exact `SUBAGENT_CALL used` or `SUBAGENT_CALL not_used` plus reason/evidence.
+  2. Emit a final-evidence `SUBAGENT_CALL used` or `SUBAGENT_CALL not_used` requirement with reason, direct evidence or substitute check, and residual risk.
+  3. Make Stop require the declaration for substantive work after explicit subagent authorization or an observed subagent tool event.
+  4. Keep authorization detection narrow: `PM-led`, `team preset`, `workflow`, and `review` alone are not subagent authorization.
+- Verification: synthetic delegated prompts include `Subagent call declaration required`; hook state records `subagentDecisionRequired`; Stop blocks final output missing exact `SUBAGENT_CALL used` or `SUBAGENT_CALL not_used` plus reason, evidence, and risk; PM-led/team preset wording alone does not set delegation authorization; an observed `spawn_agent`/subagent event also requires the final declaration.
 - Limitation: if Stop receives no usable prior hook state and no prompt text, runtime enforcement cannot reconstruct explicit subagent authorization; the PM-facing AGENTS.md declaration remains the fallback contract.
 - Do not claim: that enabled subagent capability or hook authorization proves subagents were called.
+
+### Debugger Toolchain Ambiguity
+
+- Type: `toolchain_issue`, `workflow_hook_issue`
+- Fingerprint: a report says debugger support exists, but does not distinguish shim presence, current usability, and actual debugger invocation.
+- Risk: agents may imply a debugger was used or is ready when only a wrapper file exists.
+- Fix:
+  1. Record debugger tools in `maintenance/AGENT_TOOL_REQUIREMENTS.md` and `toolchains/README.md` with active, conditional, or unavailable status.
+  2. Verify active debugger wrappers with command evidence such as `gdb.cmd --version` and `cdb.cmd -version`.
+  3. Treat `rust-gdb`/`rust-lldb` as conditional when Rustup reports `not applicable` for the active MSVC Rust toolchain.
+  4. In final reports, say whether a debugger was used, available but not used, or conditional/unavailable.
+- Verification: `check-toolchain-sources.ps1 -Json` includes debugger smoke checks for `gdb` and `cdb`, plus conditional Rust debugger wrapper checks.
+- Do not claim: that a debugger was used unless a debugger command was invoked for the task evidence.
 
 ### Patch Grammar Failure
 

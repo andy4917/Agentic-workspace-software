@@ -39,11 +39,12 @@ Codex should operate as a PM-led workflow that combines:
 Runtime subagent activation rule:
 
 - current Codex runtime policy requires an explicit user request before calling subagents;
-- user phrases such as `multi-agent`, `subagent`, `parallel agent`, `role separation`, or `delegate` count as explicit authorization for the current goal; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
+- user phrases such as `multi-agent`, `subagent`, `spawn_agent`, `parallel agent`, `role separation`, `delegate`, `delegation`, or `delegated` count as explicit authorization for the current goal; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
+- `PM-led`, `team preset`, `workflow`, or `review` alone do not count as explicit subagent authorization; they may still raise the task level or justify a local review workflow.
 - when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
 - enabled feature flags are capability, not evidence of actual subagent use.
-- when authorization is present, the PM must visibly declare the subagent call
-  decision in status or final evidence as `SUBAGENT_CALL used` or
+- when authorization is present or a subagent tool is used, the PM must repeat
+  the subagent call decision in final evidence as `SUBAGENT_CALL used` or
   `SUBAGENT_CALL not_used` with reason, direct evidence or substitute check, and
   residual risk; this declaration is required even if a hook reminder omits or
   fails to show the task class.
@@ -109,6 +110,28 @@ Use this lifecycle as the main workflow overlay. Scale the ceremony to the task,
 6. Ship: summarize the change, evidence, unresolved risks, and any user decisions needed.
 
 Treat skills as workflows, not essays. A useful skill has a trigger, ordered steps, checkpoint evidence, anti-rationalization reminders, and exit criteria.
+
+## Work Level Escalation
+
+Task level routes workflow rigor; it is not proof of completion.
+
+- `L1`: tiny answer, read-only explanation, or a narrow one-file edit with no
+  durable workflow state, no toolchain/config change, and no meaningful risk.
+- `L2`: ordinary bounded engineering or documentation work with clear scope,
+  direct verification, and no cross-surface governance, release, or incident
+  signal.
+- `L3`: escalate from L2 when the request touches workflow, hooks, harness,
+  MCP, toolchain, debugger tools, commit/push, multi-surface change, long-running
+  work, or explicit subagent authorization. L3 requires visible acceptance
+  checks and not-run reasons.
+- `L4`: escalate when a root-cause, repeated-failure, false-pass,
+  hidden-fallback, stale-state, skipped-validation, or P0 incident signal
+  intersects workflow, hooks, harness, toolchain, subagents, watcher coverage,
+  goal governance, or final evidence. L4 requires pause/trace evidence and a
+  final audit.
+
+When a lower task-class reminder conflicts with the actual surface touched, use
+the higher level and preserve the mismatch as calibration evidence.
 
 ## Turn-Based Anomaly Calibration
 

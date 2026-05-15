@@ -24,11 +24,12 @@
       "subagent",
       "sub-agent",
       "multi-agent",
+      "spawn_agent",
       "parallel agent",
       "role separation",
       "delegate",
       "delegation",
-      "PM-led"
+      "delegated"
     ],
     "spawn_threshold": "multi_surface_or_parallelizable_or_risk_or_repeated_failure",
     "must_not_delegate": "immediate_blocking_next_step_or_tightly_coupled_high_risk_work",
@@ -139,6 +140,12 @@
       "L3": "multi-surface, delegated, workflow-sensitive, or long-running work",
       "L4": "P0/repeated-failure/root-cause workflow or harness incident, especially with explicit delegation"
     },
+    "escalation_rules": [
+      "Start at L2 for ordinary bounded engineering; downgrade to L1 only for tiny no-risk answers or one-file edits with no durable state change.",
+      "Escalate to L3 for workflow, hook, harness, toolchain, debugger-tool, MCP, multi-surface, long-running, commit/push, or explicit subagent authorization work.",
+      "Escalate to L4 when a root-cause, repeated-failure, false-pass, stale-state, hidden-fallback, or P0 incident signal intersects workflow, hook, harness, toolchain, subagent, watcher, or goal-governance surfaces.",
+      "Task level is a workflow routing signal, not completion authority; direct verification and final evidence still decide completion."
+    ],
     "prompt_runtime_contract": [
       "emit concise task_class and goal summary in UserPromptSubmit additionalContext",
       "store classification and English intent frame in hook state",
