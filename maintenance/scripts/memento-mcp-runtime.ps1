@@ -160,6 +160,18 @@ function Test-MementoHealth {
     }
 }
 
+function Test-CurrentTokenAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]$identity
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Assert-PostgresNonAdminLaunchToken {
+    if (Test-CurrentTokenAdministrator) {
+        throw "PostgreSQL refuses to run from an elevated administrator token. Start Codex or PowerShell normally as the current user, then rerun this script. This Memento runtime is designed to run without administrator privileges."
+    }
+}
+
 function Get-MementoServerProcess {
     if (-not (Test-Path -LiteralPath $ServerPidPath -PathType Leaf)) {
         return $null
@@ -315,6 +327,7 @@ function Start-PostgresRuntime {
     }
 
     Clear-StalePostmasterPid
+    Assert-PostgresNonAdminLaunchToken
 
     $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $pgLog = Join-PathStrict $LogRoot ("postgresql-" + $timestamp + ".out.log")
@@ -637,6 +650,7 @@ function Invoke-Status {
     Write-Output "status=observed"
     Write-Detail ("source_root=" + $SourceRoot)
     Write-Detail ("state_root=" + $StateRoot)
+    Write-Detail ("current_process_administrator=" + [string](Test-CurrentTokenAdministrator))
     Write-Detail ("postgres_ready=" + [string](Test-PostgresReady))
     Write-Detail ("memento_health=" + [string](Test-MementoHealth))
     Write-Detail ("memento_inprocess_onnx_enabled=" + $InProcessOnnxEnabled)

@@ -474,8 +474,11 @@ def memento_runtime_status(root: Path) -> dict[str, Any]:
     if result.get("status") != "pass":
         failures.append("memento runtime status command failed")
 
+    process_admin = parse_status_bool(details.get("current_process_administrator"))
     postgres_ready = parse_status_bool(details.get("postgres_ready"))
     memento_health = parse_status_bool(details.get("memento_health"))
+    if process_admin is not False:
+        failures.append("current_process_administrator is not False")
     if postgres_ready is not True:
         failures.append("postgres_ready is not True")
     if memento_health is not True:
