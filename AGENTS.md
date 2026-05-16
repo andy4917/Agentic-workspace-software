@@ -516,6 +516,11 @@ it as out of scope with direct evidence.
   managed source, inventory, toolchain, logs, secrets, project repositories,
   generated state, and external publishing. Apply its risk levels before edits:
   observe, draft, controlled-change, or high-risk-change.
+- For control-plane alignment or drift remediation across config, instructions,
+  hooks, scripts, skills, MCP/runtime notes, toolchain policy, generated state,
+  logs, or operational workflows, use the runbook's Control-Plane Alignment
+  section. Prefer one canonical source plus short references over another
+  overlapping policy layer.
 
 ## Anti-Rationalization Rules
 

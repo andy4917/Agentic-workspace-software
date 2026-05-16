@@ -75,6 +75,111 @@ the evidence. If the risk is ambiguous, stop and ask.
 8. Ship: report changed surfaces, checks run, checks not run, residual risks,
    rollback notes, and status.
 
+## Control-Plane Alignment
+
+Use this section when the task asks to audit or remediate workstation
+control-plane drift across config, instructions, hooks, scripts, skills, MCP
+runtime notes, toolchain policy, operational workflows, generated state, logs,
+or records.
+
+The objective is to make future Codex agents easier to operate correctly without
+adding ceremony. Do not create another workflow layer when an existing source can
+be clarified, consolidated, or referenced.
+
+### Two-Pass Workflow
+
+1. Read-only conflict audit: inspect narrowly but sufficiently, and build a
+   control-plane map before editing.
+2. Conservative adjustment: patch only after direct evidence identifies a
+   duplicate, contradiction, stale rule, hidden fallback, completion-authority
+   leak, workflow overreach or underreach, toolchain ambiguity, MCP/session
+   drift, skill overlap, generated-state contamination, secret-boundary
+   weakness, fake verification, or maintenance bloat.
+
+### Authority Model
+
+Before editing, name the authority chain for each affected topic:
+
+- canonical source;
+- secondary references;
+- active runtime surface;
+- generated or inventory surfaces;
+- deprecated or historical surfaces;
+- verification command or check;
+- rollback or recovery note.
+
+If two surfaces conflict, choose the canonical source first, update references
+to point to it, and mark historical surfaces clearly. Do not patch multiple
+surfaces blindly.
+
+### Remediation Order
+
+1. Fix dangerous contradictions.
+2. Fix active-runtime or toolchain ambiguity.
+3. Fix stale references that can cause wrong tool or session behavior.
+4. Consolidate duplicate workflow rules.
+5. Trim over-broad final evidence or hook requirements only when safety is
+   preserved.
+6. Update reports or handoff docs last.
+
+### Failure Capsule
+
+When the audit finds a failure, contradiction, false pass, stale state, hidden
+fallback, or unsupported claim, preserve it instead of smoothing it over:
+
+```text
+Expected:
+Observed:
+First mismatch:
+Evidence:
+Affected surface:
+Failure class:
+Current risk:
+Next-turn analysis target:
+Unsafe next actions:
+```
+
+Classify failures with the smallest accurate set from: `claim failure`,
+`validation failure`, `tool failure`, `instruction failure`, `state failure`,
+`boundary failure`, `design failure`, or `maintenance failure`.
+
+Do not claim root cause until the mechanism level is evidenced:
+reproduce, boundary, mechanism, masking, prevention.
+
+### Same-Proof Rerun And Goal Bridge
+
+If a change fixes a confirmed failure, rerun the exact proof that failed before
+using substitute evidence. A different passing check clears the issue only when
+the original proof is no longer applicable and that reason is stated.
+
+If the adjustment cannot be finished safely in one bounded pass, touches an
+unapproved high-risk boundary, or exposes repeated agent failure behavior that
+needs longer analysis, stop and produce a `GOAL_SPEC` with goal, failure capsule
+summary, affected surfaces, priority, acceptance criteria, same-proof rerun,
+verification commands, rollback or quarantine plan, not-yet-checked items,
+residual risks, and the next bounded action.
+
+### Alignment Report Shape
+
+When reporting a non-trivial control-plane alignment pass, lead with outcome and
+include:
+
+- scope inspected;
+- risk level;
+- canonical authority map;
+- findings with surface, evidence, why it matters, and action taken or required;
+- changes made;
+- conflicts resolved;
+- duplicates consolidated;
+- stale or historical surfaces;
+- failure capsules, when present;
+- verification checked and not checked;
+- same-proof rerun status;
+- sensitive-boundary checks;
+- rollback;
+- residual risks;
+- next safe step.
+
 ## Worker-Watcher Gate
 
 For non-trivial delegated workstation work, use

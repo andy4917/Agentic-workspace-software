@@ -18,6 +18,10 @@ Apply this protocol when the user asks for any of these:
 Before mutating files, installing tools, changing config, moving logs, or
 publishing externally, classify the request by workstation surface and risk
 level. Use `maintenance/WORKSTATION_CONTROL_RUNBOOK.md` for the full taxonomy.
+When the request is specifically about control-plane drift, duplication,
+contradictions, stale guidance, hidden fallback, or workflow bloat, use that
+runbook's Control-Plane Alignment section instead of creating a separate
+workflow.
 
 Required first-pass fields:
 
