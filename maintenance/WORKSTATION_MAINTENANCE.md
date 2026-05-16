@@ -176,6 +176,26 @@ handoff surface:
 The handoff must include accepted evidence, not-run checks, residual risks, and
 the next verification command.
 
+## Verification Layers
+
+Use `maintenance/WORKSTATION_LAYERING.md` to avoid making optional local
+runtime substrates block unrelated managed-source checks.
+
+- `repo`: `python maintenance/scripts/codex_agent_harness.py repo-verify`
+  checks tracked source quality and is suitable for CI or clean checkouts.
+- `core`: `python maintenance/scripts/codex_agent_harness.py doctor --tier core
+  --json` checks local managed-source health without Memento/PostgreSQL.
+- `extended`: `doctor --tier extended --json` adds workflow ergonomics and
+  active app runtime writability.
+- `stress`: `doctor --tier stress --json` runs runtime-heavy checks such as
+  Memento/PostgreSQL health and recent log risk patterns.
+- `full`: existing `doctor --json` and `verify` behavior remains
+  backward-compatible and runtime-heavy.
+
+Choose the smallest layer that proves the task. Escalate to `full` whenever
+hooks, MCP, Memento, toolchains, browser/native host state, Goal governance,
+Worker-Watcher, or release handoff is touched.
+
 For workflow-governance or multi-agent control-plane changes, also update the
 worker-watcher surfaces when applicable:
 
@@ -189,6 +209,7 @@ worker-watcher surfaces when applicable:
 Run the smallest relevant set:
 
 ```powershell
+%USERPROFILE%\.codex\toolchains\shims\python.cmd %USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py repo-verify
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
 %USERPROFILE%\.codex\toolchains\shims\python.cmd %USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py doctor --json
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\memento-mcp-runtime.ps1 verify

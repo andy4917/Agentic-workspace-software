@@ -27,6 +27,27 @@ SOURCE_PLAN = Path.home() / "Downloads" / "codex-agent-harness-distillation-plan
 COMMAND_PREVIEW_CHARS = 4000
 COMMAND_ARTIFACT_THRESHOLD_CHARS = 12000
 TRAJECTORY_VERSION = "codex-trajectory-v1"
+DOCTOR_TIERS = {
+    "core": [
+        "config", "harness_engine_modules", "generated_outputs_untracked",
+        "hook_tool_routing", "managed_files", "skill_frontmatter",
+        "harness_file_size", "stale_active_references", "sentinel_blockers",
+    ],
+    "extended": [
+        "config", "pm_subagent_protocol", "harness_engine_modules",
+        "app_runtime_state_writable", "generated_outputs_untracked",
+        "hook_subagent_vowline", "subagent_nickname_policy",
+        "hook_tool_routing", "managed_files", "skill_frontmatter",
+        "harness_file_size", "workspace_script_file_size",
+        "stale_active_references", "sentinel_blockers",
+    ],
+    "stress": [
+        "config", "harness_engine_modules", "generated_outputs_untracked",
+        "managed_files", "harness_file_size", "memento_runtime",
+        "stale_active_references", "sentinel_blockers",
+    ],
+}
+DOCTOR_TIERS["full"] = list(dict.fromkeys(DOCTOR_TIERS["extended"] + DOCTOR_TIERS["stress"]))
 
 MODULES: dict[str, dict[str, str]] = {
     "codex-baseline": {"purpose": "Codex baseline config, global instructions, and role agents"},
@@ -279,6 +300,33 @@ EVAL_TEMPLATES = {
         "timeout_seconds": 30,
         "risk_notes": "Windows-specific resolver smoke test; it does not mutate persistent PATH.",
     },
+    "evals/doctor-tier-smoke.json": {
+        "eval_id": "doctor-tier-smoke",
+        "task": "Verify doctor tiering separates core managed-source checks from optional runtime checks.",
+        "setup": "Run from CODEX_HOME after doctor tier or runtime-health changes.",
+        "success_criteria": [
+            "core doctor excludes memento_runtime",
+            "stress doctor includes memento_runtime",
+            "full doctor remains backward-compatible and includes both core and runtime checks"
+        ],
+        "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id doctor-tier-smoke",
+        "timeout_seconds": 60,
+        "risk_notes": "Structural tiering smoke; runtime health is still verified by full doctor/verify.",
+    },
+    "evals/repo-verify.json": {
+        "eval_id": "repo-verify",
+        "task": "Run the CI-capable managed-source verification path that does not require live private runtime state.",
+        "setup": "Run from CODEX_HOME or a Windows CI checkout.",
+        "success_criteria": [
+            "tracked Python harness files compile",
+            "tracked JSON eval and hook policy files parse",
+            "PowerShell managed scripts parse",
+            "mutable generated outputs are not tracked"
+        ],
+        "grader": "python maintenance/scripts/codex_agent_harness.py repo-verify",
+        "timeout_seconds": 120,
+        "risk_notes": "Does not prove live MCP, Memento, browser, or ignored config state.",
+    },
 }
 
 from worker_watcher_templates import (
@@ -457,6 +505,7 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
         "codex-harness-uninstall.ps1": "uninstall",
         "codex-harness-audit.ps1": "audit",
         "codex-verify.ps1": "verify",
+        "codex-repo-verify.ps1": "repo-verify",
         "codex-eval.ps1": "eval",
         "codex-merge-config.ps1": "merge-config",
         "codex-global-scan.ps1": "global-scan",

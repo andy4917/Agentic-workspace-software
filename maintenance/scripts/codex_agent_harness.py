@@ -7,7 +7,7 @@ import argparse
 
 from codex_agent_harness_lifecycle import cmd_apply, cmd_audit, cmd_discovery, cmd_doctor, cmd_plan, cmd_repair, cmd_uninstall
 from codex_agent_harness_merge import cmd_merge_config, cmd_self_test
-from codex_agent_harness_workflows import cmd_benchmark, cmd_compact_summary, cmd_context, cmd_eval, cmd_global_scan, cmd_retrieve, cmd_trajectory, cmd_verify
+from codex_agent_harness_workflows import cmd_benchmark, cmd_compact_summary, cmd_context, cmd_eval, cmd_global_scan, cmd_repo_verify, cmd_retrieve, cmd_trajectory, cmd_verify
 from codex_agent_harness_base import DEFAULT_PROFILE
 
 
@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_apply)
     p = sub.add_parser("doctor")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--tier", choices=["core", "extended", "stress", "full"], default="full")
     p.set_defaults(func=cmd_doctor)
     p = sub.add_parser("repair")
     p.add_argument("--apply", action="store_true")
@@ -39,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_audit)
     sub.add_parser("context").set_defaults(func=cmd_context)
     sub.add_parser("verify").set_defaults(func=cmd_verify)
+    sub.add_parser("repo-verify").set_defaults(func=cmd_repo_verify)
     p = sub.add_parser("eval")
     p.add_argument("--eval-id")
     p.set_defaults(func=cmd_eval)

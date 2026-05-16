@@ -164,6 +164,77 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if status == "pass" else 1
 
 
+def cmd_repo_verify(args: argparse.Namespace) -> int:
+    root = root_path(args)
+    checks = []
+    checks.append(
+        {
+            "name": "python_compile",
+            **run_command(
+                [
+                    sys.executable,
+                    "-m",
+                    "py_compile",
+                    "maintenance/scripts/codex_agent_harness.py",
+                    "maintenance/scripts/codex_agent_harness_base.py",
+                    "maintenance/scripts/codex_agent_harness_lifecycle.py",
+                    "maintenance/scripts/codex_agent_harness_merge.py",
+                    "maintenance/scripts/codex_agent_harness_smoke.py",
+                    "maintenance/scripts/codex_agent_harness_status.py",
+                    "maintenance/scripts/codex_agent_harness_workflows.py",
+                    "maintenance/scripts/worker_watcher_templates.py",
+                ],
+                root,
+            ),
+        }
+    )
+    checks.append({"name": "json_eval_definitions", **run_command([sys.executable, "-c", "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('evals').glob('*.json')]"], root)})
+    checks.append({"name": "agent_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('agents').glob('*.toml')]"], root)})
+    checks.append({"name": "hook_policy_json", **run_command([sys.executable, "-m", "json.tool", "hooks/lightweight-codex-policy.json"], root)})
+    required_paths = [
+        "README.md",
+        "AGENTS.md",
+        "maintenance/WORKSTATION_LAYERING.md",
+        ".github/workflows/repo-verify.yml",
+        "maintenance/scripts/codex_agent_harness.py",
+        "maintenance/scripts/codex-repo-verify.ps1",
+        "evals/doctor-tier-smoke.json",
+        "evals/repo-verify.json",
+    ]
+    missing = [path for path in required_paths if not (root / path).exists()]
+    checks.append({"name": "required_managed_source_paths", "status": "pass" if not missing else "fail", "exit_code": 0 if not missing else 1, "stdout_preview": "", "stderr_preview": ", ".join(missing), "duration_seconds": 0})
+    if command_exists("powershell.exe"):
+        checks.append(
+            {
+                "name": "powershell_parser",
+                **run_command(
+                    [
+                        "powershell.exe",
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-Command",
+                        "$errors=@(); Get-ChildItem maintenance/scripts,hooks -Recurse -Include *.ps1 | ForEach-Object { $t=$null; $e=$null; [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$t,[ref]$e)>$null; $errors += $e }; if($errors.Count){$errors | ConvertTo-Json; exit 1}else{'OK'}",
+                    ],
+                    root,
+                ),
+            }
+        )
+    else:
+        checks.append({"name": "powershell_parser", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "powershell.exe not found", "duration_seconds": 0})
+    checks.append({"name": "generated_outputs_untracked", **run_command(["git", "ls-files", "--", "reports/*.latest.json", "reports/*.latest.md", "maintenance/reports/*.latest.json", "maintenance/reports/*.latest.md", "reports/*results.jsonl", "trajectories/runs.jsonl", "artifacts/tool-results/*.txt"], root, include_stdout=True)})
+    if checks[-1].get("status") == "pass" and str(checks[-1].get("stdout", "")).strip():
+        checks[-1]["status"] = "fail"
+        checks[-1]["stderr_preview"] = "mutable generated output is tracked"
+    status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
+    report = {"generated_at": utc_now(), "status": status, "scope": "repo-managed-source", "checks": checks}
+    write_json(root / "reports" / "repo-verify.latest.json", report)
+    write_text(root / "reports" / "repo-verify.latest.md", "# Repo Verify\n\n" + "\n".join(f"- {c['name']}: {c['status']} ({c['exit_code']})" for c in checks) + "\n")
+    append_trajectory(root, "codex-harness repo-verify", status, checks)
+    print(root / "reports" / "repo-verify.latest.md")
+    return 0 if status == "pass" else 1
+
+
 def write_verification_report(root: Path, report: dict[str, Any]) -> None:
     report.setdefault("harness_digest", harness_source_digest(root))
     report.setdefault("repository", current_git_state(root))
@@ -221,6 +292,23 @@ def cmd_eval(args: argparse.Namespace) -> int:
                 ).get("status")
                 == "pass"
             )
+        elif eval_id == "doctor-tier-smoke":
+            core = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--tier", "core", "--json"], root, include_stdout=True)
+            stress = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--tier", "stress", "--json"], root, include_stdout=True)
+            full = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--json"], root, include_stdout=True)
+            core_json = json.loads(core.get("stdout", "{}")) if core.get("status") == "pass" else {}
+            stress_json = json.loads(stress.get("stdout", "{}")) if stress.get("status") == "pass" else {}
+            full_json = json.loads(full.get("stdout", "{}")) if full.get("status") == "pass" else {}
+            passed = (
+                core.get("status") == "pass"
+                and stress.get("status") == "pass"
+                and full.get("status") == "pass"
+                and "memento_runtime" not in core_json.get("checks", {})
+                and "memento_runtime" in stress_json.get("checks", {})
+                and "memento_runtime" in full_json.get("checks", {})
+            )
+        elif eval_id == "repo-verify":
+            passed = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repo-verify"], root, timeout=180).get("status") == "pass"
         else:
             passed = False
         results.append(

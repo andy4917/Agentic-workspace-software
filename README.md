@@ -47,6 +47,11 @@ For workstation management, follow
 `maintenance/WORKSTATION_MAINTENANCE.md` before changing active runtime,
 toolchains, logs, trust settings, hooks, or external publishing surfaces.
 
+Use `maintenance/WORKSTATION_LAYERING.md` to choose the smallest verification
+layer. In particular, `repo-verify` is the public-safe CI path for tracked
+managed source, while full local `verify` remains the runtime-heavy workstation
+proof path.
+
 ## Review Use
 
 External review should focus on:

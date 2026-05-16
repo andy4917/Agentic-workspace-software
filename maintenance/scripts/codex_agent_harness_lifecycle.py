@@ -503,33 +503,35 @@ def memento_runtime_status(root: Path) -> dict[str, Any]:
     }
 
 
-def doctor_data(root: Path) -> dict[str, Any]:
-    checks = {
-        "config": check_config(root),
-        "pm_subagent_protocol": pm_subagent_protocol_status(root),
-        "harness_engine_modules": harness_engine_module_status(root),
-        "app_runtime_state_writable": app_runtime_state_writable_status(root),
-        "generated_outputs_untracked": generated_output_tracking_status(root),
-        "hook_subagent_vowline": hook_subagent_vowline_status(root),
-        "subagent_nickname_policy": subagent_nickname_policy_status(root),
-        "hook_tool_routing": hook_tool_routing_status(root),
-        "managed_files": check_managed_files(root),
-        "skill_frontmatter": check_skill_frontmatter(root),
-        "harness_file_size": harness_line_count_status(root),
-        "workspace_script_file_size": workspace_script_line_count_status(root),
-        "memento_runtime": memento_runtime_status(root),
-        "stale_active_references": {"status": "pass", "matches": stale_active_references(root)},
-        "sentinel_blockers": {"status": "pass", "items": sentinel_checks(root)},
+def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
+    selected = DOCTOR_TIERS.get(tier, DOCTOR_TIERS["full"])
+    builders = {
+        "config": lambda: check_config(root),
+        "pm_subagent_protocol": lambda: pm_subagent_protocol_status(root),
+        "harness_engine_modules": lambda: harness_engine_module_status(root),
+        "app_runtime_state_writable": lambda: app_runtime_state_writable_status(root),
+        "generated_outputs_untracked": lambda: generated_output_tracking_status(root),
+        "hook_subagent_vowline": lambda: hook_subagent_vowline_status(root),
+        "subagent_nickname_policy": lambda: subagent_nickname_policy_status(root),
+        "hook_tool_routing": lambda: hook_tool_routing_status(root),
+        "managed_files": lambda: check_managed_files(root),
+        "skill_frontmatter": lambda: check_skill_frontmatter(root),
+        "harness_file_size": lambda: harness_line_count_status(root),
+        "workspace_script_file_size": lambda: workspace_script_line_count_status(root),
+        "memento_runtime": lambda: memento_runtime_status(root),
+        "stale_active_references": lambda: {"status": "pass", "matches": stale_active_references(root)},
+        "sentinel_blockers": lambda: {"status": "pass", "items": sentinel_checks(root)},
     }
+    checks = {name: builders[name]() for name in selected}
     if checks["stale_active_references"]["matches"]:
         checks["stale_active_references"]["status"] = "fail"
     failed = [name for name, result in checks.items() if result.get("status") != "pass"]
-    return {"generated_at": utc_now(), "root": str(root), "status": "pass" if not failed else "fail", "failed": failed, "checks": checks}
+    return {"generated_at": utc_now(), "root": str(root), "tier": tier, "status": "pass" if not failed else "fail", "failed": failed, "checks": checks}
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = root_path(args)
-    data = doctor_data(root)
+    data = doctor_data(root, args.tier)
     ensure_dir(root / "reports")
     write_json(root / "reports" / "doctor.latest.json", data)
     if args.json:

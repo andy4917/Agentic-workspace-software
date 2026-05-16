@@ -81,6 +81,20 @@ installed, an MCP being registered, or a skill being available is not enough;
 the project must have usable instructions, commands, contracts, and verification
 paths for the work being performed.
 
+## Verification Layer Selection
+
+Use `maintenance/WORKSTATION_LAYERING.md` before escalating ordinary
+managed-source work to full workstation runtime verification.
+
+- Use `repo-verify` for CI-capable tracked-source checks.
+- Use `doctor --tier core` for local managed-source health without optional
+  Memento/PostgreSQL coupling.
+- Use full `verify` for hooks, MCP, Memento, toolchain, browser/native host,
+  Goal governance, Worker-Watcher, or release handoff changes.
+
+Do not report a lower layer as proof of a higher layer. State the layer used and
+which runtime surfaces were not checked.
+
 ## Core Stacks
 
 ### Python

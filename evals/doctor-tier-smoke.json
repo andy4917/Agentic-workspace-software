@@ -1,0 +1,13 @@
+{
+  "eval_id": "doctor-tier-smoke",
+  "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id doctor-tier-smoke",
+  "risk_notes": "Structural tiering smoke; runtime health is still verified by full doctor/verify.",
+  "setup": "Run from CODEX_HOME after doctor tier or runtime-health changes.",
+  "success_criteria": [
+    "core doctor excludes memento_runtime",
+    "stress doctor includes memento_runtime",
+    "full doctor remains backward-compatible and includes both core and runtime checks"
+  ],
+  "task": "Verify doctor tiering separates core managed-source checks from optional runtime checks.",
+  "timeout_seconds": 60
+}
