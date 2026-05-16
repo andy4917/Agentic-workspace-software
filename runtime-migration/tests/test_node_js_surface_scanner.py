@@ -43,6 +43,23 @@ class NodeJsSurfaceScannerTests(unittest.TestCase):
         self.assertIn("hooks/lightweight-codex-hook.ps1", paths)
         self.assertNotIn("auth.json", paths)
 
+    def test_patched_plugin_js_is_inventoried_as_handoff_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            script = root / "plugins" / "patched" / "openai-bundled" / "plugins" / "chrome" / "scripts"
+            script.mkdir(parents=True)
+            (script / "browser-client.mjs").write_text("export const runtime = 'browser';", encoding="utf-8")
+
+            surfaces = scan(root)
+
+        self.assertEqual(len(surfaces), 1)
+        surface = surfaces[0]
+        self.assertEqual(surface.current_owner, "app-cache")
+        self.assertEqual(surface.classification, "app-cache")
+        self.assertEqual(surface.observed_problem, "github-language-stat-noise")
+        self.assertEqual(surface.migration_decision, "keep")
+        self.assertIn("plugin", surface.replacement_contract.lower())
+
     def test_report_has_required_ticket_fields(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

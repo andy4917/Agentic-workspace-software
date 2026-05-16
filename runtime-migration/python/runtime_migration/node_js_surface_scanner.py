@@ -30,7 +30,6 @@ SKIP_DIRS = {
     "memories",
     "node_modules",
     "node_repl",
-    "plugins",
     "reports",
     "sessions",
     "sqlite",
@@ -40,7 +39,13 @@ SKIP_DIRS = {
     "trajectories",
 }
 TOP_LEVEL_SCAN_FILES = {"AGENTS.md", "agent.md", "config.toml", "hooks.json", *PACKAGE_FILES}
-SCAN_ROOTS = {"hooks", "maintenance/scripts", "toolchains"}
+SCAN_ROOTS = {
+    "hooks",
+    "maintenance/scripts",
+    "plugins/patched",
+    "skills/.system/openai-docs/scripts",
+    "toolchains",
+}
 IMPORTANT_DOCS = {
     "AGENTS.md",
     "maintenance/AGENT_TOOL_REQUIREMENTS.md",
@@ -159,6 +164,8 @@ def owner_for(path: Path, root: Path) -> str:
 
 def classification_for(path: Path, root: Path, surface: str) -> str:
     rel = rel_path(path, root)
+    if rel.startswith("plugins/patched/"):
+        return "app-cache"
     if rel.startswith("skills/"):
         return "skill/reference-only"
     if rel.startswith("runtime-migration/contracts/"):
@@ -170,12 +177,45 @@ def classification_for(path: Path, root: Path, surface: str) -> str:
     return "unknown"
 
 
+def observed_problem_for(path: Path, root: Path, classification: str) -> str:
+    rel = rel_path(path, root)
+    if classification == "app-cache" and path.suffix.lower() in NODE_SUFFIXES:
+        return "github-language-stat-noise"
+    if rel.startswith("skills/.system/") and path.suffix.lower() in NODE_SUFFIXES:
+        return "js-helper-review-required"
+    return "no-problem"
+
+
 def migration_decision_for(memento_related: bool, classification: str) -> str:
     if memento_related:
         return "keep"
-    if classification in {"docs-only", "skill/reference-only"}:
+    if classification in {"app-cache", "docs-only", "skill/reference-only"}:
         return "keep"
     return "keep"
+
+
+def replacement_contract_for(memento_related: bool, classification: str) -> str:
+    if memento_related:
+        return "excluded support-only Memento runtime"
+    if classification == "app-cache":
+        return "plugin-owned JS; handoff before any Rust/Python replacement"
+    return "capture before rewrite"
+
+
+def rollback_for(memento_related: bool, classification: str) -> str:
+    if memento_related:
+        return "no mutation; managed by maintenance/scripts/memento-mcp-runtime.ps1"
+    if classification == "app-cache":
+        return "no runtime mutation; remove vendored language marker if GitHub stats handling is rejected"
+    return "no mutation; inventory only"
+
+
+def evidence_required_for(memento_related: bool, classification: str) -> list[str]:
+    if memento_related:
+        return ["memento-mcp-runtime.ps1 verify", "doctor memento_runtime"]
+    if classification == "app-cache":
+        return ["scanner output", "handoff entry", "plugin runtime smoke before active use"]
+    return ["scanner output", "contract before rewrite"]
 
 
 def build_surface(path: Path, root: Path, text: str, memento_roots: list[Path]) -> Surface | None:
@@ -186,6 +226,7 @@ def build_surface(path: Path, root: Path, text: str, memento_roots: list[Path]) 
     rel = rel_path(path, root)
     memento_related = any(is_relative_to(path, item) for item in memento_roots if item.exists())
     classification = classification_for(path, root, surface)
+    observed_problem = observed_problem_for(path, root, classification)
     decision = migration_decision_for(memento_related, classification)
     matched_terms = sorted({match.group(1).lower() for match in NODE_RUNTIME_RE.finditer(text)})
     if path.name.lower() in PACKAGE_FILES:
@@ -197,14 +238,14 @@ def build_surface(path: Path, root: Path, text: str, memento_roots: list[Path]) 
         activation_surface=surface,
         runtime_type=runtime_type,
         classification=classification,
-        observed_problem="no-problem",
+        observed_problem=observed_problem,
         memento_related=memento_related,
         migration_decision=decision,
-        replacement_contract="capture before rewrite" if not memento_related else "excluded support-only Memento runtime",
+        replacement_contract=replacement_contract_for(memento_related, classification),
         risk_level="observe",
         approval_required=False,
-        rollback="no mutation; inventory only",
-        evidence_required=["scanner output", "contract before rewrite"],
+        rollback=rollback_for(memento_related, classification),
+        evidence_required=evidence_required_for(memento_related, classification),
         matched_terms=matched_terms,
     )
 

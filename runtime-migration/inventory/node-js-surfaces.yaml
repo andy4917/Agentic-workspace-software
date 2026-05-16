@@ -1,12 +1,12 @@
 schema_version: 1
-generated_at: "2026-05-15T08:32:44+00:00"
+generated_at: "2026-05-16T17:20:15+00:00"
 root: "%USERPROFILE%\\.codex"
 scanner:
   mode: read-only
   sensitive_content_emitted: false
   memento_exclusion: paths under tools/memento-mcp or state/memento-mcp are keep-only
 summary:
-  surface_count: 27
+  surface_count: 40
   active_runtime_count: 3
   memento_related_count: 2
 surfaces:
@@ -51,9 +51,29 @@ surfaces:
     matched_terms:
       - npx
   -
-    surface_id: hook-hooks-lightweight-codex-hook-ps1
+    surface_id: hook-hooks-lib-lightweight-codex-core-ps1
     current_owner: managed-source
-    current_path: hooks/lightweight-codex-hook.ps1
+    current_path: hooks/lib/lightweight-codex-core.ps1
+    activation_surface: hook
+    runtime_type: node
+    classification: project-tooling
+    observed_problem: no-problem
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: capture before rewrite
+    risk_level: observe
+    approval_required: false
+    rollback: no mutation; inventory only
+    evidence_required:
+      - scanner output
+      - contract before rewrite
+    matched_terms:
+      - npm
+      - pnpm
+  -
+    surface_id: hook-hooks-lib-lightweight-codex-workflow-ps1
+    current_owner: managed-source
+    current_path: hooks/lib/lightweight-codex-workflow.ps1
     activation_surface: hook
     runtime_type: npx-backed
     classification: project-tooling
@@ -71,6 +91,26 @@ surfaces:
       - node
       - npm
       - npx
+      - pnpm
+  -
+    surface_id: hook-hooks-lightweight-codex-hook-ps1
+    current_owner: managed-source
+    current_path: hooks/lightweight-codex-hook.ps1
+    activation_surface: hook
+    runtime_type: node
+    classification: project-tooling
+    observed_problem: no-problem
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: capture before rewrite
+    risk_level: observe
+    approval_required: false
+    rollback: no mutation; inventory only
+    evidence_required:
+      - scanner output
+      - contract before rewrite
+    matched_terms:
+      - npm
       - pnpm
   -
     surface_id: file-maintenance-agent-tool-requirements-md
@@ -245,6 +285,25 @@ surfaces:
     matched_terms:
       - node_repl
   -
+    surface_id: file-maintenance-scripts-codex-agent-harness-status-py
+    current_owner: managed-source
+    current_path: maintenance/scripts/codex_agent_harness_status.py
+    activation_surface: file
+    runtime_type: node
+    classification: unknown
+    observed_problem: no-problem
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: capture before rewrite
+    risk_level: observe
+    approval_required: false
+    rollback: no mutation; inventory only
+    evidence_required:
+      - scanner output
+      - contract before rewrite
+    matched_terms:
+      - tsx
+  -
     surface_id: file-maintenance-scripts-codex-agent-harness-workflows-py
     current_owner: managed-source
     current_path: maintenance/scripts/codex_agent_harness_workflows.py
@@ -300,6 +359,208 @@ surfaces:
     evidence_required:
       - scanner output
       - contract before rewrite
+    matched_terms:
+      - node
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-browser-use-codex-plugin-plugin-json
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/browser-use/.codex-plugin/plugin.json
+    activation_surface: file
+    runtime_type: node
+    classification: app-cache
+    observed_problem: no-problem
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
+    matched_terms:
+      - node
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-browser-use-scripts-browser-client-mjs
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/browser-use/scripts/browser-client.mjs
+    activation_surface: file
+    runtime_type: js
+    classification: app-cache
+    observed_problem: github-language-stat-noise
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
+    matched_terms:
+      - node
+      - npm
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-browser-client-mjs
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/browser-client.mjs
+    activation_surface: file
+    runtime_type: js
+    classification: app-cache
+    observed_problem: github-language-stat-noise
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
+    matched_terms:
+      - node
+      - npm
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-check-extension-installed-js
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/check-extension-installed.js
+    activation_surface: file
+    runtime_type: js
+    classification: app-cache
+    observed_problem: github-language-stat-noise
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
+    matched_terms:
+      - node
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-check-native-host-manifest-js
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/check-native-host-manifest.js
+    activation_surface: file
+    runtime_type: js
+    classification: app-cache
+    observed_problem: github-language-stat-noise
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
+    matched_terms:
+      - node
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-chrome-is-running-js
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/chrome-is-running.js
+    activation_surface: file
+    runtime_type: js
+    classification: app-cache
+    observed_problem: github-language-stat-noise
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
+    matched_terms:
+      - node
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-installmanifest-mjs
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/installManifest.mjs
+    activation_surface: file
+    runtime_type: js
+    classification: app-cache
+    observed_problem: github-language-stat-noise
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
+    matched_terms:
+      - node
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-installed-browsers-js
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/installed-browsers.js
+    activation_surface: file
+    runtime_type: js
+    classification: app-cache
+    observed_problem: github-language-stat-noise
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
+    matched_terms:
+      - node
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-open-chrome-window-js
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/open-chrome-window.js
+    activation_surface: file
+    runtime_type: js
+    classification: app-cache
+    observed_problem: github-language-stat-noise
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
+    matched_terms:
+      - node
+  -
+    surface_id: file-plugins-patched-openai-bundled-plugins-latex-tectonic-scripts-tectonic-path-mjs
+    current_owner: app-cache
+    current_path: plugins/patched/openai-bundled/plugins/latex-tectonic/scripts/tectonic-path.mjs
+    activation_surface: file
+    runtime_type: js
+    classification: app-cache
+    observed_problem: github-language-stat-noise
+    memento_related: false
+    migration_decision: keep
+    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
+    risk_level: observe
+    approval_required: false
+    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
+    evidence_required:
+      - scanner output
+      - handoff entry
+      - plugin runtime smoke before active use
     matched_terms:
       - node
   -
