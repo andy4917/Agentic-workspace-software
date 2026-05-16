@@ -1,7 +1,7 @@
 {
   "eval_id": "doctor-tier-smoke",
   "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id doctor-tier-smoke",
-  "risk_notes": "Structural tiering smoke; runtime health is still verified by full doctor/verify.",
+  "risk_notes": "Structural tiering smoke; stress/full may exit nonzero when runtime-heavy checks are unhealthy, but the smoke still verifies that those tiers include memento_runtime. Runtime health is verified by full doctor/verify when applicable.",
   "setup": "Run from CODEX_HOME after doctor tier or runtime-health changes.",
   "success_criteria": [
     "core doctor excludes memento_runtime",

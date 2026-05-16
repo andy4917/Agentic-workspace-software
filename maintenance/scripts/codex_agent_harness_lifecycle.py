@@ -611,7 +611,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
 
 
 def audit_data(root: Path) -> dict[str, Any]:
-    doctor = doctor_data(root)
+    doctor = doctor_data(root, tier="core")
     global_scan = load_json(root / "reports" / "global-scan.latest.json", {})
     verification = load_json(root / "reports" / "verification.latest.json", {})
     verification_checks = {item.get("name"): item.get("status") for item in verification.get("checks", []) if isinstance(item, dict)}
@@ -650,7 +650,7 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("subagent nicknames are role-prefixed", subagent_nickname_policy_status(root).get("status") == "pass"),
             ("hook tool routing covers active namespaces", hook_tool_routing_status(root).get("status") == "pass"),
             ("hook script parses by existence", (root / "hooks" / "lightweight-codex-hook.ps1").exists()),
-            ("doctor currently passes", doctor.get("status") == "pass"),
+            ("core doctor currently passes", doctor.get("status") == "pass"),
             ("latest verification report exists", bool(verification)),
             ("latest verification matches current harness source", verification_fresh),
             ("latest verification includes lifecycle dry-runs", all(verification_checks.get(name) == "pass" for name in ["self_test", "repair_dry_run", "uninstall_dry_run"])),
