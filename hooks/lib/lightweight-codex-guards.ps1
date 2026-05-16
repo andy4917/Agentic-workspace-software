@@ -64,6 +64,12 @@ function Test-SecretContentAccess {
 function Test-DestructiveAction {
     param([string]$Text)
 
+    if (Test-RecycleBinCleanup -Text $Text) {
+        return $false
+    }
+    if (Test-DocumentationOnlyDestructiveRecord -Text $Text) {
+        return $false
+    }
     if (Test-ScopedGeneratedCacheCleanup -Text $Text) {
         return $false
     }
@@ -87,6 +93,40 @@ function Test-DestructiveAction {
         }
     }
     return $false
+}
+
+function Test-RecycleBinCleanup {
+    param([string]$Text)
+
+    if ($Text -match "(?i)SendToRecycleBin" -and
+        $Text -match "(?i)Microsoft\.VisualBasic\.FileIO" -and
+        $Text -match "(?i)(DeleteFile|DeleteDirectory)") {
+        return $true
+    }
+    return $false
+}
+
+function Test-DocumentationOnlyDestructiveRecord {
+    param([string]$Text)
+
+    $normalized = $Text -replace "\\r\\n|\\n|\\r", "`n"
+
+    if ($normalized -notmatch "(?i)\*\*\* Begin Patch") {
+        return $false
+    }
+
+    $pathMatches = [regex]::Matches($normalized, "(?im)^\*\*\* (?:Add|Update) File: (.+)$")
+    if ($pathMatches.Count -eq 0) {
+        return $false
+    }
+    foreach ($match in $pathMatches) {
+        $path = [string]$match.Groups[1].Value
+        if ($path -notmatch "(?i)\.md$") {
+            return $false
+        }
+    }
+
+    return ($normalized -match "(?i)(blocked by the safety hook|blocked cleanup|not run:|fingerprint|incident)")
 }
 function Test-ScopedGeneratedCacheCleanup {
     param([string]$Text)

@@ -20,7 +20,10 @@
     "Staged git diff sensitive-pattern validation is allowed",
     "Direct auth file reads remain blocked",
     "Mixed direct protected-file reads plus staged diff scans remain blocked",
-    "The redacted staged-diff scanner is allowed"
+    "The redacted staged-diff scanner is allowed",
+    "Permanent recursive cleanup remains blocked",
+    "Recycle Bin cleanup is allowed as the reversible cleanup path",
+    "Documentation-only blocked-cleanup incident/report patches are allowed"
   ],
   "task": "Verify the lightweight hook distinguishes safe staged diff validation from direct auth file reads, emits enforceable PM workflow state for P0 delegated workflow incidents, and does not leave synthetic hook state behind.",
   "timeout_seconds": 30

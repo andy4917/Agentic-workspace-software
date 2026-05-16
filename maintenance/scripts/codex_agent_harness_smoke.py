@@ -303,6 +303,45 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             scanner_script.get("status") == "pass" and "permissionDecision" not in scanner_script.get("stdout_preview", ""),
             "The redacted staged-diff scanner should be allowed as the preferred validation path.",
         )
+        cleanup_verb = "Remove" + "-Item"
+        permanent_cleanup = run_hook_sample(root, f"{cleanup_verb} -LiteralPath C:\\Users\\example\\AppData\\Local\\Temp\\demo -Recurse -Force")
+        add_check(
+            "permanent_recursive_cleanup_still_blocked",
+            "permissionDecision" in permanent_cleanup.get("stdout_preview", "") and "deny" in permanent_cleanup.get("stdout_preview", "").lower(),
+            "Permanent recursive cleanup should remain blocked unless another scoped allow rule applies.",
+        )
+        recycle_cleanup = run_hook_sample(
+            root,
+            "$path='C:\\Users\\example\\AppData\\Local\\Temp\\demo.txt'; "
+            "Add-Type -AssemblyName Microsoft.VisualBasic; "
+            "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($path, "
+            "[Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, "
+            "[Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)",
+        )
+        add_check(
+            "recycle_bin_cleanup_allowed",
+            recycle_cleanup.get("status") == "pass" and "permissionDecision" not in recycle_cleanup.get("stdout_preview", ""),
+            "Recycle Bin cleanup should be allowed as the reversible cleanup path.",
+        )
+        documented_block = run_lightweight_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "patch": (
+                        "*** Begin Patch\n*** Update File: maintenance/reports/example.md\n@@\n"
+                        f"+- Not run: `{cleanup_verb} -LiteralPath <temp> -Recurse -Force` was blocked by the safety hook.\n"
+                        "*** End Patch\n"
+                    )
+                },
+            },
+        )
+        add_check(
+            "documented_blocked_cleanup_case_allowed",
+            documented_block.get("status") == "pass" and "permissionDecision" not in documented_block.get("stdout_preview", ""),
+            "Documentation-only incident/report patches should be allowed to record a blocked cleanup case.",
+        )
 
         run_post_tool_hook_sample(root, "apply_patch", "apply_patch changed file test")
         delegated_final_without_marker = (

@@ -203,6 +203,19 @@ Use one primary type and optional secondary tags.
 - Verification: synthetic `UserPromptSubmit` plus `PreToolUse` samples prove an authorized hook-policy edit is observed, a safe toolchain command is observed, and secret/destructive denial cases still deny.
 - Do not claim: broad hook disabling, blanket `permissionDecision=allow`, or bypassing final evidence checks as a valid fix.
 
+### Hook Overblocks Reversible Cleanup Or Incident Recording
+
+- Type: `workflow_hook_issue`, `validation_gap`
+- Fingerprint: a needed cleanup under a temporary path is blocked as irreversible, or an `apply_patch` documentation/report edit is blocked only because it records the denied cleanup command text.
+- Risk: agents leave temporary files behind, erase not-run evidence from reports, or avoid documenting the first mismatch.
+- Fix playbook:
+  1. Preserve the denied hook reason and the intended cleanup path.
+  2. Prefer Windows Recycle Bin movement for removable files when cleanup is needed but permanent deletion is blocked.
+  3. Keep permanent recursive cleanup blocked unless an existing scoped allow rule validates the resolved path and boundary.
+  4. Allow documentation-only Markdown incident/report patches to record blocked cleanup cases; this is not permission to execute the cleanup.
+- Verification: hook policy smoke includes `permanent_recursive_cleanup_still_blocked`, `recycle_bin_cleanup_allowed`, and `documented_blocked_cleanup_case_allowed`.
+- Do not claim: that Recycle Bin cleanup is equivalent to permanent deletion, or that recording a blocked command grants future execution permission.
+
 ### Advisory PM Contract Without Verifiable State
 
 - Type: `workflow_hook_issue`, `validation_gap`
