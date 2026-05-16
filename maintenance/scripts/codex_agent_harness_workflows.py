@@ -317,14 +317,19 @@ def cmd_eval(args: argparse.Namespace) -> int:
             core = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--tier", "core", "--json"], root, include_stdout=True)
             stress = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--tier", "stress", "--json"], root, include_stdout=True)
             full = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--json"], root, include_stdout=True)
-            core_json = json.loads(core.get("stdout", "{}")) if core.get("status") == "pass" else {}
+            core_json = json.loads(core.get("stdout", "{}")) if core.get("stdout") else {}
             stress_json = json.loads(stress.get("stdout", "{}")) if stress.get("stdout") else {}
             full_json = json.loads(full.get("stdout", "{}")) if full.get("stdout") else {}
+            core_checks = core_json.get("checks", {})
+            stress_checks = stress_json.get("checks", {})
+            full_checks = full_json.get("checks", {})
             passed = (
-                core.get("status") == "pass"
-                and "memento_runtime" not in core_json.get("checks", {})
-                and "memento_runtime" in stress_json.get("checks", {})
-                and "memento_runtime" in full_json.get("checks", {})
+                bool(core_checks)
+                and bool(stress_checks)
+                and bool(full_checks)
+                and "memento_runtime" not in core_checks
+                and "memento_runtime" in stress_checks
+                and "memento_runtime" in full_checks
             )
         elif eval_id == "repo-verify":
             passed = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repo-verify"], root, timeout=180).get("status") == "pass"

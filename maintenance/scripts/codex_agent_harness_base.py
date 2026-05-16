@@ -315,7 +315,7 @@ EVAL_TEMPLATES = {
         ],
         "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id doctor-tier-smoke",
         "timeout_seconds": 60,
-        "risk_notes": "Structural tiering smoke; runtime health is still verified by full doctor/verify.",
+        "risk_notes": "Structural tiering smoke; stress/full may exit nonzero when runtime-heavy checks are unhealthy, but the smoke still verifies that those tiers include memento_runtime. Runtime health is verified by full doctor/verify when applicable.",
     },
     "evals/repo-verify.json": {
         "eval_id": "repo-verify",
