@@ -81,6 +81,9 @@ function Get-SkillRoute {
     if ($hasWorkflowGovernanceSignal) {
         $routes += "agent-harness-construction"
     }
+    if ($p -match "(?i)(clean[-_ ]?all[-_ ]?slop|slop|cleanup|legacy|fallback|dead code|dead script|dead config|contamination|unsupported success|fake verification|hidden fallback)") {
+        $routes += "clean-all-slop"
+    }
     if ($p -match "new feature|feature|architecture|significant|project|spec|requirements") {
         $routes += "spec-driven workflow"
     }
@@ -92,6 +95,9 @@ function Get-SkillRoute {
     }
     if ($p -match "bug|fail|failure|error|regression|behavior|test|root cause|\bp0\b" -or $hasRootCauseSignal) {
         $routes += "test-driven/prove-it workflow"
+    }
+    if ($p -match "(?i)(verify|verification|doctor|harness smoke|deterministic checks?)" -or $hasWorkflowGovernanceSignal) {
+        $routes += "verification-loop"
     }
     if ($p -match "api|sdk|library|framework|official|docs|version") {
         $routes += "source-backed documentation lookup"
@@ -489,6 +495,45 @@ function Get-IntentFrame {
     }
 }
 
+function Test-SkillEvidenceRequired {
+    param([string]$SkillRoute)
+
+    if ([string]::IsNullOrWhiteSpace($SkillRoute)) {
+        return $false
+    }
+    return ($SkillRoute -notmatch "(?i)^none selected yet")
+}
+
+function Get-SkillEvidenceSummary {
+    param(
+        [string]$ToolName,
+        [string]$Text,
+        [string]$SkillRoute
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return ""
+    }
+    $isSkillFileRead =
+        $Text -match '(?i)skills?[\\/][^\s]+[\\/]SKILL\.md' -or
+        $Text -match '(?i)[\\/]SKILL\.md' -or
+        $Text -match '(?i)(Get-Content|cat).+SKILL\.md'
+    $routeTerms = @($SkillRoute -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $mentionsRoutedSkill = $false
+    foreach ($term in $routeTerms) {
+        if ($term -and $Text -match [regex]::Escape($term)) {
+            $mentionsRoutedSkill = $true
+            break
+        }
+    }
+    if (-not ($isSkillFileRead -or $mentionsRoutedSkill)) {
+        return ""
+    }
+
+    $digest = Get-StateDigest -Text $Text
+    return "${ToolName}:skill_evidence; route=$SkillRoute; sha256:$digest"
+}
+
 function Test-HookMaintenanceAuthorized {
     param([string]$Prompt)
 
@@ -569,6 +614,11 @@ function Get-PromptReminder {
         $subagentDecisionAction = "Subagent call declaration required: after this user instruction, final evidence must repeat SUBAGENT_CALL used or SUBAGENT_CALL not_used with reason, direct evidence, and residual risk even if task_class is unavailable."
     }
 
+    $skillEvidenceAction = "Skill evidence: not required unless a matching skill workflow is routed."
+    if (Test-SkillEvidenceRequired -SkillRoute $SkillRoute) {
+        $skillEvidenceAction = "Skill evidence required: matching skill workflows were routed; before finalizing, include SKILL_EVIDENCE used/not_used with reason, direct evidence, and residual risk."
+    }
+
     $goalAction = "Goal action: no persisted Codex Goal required unless the task becomes long-running or stateful."
     if ([bool]$classification.goalActionRequired) {
         $goalAction = "Goal action required: create or update one Codex Goal before build/repair work, then keep it as tracking only."
@@ -593,6 +643,7 @@ Lightweight Codex workflow reminder:
 - Memory: $MemoryRoute; support-only, never completion authority.
 - Subagents: max=$($Policy.subagents.max_parallel), depth=$($Policy.subagents.max_depth). $delegationAuthorization
 - $subagentDecisionAction
+- $skillEvidenceAction
 - $watcherAction
 - $calibrationAction
 - Completion: changed surfaces, direct checks, not-run reasons, PM verification, residual risks, rollback, status.
@@ -633,8 +684,15 @@ function Test-WatcherCoverageReady {
     $hasWatcherReport = $Message -match "(?i)(WATCHER_REPORT|OBS-|REV-|watcher report|watcher evidence|adversarial review)"
     $hasWatcherNotUsed = $Message -match "(?i)(WATCHER_NOT_USED|watcher not used)"
     $hasAcceptedRejectedEvidence = $Message -match "(?i)(accepted and rejected subagent evidence|accepted/rejected subagent evidence|accepted subagent evidence|rejected subagent evidence|subagent evidence)"
+    $hasWatcherNotUsedReason = $Message -match "(?i)(reason|because)"
+    $hasWatcherNotUsedRisk = $Message -match "(?i)(risk|residual)"
+    $hasWatcherNotUsedSubstitute = $Message -match "(?i)(substitute check|substitute evidence|pm independent verification|direct check)"
+    $hasWatcherNotUsedConfidence = $Message -match "(?i)(confidence impact|confidence)"
 
-    return ($hasWatcherReport -or $hasWatcherNotUsed -or $hasAcceptedRejectedEvidence)
+    $watcherReportReady = $hasWatcherReport -and $hasAcceptedRejectedEvidence
+    $watcherOmissionReady = $hasWatcherNotUsed -and $hasWatcherNotUsedReason -and $hasWatcherNotUsedRisk -and $hasWatcherNotUsedSubstitute -and $hasWatcherNotUsedConfidence
+
+    return ($watcherReportReady -or $watcherOmissionReady)
 }
 
 function Test-AnomalyTraceReady {
@@ -674,6 +732,28 @@ function Test-SubagentDecisionReady {
     $hasMarker = $Message -match "(?i)SUBAGENT_CALL\s+(used|not_used|not used)"
     $hasReason = $Message -match "(?i)(reason|because)"
     $hasEvidence = $Message -match "(?i)(evidence|verified|direct evidence|substitute check)"
+    $hasRisk = $Message -match "(?i)(risk|residual)"
+
+    return ($hasMarker -and $hasReason -and $hasEvidence -and $hasRisk)
+}
+
+function Test-SkillEvidenceReady {
+    param(
+        $State,
+        [string]$Message
+    )
+
+    $hasSkillEvent = @($State.skillEvents).Count -gt 0
+    if (-not ([bool]$State.skillEvidenceRequired -or $hasSkillEvent)) {
+        return $true
+    }
+    if ([string]::IsNullOrWhiteSpace($Message)) {
+        return $false
+    }
+
+    $hasMarker = $Message -match "(?i)SKILL_EVIDENCE\s+(used|not_used|not used)"
+    $hasReason = $Message -match "(?i)(reason|because)"
+    $hasEvidence = $Message -match "(?i)(evidence|direct evidence|checked|read|loaded)"
     $hasRisk = $Message -match "(?i)(risk|residual)"
 
     return ($hasMarker -and $hasReason -and $hasEvidence -and $hasRisk)

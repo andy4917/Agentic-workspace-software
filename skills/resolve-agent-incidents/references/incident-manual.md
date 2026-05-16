@@ -204,6 +204,20 @@ Use one primary type and optional secondary tags.
 - Verification: synthetic `UserPromptSubmit` output includes `task_class=L4`, goal action, watcher action, and delegation authorization; hook state contains the structured fields; Stop blocks a final message that omits watcher/subagent evidence for active L4 delegated work.
 - Do not claim: that a reminder sentence or a worker-watcher document proves runtime PM behavior.
 
+### L4 Stop Evidence Skipped After State Rewrite
+
+- Type: `workflow_hook_issue`, `validation_gap`, `git_or_state_issue`
+- Fingerprint: an L4 delegated prompt is recorded, then a later prompt or hook prompt rewrites the singleton `hooks/state/lightweight-status.json`; Stop sees no changed surface or tool event and allows finalization without subagent call evidence, watcher evidence, or anomaly trace.
+- Risk: explicit subagent authorization becomes advisory only; the PM may not notice missing delegation or missing post-fix verification because the Stop hook reports `observed` instead of `not_ready`.
+- Likely causes: Stop enforcement is gated on `hasSubstantiveActivity` only; watcher coverage accepts broad `subagent evidence` wording without `WATCHER_REPORT` or a complete `WATCHER_NOT_USED`; PostToolUse records subagent activity from plain text mentions such as `WATCHER_REPORT` in shell output.
+- Fix playbook:
+  1. Preserve the first mismatch with log ids, timestamps, prompt hash, Stop outcome, and state-file fields.
+  2. Enforce L4 workflow evidence when `anomalyPauseExpected`, `subagentDecisionRequired`, or `watcherExpected` is true, even if no tool event or changed surface is present.
+  3. Require concrete watcher coverage: `WATCHER_REPORT` plus accepted/rejected subagent evidence, or `WATCHER_NOT_USED` with reason, risk, substitute/direct check, and confidence impact.
+  4. Record subagent events only from actual subagent tool names such as `spawn_agent`, `wait_agent`, `send_input`, `close_agent`, or `resume_agent`, not from read-only text mentions.
+- Verification: `hook-policy-smoke` includes and passes `stop_enforces_l4_state_without_tool_events`, `stop_requires_concrete_watcher_artifact_or_omission_record`, and `posttooluse_text_mentions_do_not_create_subagent_events`.
+- Do not claim: that a final report containing the right words proves the hook state was enforced.
+
 ### Synthetic Hook Smoke Pollutes Live State
 
 - Type: `workflow_hook_issue`, `git_or_state_issue`

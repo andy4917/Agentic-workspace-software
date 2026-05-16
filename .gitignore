@@ -27,6 +27,7 @@ cache/
 sqlite/
 browser/
 node_repl/
+computer-use-turn-ended/
 .sandbox/
 .sandbox-bin/
 .sandbox-secrets/

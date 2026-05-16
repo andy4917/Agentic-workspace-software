@@ -389,12 +389,16 @@ def memento_recent_log_risks(root: Path, started_at: str | None) -> dict[str, An
     ]
     log_files = sorted(log_root.glob("*.log"), key=lambda path: path.stat().st_mtime, reverse=True)[:12]
     matches: list[dict[str, Any]] = []
+    ignored_controlled_shutdown_count = 0
     for path in log_files:
         try:
             text = read_text(path)[-30000:]
         except (OSError, UnicodeDecodeError):
             continue
         for number, line in enumerate(text.splitlines(), 1):
+            if re.search(r"\bFATAL:\s+terminating connection due to administrator command\b", line, re.I):
+                ignored_controlled_shutdown_count += 1
+                continue
             matched = [name for name, pattern in patterns if pattern.search(line)]
             if not matched:
                 continue
@@ -420,6 +424,7 @@ def memento_recent_log_risks(root: Path, started_at: str | None) -> dict[str, An
         "scanned_files": [rel(path, root) for path in log_files],
         "match_count": len(matches),
         "after_current_start_count": after_current_start_count,
+        "ignored_controlled_shutdown_count": ignored_controlled_shutdown_count,
         "matches": matches,
     }
 

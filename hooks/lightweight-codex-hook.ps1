@@ -7,7 +7,7 @@ $script:HookScriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path 
 $policy = Read-Policy
 $inputObject = Read-HookInput
 $eventName = [string]$inputObject.hook_event_name
-$state = Read-State
+$state = Normalize-WorkflowState -State (Read-State)
 
 try {
 switch ($eventName) {
@@ -61,10 +61,14 @@ switch ($eventName) {
         $state.anomalyPauseExpected = [bool]$classification.anomalyPauseExpected
         $state.subagentDecisionRequired = [bool]$classification.subagentDecisionRequired
         $state.intentFrame = $intentFrame
+        $state.skillRoute = $skillRoute
+        $state.skillEvidenceRequired = Test-SkillEvidenceRequired -SkillRoute $skillRoute
         $state.toolchainHint = $toolchainHint
         $state.memoryRoute = $memoryRoute
         $state.changedSurfaces = @()
         $state.checksRun = @()
+        $state.autonomousHarnessChecks = @()
+        $state.skillEvents = @()
         $state.requiredReminders = @()
         $state.toolEvents = @()
         $state.subagentEvents = @()
@@ -78,6 +82,9 @@ switch ($eventName) {
         }
         if ([bool]$classification.subagentDecisionRequired) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Subagent call declaration required: record SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk."
+        }
+        if ([bool]$state.skillEvidenceRequired) {
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Skill workflow evidence required: record SKILL_EVIDENCE used/not_used with reason, direct evidence, and residual risk."
         }
         if ([bool]$classification.anomalyPauseExpected) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Anomaly pause/trace required: preserve the first mismatch, stop the original path, and resume only with verified correction or blocked/continue status."
@@ -213,7 +220,13 @@ switch ($eventName) {
         $logChangedSurfaces = @()
         $logValidationResults = @()
         $logSubagentResults = @()
-        if ($toolName -match "(?i)(spawn_agent|wait_agent|send_input|close_agent|resume_agent)" -or $text -match "(?i)(agent_id|agent_type|WATCHER_REPORT|WATCHER_NOT_USED|NORMALIZED_WORKER_PACKET)") {
+        $skillEvidence = Get-SkillEvidenceSummary -ToolName $toolName -Text $text -SkillRoute ([string]$state.skillRoute)
+        if (-not [string]::IsNullOrWhiteSpace($skillEvidence)) {
+            $state.skillEvents = Add-Unique -Items $state.skillEvents -Value $skillEvidence
+            $additional += "Skill workflow evidence observed: final audit must accept this evidence or record SKILL_EVIDENCE not_used with reason, direct evidence, and residual risk."
+        }
+        $isSubagentTool = $toolName -match "(?i)(^|\.)(spawn_agent|wait_agent|send_input|close_agent|resume_agent)$"
+        if ($isSubagentTool) {
             $evidence = Get-ToolEvidenceSummary -ToolName $toolName -Text $text
             $state.subagentEvents = Add-Unique -Items $state.subagentEvents -Value $evidence
             $logSubagentResults += $evidence
@@ -252,6 +265,21 @@ switch ($eventName) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Review changed product/control surfaces for hardcoded or fake-success contamination."
         }
 
+        if (Test-AutonomousHarnessCheckRequired -ToolName $toolName -Text $text) {
+            $state.changedSurfaces = Add-Unique -Items $state.changedSurfaces -Value "control-plane"
+            $logChangedSurfaces += "control-plane"
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Autonomous harness checks invoked for control-plane edits; confirm doctor/verify evidence before finalizing."
+
+            $doctorEvidence = Invoke-AutonomousHarnessCheck -Mode "doctor" -TimeoutSeconds 45
+            $verifyEvidence = Invoke-AutonomousHarnessCheck -Mode "verify" -TimeoutSeconds 600
+            foreach ($evidence in @($doctorEvidence, $verifyEvidence)) {
+                $state.checksRun = Add-Unique -Items $state.checksRun -Value $evidence
+                $state.autonomousHarnessChecks = Add-Unique -Items $state.autonomousHarnessChecks -Value $evidence
+                $logValidationResults += $evidence
+            }
+            $additional += "Autonomous harness checks invoked for control-plane edit: doctor plus bounded verify. Use recorded logs or rerun verify directly if the autonomous verify timed out."
+        }
+
         Save-State -State $state
         Write-CodexStructuredLog -EventName "PostToolUse" -Outcome "observed" -ToolName $toolName -ChangedSurface $logChangedSurfaces -ValidationResult $logValidationResults -SubagentResult $logSubagentResults | Out-Null
 
@@ -272,12 +300,14 @@ switch ($eventName) {
         $lastMessage = [string]$inputObject.last_assistant_message
         $hasChanged = @($state.changedSurfaces).Count -gt 0
         $hasSubstantiveActivity = $hasChanged -or @($state.toolEvents).Count -gt 0
+        $mustEnforceWorkflowEvidence = $hasSubstantiveActivity -or [bool]$state.anomalyPauseExpected -or [bool]$state.subagentDecisionRequired -or [bool]$state.watcherExpected
         $auditReady = Test-FinalAuditReady -Message $lastMessage
         $watcherReady = Test-WatcherCoverageReady -State $state -Message $lastMessage
         $anomalyTraceReady = Test-AnomalyTraceReady -State $state -Message $lastMessage
         $subagentDecisionReady = Test-SubagentDecisionReady -State $state -Message $lastMessage
+        $skillEvidenceReady = Test-SkillEvidenceReady -State $state -Message $lastMessage
 
-        if ($hasSubstantiveActivity -and -not $anomalyTraceReady -and -not [bool]$inputObject.stop_hook_active) {
+        if ($mustEnforceWorkflowEvidence -and -not $anomalyTraceReady -and -not [bool]$inputObject.stop_hook_active) {
             $reason = "Anomaly pause/trace evidence missing for an L4 workflow incident."
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
@@ -287,7 +317,7 @@ switch ($eventName) {
             break
         }
 
-        if ($hasSubstantiveActivity -and -not $subagentDecisionReady -and -not [bool]$inputObject.stop_hook_active) {
+        if ($mustEnforceWorkflowEvidence -and -not $subagentDecisionReady -and -not [bool]$inputObject.stop_hook_active) {
             $reason = "Subagent call declaration missing after explicit subagent authorization."
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
@@ -297,12 +327,22 @@ switch ($eventName) {
             break
         }
 
-        if ($hasSubstantiveActivity -and -not $watcherReady -and -not [bool]$inputObject.stop_hook_active) {
+        if ($mustEnforceWorkflowEvidence -and -not $watcherReady -and -not [bool]$inputObject.stop_hook_active) {
             $reason = "Watcher or subagent evidence missing for an L4 delegated workflow incident."
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
                 reason = "Final preflight: this prompt was classified as L4 with delegation authorized. Before finalizing, include accepted/rejected subagent evidence plus WATCHER_REPORT, or record WATCHER_NOT_USED with reason, risk, substitute check, and confidence impact."
+            }
+            break
+        }
+
+        if (([bool]$state.skillEvidenceRequired -or @($state.skillEvents).Count -gt 0) -and -not $skillEvidenceReady -and -not [bool]$inputObject.stop_hook_active) {
+            $reason = "Skill workflow evidence missing after routed skill workflow."
+            Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
+            Write-HookJson @{
+                decision = "block"
+                reason = "Final preflight: skill workflow evidence missing after matching skill workflows were routed or observed. Before finalizing, include SKILL_EVIDENCE used/not_used with reason, direct evidence, and residual risk."
             }
             break
         }

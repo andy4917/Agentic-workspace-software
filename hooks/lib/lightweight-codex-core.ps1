@@ -238,10 +238,15 @@ function Read-State {
             anomalyPauseExpected = $false
             subagentDecisionRequired = $false
             intentFrame = [ordered]@{}
+            workflowVariables = @()
+            skillRoute = ""
+            skillEvidenceRequired = $false
             toolchainHint = ""
             memoryRoute = ""
             changedSurfaces = @()
             checksRun = @()
+            autonomousHarnessChecks = @()
+            skillEvents = @()
             requiredReminders = @()
             toolEvents = @()
             subagentEvents = @()
@@ -263,10 +268,15 @@ function Read-State {
             anomalyPauseExpected = [bool]$state.anomalyPauseExpected
             subagentDecisionRequired = [bool]$state.subagentDecisionRequired
             intentFrame = $state.intentFrame
+            workflowVariables = @($state.workflowVariables | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 160 })
+            skillRoute = [string]$state.skillRoute
+            skillEvidenceRequired = [bool]$state.skillEvidenceRequired
             toolchainHint = [string]$state.toolchainHint
             memoryRoute = [string]$state.memoryRoute
             changedSurfaces = @($state.changedSurfaces | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
             checksRun = @($state.checksRun | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
+            autonomousHarnessChecks = @($state.autonomousHarnessChecks | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
+            skillEvents = @($state.skillEvents | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             requiredReminders = @($state.requiredReminders | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             toolEvents = @($state.toolEvents | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
             subagentEvents = @($state.subagentEvents | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 180 })
@@ -285,10 +295,15 @@ function Read-State {
             anomalyPauseExpected = $false
             subagentDecisionRequired = $false
             intentFrame = [ordered]@{}
+            workflowVariables = @()
+            skillRoute = ""
+            skillEvidenceRequired = $false
             toolchainHint = ""
             memoryRoute = ""
             changedSurfaces = @()
             checksRun = @()
+            autonomousHarnessChecks = @()
+            skillEvents = @()
             requiredReminders = @("Hook state could not be parsed; refresh evidence before finalizing.")
             toolEvents = @()
             subagentEvents = @()
@@ -305,6 +320,7 @@ function Save-State {
         New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
     }
 
+    $State = Normalize-WorkflowState -State $State
     $State.lastUpdated = (Get-Date).ToString("o")
     $json = ($State | ConvertTo-Json -Depth 16) + "`n"
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -324,6 +340,188 @@ function Add-Unique {
         return @($Items)
     }
     return @($Items + $Value)
+}
+
+function Get-WorkflowVariableCatalog {
+    return @(
+        "currentGoal:prompt digest and visible goal boundary",
+        "workflow:workflow preset",
+        "taskClass:L1-L4 rigor level",
+        "classificationReason:why task class changed",
+        "delegationAuthorized:explicit subagent authorization flag",
+        "goalRequired:persisted goal requirement",
+        "watcherExpected:watcher coverage requirement",
+        "anomalyPauseExpected:pause/trace requirement",
+        "subagentDecisionRequired:SUBAGENT_CALL final evidence gate",
+        "skillRoute:routed skill workflows",
+        "skillEvidenceRequired:SKILL_EVIDENCE final evidence gate",
+        "changedSurfaces:deduped changed surface list",
+        "checksRun:deduped validation evidence list",
+        "autonomousHarnessChecks:deduped autonomous doctor/verify evidence",
+        "skillEvents:deduped skill workflow evidence",
+        "requiredReminders:deduped final evidence reminders",
+        "toolEvents:deduped tool event names",
+        "subagentEvents:actual subagent tool evidence only",
+        "userAuthorizations:deduped scoped authorization markers"
+    )
+}
+
+function Normalize-StateList {
+    param(
+        [object[]]$Items,
+        [int]$Limit = 240,
+        [int]$MaxItems = 32
+    )
+
+    $seen = @{}
+    $output = @()
+    foreach ($item in @($Items)) {
+        $text = Get-StateSummaryText -Value ([string]$item) -Limit $Limit
+        if ([string]::IsNullOrWhiteSpace($text)) {
+            continue
+        }
+        if ($seen.ContainsKey($text)) {
+            continue
+        }
+        $seen[$text] = $true
+        $output += $text
+    }
+    if ($output.Count -gt $MaxItems) {
+        return ,@($output | Select-Object -Last $MaxItems)
+    }
+    return ,@($output)
+}
+
+function Normalize-SkillRoute {
+    param([string]$SkillRoute)
+
+    if ([string]::IsNullOrWhiteSpace($SkillRoute)) {
+        return ""
+    }
+    $seen = @{}
+    $terms = @()
+    foreach ($term in ($SkillRoute -split ",")) {
+        $text = $term.Trim()
+        if ([string]::IsNullOrWhiteSpace($text)) {
+            continue
+        }
+        if ($seen.ContainsKey($text)) {
+            continue
+        }
+        $seen[$text] = $true
+        $terms += $text
+    }
+    if ($terms.Count -gt 1) {
+        $terms = @($terms | Where-Object { $_ -notmatch "(?i)^none selected yet" })
+    }
+    return ($terms -join ", ")
+}
+
+function Normalize-WorkflowState {
+    param($State)
+
+    $State.workflowVariables = @(Get-WorkflowVariableCatalog)
+    $State.skillRoute = Normalize-SkillRoute -SkillRoute ([string]$State.skillRoute)
+    $State.skillEvidenceRequired = [bool]$State.skillEvidenceRequired -or (
+        -not [string]::IsNullOrWhiteSpace([string]$State.skillRoute) -and
+        [string]$State.skillRoute -notmatch "(?i)^none selected yet"
+    )
+    $State.changedSurfaces = Normalize-StateList -Items @($State.changedSurfaces) -Limit 120 -MaxItems 24
+    $State.checksRun = Normalize-StateList -Items @($State.checksRun) -Limit 240 -MaxItems 48
+    $State.autonomousHarnessChecks = Normalize-StateList -Items @($State.autonomousHarnessChecks) -Limit 240 -MaxItems 24
+    $State.skillEvents = Normalize-StateList -Items @($State.skillEvents) -Limit 240 -MaxItems 24
+    $State.requiredReminders = Normalize-StateList -Items @($State.requiredReminders) -Limit 240 -MaxItems 32
+    $State.toolEvents = Normalize-StateList -Items @($State.toolEvents) -Limit 120 -MaxItems 24
+    $State.subagentEvents = Normalize-StateList -Items @($State.subagentEvents) -Limit 180 -MaxItems 24
+    $State.userAuthorizations = Normalize-StateList -Items @($State.userAuthorizations) -Limit 120 -MaxItems 16
+    return $State
+}
+
+function Test-AutonomousHarnessCheckRequired {
+    param(
+        [string]$ToolName,
+        [string]$Text
+    )
+
+    if ($env:CODEX_HOOK_AUTONOMOUS_DISABLE -eq "1") {
+        return $false
+    }
+    if ($ToolName -notmatch "(?i)(apply_patch|Edit|Write)") {
+        return $false
+    }
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return $false
+    }
+
+    return ($Text -match "(?i)(hooks[\\/]|hooks\.json|evals[\\/]hook-policy-smoke\.json|maintenance[\\/]scripts[\\/]codex_agent_harness|maintenance[\\/]scripts[\\/]codex-[^\\/]+\.ps1|skills[\\/][^\\/]+[\\/]SKILL\.md|AGENTS\.md)")
+}
+
+function Stop-HookProcessTree {
+    param([int]$ProcessId)
+
+    try {
+        $children = @(Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $ProcessId })
+        foreach ($child in $children) {
+            Stop-HookProcessTree -ProcessId ([int]$child.ProcessId)
+        }
+        Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
+    } catch {
+    }
+}
+
+function Invoke-AutonomousHarnessCheck {
+    param(
+        [ValidateSet("doctor", "verify")]
+        [string]$Mode,
+        [int]$TimeoutSeconds = 45
+    )
+
+    $codexHome = Get-CodexHomePath
+    $python = Join-Path $codexHome "toolchains\shims\python.cmd"
+    $harness = Join-Path $codexHome "maintenance\scripts\codex_agent_harness.py"
+    if (-not (Test-Path -LiteralPath $python)) {
+        return "autonomous_${Mode}:blocked; reason=missing_python_shim; path=$python"
+    }
+    if (-not (Test-Path -LiteralPath $harness)) {
+        return "autonomous_${Mode}:blocked; reason=missing_harness; path=$harness"
+    }
+
+    if ($env:CODEX_HOOK_SMOKE -eq "1") {
+        return "autonomous_${Mode}:smoke_probe; command=codex_agent_harness.py $Mode"
+    }
+
+    $logDir = Join-Path $codexHome "logs\hook-autonomous"
+    if (-not (Test-Path -LiteralPath $logDir)) {
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    }
+
+    $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmss-fff")
+    $outPath = Join-Path $logDir "$stamp-$Mode.out.log"
+    $errPath = Join-Path $logDir "$stamp-$Mode.err.log"
+    $arguments = @($harness, $Mode)
+    if ($Mode -eq "doctor") {
+        $arguments += "--json"
+    }
+
+    try {
+        $process = Start-Process -FilePath $python -ArgumentList $arguments -WorkingDirectory $codexHome -WindowStyle Hidden -RedirectStandardOutput $outPath -RedirectStandardError $errPath -PassThru
+        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            Stop-HookProcessTree -ProcessId ([int]$process.Id)
+            return "autonomous_${Mode}:timeout; seconds=$TimeoutSeconds; out=$outPath; err=$errPath"
+        }
+        $process.Refresh()
+        $stdout = ""
+        if (Test-Path -LiteralPath $outPath) {
+            $stdout = Get-Content -LiteralPath $outPath -Raw -ErrorAction SilentlyContinue
+        }
+        $digest = ""
+        if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+            $digest = Get-StateDigest -Text $stdout
+        }
+        return "autonomous_${Mode}:exit=$($process.ExitCode); out=$outPath; err=$errPath; sha256:$digest"
+    } catch {
+        return "autonomous_${Mode}:error; reason=$($_.Exception.Message)"
+    }
 }
 
 function Write-CodexStructuredLog {

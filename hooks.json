@@ -27,7 +27,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*",
+        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|spawn_agent|send_input|wait_agent|close_agent|resume_agent|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*",
         "hooks": [
           {
             "type": "command",
@@ -40,7 +40,7 @@
     ],
     "PermissionRequest": [
       {
-        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*",
+        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|spawn_agent|send_input|wait_agent|close_agent|resume_agent|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*",
         "hooks": [
           {
             "type": "command",
@@ -53,7 +53,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*",
+        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|spawn_agent|send_input|wait_agent|close_agent|resume_agent|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*",
         "hooks": [
           {
             "type": "command",

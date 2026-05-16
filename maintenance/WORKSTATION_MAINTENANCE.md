@@ -152,9 +152,15 @@ exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
   remove or disable the `memento` MCP registration with Codex CLI only when the
   user explicitly asks, and preserve the ignored state directory unless the user
   explicitly requests destructive cleanup.
-- `legacy_boundary`: `toolchains\shims\memsearch.*` and
-  `maintenance\scripts\check-memory-rag-status.ps1` are retired legacy
-  Memory/RAG surfaces and must not be treated as active fallback.
+- `legacy_boundary`: the retired `toolchains\shims\memsearch.*` shims,
+  `maintenance\scripts\check-memory-rag-status.ps1`, duplicate
+  `hooks\lib\state`, raw `memories`, and `computer-use-turn-ended` runtime
+  residue were recycled on 2026-05-16 under
+  `maintenance\reports\2026-05-16-clean-all-slop-runtime-cleanup.json`. Do not
+  recreate them as active fallback; use `memento-mcp-runtime.ps1 verify` and
+  `codex_agent_harness.py doctor|verify` instead. Local `config.toml` also has
+  `[features].memories=false` and `[memories].generate_memories/use_memories=false`
+  to prevent raw memory residue from reappearing after cleanup.
 
 ## Handoff Requirement
 

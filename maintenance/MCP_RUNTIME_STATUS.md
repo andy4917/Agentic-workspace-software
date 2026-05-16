@@ -1,6 +1,6 @@
 # MCP Runtime Status
 
-Updated for the 2026-05-15 MCP active-use refresh.
+Updated for the 2026-05-16 Codex app update clean pass.
 
 ## Current Finding
 
@@ -50,7 +50,10 @@ different command, credential source, or policy boundary.
   `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
   @modelcontextprotocol/server-sequential-thinking`. Use only for ambiguous
   multi-step planning/debugging where revision or branching adds value.
-- `windows_powershell`: global, stdio via the installed
+- `windows_powershell`: global, stdio via
+  `maintenance\scripts\start-windows-powershell-mcp.cmd`, which prepends
+  `%USERPROFILE%\.codex\toolchains\shims` and
+  `%LOCALAPPDATA%\OpenAI\Codex\bin` before launching the installed
   `PowerShell.MCP.Proxy.exe`. Use for persistent PowerShell diagnostics and
   Windows command execution when its stateful console is useful. It exposes
   `start_console`, `get_current_location`, `invoke_expression`, and
@@ -172,12 +175,15 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
 
 Legacy Memory/RAG surfaces are contamination boundaries:
 
-- `toolchains\shims\memsearch.*` is retired and must not be used as active
-  fallback.
-- `maintenance\scripts\check-memory-rag-status.ps1` is retired and points to the
-  Memento runtime verifier.
-- `memories\raw_memories.md` is historical data only unless the user explicitly
-  asks for a reviewed import or migration into Memento.
+- `toolchains\shims\memsearch.*` and
+  `maintenance\scripts\check-memory-rag-status.ps1` were removed to the Windows
+  Recycle Bin on 2026-05-16 and must remain absent unless a reviewed rollback is
+  requested.
+- `memories` raw historical data was also recycled without reading contents.
+  A reviewed import or migration into Memento must use an explicit user request,
+  not hidden fallback.
+- Cleanup manifest:
+  `maintenance\reports\2026-05-16-clean-all-slop-runtime-cleanup.json`.
 
 ## Toolchain Source Rule
 
@@ -200,6 +206,71 @@ Run this check after shim or MCP command changes:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
 ```
+
+## 2026-05-16 Codex App Update Clean Pass
+
+- `source_class`: Codex Desktop package update plus managed workstation config
+  cleanup.
+- `package`: `OpenAI.Codex_26.513.3673.0_x64__2p2nqsd0c76g0`.
+- `app_version_file`: `42.0.1`.
+- `bundled_cli`: `codex-cli 0.131.0-alpha.9`.
+- `changed_config`: `%USERPROFILE%\.codex\config.toml`.
+- `changed_script`:
+  `%USERPROFILE%\.codex\maintenance\scripts\start-windows-powershell-mcp.cmd`.
+- `changed_profile`:
+  `%USERPROFILE%\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` now
+  prepends the Codex shim root and official Codex bin for interactive PowerShell
+  sessions.
+- `persistent_path`: the temporary User PATH addition of
+  `%USERPROFILE%\.codex\toolchains\shims` and
+  `%LOCALAPPDATA%\OpenAI\Codex\bin` was removed after `rg-resolution-smoke`
+  proved it violated the managed process-local PATH policy.
+- `changed_native_host`:
+  `%LOCALAPPDATA%\OpenAI\extension\com.openai.codexextension.json` and
+  `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.openai.codexextension`.
+- `owner`: Codex global workstation maintenance.
+- `config_surface`: `[mcp_servers.windows_powershell].command` now points to the
+  wrapper above; `model_reasoning_effort` is reset to the managed default
+  `medium`; legacy local `memories` generation/use is disabled in
+  `%USERPROFILE%\.codex\config.toml` so raw Memory/RAG residue cannot keep
+  reappearing as a fallback route.
+- `dependency_chain`: Codex Desktop official bundle ->
+  `%LOCALAPPDATA%\OpenAI\Codex\bin` -> `%USERPROFILE%\.codex\toolchains\shims`
+  -> installed `PowerShell.MCP.Proxy.exe`.
+- `reason`: after the app update, the active PowerShell MCP console could run
+  by explicit path but bare `rg` and `codex` were not on PATH. The wrapper makes
+  future PowerShell MCP sessions inherit the same official Codex bundle/shim
+  route used by normal Codex tooling, and the PowerShell profile covers
+  profile-rebuilt internal shells without requiring persistent User PATH
+  pollution. The Chrome native messaging manifest was also re-registered with
+  the current installed Codex app bundle so it no longer points at
+  `.codex\plugins\cache`.
+- `verification`: parse config with `codex mcp list`, run
+  `check-toolchain-sources.ps1`, run `memento-mcp-runtime.ps1 verify`, and
+  verify `rg`, `codex`, `node`, and `python` resolve through the Codex shims in
+  a new PowerShell profile session reconstructed from persistent User and
+  Machine PATH. Run `codex-home-maintenance.ps1 -Mode Report` and require
+  `native_messaging_hosts.stale_cache_reference=false`.
+- `reload_note`: already-running Codex sessions may keep the old MCP process
+  until the app/session reloads. This is runtime state, not a config failure.
+- `known_runtime_noise`: PowerShell.MCP `1.8.0` is the current PSGallery
+  version as of 2026-05-16. Codex MCP discovery may still ask this server for
+  `resources/list` and `resources/templates/list`; the server logs Windows
+  Application Event warnings because those optional handlers are not available.
+  Tool calls such as `get_current_location` and `invoke_expression` remain
+  functional, so this is tracked as upstream/client capability-probe noise, not
+  a local workstation clean failure.
+- `rollback`: restore
+  `%USERPROFILE%\.codex\maintenance\backups\config-before-codex-update-clean-20260516-205543.toml`
+  or
+  `%USERPROFILE%\.codex\maintenance\backups\config-before-disable-legacy-memories-20260516-225648.toml`
+  to `%USERPROFILE%\.codex\config.toml`, import the matching
+  `%USERPROFILE%\.codex\maintenance\backups\com.openai.codexextension-before-clean-*.reg`
+  file and restore the matching JSON backup if the Chrome native host needs to
+  be reverted, remove the wrapper script if no longer referenced, restore
+  `%USERPROFILE%\.codex\maintenance\backups\user-path-before-removing-codex-shim-persistent-20260516-213112.txt`
+  only if persistent PATH behavior must be reverted, and remove the two Codex
+  entries from the PowerShell profile if the profile route must be reverted.
 
 ## Required Agent Behavior
 

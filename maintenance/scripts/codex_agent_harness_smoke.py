@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -53,10 +54,13 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
 
 
 def run_lightweight_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    env = os.environ.copy()
+    env["CODEX_HOOK_SMOKE"] = "1"
     try:
         completed = subprocess.run(
             ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "hooks/lightweight-codex-hook.ps1"],
             cwd=root,
+            env=env,
             input=json.dumps(payload),
             text=True,
             capture_output=True,
@@ -200,6 +204,66 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and bool(hook_state.get("intentFrame", {}).get("calibration_action")),
             "Hook state should retain task class, delegation authorization, goal requirement, watcher expectation, subagent call decision, anomaly calibration, and English intent frame.",
         )
+        skill_prompt = "Use clean-all-slop to clean legacy fallback and dead hook harness scripts."
+        skill_probe = run_prompt_hook_sample(root, skill_prompt)
+        skill_stdout = skill_probe.get("stdout_preview", "").lower()
+        try:
+            skill_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            skill_state = {}
+        skill_stop_missing = run_stop_hook_sample(
+            root,
+            "FINAL_GOAL_AUDIT checked skill route sample. checks not run none. residual risk low. "
+            "status complete. PM independent verification complete.",
+        )
+        run_post_tool_hook_sample(root, "functions.shell_command", "Get-Content skills/clean-all-slop/SKILL.md -Raw")
+        try:
+            skill_event_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            skill_event_state = {}
+        skill_stop_with_marker = run_stop_hook_sample(
+            root,
+            "FINAL_GOAL_AUDIT checked skill route sample. checks not run none. residual risk low. "
+            "status complete. PM independent verification complete. "
+            "SKILL_EVIDENCE used reason clean-all-slop route direct evidence skills/clean-all-slop/SKILL.md residual risk low.",
+        )
+        add_check(
+            "skill_route_requires_final_evidence",
+            "clean-all-slop" in skill_stdout
+            and skill_state.get("skillEvidenceRequired") is True
+            and "clean-all-slop" in str(skill_state.get("skillRoute", ""))
+            and "skill workflow evidence" in skill_stop_missing.get("stdout_preview", "").lower()
+            and bool(skill_event_state.get("skillEvents"))
+            and '"continue":true' in skill_stop_with_marker.get("stdout_preview", "").lower(),
+            "Prompt routing should persist matching skill workflow requirements, record SKILL.md access, and require SKILL_EVIDENCE before finalization.",
+        )
+        skill_events = skill_event_state.get("skillEvents", [])
+        reminders = skill_event_state.get("requiredReminders", [])
+        variable_catalog = skill_event_state.get("workflowVariables", [])
+        add_check(
+            "workflow_variable_catalog_and_state_normalization",
+            isinstance(variable_catalog, list)
+            and any("skillRoute:" in str(item) for item in variable_catalog)
+            and any("autonomousHarnessChecks:" in str(item) for item in variable_catalog)
+            and isinstance(skill_events, list)
+            and all(str(item).strip() for item in skill_events)
+            and len(skill_events) == len(set(map(str, skill_events)))
+            and isinstance(reminders, list)
+            and len(reminders) == len(set(map(str, reminders))),
+            "Hook state should define workflow variables and normalize event/reminder lists to remove empty values, duplicates, and state bloat.",
+        )
+        run_prompt_hook_sample(root, workflow_prompt)
+        state_only_final = (
+            "FINAL_GOAL_AUDIT checked state-only stop sample. checks not run none. residual risk low. "
+            "status complete. PM independent verification complete."
+        )
+        state_only_stop = run_stop_hook_sample(root, state_only_final)
+        add_check(
+            "stop_enforces_l4_state_without_tool_events",
+            '"decision":"block"' in state_only_stop.get("stdout_preview", "").lower()
+            and "anomaly-calibration workflow was active" in state_only_stop.get("stdout_preview", "").lower(),
+            "Stop should enforce L4 anomaly/subagent/watcher requirements even when no tool event or changed surface is recorded.",
+        )
 
         selector = "Select-" + "String"
         search_terms = "|".join(["pass" + "word", "api[_-]?key", "sec" + "ret", "to" + "ken", "credential", "private key"])
@@ -244,13 +308,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         delegated_final_without_marker = (
             "FINAL_GOAL_AUDIT pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
             "checked verification. checks not run none. residual risk low. status complete. PM independent verification complete. "
-            "accepted/rejected subagent evidence none. WATCHER_NOT_USED reason direct smoke substitute check."
+            "accepted/rejected subagent evidence none. WATCHER_NOT_USED reason direct smoke risk low substitute check hook sample confidence impact low."
         )
         delegated_final_with_marker = (
             "FINAL_GOAL_AUDIT pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
             "checked verification. checks not run none. residual risk low. status complete. PM independent verification complete. "
-            "accepted/rejected subagent evidence none. WATCHER_NOT_USED reason direct smoke substitute check. "
-            "SUBAGENT_CALL not_used reason PM kept work local evidence direct hook sample."
+            "accepted/rejected subagent evidence none. WATCHER_NOT_USED reason direct smoke risk low substitute check hook sample confidence impact low. "
+            "SUBAGENT_CALL not_used reason PM kept work local evidence direct hook sample. "
+            "SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
         )
         stop_missing_subagent = run_stop_hook_sample(root, delegated_final_without_marker)
         stop_with_subagent = run_stop_hook_sample(root, delegated_final_with_marker)
@@ -259,6 +324,20 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "subagent use was explicitly authorized or a subagent tool event was observed" in stop_missing_subagent.get("stdout_preview", "").lower()
             and '"continue":true' in stop_with_subagent.get("stdout_preview", "").lower(),
             "Stop should reject delegated finals without SUBAGENT_CALL used/not_used and allow the explicit marker with reason/evidence.",
+        )
+        watcherless_final = (
+            "FINAL_GOAL_AUDIT pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
+            "checked verification. checks not run none. residual risk low. status complete. PM independent verification complete. "
+            "accepted/rejected subagent evidence reviewed. "
+            "SUBAGENT_CALL used reason direct sample evidence hook state residual risk low. "
+            "SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
+        )
+        watcherless_stop = run_stop_hook_sample(root, watcherless_final)
+        add_check(
+            "stop_requires_concrete_watcher_artifact_or_omission_record",
+            '"decision":"block"' in watcherless_stop.get("stdout_preview", "").lower()
+            and "accepted/rejected subagent evidence plus watcher_report" in watcherless_stop.get("stdout_preview", "").lower(),
+            "Stop should reject L4 delegated finals that mention subagent evidence but omit WATCHER_REPORT or complete WATCHER_NOT_USED.",
         )
 
         pm_led_probe = run_prompt_hook_sample(root, "Review PM-led team preset workflow routing and level escalation criteria.")
@@ -272,6 +351,16 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and pm_led_state.get("delegationAuthorized") is False
             and pm_led_state.get("subagentDecisionRequired") is False,
             "PM-led/team preset wording alone should not require SUBAGENT_CALL evidence.",
+        )
+        run_post_tool_hook_sample(root, "functions.shell_command", "rg WATCHER_REPORT maintenance")
+        try:
+            text_scan_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            text_scan_state = {}
+        add_check(
+            "posttooluse_text_mentions_do_not_create_subagent_events",
+            not text_scan_state.get("subagentEvents"),
+            "PostToolUse should not treat read-only text mentions of WATCHER_REPORT or WATCHER_NOT_USED as subagent activity.",
         )
 
         run_prompt_hook_sample(root, "Tiny local note.")
@@ -304,6 +393,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and any("Compatibility review required" in str(item) for item in post_level_state.get("requiredReminders", [])),
             "PostToolUse should raise to L4 when incident language intersects workflow/harness surfaces.",
         )
+        autonomous_text = str(post_level_state.get("autonomousHarnessChecks", "")).lower()
+        add_check(
+            "posttooluse_autonomous_harness_checks_for_control_plane_edits",
+            "autonomous_doctor:smoke_probe" in autonomous_text
+            and "autonomous_verify:smoke_probe" in autonomous_text,
+            "PostToolUse should autonomously invoke doctor and verify evidence paths for control-plane edits.",
+        )
 
         run_post_tool_hook_sample(root, "spawn_agent", '{"agent_type":"reviewer"}')
         event_final_without_marker = (
@@ -314,6 +410,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         event_final_with_marker = (
             event_final_without_marker
             + " SUBAGENT_CALL used reason subagent tool event observed direct evidence spawn_agent residual risk low."
+            + " SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
         )
         event_stop_missing = run_stop_hook_sample(root, event_final_without_marker)
         event_stop_with_marker = run_stop_hook_sample(root, event_final_with_marker)
