@@ -170,10 +170,10 @@ Use one primary type and optional secondary tags.
 - Fingerprint: PostgreSQL stderr says the server cannot run as a system administrator ID; `memento-mcp-runtime.ps1 status` reports `postgres_ready=False` and Memento MCP calls fail with `ECONNREFUSED 127.0.0.1:55432`.
 - Risk: agents may ask for elevation even though PostgreSQL explicitly requires the opposite launch condition.
 - Likely cause: Memento PostgreSQL was started from an elevated administrator token instead of the current non-elevated user token.
-- Required permission state: `user_permission=allowed` with `current_process_administrator=False`.
+- Required service owner state: `user_permission=allowed`; PostgreSQL is owned by the current non-elevated user token. Elevated clients may connect to the loopback MCP service, but must not directly launch PostgreSQL.
 - Fix playbook:
-  1. Run Codex or PowerShell normally, not elevated.
-  2. Run `memento-mcp-runtime.ps1 start` or `repair`; the script must guard against administrator-token launch before starting PostgreSQL.
+  1. Check `memento-mcp-runtime.ps1 status`; preserve `current_process_administrator`, `postgres_ready`, and `memento_health`.
+  2. Run `memento-mcp-runtime.ps1 start`, `repair`, or `verify`; the script must bridge elevated clients to a non-elevated user launch before starting PostgreSQL.
   3. Verify with `memento-mcp-runtime.ps1 verify`, `doctor --tier stress --json`, and live `context(workspace="global_pm")`.
 - Do not claim: that administrator permission is required for normal Memento runtime operation after installation.
 

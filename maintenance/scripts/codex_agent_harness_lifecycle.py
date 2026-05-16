@@ -477,8 +477,10 @@ def memento_runtime_status(root: Path) -> dict[str, Any]:
     process_admin = parse_status_bool(details.get("current_process_administrator"))
     postgres_ready = parse_status_bool(details.get("postgres_ready"))
     memento_health = parse_status_bool(details.get("memento_health"))
-    if process_admin is not False:
-        failures.append("current_process_administrator is not False")
+    if process_admin is None:
+        warnings.append("current_process_administrator was not reported")
+    elif process_admin is True:
+        warnings.append("current process is elevated; Memento service health was evaluated separately")
     if postgres_ready is not True:
         failures.append("postgres_ready is not True")
     if memento_health is not True:

@@ -16,3 +16,129 @@ contracts:
     checks:
       - old and new commands run on the same safe fixture
       - stdout, stderr class, and exit code are compared
+  - surface_id: chrome-installed-browsers
+    status: draft_from_observed_js
+    source_path: plugins/patched/openai-bundled/plugins/chrome/scripts/installed-browsers.js
+    command:
+      current: node scripts/installed-browsers.js
+      future_rust_candidate: runtime-migration/rust/chrome-installed-browsers
+    arguments:
+      supported:
+        - --check
+        - --json
+      unsupported_behavior: current script ignores unknown flags except help
+      help_flags:
+        - -h
+        - --help
+    stdin: none
+    stdout:
+      default: text report
+      with_json: pretty JSON inventory
+    stderr: top-level error message only on fatal error
+    exit_codes:
+      success: 0
+      check_no_installed_browsers: 1
+      fatal_error: 2
+    json_contract:
+      platform: string
+      default_browser: object
+      installed_browsers: array
+      installed_browser_item:
+        name: string
+        command: optional string
+        path: string
+        bundle_id: optional string or null
+        version: optional string or null
+    compatibility:
+      windows_paths: required
+      secrets_printed: false
+      writes_files: false
+      launches_browser: false
+      reads_real_profile_in_tests: false
+    parity_checks:
+      - JS and Rust commands run against identical command-output fixtures.
+      - JS and Rust JSON output is compared after stable key/order normalization.
+      - --check exit code 1 is preserved for an empty installed_browsers array.
+      - Registry and filesystem probes are injected or fixture-backed in tests.
+  - surface_id: chrome-open-window-dry-run
+    status: draft_from_observed_js
+    source_path: plugins/patched/openai-bundled/plugins/chrome/scripts/open-chrome-window.js
+    command:
+      current: node scripts/open-chrome-window.js
+      future_rust_candidate: runtime-migration/rust/chrome-open-window
+    arguments:
+      supported_first_rust_phase:
+        - --dry-run
+        - --json
+      out_of_scope_first_rust_phase:
+        - real browser launch without --dry-run
+      help_flags:
+        - -h
+        - --help
+    environment:
+      - CODEX_CHROME_USER_DATA_DIR
+      - CODEX_CHROME_PREFERENCES_PATH
+    stdin: none
+    stdout:
+      default: text report
+      with_json: pretty JSON launch plan
+    stderr: usage text or top-level error message
+    exit_codes:
+      success: 0
+      unsupported_flag: 2
+      fatal_error: 2
+    json_contract:
+      platform: string
+      dryRun: boolean
+      profileDirectory: string
+      command: string
+      args: array
+    compatibility:
+      windows_paths: required
+      secrets_printed: false
+      writes_files: false
+      launches_browser: false
+      launch_scope_note: first Rust phase is dry-run only
+      reads_real_profile_in_tests: false
+    parity_checks:
+      - JS and Rust --dry-run --json output match on temporary profile fixtures.
+      - Default and Profile N profile ordering are covered.
+      - command and args quoting are compared per platform.
+      - Tests fail if the Rust path attempts to launch Chrome in dry-run mode.
+  - surface_id: chrome-install-manifest-dry-run
+    status: draft_controlled_change_only
+    source_path: plugins/patched/openai-bundled/plugins/chrome/scripts/installManifest.mjs
+    command:
+      current: import install from installManifest.mjs
+      future_rust_candidate: runtime-migration/rust/chrome-install-manifest
+    arguments:
+      supported_first_rust_phase:
+        - --dry-run
+      required_for_apply_later:
+        - --apply
+        - --backup
+    stdin: none
+    stdout: dry-run manifest and registry plan
+    stderr: human-readable diagnostics
+    exit_codes:
+      success: 0
+      validation_failure: non-zero
+    manifest_contract:
+      name: com.openai.codexextension
+      description: Codex chrome native messaging host
+      type: stdio
+      path: resolved extension-host executable path
+      allowed_origins:
+        - chrome-extension://hehggadaopoacecdllhhajmbjkdcmajg/
+    compatibility:
+      windows_paths: required
+      secrets_printed: false
+      writes_files: false
+      writes_registry: false
+      mutation_scope_note: dry-run only
+      apply_requires_backup: true
+    parity_checks:
+      - Dry-run manifest JSON matches the JS-generated manifest shape.
+      - Plugin cache/latest root resolution is fixture-tested.
+      - Windows registry command is reported but not executed in dry-run.
+      - Apply mode remains blocked until rollback and native-host smoke exist.

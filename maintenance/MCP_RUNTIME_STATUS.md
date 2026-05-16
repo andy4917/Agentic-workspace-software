@@ -144,8 +144,10 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
   Scoop PostgreSQL 18 -> pgvector `0.8.2` -> dedicated `memento_pm` database.
 - `privilege_model`: PostgreSQL is started by
   `memento-mcp-runtime.ps1` from the current non-elevated user token. It must
-  not be launched from an elevated administrator token; the runtime is intended
-  to require no administrator privileges after installation.
+  not be launched from an elevated administrator token. Elevated Codex or
+  PowerShell clients may request `start`, `repair`, or `verify`, but the script
+  bridges the launch to a non-elevated user PowerShell and then connects to the
+  same loopback MCP service.
 - `user_permission`: `allowed` for the current non-elevated user token.
 - `managed_memory_policy`: the Codex-managed runtime starts Memento with
   `MEMENTO_INPROCESS_ONNX_ENABLED=false` and
@@ -163,8 +165,8 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
   Memento/PostgreSQL so managed-source work is not blocked by optional PM memory
   runtime state. `doctor --tier stress --json` includes the runtime-heavy
   Memento check. The Memento check runs the managed runtime `status` action,
-  requires `current_process_administrator=False`, `postgres_ready=True`, and
-  `memento_health=True`, records the Memento working set against
+  records `current_process_administrator` as context, requires
+  `postgres_ready=True` and `memento_health=True`, records the Memento working set against
   `MEMENTO_MAX_WORKING_SET_MB`, checks that the managed ONNX/local embedding
   defaults remain disabled, and scans recent
   Memento/PostgreSQL logs for known Windows failure signatures such as

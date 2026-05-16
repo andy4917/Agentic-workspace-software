@@ -324,7 +324,7 @@ EVAL_TEMPLATES = {
         "success_criteria": [
             "tracked Python harness files compile",
             "tracked JSON eval and hook policy files parse",
-            "PowerShell managed scripts parse",
+            "PowerShell managed scripts and high-risk local wrappers parse",
             "mutable generated outputs are not tracked"
         ],
         "grader": "python maintenance/scripts/codex_agent_harness.py repo-verify",

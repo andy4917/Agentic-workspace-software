@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet("status", "start", "stop", "restart", "repair", "verify")]
-    [string] $Action = "status"
+    [string] $Action = "status",
+    [switch] $NoElevationBridge
 )
 
 $ErrorActionPreference = "Stop"
@@ -166,9 +167,77 @@ function Test-CurrentTokenAdministrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-PowerShellRuntimeExe {
+    $candidate = Join-PathStrict $PSHOME "powershell.exe"
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        return $candidate
+    }
+    return "powershell.exe"
+}
+
+function ConvertTo-WindowsArgument {
+    param([AllowNull()][string] $Value)
+
+    if ($null -eq $Value) {
+        return '""'
+    }
+    $escaped = ([string]$Value).Replace('"', '\"')
+    return '"' + $escaped + '"'
+}
+
+function Invoke-NonElevatedRuntimeAction {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("start", "repair")]
+        [string] $BridgeAction,
+        [int] $TimeoutSeconds = 75
+    )
+
+    if (-not (Test-CurrentTokenAdministrator)) {
+        return $false
+    }
+    if ($NoElevationBridge) {
+        throw "PostgreSQL refuses an elevated administrator token, and the non-elevated bridge was already attempted. Start Codex or PowerShell normally, then run memento-mcp-runtime.ps1 $BridgeAction."
+    }
+    if ([string]::IsNullOrWhiteSpace($PSCommandPath) -or -not (Test-Path -LiteralPath $PSCommandPath -PathType Leaf)) {
+        throw "Cannot locate the current Memento runtime script for a non-elevated bridge launch."
+    }
+
+    New-Item -ItemType Directory -Path $LogRoot -Force | Out-Null
+    $powershellExe = Get-PowerShellRuntimeExe
+    $arguments = @(
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        (ConvertTo-WindowsArgument $PSCommandPath),
+        $BridgeAction,
+        "-NoElevationBridge"
+    ) -join " "
+
+    Write-Detail ("privilege_bridge=launch action=" + $BridgeAction + " target=non-elevated-user")
+    try {
+        $shell = New-Object -ComObject Shell.Application
+        $shell.ShellExecute($powershellExe, $arguments, (Split-Path -Parent $PSCommandPath), "open", 0) | Out-Null
+    } catch {
+        throw "Failed to launch non-elevated Memento runtime bridge: $($_.Exception.Message)"
+    }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if ((Test-PostgresReady) -and (Test-MementoHealth)) {
+            Write-Detail ("privilege_bridge=ready action=" + $BridgeAction)
+            return $true
+        }
+        Start-Sleep -Milliseconds 750
+    }
+
+    throw "Non-elevated Memento runtime bridge did not produce a healthy PostgreSQL and Memento service within ${TimeoutSeconds}s."
+}
+
 function Assert-PostgresNonAdminLaunchToken {
     if (Test-CurrentTokenAdministrator) {
-        throw "PostgreSQL refuses to run from an elevated administrator token. Start Codex or PowerShell normally as the current user, then rerun this script. This Memento runtime is designed to run without administrator privileges."
+        throw "PostgreSQL refuses to run from an elevated administrator token. The Memento runtime must be owned by the current non-elevated user token."
     }
 }
 
@@ -315,6 +384,13 @@ function Start-PostgresRuntime {
         return
     }
 
+    if (Test-CurrentTokenAdministrator) {
+        if (Invoke-NonElevatedRuntimeAction -BridgeAction "start") {
+            Write-Detail "postgres=non-elevated-bridge-ready"
+            return
+        }
+    }
+
     if (-not (Test-Path -LiteralPath $PgData -PathType Container)) {
         throw "PostgreSQL data directory not found: $PgData"
     }
@@ -393,6 +469,20 @@ function Start-MementoRuntime {
     if (Test-MementoHealth) {
         Write-Detail "memento=http-already-healthy"
         return
+    }
+
+    $existingServer = Get-MementoServerProcess
+    if ($null -ne $existingServer) {
+        $deadline = (Get-Date).AddSeconds(8)
+        while ((Get-Date) -lt $deadline) {
+            if (Test-MementoHealth) {
+                Write-Detail "memento=http-recovered-after-postgres-start"
+                return
+            }
+            Start-Sleep -Milliseconds 500
+        }
+        Write-Detail ("memento=unhealthy-existing-server-recycle pid=" + [string]$existingServer.Id)
+        Stop-MementoRuntime -StopPostgres $false
     }
 
     if (-not (Test-Path -LiteralPath (Join-PathStrict $SourceRoot "server.js") -PathType Leaf)) {
@@ -640,6 +730,13 @@ function Invoke-MementoVerify {
 
 function Invoke-MementoRepair {
     Write-Detail "repair=begin"
+    if (Test-CurrentTokenAdministrator -and -not $NoElevationBridge) {
+        Write-Detail "repair=delegating-to-non-elevated-user"
+        Invoke-NonElevatedRuntimeAction -BridgeAction "repair" | Out-Null
+        Invoke-MementoVerify
+        Write-Detail "repair=complete"
+        return
+    }
     Stop-MementoRuntime -StopPostgres $true
     Start-MementoRuntime
     Invoke-MementoVerify
@@ -651,6 +748,8 @@ function Invoke-Status {
     Write-Detail ("source_root=" + $SourceRoot)
     Write-Detail ("state_root=" + $StateRoot)
     Write-Detail "user_permission=allowed"
+    Write-Detail "privilege_model=non_elevated_user_runtime"
+    Write-Detail "elevated_client_bridge=enabled"
     Write-Detail ("current_process_administrator=" + [string](Test-CurrentTokenAdministrator))
     Write-Detail ("postgres_ready=" + [string](Test-PostgresReady))
     Write-Detail ("memento_health=" + [string](Test-MementoHealth))

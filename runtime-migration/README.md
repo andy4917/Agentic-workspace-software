@@ -10,6 +10,15 @@ Current scope:
 - Python for read-only inventory and migration orchestration;
 - Rust reserved for protocol kernels, long-lived services, and hot local
   validation paths after contracts exist.
+- Rust candidate triage is recorded in
+  `inventory/rust-workflow-candidates.yaml`; absence of current tracked Rust
+  source does not mean the deferred surfaces are unsuitable for an isolated Rust
+  compile workflow.
+- The current Rust correction report is
+  `reports/2026-05-17-rust-workflow-candidate-triage.md`; it ranks
+  `installed-browsers.js` as the safe first Rust slice, keeps
+  `open-chrome-window.js` behind dry-run parity, and treats
+  `installManifest.mjs` as a later controlled-change surface.
 
 First verifier:
 
@@ -27,3 +36,5 @@ GitHub language-stat rule:
 - Compact helper CLIs may be migrated out of plugin app-cache only when their
   command contract is documented and covered by Python compile plus fixture
   tests that avoid reading real user browser data.
+- Rust helper CLIs must also keep app-cache command references unchanged until
+  `contracts/cli-contracts.yaml` parity checks pass and rollback is documented.

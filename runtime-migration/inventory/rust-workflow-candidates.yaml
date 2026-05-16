@@ -1,0 +1,316 @@
+schema_version: 1
+generated_at: "2026-05-17T18:20:00+09:00"
+root: "%USERPROFILE%\\.codex"
+scope: "Rust workflow candidate correction for deferred Node/JS surfaces"
+evidence_sources:
+  - runtime-migration/README.md
+  - runtime-migration/contracts/cli-contracts.yaml
+  - runtime-migration/inventory/js-language-handoff.yaml
+  - runtime-migration/inventory/node-js-surfaces.yaml
+  - plugins/patched/openai-bundled/plugins/chrome/scripts/installed-browsers.js
+  - plugins/patched/openai-bundled/plugins/chrome/scripts/open-chrome-window.js
+  - plugins/patched/openai-bundled/plugins/chrome/scripts/installManifest.mjs
+observed_state:
+  tracked_rust_sources: 0
+  tracked_cargo_manifests: 0
+  rust_toolchain_observed:
+    cargo: "cargo 1.95.0"
+    rustc: "rustc 1.95.0"
+  chrome_candidate_surfaces:
+    source_owner: app-cache
+    active_source_path: plugins/patched/openai-bundled/plugins/chrome/scripts
+    cache_copies_observed:
+      - .tmp/bundled-marketplaces/openai-bundled/plugins/chrome/scripts
+      - plugins/cache/openai-bundled/chrome/0.1.7/scripts
+      - plugins/cache/openai-bundled/chrome/latest/scripts
+decision_correction:
+  status: accepted_for_planning
+  summary: Rust was not used in the previous migration slice because that slice
+    selected compact helper replacements with Python fixture parity already in
+    reach; this is not evidence that Rust is unsuitable for the workspace.
+  prior_boundary: "Python first for inventory/orchestration; Rust later for protocol kernels, long-lived services, and hot local validation paths after contracts exist."
+  corrected_read: Several deferred Chrome helper surfaces can support an
+    isolated Rust compile workflow after contract capture. They should not be
+    forced directly into plugin replacement until fixture parity, rollback, and
+    runtime smoke evidence exist.
+  first_slice_choice: chrome-installed-browsers
+safety_model:
+  compile_safe_means:
+    - the Rust project compiles independently under runtime-migration/rust;
+    - unit tests use fixtures or injected command/filesystem adapters;
+    - no tests read real browser profiles, cookies, secrets, or native-host state;
+    - plugin command references stay pointed at the existing JS helper until
+      parity and rollback are documented.
+  mutation_levels:
+    observe: read-only filesystem, registry query, command query, JSON/text output
+    dry_run: resolves launch or mutation plan but does not apply it
+    controlled_change: writes native-host files, registry keys, or launches apps
+  default_boundary_this_turn:
+    - document and contract candidates only
+    - no plugin runtime replacement
+    - no registry/native-host mutation
+candidate_order:
+  - chrome-installed-browsers
+  - chrome-open-window-dry-run
+  - runtime-migration-scanner
+  - chrome-install-manifest-dry-run
+  - chrome-browser-client-protocol
+candidates:
+  - surface_id: chrome-installed-browsers
+    path: plugins/patched/openai-bundled/plugins/chrome/scripts/installed-browsers.js
+    current_runtime: node
+    current_owner: app-cache
+    rust_fit: high
+    recommended_phase: first_rust_slice
+    mutation_level: observe
+    why_fit:
+      - deterministic CLI shape with --check and --json flags
+      - platform-specific discovery can be modeled behind command and filesystem adapters
+      - machine-readable JSON output gives a stable parity oracle
+      - no write path or browser launch path was observed in the source
+    observed_contract:
+      command: scripts/installed-browsers.js
+      flags:
+        - --check
+        - --json
+      stdout:
+        text_report: default
+        json_inventory: when --json is present
+      exit_codes:
+        success: 0
+        check_failure: 1 when --check finds no installed browsers
+        fatal_error: 2 from top-level error handler
+      json_shape:
+        platform: string
+        default_browser: object
+        installed_browsers: array
+    observed_dependencies:
+      node_modules:
+        - node:fs
+        - node:os
+        - node:path
+        - node:process
+        - node:child_process
+      external_commands:
+        windows:
+          - reg query
+          - where chrome
+        macos:
+          - plutil
+          - mdfind
+          - which
+        linux:
+          - xdg-settings
+          - which
+      filesystem_reads:
+        - application directories
+        - Chrome executable candidate paths
+        - macOS plist files
+    rust_shape:
+      crate: runtime-migration/rust/chrome-installed-browsers
+      adapters:
+        - CommandRunner
+        - FileSystemProbe
+        - PlatformEnv
+      implementation_boundary: produce the same CLI output contract without
+        installing, launching, or editing plugin files
+    required_checks_before_replacement:
+      - cargo fmt --check
+      - cargo test using command-output and filesystem fixtures
+      - JS vs Rust JSON parity on Windows no-browser and Chrome-present fixtures
+      - JS vs Rust text smoke for --check behavior
+      - manual browser/plugin smoke only after command reference replacement
+    rollback: keep the JS helper as the command target until replacement is a
+      separate reviewed patch
+    residual_risk: Real OS discovery can vary by platform, registry
+      virtualization, and localized command output; fixtures reduce but do not
+      fully replace one real Windows smoke.
+  - surface_id: chrome-open-window-dry-run
+    path: plugins/patched/openai-bundled/plugins/chrome/scripts/open-chrome-window.js
+    current_runtime: node
+    current_owner: app-cache
+    rust_fit: medium_after_dry_run_parity
+    recommended_phase: second_candidate_after_installed_browsers
+    mutation_level: dry_run_first_controlled_change_later
+    why_fit:
+      - profile selection and Chrome executable resolution are deterministic enough for fixtures
+      - --dry-run --json exposes the launch command without opening Chrome
+      - actual launch is a side effect and must not be part of the first Rust slice
+    observed_contract:
+      command: scripts/open-chrome-window.js
+      flags:
+        - --dry-run
+        - --json
+      env_overrides:
+        - CODEX_CHROME_USER_DATA_DIR
+        - CODEX_CHROME_PREFERENCES_PATH
+      stdout:
+        text_report: default
+        json_launch_plan: when --json is present
+      exit_codes:
+        success: 0
+        usage_error: 2 for unsupported flags
+        fatal_error: 2 from top-level error handler
+      json_shape:
+        platform: string
+        dryRun: boolean
+        profileDirectory: string
+        command: string
+        args: array
+    observed_dependencies:
+      node_modules:
+        - node:fs
+        - node:os
+        - node:path
+        - node:process
+        - node:child_process
+      external_commands:
+        windows:
+          - reg query
+          - where chrome
+          - cmd.exe start only when not dry-run
+        macos:
+          - plutil
+          - mdfind
+          - open only when not dry-run
+        linux:
+          - which
+          - google-chrome only when not dry-run
+      filesystem_reads:
+        - Chrome Local State
+        - Chrome Preferences
+        - application directories
+    rust_shape:
+      crate: runtime-migration/rust/chrome-open-window
+      first_mode_only:
+        - --dry-run
+        - --json
+      adapters:
+        - CommandRunner
+        - FileSystemProbe
+        - ProfileFixtureRoot
+      implementation_boundary: compute the launch plan only; real launch remains
+        on the JS helper until browser smoke and rollback exist
+    required_checks_before_replacement:
+      - cargo fmt --check
+      - cargo test using temporary Chrome profile roots
+      - JS vs Rust --dry-run --json parity across Default and Profile N cases
+      - no execFile/app launch in Rust tests
+      - browser runtime smoke only for a later apply patch
+    rollback: leave plugin command references unchanged until launch behavior is
+      proven separately
+    residual_risk: Launch quoting differs across cmd.exe, macOS open, and Linux
+      command invocation; dry-run parity is necessary but not sufficient for
+      replacement of real launch.
+  - surface_id: chrome-install-manifest
+    path: plugins/patched/openai-bundled/plugins/chrome/scripts/installManifest.mjs
+    current_runtime: bundled_minified_esm
+    current_owner: app-cache
+    rust_fit: possible_controlled_change
+    recommended_phase: later_controlled_change
+    mutation_level: controlled_change
+    why_fit:
+      - manifest JSON generation and extension-host path resolution are simple
+        enough for Rust
+      - native-host file writes and Windows registry mutation make replacement
+        higher risk than helper CLI parity
+      - minified bundled source increases review risk and argues for a contract
+        capture before implementation
+    observed_contract:
+      export: install
+      native_host_name: com.openai.codexextension
+      extension_id: hehggadaopoacecdllhhajmbjkdcmajg
+      writes:
+        - native messaging host manifest JSON under user profile paths
+        - HKCU native messaging host registry value on Windows
+      validates:
+        - bundled extension-host binary exists before writing
+    observed_dependencies:
+      node_modules:
+        - node:fs
+        - node:fs/promises
+        - node:os
+        - node:path
+        - node:child_process
+        - node:util
+      external_commands:
+        windows:
+          - reg add
+      filesystem_writes:
+        - macOS Chrome NativeMessagingHosts
+        - Linux Chrome NativeMessagingHosts
+        - Windows OpenAI extension directory
+    rust_shape:
+      crate: runtime-migration/rust/chrome-install-manifest
+      first_mode_only:
+        - --dry-run
+      apply_mode_requirements:
+        - explicit --apply
+        - pre-change manifest backup
+        - registry rollback command capture on Windows
+        - native-host smoke after apply
+      implementation_boundary: dry-run manifest generation can be compiled and
+        tested; apply mode is out of scope for the first safe Rust slice
+    required_checks_before_replacement:
+      - manifest JSON fixture parity
+      - path resolution parity for cache and latest plugin roots
+      - no writes without --apply
+      - rollback file/registry plan reviewed before any apply
+    rollback: restore prior manifest file and registry value from captured backup
+    residual_risk: This surface changes browser native-host registration; a
+      correct compile can still leave the user's Chrome integration broken if
+      apply/rollback is not tested on the target OS.
+  - surface_id: runtime-migration-scanner
+    path: runtime-migration/python/runtime_migration/node_js_surface_scanner.py
+    current_runtime: python
+    current_owner: managed-source
+    rust_fit: medium_later
+    recommended_phase: after_schema_stabilizes
+    mutation_level: observe
+    why_fit:
+      - deterministic filesystem classification is Rust-friendly
+      - current Python test harness already exists and should remain the parity oracle
+      - schema churn would make an early Rust rewrite noisy
+    required_checks_before_replacement:
+      - preserve inventory YAML shape for downstream tests
+      - keep Python wrapper or compatibility command during transition
+      - run scanner tests before and after the swap
+    rollback: retain Python scanner until Rust output parity is accepted
+    residual_risk: Premature rewrite could change inventory semantics while the
+      migration policy is still moving.
+  - surface_id: chrome-browser-client-protocol
+    path: plugins/patched/openai-bundled/plugins/chrome/scripts/browser-client.mjs
+    current_runtime: bundled_js_protocol_client
+    current_owner: app-cache
+    rust_fit: not_first_slice
+    recommended_phase: separate_design_only
+    mutation_level: controlled_change
+    why_fit:
+      - possible Rust role would be a native-host or protocol kernel, not a
+        direct helper CLI rewrite
+      - command/tool schema and browser smoke suite must exist first
+      - replacement risk is broader than language-stat cleanup
+    required_checks_before_replacement:
+      - capture command/tool schema
+      - browser smoke across attach, navigation, DOM, screenshot, clipboard
+      - upstream plugin rollback intact
+    rollback: restore bundled JS client from the plugin cache/source package
+    residual_risk: A direct rewrite would risk protocol drift and hidden browser
+      automation regressions.
+non_candidates_for_now:
+  - surface_id: memento-mcp-source-and-state
+    reason: Memento remains a support-only managed runtime boundary and is not
+      part of the Rust/Python rewrite unless explicitly requested.
+first_rust_slice_acceptance:
+  - Add an isolated Cargo project under runtime-migration/rust for
+    chrome-installed-browsers only.
+  - Compile with %USERPROFILE%\\.codex\\toolchains\\shims\\cargo.cmd.
+  - Keep plugin command references on the JS helper during the first patch.
+  - Implement fixture-driven command/filesystem adapters before touching real OS
+    discovery behavior in tests.
+  - Run old JS vs Rust JSON parity on safe fixtures.
+  - Record any platform-specific non-parity as a blocker, not as a pass.
+not_done_this_turn:
+  - no Cargo project was created
+  - no plugin runtime command reference was changed
+  - no native-host or registry write was performed

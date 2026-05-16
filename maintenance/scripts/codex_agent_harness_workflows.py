@@ -211,6 +211,47 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
     ]
     missing = [path for path in required_paths if not (root / path).exists()]
     checks.append({"name": "required_managed_source_paths", "status": "pass" if not missing else "fail", "exit_code": 0 if not missing else 1, "stdout_preview": "", "stderr_preview": ", ".join(missing), "duration_seconds": 0})
+    powershell_parser_script = r"""
+$recursiveRoots = @(
+    "maintenance/scripts",
+    "hooks",
+    "profile.d",
+    "toolchains/shims",
+    "skills"
+) | Where-Object { Test-Path -LiteralPath $_ }
+$directRoots = @("tools") | Where-Object { Test-Path -LiteralPath $_ }
+$errors = @()
+$files = @()
+foreach ($root in $recursiveRoots) {
+    $files += Get-ChildItem -LiteralPath $root -Recurse -File
+}
+foreach ($root in $directRoots) {
+    $files += Get-ChildItem -LiteralPath $root -File
+}
+$files = $files |
+    Where-Object {
+        $_.Extension -in @(".ps1", ".psm1") -and
+        $_.FullName -notmatch "\\tools\\memento-mcp\\" -and
+        $_.FullName -notmatch "\\node_modules\\" -and
+        $_.FullName -notmatch "\\plugins\\cache\\" -and
+        $_.FullName -notmatch "\\.tmp\\"
+    }
+foreach ($file in $files) {
+    $lexedItems = $null
+    $parseErrors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile(
+        $file.FullName,
+        [ref]$lexedItems,
+        [ref]$parseErrors
+    ) > $null
+    $errors += $parseErrors
+}
+if ($errors.Count) {
+    $errors | ConvertTo-Json
+    exit 1
+}
+"OK files=$($files.Count)"
+""".strip()
     if command_exists("powershell.exe"):
         checks.append(
             {
@@ -222,7 +263,7 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
                         "-ExecutionPolicy",
                         "Bypass",
                         "-Command",
-                        "$errors=@(); Get-ChildItem maintenance/scripts,hooks -Recurse -Include *.ps1 | ForEach-Object { $t=$null; $e=$null; [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$t,[ref]$e)>$null; $errors += $e }; if($errors.Count){$errors | ConvertTo-Json; exit 1}else{'OK'}",
+                        powershell_parser_script,
                     ],
                     root,
                 ),
