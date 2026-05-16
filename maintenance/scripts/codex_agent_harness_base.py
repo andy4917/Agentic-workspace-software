@@ -19,6 +19,8 @@ import sys
 import tomllib
 from pathlib import Path
 from typing import Any
+
+from codex_agent_harness_calibration import CALIBRATION_EVAL_TEMPLATE, CALIBRATION_ROLE_CONFIG
 SCHEMA_VERSION = "1"
 RUBRIC_VERSION = "codex-harness-audit-v1"
 OWNER = "codex-agent-harness"
@@ -30,20 +32,20 @@ TRAJECTORY_VERSION = "codex-trajectory-v1"
 DOCTOR_TIERS = {
     "core": [
         "config", "harness_engine_modules", "generated_outputs_untracked",
-        "hook_tool_routing", "managed_files", "skill_frontmatter",
+        "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter",
         "harness_file_size", "stale_active_references", "sentinel_blockers",
     ],
     "extended": [
         "config", "pm_subagent_protocol", "harness_engine_modules",
         "app_runtime_state_writable", "generated_outputs_untracked",
         "hook_subagent_vowline", "subagent_nickname_policy",
-        "hook_tool_routing", "managed_files", "skill_frontmatter",
+        "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter",
         "harness_file_size", "workspace_script_file_size",
         "stale_active_references", "sentinel_blockers",
     ],
     "stress": [
         "config", "harness_engine_modules", "generated_outputs_untracked",
-        "managed_files", "harness_file_size", "memento_runtime",
+        "calibration_policy", "managed_files", "harness_file_size", "memento_runtime",
         "stale_active_references", "sentinel_blockers",
     ],
 }
@@ -118,6 +120,8 @@ nickname_candidates = ["DOC-Source", "DOC-Cite", "DOC-Archivist"]
 # and reward_hacking_guard are documented in maintenance/SUBAGENT_DELEGATION_CHARTER.md.
 """,
 }
+
+ROLE_CONFIGS["agents/calibration-verifier.toml"] = CALIBRATION_ROLE_CONFIG
 
 DELEGATION_CHARTER = """# Subagent Delegation Charter
 
@@ -329,6 +333,8 @@ EVAL_TEMPLATES = {
     },
 }
 
+EVAL_TEMPLATES["evals/calibration-policy-smoke.json"] = CALIBRATION_EVAL_TEMPLATE
+
 from worker_watcher_templates import (
     DELEGATION_CHARTER as WORKER_WATCHER_DELEGATION_CHARTER,
     EVAL_TEMPLATES as WORKER_WATCHER_EVAL_TEMPLATES,
@@ -396,7 +402,15 @@ def sha256_file(path: Path) -> str:
 
 
 def harness_source_files(root: Path) -> list[Path]:
-    return sorted((root / "maintenance" / "scripts").glob("codex_agent_harness*.py"))
+    files = list((root / "maintenance" / "scripts").glob("codex_agent_harness*.py"))
+    extra = [
+        "AGENTS.md", "CALIBRATION.md", "config.toml",
+        "hooks/lightweight-codex-hook.ps1", "hooks/lightweight-codex-policy.json",
+        "hooks/lib/lightweight-codex-workflow.ps1", "agents/calibration-verifier.toml",
+        "evals/calibration-eval.yaml", "evals/calibration-policy-smoke.json",
+    ]
+    files.extend(root / item for item in extra if (root / item).exists())
+    return sorted(files)
 
 
 def harness_source_digest(root: Path) -> str:
@@ -627,13 +641,7 @@ def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_std
 
 
 def discover_instruction_files(root: Path) -> list[dict[str, Any]]:
-    candidates = [
-        root / "instructions.md",
-        root / "AGENTS.md",
-        root / "agent.md",
-        root / "CLAUDE.md",
-        root / ".cursorrules",
-    ]
+    candidates = [root / name for name in ["instructions.md", "AGENTS.md", "CALIBRATION.md", "agent.md", "CLAUDE.md", ".cursorrules"]]
     cursor_rules = root / ".cursor" / "rules"
     if cursor_rules.exists():
         candidates.extend(sorted(cursor_rules.glob("*.mdc")))

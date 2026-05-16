@@ -184,6 +184,9 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         root = Path(td)
         write_text(
             root / "config.toml",
+            'project_doc_fallback_filenames = ["CALIBRATION.md"]\n'
+            "project_doc_max_bytes = 65536\n"
+            "\n"
             "[features]\n"
             "plugins = true\n"
             "hooks = true\n"
@@ -212,11 +215,17 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "\n"
             "[agents.observer]\n"
             'description = "Independent watcher for worker handoff integrity, goal drift, evidence quality, and instruction compliance."\n'
-            'config_file = "agents/observer.toml"\n',
+            'config_file = "agents/observer.toml"\n'
+            "\n"
+            "[agents.calibration-verifier]\n"
+            'description = "Checks whether a draft answer, diagnosis, or plan is sufficiently supported before acceptance."\n'
+            'config_file = "agents/calibration-verifier.toml"\n',
         )
         write_text(
             root / "AGENTS.md",
             "# Test\n\n"
+            "## Live Turn Calibration\n\n"
+            "- Use CALIBRATION.md as the canonical live-turn calibration policy.\n"
             "- use role-prefixed nicknames with PM-* reserved for the main coordinator and EXP-*, REV-*, DOC-*, SEC-*, VAL-*, IMP-*, ENV-*, and OBS-* for subagents\n"
             "- require each subagent to state its own concrete goal\n"
             "- include Purpose, PM Context, Owned Surface, Expected Evidence, Anti-Reward-Hacking Rules, Exit Criteria, and Not Checked fields\n"
@@ -224,6 +233,14 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "- pm must continue useful non-overlapping work while agents run\n"
             "- subagent outputs are candidate evidence, not authority\n"
             "- reject unsupported success claims and close and replace agents that produce reward-hacked validation\n",
+        )
+        write_text(
+            root / "CALIBRATION.md",
+            "# Calibration\n\n"
+            "Answer statuses: candidate, supported, inferred, uncertain, accepted, abstain.\n"
+            "Claim evidence states: observed, derived, assumed, unchecked.\n"
+            "## Falsifier-First\n\nCheck the strongest contradiction before accepting.\n"
+            "## Completion Authority\n\nTests, tools, and reports are evidence only.\n",
         )
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})
@@ -249,6 +266,10 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         write_json(
             root / "hooks" / "lightweight-codex-policy.json",
             {
+                "calibration": {
+                    "source_path": "CALIBRATION.md",
+                    "hook_boundary": "thin reminder only; not completion authority",
+                },
                 "subagents": {
                     "required_start_skill": "vowline",
                     "required_start_skill_path": str(Path.home() / ".agents" / "skills" / "vowline" / "SKILL.md"),
@@ -256,9 +277,16 @@ def cmd_self_test(args: argparse.Namespace) -> int:
                 }
             },
         )
+        write_text(
+            root / "hooks" / "lib" / "lightweight-codex-workflow.ps1",
+            "# selected answers, diagnoses, plans, and patch rationales stay candidate until direct evidence\n"
+            "# incident terms inside read-only inspection output stay L3 compatibility evidence\n",
+        )
+        write_text(root / "evals" / "calibration-eval.yaml", "checks:\n  - confident_wrong\n  - unsupported_material_claim\n")
         for name in [
             "codex_agent_harness.py",
             "codex_agent_harness_base.py",
+            "codex_agent_harness_calibration.py",
             "codex_agent_harness_lifecycle.py",
             "codex_agent_harness_merge.py",
             "codex_agent_harness_smoke.py",
@@ -286,6 +314,15 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             return 1
         write_text(root / "agents" / "explorer.toml", "drifted = true\n")
         cmd_apply(ns)
+        write_json(
+            root / "reports" / "global-scan.latest.json",
+            {
+                "content_redacted": True,
+                "active_hit_count": 0,
+                "scan_error_count": 0,
+                "harness_digest": harness_source_digest(root),
+            },
+        )
         if doctor_data(root)["status"] != "pass":
             print("doctor failed in self-test", file=sys.stderr)
             return 1

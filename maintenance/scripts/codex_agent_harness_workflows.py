@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from codex_agent_harness_base import *
+from codex_agent_harness_calibration import check_calibration_policy
 from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, doctor_data, load_trajectory_records, trajectory_records_valid
 from codex_agent_harness_smoke import (
     check_dont_even_try_integration_smoke,
@@ -177,6 +178,7 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
                     "py_compile",
                     "maintenance/scripts/codex_agent_harness.py",
                     "maintenance/scripts/codex_agent_harness_base.py",
+                    "maintenance/scripts/codex_agent_harness_calibration.py",
                     "maintenance/scripts/codex_agent_harness_lifecycle.py",
                     "maintenance/scripts/codex_agent_harness_merge.py",
                     "maintenance/scripts/codex_agent_harness_smoke.py",
@@ -191,13 +193,19 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
     checks.append({"name": "json_eval_definitions", **run_command([sys.executable, "-c", "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('evals').glob('*.json')]"], root)})
     checks.append({"name": "agent_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('agents').glob('*.toml')]"], root)})
     checks.append({"name": "hook_policy_json", **run_command([sys.executable, "-m", "json.tool", "hooks/lightweight-codex-policy.json"], root)})
+    checks.append({"name": "calibration_policy_smoke", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "eval", "--eval-id", "calibration-policy-smoke"], root)})
     required_paths = [
         "README.md",
         "AGENTS.md",
+        "CALIBRATION.md",
         "maintenance/WORKSTATION_LAYERING.md",
         ".github/workflows/repo-verify.yml",
         "maintenance/scripts/codex_agent_harness.py",
+        "maintenance/scripts/codex_agent_harness_calibration.py",
         "maintenance/scripts/codex-repo-verify.ps1",
+        "agents/calibration-verifier.toml",
+        "evals/calibration-eval.yaml",
+        "evals/calibration-policy-smoke.json",
         "evals/doctor-tier-smoke.json",
         "evals/repo-verify.json",
     ]
@@ -277,6 +285,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
             passed = check_worker_watcher_normalized_handoff_smoke(root).get("status") == "pass"
         elif eval_id == "goal-integrity-gate-smoke":
             passed = check_goal_integrity_gate_smoke(root).get("status") == "pass"
+        elif eval_id == "calibration-policy-smoke":
+            passed = check_calibration_policy(root).get("status") == "pass"
         elif eval_id == "rg-resolution-smoke":
             passed = (
                 run_command(
@@ -401,6 +411,7 @@ def score_retrieval_candidate(query_terms: list[str], text: str, path: Path) -> 
 def retrieval_candidate_files(root: Path) -> list[Path]:
     allowed = [
         root / "AGENTS.md",
+        root / "CALIBRATION.md",
         root / "agent.md",
         root / "maintenance" / "MCP_RUNTIME_STATUS.md",
         root / "maintenance" / "scripts",

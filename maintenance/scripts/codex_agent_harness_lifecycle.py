@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from codex_agent_harness_base import *
+from codex_agent_harness_calibration import check_calibration_policy
 from codex_agent_harness_status import (
     app_runtime_state_writable_status,
     generated_output_tracking_status,
@@ -243,18 +244,27 @@ def check_config(root: Path) -> dict[str, Any]:
         "reviewer": "agents/reviewer.toml",
         "docs-researcher": "agents/docs-researcher.toml",
         "observer": "agents/observer.toml",
+        "calibration-verifier": "agents/calibration-verifier.toml",
     }
     missing_agent_roles = []
     for role, config_file in required_agent_roles.items():
         role_data = agents.get(role, {})
         if not isinstance(role_data, dict) or role_data.get("config_file") != config_file or not role_data.get("description"):
             missing_agent_roles.append(role)
+    fallback_files = data.get("project_doc_fallback_filenames", [])
+    fallback_max_bytes = data.get("project_doc_max_bytes")
+    missing_calibration_fallback = not (
+        isinstance(fallback_files, list)
+        and "CALIBRATION.md" in fallback_files
+        and fallback_max_bytes == 65536
+    )
     return {
-        "status": "pass" if not missing and not unexpected and not wrong_false and not missing_agent_roles else "fail",
+        "status": "pass" if not missing and not unexpected and not wrong_false and not missing_agent_roles and not missing_calibration_fallback else "fail",
         "missing_true": missing,
         "unexpected_true": unexpected,
         "missing_false": wrong_false,
         "missing_agent_roles": missing_agent_roles,
+        "missing_calibration_fallback": missing_calibration_fallback,
     }
 
 
@@ -513,6 +523,7 @@ def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
         "generated_outputs_untracked": lambda: generated_output_tracking_status(root),
         "hook_subagent_vowline": lambda: hook_subagent_vowline_status(root),
         "subagent_nickname_policy": lambda: subagent_nickname_policy_status(root),
+        "calibration_policy": lambda: check_calibration_policy(root),
         "hook_tool_routing": lambda: hook_tool_routing_status(root),
         "managed_files": lambda: check_managed_files(root),
         "skill_frontmatter": lambda: check_skill_frontmatter(root),

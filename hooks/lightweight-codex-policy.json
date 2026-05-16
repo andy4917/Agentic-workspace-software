@@ -91,6 +91,26 @@
       "next_direct_verification_step"
     ]
   },
+  "calibration": {
+    "source_path": "CALIBRATION.md",
+    "authority": "canonical_instruction_source_for_answer_status_and_claim_evidence",
+    "answer_statuses": [
+      "candidate",
+      "supported",
+      "inferred",
+      "uncertain",
+      "accepted",
+      "abstain"
+    ],
+    "claim_evidence_states": [
+      "observed",
+      "derived",
+      "assumed",
+      "unchecked"
+    ],
+    "core_rule": "selected_answers_plans_diagnoses_and_patch_rationales_start_as_candidate_until_direct_evidence_supports_them",
+    "hook_boundary": "thin_reminder_only_not_full_verification_or_completion_authority"
+  },
   "memory": {
     "provider": "memento",
     "authority": "support_only_never_completion_authority",

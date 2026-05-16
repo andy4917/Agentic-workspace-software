@@ -111,6 +111,30 @@ Use this lifecycle as the main workflow overlay. Scale the ceremony to the task,
 
 Treat skills as workflows, not essays. A useful skill has a trigger, ordered steps, checkpoint evidence, anti-rationalization reminders, and exit criteria.
 
+## Live Turn Calibration
+
+Use `CALIBRATION.md` as the canonical source for answer-status and
+claim-evidence calibration. Do not duplicate the full calibration policy in
+this file, hooks, README files, or harness scripts; those surfaces may only
+summarize, point to, or verify the canonical file.
+
+During live work, treat every selected answer, diagnosis, plan, implementation
+hypothesis, and patch rationale as `candidate` until direct evidence supports
+it. Factual, diagnostic, security, config, dependency, version, path, API, and
+test-result claims must be tracked as `observed`, `derived`, `assumed`, or
+`unchecked` at the claim level.
+
+Before committing to a diagnosis or plan, identify the cheapest falsifier. If
+the falsifier is cheap and safe, check it before proceeding. If it is not
+checked, keep the answer `uncertain` or `inferred`; do not present it as
+`accepted`.
+
+If new evidence contradicts the current path, downgrade the answer status
+immediately and revise. Time already spent on a path is not evidence. For
+high-risk or ambiguity-heavy tasks, independently verify the draft by
+extracting key claims into neutral questions and answering those questions from
+files, tests, tool output, or source material before finalizing.
+
 ## Work Level Escalation
 
 Task level routes workflow rigor; it is not proof of completion.

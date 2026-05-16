@@ -395,6 +395,9 @@ function Get-ToolTaskAdjustment {
     $largeLines = [int]$Policy.work_size.large_changed_lines
     $governancePattern = "(?i)(hook|workflow|harness|toolchain|debugger|mcp|plugins?[\\/]+cache|skills?[\\/].*scripts?|agents\.md|project_workflow_chain|codex_agent_harness|lightweight-codex)"
     $incidentPattern = "(?i)(root cause|failure|failed|regression|false[- ]?pass|fake success|hidden fallback|stale state|unsupported success|bypass)"
+    $writeLikeTool = $ToolName -match "(?i)(apply_patch|Edit|Write)"
+    $writeLikeText = $Text -match "(?i)(apply_patch|Set-Content|Add-Content|Out-File|Remove-Item|Move-Item|Copy-Item|git\s+(add|commit|push|merge|rebase))"
+    $readOnlyInspection = $Text -match "(?i)(Get-Content|Select-String|rg(\.ps1|\.cmd)?\b|git\s+(status|diff|show|log|ls-files)|Get-ChildItem|Test-Path)" -and -not ($writeLikeTool -or $writeLikeText)
 
     if ($Text -match $governancePattern) {
         $level = "L3"
@@ -404,9 +407,11 @@ function Get-ToolTaskAdjustment {
         $level = "L3"
         $reasons += "$Stage observed large or multi-surface change"
     }
-    if (($Text -match $governancePattern) -and ($Text -match $incidentPattern)) {
+    if (($Text -match $governancePattern) -and ($Text -match $incidentPattern) -and -not $readOnlyInspection) {
         $level = "L4"
         $reasons += "$Stage observed incident signal intersecting workflow/governance surface"
+    } elseif (($Text -match $governancePattern) -and ($Text -match $incidentPattern) -and $readOnlyInspection) {
+        $reasons += "$Stage observed incident terms inside read-only inspection output; keep as L3 compatibility evidence"
     }
     if ($ToolName -match "(?i)(spawn_agent|send_input|wait_agent|close_agent|resume_agent)") {
         $level = "L3"
@@ -417,7 +422,7 @@ function Get-ToolTaskAdjustment {
         level = $level
         reason = (($reasons | Select-Object -Unique) -join "; ")
         compatibilityReviewRequired = ($Text -match $governancePattern -or $ChangedFileCount -gt 1 -or $ChangedLineCount -ge $largeLines)
-        anomalyPauseExpected = (($Text -match $governancePattern) -and ($Text -match $incidentPattern))
+        anomalyPauseExpected = (($Text -match $governancePattern) -and ($Text -match $incidentPattern) -and -not $readOnlyInspection)
     }
 }
 
@@ -491,7 +496,7 @@ function Get-IntentFrame {
         memory_action = $MemoryRoute
         subagent_policy = $subagentPolicy
         subagent_call_declaration = "If the user explicitly authorizes subagents or a subagent tool is used, final evidence must repeat SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, regardless of task-class reminder availability."
-        calibration_action = "If hook state, tool output, validation, or final preflight contradicts the current workflow, pause the active path, preserve evidence, trace the anomaly, and resume only with direct verification or an explicit blocked/continue decision."
+        calibration_action = "Use CALIBRATION.md: selected answers, diagnoses, plans, and patch rationales remain candidate until direct evidence supports them. If hook state, tool output, validation, or final preflight contradicts the current workflow, pause the active path, preserve evidence, trace the anomaly, and resume only with direct verification or an explicit blocked/continue decision."
     }
 }
 
@@ -629,9 +634,13 @@ function Get-PromptReminder {
         $watcherAction = "Watcher action required by default for this L4 delegated incident: spawn an OBS/REV read-only watcher for inspect/adversarial review; if omitted, record WATCHER_NOT_USED with reason, risk, substitute check, and confidence impact."
     }
 
-    $calibrationAction = "Calibration: if an unexpected mismatch appears, preserve evidence and switch to debug trace before continuing."
+    $calibrationSource = "CALIBRATION.md"
+    if ($null -ne $Policy.calibration -and -not [string]::IsNullOrWhiteSpace([string]$Policy.calibration.source_path)) {
+        $calibrationSource = [string]$Policy.calibration.source_path
+    }
+    $calibrationAction = "Calibration: use $calibrationSource; selected answers, diagnoses, plans, and patch rationales stay candidate until direct evidence supports them. If an unexpected mismatch appears, preserve evidence and switch to debug trace before continuing."
     if ([bool]$classification.anomalyPauseExpected) {
-        $calibrationAction = "Calibration action required: anomaly signal detected; pause build/ship, preserve evidence, trace the first mismatch, check overlap with existing gates, then resume only with verification or blocked/continue status."
+        $calibrationAction = "Calibration action required: use $calibrationSource; anomaly signal detected. Pause build/ship, preserve evidence, trace the first mismatch, check overlap with existing gates, then resume only with verification or blocked/continue status."
     }
 
     return @"
