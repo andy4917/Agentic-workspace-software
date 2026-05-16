@@ -24,3 +24,6 @@ GitHub language-stat rule:
 - Any JS kept because a forced Rust/Python rewrite would break plugin or browser
   behavior must be recorded in `inventory/js-language-handoff.yaml` before it is
   counted as deferred rather than migrated.
+- Compact helper CLIs may be migrated out of plugin app-cache only when their
+  command contract is documented and covered by Python compile plus fixture
+  tests that avoid reading real user browser data.

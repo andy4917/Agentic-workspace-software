@@ -22,13 +22,13 @@ On the first Chrome-backed browser task in a session, try a lightweight browser-
 
 If browser-client still reports that it cannot communicate with Chrome after that retry, confirm that Chrome is installed, running and that the extension is present in the selected Chrome profile:
 
-From the plugin root, use `node_repl` to run:
+From the plugin root, run these diagnostic commands:
 
 ```
-scripts/chrome-is-running.js --check
+python scripts/chrome_is_running.py --check
 scripts/installed-browsers.js --check
-scripts/check-extension-installed.js --json
-scripts/check-native-host-manifest.js --json
+python scripts/check_extension_installed.py --json
+python scripts/check_native_host_manifest.py --json
 ```
 
 Depending on the outcome follow the following checks. Be sure to ask the user permission when required, if it is stated in the check.
@@ -123,25 +123,25 @@ Use JSON output when another tool or script needs structured data:
 scripts/installed-browsers.js --json
 ```
 
-### chrome-is-running.js
+### chrome_is_running.py
 
 This script checks whether Google Chrome is actively running. It exits `0` when Chrome is running, `1` when Chrome is not running, and `2` for usage or runtime errors.
 
-From the plugin root, use `node_repl` to run:
+From the plugin root, run:
 
 ```
-scripts/chrome-is-running.js --check
+python scripts/chrome_is_running.py --check
 ```
 
 Use JSON output when another tool or script needs structured data:
 
 ```
-scripts/chrome-is-running.js --json
+python scripts/chrome_is_running.py --json
 ```
 
 ### open-chrome-window.js
 
-This script opens `about:blank` in a Google Chrome window for the same selected Chrome profile used by `check-extension-installed.js`. Use it only after the User gives permission.
+This script opens `about:blank` in a Google Chrome window for the same selected Chrome profile used by `check_extension_installed.py`. Use it only after the User gives permission.
 
 From the plugin root, use `node_repl` to run:
 
@@ -155,38 +155,38 @@ Use dry-run JSON output when another tool or script needs to verify the selected
 scripts/open-chrome-window.js --dry-run --json
 ```
 
-### check-extension-installed.js
+### check_extension_installed.py
 
 This script checks whether the selected Google Chrome profile has installed version directories for the configured public Chrome Web Store extension ID. It exits `0` when installed and enabled, `1` when installed but not enabled, `2` when not installed, and `3` for usage or runtime errors.
 
-From the plugin root, use `node_repl` to run:
+From the plugin root, run:
 
 ```
-scripts/check-extension-installed.js
+python scripts/check_extension_installed.py
 ```
 
 Use JSON output when another tool or script needs structured data:
 
 ```
-scripts/check-extension-installed.js --json
+python scripts/check_extension_installed.py --json
 ```
 
 The check reads the configured extension ID from `scripts/extension-id.json`. It detects the Chrome profile from `Local State`, then falls back to the highest-numbered `Profile X` or `Default` directory with `Preferences`. For debugging or tests, override profile selection with `CODEX_CHROME_USER_DATA_DIR=/path/to/chrome-root` or `CODEX_CHROME_PREFERENCES_PATH=/path/to/Profile/Preferences`.
 
-### check-native-host-manifest.js
+### check_native_host_manifest.py
 
 This script checks whether the Chrome Native Messaging Host manifest exists for the configured native host name and allows the Chrome extension ID from `scripts/extension-id.json`. On Windows it also checks the Chrome NativeMessagingHosts registry key. It exits `0` when correct, `1` when missing or incorrect, and `2` for usage or runtime errors.
 
-From the plugin root, use `node_repl` to run:
+From the plugin root, run:
 
 ```
-scripts/check-native-host-manifest.js
+python scripts/check_native_host_manifest.py
 ```
 
 Use JSON output when another tool or script needs structured data:
 
 ```
-scripts/check-native-host-manifest.js --json
+python scripts/check_native_host_manifest.py --json
 ```
 
 ## Chrome Safety

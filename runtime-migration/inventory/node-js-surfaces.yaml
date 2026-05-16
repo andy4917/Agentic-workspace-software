@@ -1,12 +1,12 @@
 schema_version: 1
-generated_at: "2026-05-16T17:20:15+00:00"
+generated_at: "2026-05-16T17:55:52+00:00"
 root: "%USERPROFILE%\\.codex"
 scanner:
   mode: read-only
   sensitive_content_emitted: false
   memento_exclusion: paths under tools/memento-mcp or state/memento-mcp are keep-only
 summary:
-  surface_count: 40
+  surface_count: 36
   active_runtime_count: 3
   memento_related_count: 2
 surfaces:
@@ -424,66 +424,6 @@ surfaces:
       - node
       - npm
   -
-    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-check-extension-installed-js
-    current_owner: app-cache
-    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/check-extension-installed.js
-    activation_surface: file
-    runtime_type: js
-    classification: app-cache
-    observed_problem: github-language-stat-noise
-    memento_related: false
-    migration_decision: keep
-    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
-    risk_level: observe
-    approval_required: false
-    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
-    evidence_required:
-      - scanner output
-      - handoff entry
-      - plugin runtime smoke before active use
-    matched_terms:
-      - node
-  -
-    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-check-native-host-manifest-js
-    current_owner: app-cache
-    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/check-native-host-manifest.js
-    activation_surface: file
-    runtime_type: js
-    classification: app-cache
-    observed_problem: github-language-stat-noise
-    memento_related: false
-    migration_decision: keep
-    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
-    risk_level: observe
-    approval_required: false
-    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
-    evidence_required:
-      - scanner output
-      - handoff entry
-      - plugin runtime smoke before active use
-    matched_terms:
-      - node
-  -
-    surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-chrome-is-running-js
-    current_owner: app-cache
-    current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/chrome-is-running.js
-    activation_surface: file
-    runtime_type: js
-    classification: app-cache
-    observed_problem: github-language-stat-noise
-    memento_related: false
-    migration_decision: keep
-    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
-    risk_level: observe
-    approval_required: false
-    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
-    evidence_required:
-      - scanner output
-      - handoff entry
-      - plugin runtime smoke before active use
-    matched_terms:
-      - node
-  -
     surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-installmanifest-mjs
     current_owner: app-cache
     current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/installManifest.mjs
@@ -527,26 +467,6 @@ surfaces:
     surface_id: file-plugins-patched-openai-bundled-plugins-chrome-scripts-open-chrome-window-js
     current_owner: app-cache
     current_path: plugins/patched/openai-bundled/plugins/chrome/scripts/open-chrome-window.js
-    activation_surface: file
-    runtime_type: js
-    classification: app-cache
-    observed_problem: github-language-stat-noise
-    memento_related: false
-    migration_decision: keep
-    replacement_contract: plugin-owned JS; handoff before any Rust/Python replacement
-    risk_level: observe
-    approval_required: false
-    rollback: no runtime mutation; remove vendored language marker if GitHub stats handling is rejected
-    evidence_required:
-      - scanner output
-      - handoff entry
-      - plugin runtime smoke before active use
-    matched_terms:
-      - node
-  -
-    surface_id: file-plugins-patched-openai-bundled-plugins-latex-tectonic-scripts-tectonic-path-mjs
-    current_owner: app-cache
-    current_path: plugins/patched/openai-bundled/plugins/latex-tectonic/scripts/tectonic-path.mjs
     activation_surface: file
     runtime_type: js
     classification: app-cache

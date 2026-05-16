@@ -9,8 +9,13 @@ github_language_baseline:
 decision:
   owned_migration_path: runtime-migration continues in Python first, Rust later for stable hot paths
   github_stats_fix: mark OpenAI-bundled patched plugin cache as vendored
-  completed_rewrite_this_slice: skills/.system/openai-docs/scripts/resolve-latest-model-info.js migrated to Python
-  completion_boundary: vendored language reduction is not a Rust/Python rewrite pass
+  completed_rewrite_this_slice:
+    - skills/.system/openai-docs/scripts/resolve-latest-model-info.js migrated to Python
+    - plugins/patched/openai-bundled/plugins/chrome/scripts/chrome-is-running.js migrated to Python
+    - plugins/patched/openai-bundled/plugins/chrome/scripts/check-extension-installed.js migrated to Python
+    - plugins/patched/openai-bundled/plugins/chrome/scripts/check-native-host-manifest.js migrated to Python
+    - plugins/patched/openai-bundled/plugins/latex-tectonic/scripts/tectonic-path.mjs migrated to Python
+  completion_boundary: vendored language reduction is not by itself a Rust/Python rewrite pass; this handoff now distinguishes migrated helper CLIs from deferred browser runtime JS
 handoff_surfaces:
   -
     surface_id: app-cache-openai-bundled-browser-use-browser-client
@@ -24,20 +29,11 @@ handoff_surfaces:
   -
     surface_id: app-cache-openai-bundled-chrome-scripts
     current_path: plugins/patched/openai-bundled/plugins/chrome/scripts
-    bytes: 799712
+    bytes: 773683
     owner: app-cache
-    decision: keep-js
-    reason: Chrome plugin helper scripts depend on browser/Node integration points and extension installation behavior
-    safer_next_step: design a Python/Rust native-host replacement only after capturing extension install, launch, and browser-client contracts
-    rollback: remove the vendored Linguist marker if GitHub stats treatment is rejected
-  -
-    surface_id: app-cache-openai-bundled-latex-tectonic-helper
-    current_path: plugins/patched/openai-bundled/plugins/latex-tectonic/scripts/tectonic-path.mjs
-    bytes: 710
-    owner: app-cache
-    decision: keep-js
-    reason: small plugin-owned path helper; migration value is low without a plugin contract
-    safer_next_step: defer until plugin cache ownership policy changes
+    decision: keep-js-partial
+    reason: remaining JS contains the core browser-client module, the bundled native-host installer, installed-browser discovery, and Chrome launch helper; these still depend on Node REPL/browser, native-host install, or broad OS browser discovery contracts
+    safer_next_step: migrate installed-browsers.js only with cross-platform fixture parity; keep browser-client.mjs and installManifest.mjs until an upstream plugin/native-host contract replacement exists
     rollback: remove the vendored Linguist marker if GitHub stats treatment is rejected
   -
     surface_id: system-skill-openai-docs-model-helper
@@ -49,6 +45,35 @@ handoff_surfaces:
     reason: local skill helper has a compact CLI contract and no browser/Node-only runtime requirement
     verification: runtime-migration/tests/test_openai_docs_latest_model_info.py
     rollback: restore the deleted JS helper and SKILL.md command from the previous commit
+  -
+    surface_id: app-cache-openai-bundled-chrome-diagnostic-helpers
+    previous_paths:
+      - plugins/patched/openai-bundled/plugins/chrome/scripts/chrome-is-running.js
+      - plugins/patched/openai-bundled/plugins/chrome/scripts/check-extension-installed.js
+      - plugins/patched/openai-bundled/plugins/chrome/scripts/check-native-host-manifest.js
+    replacement_paths:
+      - plugins/patched/openai-bundled/plugins/chrome/scripts/chrome_is_running.py
+      - plugins/patched/openai-bundled/plugins/chrome/scripts/check_extension_installed.py
+      - plugins/patched/openai-bundled/plugins/chrome/scripts/check_native_host_manifest.py
+      - plugins/patched/openai-bundled/plugins/chrome/scripts/chrome_common.py
+    previous_bytes: 26029
+    owner: app-cache
+    decision: rewrite-python
+    reason: read-only diagnostic CLIs have compact file/process/registry contracts and do not implement the browser-client protocol
+    verification: runtime-migration/tests/test_plugin_python_helpers.py
+    rollback: restore deleted JS helpers and Chrome SKILL.md command references from the previous commit
+  -
+    surface_id: app-cache-openai-bundled-latex-tectonic-helper
+    previous_path: plugins/patched/openai-bundled/plugins/latex-tectonic/scripts/tectonic-path.mjs
+    replacement_path: plugins/patched/openai-bundled/plugins/latex-tectonic/scripts/tectonic_path.py
+    previous_bytes: 710
+    owner: app-cache
+    decision: rewrite-python
+    reason: path-only helper has a compact filesystem contract and no Node-only runtime requirement
+    verification: runtime-migration/tests/test_plugin_python_helpers.py
+    rollback: restore the deleted JS helper and latex-tectonic SKILL.md command reference from the previous commit
 not_migrated_this_slice:
   - Memento MCP remains excluded by policy and direct memory-runtime guardrails.
-  - OpenAI-bundled plugin JS remains executable JS; it is classified as vendored app-cache rather than converted.
+  - OpenAI-bundled browser-client.mjs remains executable JS; it is the browser runtime protocol and requires a separate native-host/browser-client design before conversion.
+  - Chrome installManifest.mjs remains executable JS because it is a bundled native-host installer and registry mutation path.
+  - installed-browsers.js and open-chrome-window.js remain executable JS pending cross-platform parity fixtures and launch dry-run coverage.

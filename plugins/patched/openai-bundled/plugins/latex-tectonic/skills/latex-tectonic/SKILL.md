@@ -14,10 +14,10 @@ The plugin bundles Tectonic under the plugin root:
 
 Resolve the plugin root from this `SKILL.md` file by going two directories up from `skills/latex-tectonic/`.
 
-Use `scripts/tectonic-path.mjs` when another script needs the executable path:
+Use `scripts/tectonic_path.py` when another script needs the executable path:
 
 ```bash
-node scripts/tectonic-path.mjs
+python scripts/tectonic_path.py
 ```
 
 For normal compilation, run the bundled executable directly from the document directory:
