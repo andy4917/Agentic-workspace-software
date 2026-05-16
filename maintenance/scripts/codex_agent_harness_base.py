@@ -325,6 +325,7 @@ EVAL_TEMPLATES = {
             "tracked Python harness files compile",
             "tracked JSON eval and hook policy files parse",
             "PowerShell managed scripts parse",
+            "repo-safe calibration smoke does not require ignored private config.toml",
             "mutable generated outputs are not tracked"
         ],
         "grader": "python maintenance/scripts/codex_agent_harness.py repo-verify",

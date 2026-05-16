@@ -7,9 +7,12 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   repo-verify:
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -22,3 +25,18 @@ jobs:
       - name: Run repository-only verification
         shell: pwsh
         run: python maintenance/scripts/codex_agent_harness.py repo-verify
+
+      - name: Print repository verification reports
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path reports/repo-verify.latest.md) {
+            Get-Content -Raw reports/repo-verify.latest.md
+          } else {
+            Write-Host "reports/repo-verify.latest.md not found"
+          }
+          if (Test-Path reports/repo-verify.latest.json) {
+            Get-Content -Raw reports/repo-verify.latest.json
+          } else {
+            Write-Host "reports/repo-verify.latest.json not found"
+          }

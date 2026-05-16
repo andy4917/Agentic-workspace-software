@@ -193,7 +193,18 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
     checks.append({"name": "json_eval_definitions", **run_command([sys.executable, "-c", "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('evals').glob('*.json')]"], root)})
     checks.append({"name": "agent_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('agents').glob('*.toml')]"], root)})
     checks.append({"name": "hook_policy_json", **run_command([sys.executable, "-m", "json.tool", "hooks/lightweight-codex-policy.json"], root)})
-    checks.append({"name": "calibration_policy_smoke", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "eval", "--eval-id", "calibration-policy-smoke"], root)})
+    calibration = check_calibration_policy(root, require_config=False)
+    checks.append(
+        {
+            "name": "calibration_policy_smoke_repo_safe",
+            "status": calibration.get("status", "fail"),
+            "exit_code": 0 if calibration.get("status") == "pass" else 1,
+            "stdout_preview": "",
+            "stderr_preview": "; ".join(calibration.get("failures", [])),
+            "duration_seconds": 0,
+            "report": calibration,
+        }
+    )
     required_paths = [
         "README.md",
         "AGENTS.md",

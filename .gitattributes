@@ -1,4 +1,5 @@
 * text=auto
+.gitattributes text eol=lf
 
 *.ps1 text eol=crlf
 *.psm1 text eol=crlf
@@ -9,6 +10,7 @@
 *.yaml text eol=lf
 *.yml text eol=lf
 *.toml text eol=lf
+*.py text eol=lf
 
 # OpenAI-bundled plugin cache is kept for plugin compatibility and rollback.
 # It is not owned runtime-migration source; track it as vendored for Linguist.

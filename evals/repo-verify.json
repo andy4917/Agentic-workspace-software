@@ -7,6 +7,7 @@
     "tracked Python harness files compile",
     "tracked JSON eval and hook policy files parse",
     "PowerShell managed scripts parse",
+    "repo-safe calibration smoke does not require ignored private config.toml",
     "mutable generated outputs are not tracked"
   ],
   "task": "Run the CI-capable managed-source verification path that does not require live private runtime state.",
