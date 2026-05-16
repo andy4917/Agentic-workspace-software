@@ -650,6 +650,7 @@ function Invoke-Status {
     Write-Output "status=observed"
     Write-Detail ("source_root=" + $SourceRoot)
     Write-Detail ("state_root=" + $StateRoot)
+    Write-Detail "user_permission=allowed"
     Write-Detail ("current_process_administrator=" + [string](Test-CurrentTokenAdministrator))
     Write-Detail ("postgres_ready=" + [string](Test-PostgresReady))
     Write-Detail ("memento_health=" + [string](Test-MementoHealth))

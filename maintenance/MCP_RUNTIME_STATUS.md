@@ -146,6 +146,7 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
   `memento-mcp-runtime.ps1` from the current non-elevated user token. It must
   not be launched from an elevated administrator token; the runtime is intended
   to require no administrator privileges after installation.
+- `user_permission`: `allowed` for the current non-elevated user token.
 - `managed_memory_policy`: the Codex-managed runtime starts Memento with
   `MEMENTO_INPROCESS_ONNX_ENABLED=false` and
   `MEMENTO_MANAGED_EMBEDDING_PROVIDER=none` unless explicitly overridden. This

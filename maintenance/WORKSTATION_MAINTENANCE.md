@@ -150,6 +150,7 @@ exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
 - `privilege_model`: normal operation uses the current non-elevated user token.
   PostgreSQL must not be launched from an elevated administrator token; the
   runtime should not require administrator privileges after installation.
+- `user_permission`: `allowed` for the current non-elevated user token.
 - `scope`: Codex-global PM memory support only; not project completion
   authority and not a replacement for AGENTS, hooks, scorecard, Memento gates,
   tests, runtime output, or PM verification.
