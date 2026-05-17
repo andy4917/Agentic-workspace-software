@@ -363,7 +363,11 @@ def root_path(args: argparse.Namespace) -> Path:
 
 
 def rel(path: Path, root: Path) -> str:
-    return path.resolve().relative_to(root.resolve()).as_posix()
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        fallback = path.relative_to(root) if path.is_relative_to(root) else path.resolve()
+        return fallback.as_posix()
 
 
 def ensure_dir(path: Path) -> None:
@@ -406,10 +410,11 @@ def harness_source_files(root: Path) -> list[Path]:
     extra = [
         "AGENTS.md", "CALIBRATION.md", "config.toml",
         "hooks/lightweight-codex-hook.ps1", "hooks/lightweight-codex-policy.json",
-        "hooks/lib/lightweight-codex-workflow.ps1", "agents/calibration-verifier.toml",
+        "agents/calibration-verifier.toml",
         "evals/calibration-eval.yaml", "evals/calibration-policy-smoke.json",
     ]
     files.extend(root / item for item in extra if (root / item).exists())
+    files.extend((root / "hooks" / "lib").glob("*.ps1"))
     return sorted(files)
 
 
@@ -760,7 +765,6 @@ def store_tool_artifact(root: Path, name: str, content: str) -> dict[str, Any]:
     path = root / "artifacts" / "tool-results" / f"{local_stamp()}-{digest}-{safe_name}.txt"
     write_text(path, redact_obvious_secrets(content))
     return {"path": rel(path, root), "bytes": path.stat().st_size, "sha256": sha256_file(path)}
-
 
 def current_git_state(root: Path) -> dict[str, Any]:
     def run_git(args: list[str]) -> str:

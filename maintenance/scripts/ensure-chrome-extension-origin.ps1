@@ -196,15 +196,32 @@ function Read-AppServerResponse {
         [int]$TimeoutMs = 30000
     )
 
+    if ($null -eq $Process -or $null -eq $Process.StandardOutput) {
+        throw "app-server stdout is unavailable for response id=$ExpectedId"
+    }
+
     $deadline = [DateTimeOffset]::UtcNow.AddMilliseconds($TimeoutMs)
     while ([DateTimeOffset]::UtcNow -lt $deadline) {
+        if ($Process.HasExited) {
+            throw "app-server exited before response id=$ExpectedId exitCode=$($Process.ExitCode)"
+        }
+
         $remainingMs = [int][Math]::Max(1, ($deadline - [DateTimeOffset]::UtcNow).TotalMilliseconds)
         $readTask = $Process.StandardOutput.ReadLineAsync()
+        if ($null -eq $readTask) {
+            throw "app-server stdout read returned null for response id=$ExpectedId"
+        }
         if (-not $readTask.Wait($remainingMs)) {
             throw "timed out waiting for app-server response id=$ExpectedId"
         }
 
         $line = $readTask.Result
+        if ($null -eq $line) {
+            if ($Process.HasExited) {
+                throw "app-server closed stdout before response id=$ExpectedId exitCode=$($Process.ExitCode)"
+            }
+            continue
+        }
         if ([string]::IsNullOrWhiteSpace($line)) {
             continue
         }
@@ -231,8 +248,11 @@ function Send-AppServerRequest {
         $Params
     )
 
+    if ($null -eq $Process -or $null -eq $Process.StandardInput) {
+        throw "app-server stdin is unavailable for request id=$Id method=$Method"
+    }
+
     $request = [ordered]@{
-        jsonrpc = "2.0"
         id = $Id
         method = $Method
     }
@@ -241,8 +261,9 @@ function Send-AppServerRequest {
     }
 
     $json = $request | ConvertTo-Json -Depth 20 -Compress
-    $Process.StandardInput.WriteLine($json)
-    $Process.StandardInput.Flush()
+    $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($json + "`n")
+    $Process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $Process.StandardInput.BaseStream.Flush()
 }
 
 function Get-PluginInstalledFromReadResponse {
@@ -252,8 +273,148 @@ function Get-PluginInstalledFromReadResponse {
         return $false
     }
 
+    if ($null -eq $Response.result -or $null -eq $Response.result.plugin) {
+        return $false
+    }
+
     $summary = $Response.result.plugin.summary
     return ($null -ne $summary -and $summary.installed -eq $true -and $summary.enabled -eq $true)
+}
+
+function Invoke-AppServerPluginEnsureWithPython {
+    param(
+        [string]$CodexHome,
+        [string]$CodexExe,
+        [string]$MarketplacePath
+    )
+
+    $shimPython = Join-Path $CodexHome "toolchains\shims\python.cmd"
+    $pythonSource = $null
+    if (Test-Path -LiteralPath $shimPython -PathType Leaf) {
+        $pythonSource = $shimPython
+    } else {
+        $python = Get-Command python -ErrorAction SilentlyContinue
+        if ($null -ne $python) {
+            $pythonSource = $python.Source
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($pythonSource)) {
+        return $null
+    }
+
+    $oldExe = $env:CODEX_APP_SERVER_EXE
+    $oldMarketplace = $env:CODEX_APP_SERVER_MARKETPLACE
+    $env:CODEX_APP_SERVER_EXE = $CodexExe
+    $env:CODEX_APP_SERVER_MARKETPLACE = $MarketplacePath
+
+    $script = @'
+import json
+import os
+import queue
+import subprocess
+import sys
+import threading
+import time
+
+exe = os.environ["CODEX_APP_SERVER_EXE"]
+marketplace = os.environ["CODEX_APP_SERVER_MARKETPLACE"]
+proc = None
+
+def send(proc, request_id, method, params=None):
+    request = {"id": request_id, "method": method}
+    if params is not None:
+        request["params"] = params
+    proc.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+    proc.stdin.flush()
+
+def read_response(lines, expected_id, timeout_seconds):
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            line = lines.get(timeout=max(0.1, deadline - time.time()))
+        except queue.Empty:
+            break
+        if not line.strip():
+            continue
+        message = json.loads(line)
+        if message.get("id") == expected_id:
+            return message
+    raise TimeoutError(f"timed out waiting for app-server response id={expected_id}")
+
+def is_installed(response):
+    summary = response.get("result", {}).get("plugin", {}).get("summary")
+    return bool(summary and summary.get("installed") is True and summary.get("enabled") is True)
+
+try:
+    proc = subprocess.Popen(
+        [exe, "app-server", "--listen", "stdio://"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+    )
+    lines = queue.Queue()
+
+    def reader():
+        for item in proc.stdout:
+            lines.put(item)
+
+    threading.Thread(target=reader, daemon=True).start()
+    send(proc, 1, "initialize", {
+        "clientInfo": {"name": "codex-browser-plugin-ui-repair", "title": "Codex Browser Plugin UI Repair", "version": "0.0.1"},
+        "capabilities": {"experimentalApi": True, "requestAttestation": False, "optOutNotificationMethods": []},
+    })
+    read_response(lines, 1, 15)
+    params = {"marketplacePath": marketplace, "remoteMarketplaceName": None, "pluginName": "browser"}
+    send(proc, 2, "plugin/read", params)
+    before = read_response(lines, 2, 30)
+    if is_installed(before):
+        print("ok: browser@openai-bundled is installed and enabled")
+        sys.exit(0)
+    send(proc, 3, "plugin/install", params)
+    install = read_response(lines, 3, 45)
+    if install.get("error"):
+        print("failed: browser@openai-bundled install failed: " + str(install["error"].get("message", install["error"])))
+        sys.exit(0)
+    send(proc, 4, "plugin/read", params)
+    after = read_response(lines, 4, 30)
+    if is_installed(after):
+        print("patched-plugin: browser@openai-bundled installed and enabled through app-server")
+    else:
+        print("failed: browser@openai-bundled still not installed after app-server install")
+except Exception as exc:
+    print("failed: browser@openai-bundled app-server python check failed: " + str(exc))
+finally:
+    if proc is not None:
+        try:
+            proc.stdin.close()
+        except Exception:
+            pass
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+'@
+
+    $tempScript = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-app-server-plugin-ensure-" + [guid]::NewGuid().ToString("N") + ".py")
+    try {
+        [System.IO.File]::WriteAllText($tempScript, $script, [System.Text.UTF8Encoding]::new($false))
+        $output = & $pythonSource $tempScript
+        if ($LASTEXITCODE -eq 0 -and $null -ne $output) {
+            return [string]($output | Select-Object -Last 1)
+        }
+        return "failed: browser@openai-bundled app-server python check failed with exit=$LASTEXITCODE"
+    }
+    finally {
+        Remove-Item -LiteralPath $tempScript -Force -ErrorAction SilentlyContinue
+        $env:CODEX_APP_SERVER_EXE = $oldExe
+        $env:CODEX_APP_SERVER_MARKETPLACE = $oldMarketplace
+    }
 }
 
 function Ensure-BrowserPluginInstalled {
@@ -272,23 +433,37 @@ function Ensure-BrowserPluginInstalled {
         return "skipped: openai-bundled marketplace file not found at $marketplacePath"
     }
 
+    $pythonResult = Invoke-AppServerPluginEnsureWithPython -CodexHome $CodexHome -CodexExe $codexExe -MarketplacePath $marketplacePath
+    if (-not [string]::IsNullOrWhiteSpace($pythonResult)) {
+        return $pythonResult
+    }
+
     $process = $null
 
     try {
         $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
         $startInfo.FileName = $codexExe
-        $startInfo.ArgumentList.Add("app-server")
-        $startInfo.ArgumentList.Add("--listen")
-        $startInfo.ArgumentList.Add("stdio://")
+        $startInfo.Arguments = "app-server --listen stdio://"
         $startInfo.RedirectStandardInput = $true
         $startInfo.RedirectStandardOutput = $true
-        $startInfo.RedirectStandardError = $false
+        $startInfo.RedirectStandardError = $true
+        if ($null -ne $startInfo.PSObject.Properties["StandardInputEncoding"]) {
+            $startInfo.StandardInputEncoding = [System.Text.UTF8Encoding]::new($false)
+        }
+        if ($null -ne $startInfo.PSObject.Properties["StandardOutputEncoding"]) {
+            $startInfo.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        }
+        if ($null -ne $startInfo.PSObject.Properties["StandardErrorEncoding"]) {
+            $startInfo.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
+        }
         $startInfo.UseShellExecute = $false
         $startInfo.CreateNoWindow = $true
 
         $process = [System.Diagnostics.Process]::new()
         $process.StartInfo = $startInfo
+        $process.add_ErrorDataReceived({ })
         $null = $process.Start()
+        $process.BeginErrorReadLine()
 
         Send-AppServerRequest -Process $process -Id 1 -Method "initialize" -Params ([ordered]@{
             clientInfo = [ordered]@{
@@ -329,7 +504,8 @@ function Ensure-BrowserPluginInstalled {
 
         return "failed: browser@openai-bundled still not installed after app-server install"
     } catch {
-        return "failed: browser@openai-bundled app-server install check failed: $($_.Exception.Message)"
+        $position = ($_.InvocationInfo.PositionMessage -replace '\s+', ' ').Trim()
+        return "failed: browser@openai-bundled app-server install check failed: $($_.Exception.Message) at $position"
     } finally {
         if ($null -ne $process) {
             try { $process.StandardInput.Close() } catch {}

@@ -412,12 +412,12 @@ Use the guarded first-browser-cell pattern above when starting browser work. It 
 
 The ability to interact directly with the browser is exposed through the `browser-client` runtime via the `agent.browsers.*` API.
 
-Only the Node REPL `js` tool (`mcp__node_repl__js`) can be used to control the Chrome extension. Do not use external MCP browser-control tools, separate browser automation servers, or other browser skills for this surface. References to Playwright mean the in-skill `tab.playwright` API after browser-client setup.
+Only the Node REPL `js` tool (`mcp__node_repl__js`) can be used to control the Chrome extension. Do not use external MCP browser-control tools, separate browser automation servers, Playwright packages, Puppeteer packages, or other browser skills for this surface. References to `tab.playwright` below describe an in-skill browser-client API shape only; they are not permission to install or route through standalone Playwright or Puppeteer.
 
 ### How to use the API
 
-* You are provided with various options for interacting with the browser (Playwright, vision), and you should use the most appropriate tool for the job.
-* Prefer Playwright where possible, but if it is not clear how to best use it, prefer vision.
+* You are provided with native browser-client APIs and visual state checks; use the smallest native path that proves the requested behavior.
+* Do not choose Playwright or Puppeteer as a fallback for Chrome extension recovery, Browser recovery, or local app verification unless the user explicitly changes this constraint in a future task.
 * Always make sure you understand what is on the screen before proceeding to your next action. After clicking, scrolling, typing, or other interactions, collect the cheapest state check that answers the next question. Prefer a fresh DOM snapshot when you need locator ground truth, prefer a screenshot when visual confirmation matters, and avoid requesting both by default.
 * Screenshots return an `Image` type that can ONLY be put into context by using the top-level `display` function (e.g. `await display(screenshot);`).
 * If you take a screenshot that the user should see, include the image inline in your Markdown response using Markdown image syntax so the image renders, rather than as a bare link:
@@ -441,9 +441,9 @@ Only the Node REPL `js` tool (`mcp__node_repl__js`) can be used to control the C
 * When the page exposes one authoritative signal for the fact you need, such as a selected option, checked state, success modal or toast, basket line item, selected sort option, or current URL parameter, treat that as the answer unless another signal directly contradicts it.
 * Do not keep re-verifying the same fact through header badges, alternate surfaces, or repeated full-page snapshots once an authoritative signal is already present.
 
-## Playwright
+## In-Skill Locator API
 
-Playwright is a critical part of the JavaScript API available to you.
+The `tab.playwright` object is a constrained locator surface exposed by the browser-client runtime, not a standalone Playwright package.
 
 You only have access to a limited subset of the Playwright API, so only call functions that are explicitly defined.
 Notably, you do not have access to `evaluate`.

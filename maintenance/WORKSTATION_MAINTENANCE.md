@@ -158,6 +158,11 @@ exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
   tests, runtime output, or PM verification.
 - `verification`:
   `maintenance\scripts\memento-mcp-runtime.ps1 verify`.
+- `session_start_guard`: the lightweight SessionStart hook checks
+  `memento-mcp-runtime.ps1 status` and schedules a hidden background `start`
+  when Memento is unhealthy. Treat this as a startup repair aid, not as proof
+  that the current session has live `mcp__memento__...` tools; verify exposure
+  or report reload-required.
 - `rollback`: stop with `maintenance\scripts\memento-mcp-runtime.ps1 stop`,
   remove or disable the `memento` MCP registration with Codex CLI only when the
   user explicitly asks, and preserve the ignored state directory unless the user
@@ -171,6 +176,34 @@ exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
   `codex_agent_harness.py doctor|verify` instead. Local `config.toml` also has
   `[features].memories=false` and `[memories].generate_memories/use_memories=false`
   to prevent raw memory residue from reappearing after cleanup.
+
+`vowline` is the managed global Codex operating skill:
+
+- `source_class`: `external-upstream`.
+- `owner`: user-global Codex skill installation from
+  `https://github.com/chojondocho/vowline.git`.
+- `source_version`: commit `4c7e24015efd1faae2489b3dd6fce1c5b1178c86`,
+  Vowline 0.6.0 source tree; installed `SKILL.md` SHA256
+  `8E427BB48AF926119A531380FB781B3F97AB704E6229ABD6059428616B5535A4`.
+- `exact_path`: primary `%USERPROFILE%\.agents\skills\vowline`; Codex
+  compatibility mirror `%USERPROFILE%\.codex\skills\vowline`.
+- `config_surface`: `%USERPROFILE%\.codex\AGENTS.md` Vowline marked block,
+  `%USERPROFILE%\.agents\skills\vowline\agents\openai.yaml`, and
+  `hooks\lib\lightweight-codex-workflow.ps1` prompt skill routing.
+- `dependency_chain`: GitHub source checkout -> `install.py global
+  --harnesses codex` -> `.agents` primary skill -> `.codex` compatibility
+  mirror -> AGENTS activation block -> UserPromptSubmit Vowline route.
+- `scope`: Codex-global operating discipline for substantive work and all
+  delegated subagents; not completion authority and not a subagent runtime
+  authorization override.
+- `verification`: `install.py verify-global --harnesses codex`, two
+  `quick_validate.py` runs for primary and mirror paths,
+  `codex_agent_harness.py doctor --json`, `repo-verify`,
+  `eval --eval-id hook-policy-smoke`, and `git diff --check`.
+- `rollback`: clone the same upstream repo and run
+  `python uninstall.py global --harnesses codex`, or restore the previous
+  Vowline skill directories and remove only the `<!-- vowline:start -->`
+  block if a manual rollback is required.
 
 ## Handoff Requirement
 

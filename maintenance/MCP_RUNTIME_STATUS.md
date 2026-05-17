@@ -138,6 +138,11 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
 - `postgres_port`: `55432`.
 - `memento_url`: `http://127.0.0.1:57332/mcp`.
 - `codex_mcp_name`: `memento`.
+- `current_version`: local source package version `4.1.0`; upstream
+  `origin/main` and tag `v4.1.0` both resolve to commit
+  `98289226527f8be0138b7e34d3f843d040b09817`. The local runtime keeps the
+  Codex Windows patches for disabled in-process ONNX and disabled adaptive
+  search parameter learning.
 - `credential_source`: user environment variable `MEMENTO_ACCESS_KEY` and the
   ignored local `.env`; do not print either value.
 - `dependency_chain`: Codex official bundled Node -> local Memento checkout ->
@@ -159,6 +164,15 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
   default `MEMENTO_MAX_WORKING_SET_MB=512`.
 - `verification`: run
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\memento-mcp-runtime.ps1 verify`.
+- `session_start_guard`: `hooks\lightweight-codex-hook.ps1` calls
+  `Invoke-MementoSessionStartEnsure` during `SessionStart`. The guard runs
+  `memento-mcp-runtime.ps1 status`; if PostgreSQL or Memento HTTP is unhealthy,
+  it schedules `memento-mcp-runtime.ps1 start` in a hidden background
+  PowerShell and returns a context note with log paths. This prevents the
+  previous hidden failure mode where a configured Memento MCP stayed down until
+  a later manual `verify`. It does not claim that an already-running Codex
+  session receives `mcp__memento__...` tools retroactively; reload may still be
+  required when tools were missing at session creation.
 - `doctor_coverage`: `maintenance\scripts\codex_agent_harness.py doctor --json`
   remains the full backward-compatible local check and includes
   `memento_runtime`. `doctor --tier core --json` intentionally excludes
@@ -283,6 +297,61 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
   `%USERPROFILE%\.codex\maintenance\backups\user-path-before-removing-codex-shim-persistent-20260516-213112.txt`
   only if persistent PATH behavior must be reverted, and remove the two Codex
   entries from the PowerShell profile if the profile route must be reverted.
+
+## 2026-05-18 Browser And Chrome Native Host Recovery
+
+- `source_class`: Codex Desktop browser/plugin runtime repair.
+- `package`: `OpenAI.Codex_26.513.4821.0_x64__2p2nqsd0c76g0`.
+- `changed_native_host`:
+  `%LOCALAPPDATA%\OpenAI\extension\com.openai.codexextension.json`.
+- `changed_runbook`:
+  `%USERPROFILE%\Downloads\codex-windows-browser-recovery-runbook.md`.
+- `root_cause`: the Chrome native messaging manifest survived a Codex Desktop
+  update and still pointed to the removed
+  `OpenAI.Codex_26.513.3673.0_x64__2p2nqsd0c76g0` package. The HKCU registry
+  key was still valid because it pointed to the manifest JSON, but the
+  executable path inside that JSON no longer existed.
+- `secondary_mismatch`: importing `browser-client.mjs` from the legacy
+  `browser-use` cache path failed native bridge trust with `browser-client is
+  not trusted`; the working in-app Browser route is the official installed app
+  bundle `plugins\browser\scripts\browser-client.mjs`.
+- `fix`: back up the native host JSON, then update only its `path` value to the
+  current installed app bundle host:
+  `C:\Program Files\WindowsApps\OpenAI.Codex_26.513.4821.0_x64__2p2nqsd0c76g0\app\resources\plugins\openai-bundled\plugins\chrome\extension-host\windows\x64\extension-host.exe`.
+- `backup`:
+  `%LOCALAPPDATA%\OpenAI\extension\com.openai.codexextension.json.bak-20260518-023107`.
+- `verification`:
+  - manifest JSON parses and `Test-Path` for the manifest `path` is true;
+  - `reg.exe query HKCU\Software\Google\Chrome\NativeMessagingHosts\com.openai.codexextension /ve`
+    points at `%LOCALAPPDATA%\OpenAI\extension\com.openai.codexextension.json`;
+  - Chrome backend discovery lists `type=extension`;
+  - in-app Browser `iab` and Chrome `extension` both opened
+    `http://127.0.0.1:5173/` and `http://localhost:5173/`, clicked the smoke
+    button, and navigated to `/clicked` with title `Codex Browser E2E Clicked`;
+  - temporary port `5173` was closed after the check.
+- `runbook_policy_update`: removed the project-level browser automation fallback
+  from the Windows browser recovery runbook. Future agents should not use
+  project browser automation as proof that Codex Browser or the Codex Chrome
+  plugin works.
+- `2026-05-18 follow_up_prevention`: `ensure-chrome-extension-origin.ps1` now
+  verifies `browser@openai-bundled` through the Codex app-server protocol and
+  reports `installed=true enabled=true` instead of trusting cache presence. The
+  helper avoids the Windows PowerShell `ProcessStartInfo.ArgumentList` null
+  issue and uses a UTF-8 Python probe for app-server requests because the app
+  protocol accepts `id/method/params` line JSON, not generic JSON-RPC with a
+  `jsonrpc` field.
+- `2026-05-18 maintenance_guard`: `codex-home-maintenance.ps1` now records
+  whether the Chrome native host executable exists and whether it is under the
+  currently installed Codex package location. This catches registry-valid but
+  executable-stale native host manifests after app updates.
+- `rollback`: restore the JSON backup above, or rerun the Codex Chrome plugin
+  setup flow from the Codex app UI if a future app version changes the native
+  host contract.
+- `agent_handoff`: when Chrome disappears after a Codex app update, first check
+  the manifest executable path existence before changing firewall, loopback,
+  cache, or browser security settings. Existing helper scripts may report the
+  manifest as `correct=true` while the executable path is stale, so always run a
+  direct `Test-Path` on the manifest `path`.
 
 ## Required Agent Behavior
 

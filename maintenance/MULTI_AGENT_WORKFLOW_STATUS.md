@@ -59,6 +59,33 @@ When the prompt does not explicitly authorize subagents:
 - use skills directly when their trigger matches;
 - record why subagents were not used if the task looked large enough to raise the question.
 
+## 2026-05-18 Follow-Up
+
+Thread `019e35aa-326c-7673-9379-8454e8411a34` did use parent-level
+`spawn_agent` after a later prompt explicitly requested subagents. The confusing
+`SUBAGENT_CALL not_used` fragments in that rollout were subagent close/status
+payloads describing the child agents' own nested delegation, not proof that the
+parent PM never spawned agents.
+
+One hook gap was confirmed: `PostToolUse` detected direct `spawn_agent` tool
+names, but missed `functions.spawn_agent` nested inside `multi_tool_use.parallel`.
+That made `hooks/state/lightweight-status.json` underreport actual parent-level
+subagent activity for parallel dispatch. The hook now detects nested parallel
+subagent recipient names, and `hook-policy-smoke` includes a regression check for
+that path.
+
+A second hook gap was confirmed by `OBS-PRESHIP-SPARK`: when governance/incident
+evidence raised a tool event to L4, a later nested subagent signal could overwrite
+the candidate adjustment back to L3. `Get-ToolTaskAdjustment` now selects the
+higher task level instead of assigning levels in last-match order, and
+`hook-policy-smoke` covers the nested-subagent-plus-L4 case.
+
+Task level remains workflow routing and evidence pressure. It is not a reliable
+runtime override for higher-priority subagent authorization rules by itself. If a
+future Codex runtime exposes standing task-level authorization as a supported
+policy, update this document and the hook policy together with a live tool-call
+proof.
+
 ## Evidence Sources
 
 - `codex --help`: `--enable <FEATURE>` maps to `features.<name>=true`.

@@ -49,6 +49,15 @@ function Select-LifecyclePhase {
     return "define-plan-build-verify-review-ship"
 }
 
+function Test-VowlineSubstantivePrompt { param([string]$Prompt)
+    if ([string]::IsNullOrWhiteSpace($Prompt)) { return $false }
+    $trimmed = $Prompt.Trim(); $p = $trimmed.ToLowerInvariant()
+    if ($trimmed.Length -le 40 -and $p -match "^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|tiny local note\.?)$") { return $false }
+    if ($p -match "(?i)(implement|build|fix|change|edit|create|add|review|audit|inspect|debug|bug|fail|failure|test|verify|install|update|upgrade|repo|repository|skill|configure|config|setting|optimi[sz]e|tool|hook|workflow|agent|subagent|mcp|runtime|version|docs|research|artifact|file|code|script)") { return $true }
+    $signals = @(@([int]0xC791,[int]0xC5C5),@([int]0xC218,[int]0xC815),@([int]0xD655,[int]0xC778),@([int]0xAC80,[int]0xD1A0),@([int]0xC124,[int]0xC815),@([int]0xCD5C,[int]0xC801),@([int]0xBC84,[int]0xC804),@([int]0xC5C5,[int]0xB370,[int]0xC774,[int]0xD2B8),@([int]0xC2A4,[int]0xD0AC),@([int]0xB808,[int]0xD3EC),@([int]0xC5D0,[int]0xC774,[int]0xC804,[int]0xD2B8),@([int]0xD6C5),@([int]0xC6CC,[int]0xD06C,[int]0xD50C,[int]0xB85C),@([int]0xCF54,[int]0xB4DC),@([int]0xD30C,[int]0xC77C),@([int]0xBB38,[int]0xC11C),@([int]0xAD6C,[int]0xD604),@([int]0xD14C,[int]0xC2A4,[int]0xD2B8))
+    return (Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals $signals) -or $trimmed.Length -gt 80
+}
+
 function Get-SkillRoute {
     param([string]$Prompt)
 
@@ -71,6 +80,9 @@ function Get-SkillRoute {
         @([int]0xC138, [int]0xC774, [int]0xBE0C)
     )
 
+    if (Test-VowlineSubstantivePrompt -Prompt $Prompt) {
+        $routes += "vowline"
+    }
     if ($p -match "vague|idea|brainstorm|unclear|ambiguous") {
         $routes += "idea/spec refinement"
     }
@@ -214,6 +226,12 @@ function Test-SubagentSessionStart {
     return $false
 }
 
+function Test-SubagentToolUse { param([string]$ToolName, [string]$Text)
+    if ($ToolName -match "(?i)(^|\.)(spawn_agent|wait_agent|send_input|close_agent|resume_agent)$") { return $true }
+    if ($ToolName -notmatch "(?i)^multi_tool_use\.parallel$") { return $false }
+    return ($Text -match '(?i)"recipient_name"\s*:\s*"(functions\.)?(spawn_agent|wait_agent|send_input|close_agent|resume_agent)"')
+}
+
 function Get-VowlineSubagentContext {
     param($Policy)
 
@@ -241,7 +259,6 @@ Subagent startup requirement:
 - Use the local charter when relevant: $charterPath
 "@
 }
-
 function Test-DelegationAuthorized {
     param([string]$Prompt)
 
@@ -379,6 +396,14 @@ function Get-TaskLevelRank {
     }
 }
 
+function Select-HigherTaskLevel {
+    param([string]$Current, [string]$Candidate)
+    if ((Get-TaskLevelRank -Level $Candidate) -gt (Get-TaskLevelRank -Level $Current)) {
+        return $Candidate
+    }
+    return $Current
+}
+
 function Get-ToolTaskAdjustment {
     param(
         [string]$Stage,
@@ -400,21 +425,21 @@ function Get-ToolTaskAdjustment {
     $readOnlyInspection = $Text -match "(?i)(Get-Content|Select-String|rg(\.ps1|\.cmd)?\b|git\s+(status|diff|show|log|ls-files)|Get-ChildItem|Test-Path)" -and -not ($writeLikeTool -or $writeLikeText)
 
     if ($Text -match $governancePattern) {
-        $level = "L3"
+        $level = Select-HigherTaskLevel -Current $level -Candidate "L3"
         $reasons += "$Stage observed workflow/harness/toolchain or skill/plugin-cache surface"
     }
     if ($ChangedFileCount -ge $largeFiles -or $ChangedLineCount -ge $largeLines) {
-        $level = "L3"
+        $level = Select-HigherTaskLevel -Current $level -Candidate "L3"
         $reasons += "$Stage observed large or multi-surface change"
     }
     if (($Text -match $governancePattern) -and ($Text -match $incidentPattern) -and -not $readOnlyInspection) {
-        $level = "L4"
+        $level = Select-HigherTaskLevel -Current $level -Candidate "L4"
         $reasons += "$Stage observed incident signal intersecting workflow/governance surface"
     } elseif (($Text -match $governancePattern) -and ($Text -match $incidentPattern) -and $readOnlyInspection) {
         $reasons += "$Stage observed incident terms inside read-only inspection output; keep as L3 compatibility evidence"
     }
-    if ($ToolName -match "(?i)(spawn_agent|send_input|wait_agent|close_agent|resume_agent)") {
-        $level = "L3"
+    if (Test-SubagentToolUse -ToolName $ToolName -Text $Text) {
+        $level = Select-HigherTaskLevel -Current $level -Candidate "L3"
         $reasons += "$Stage observed subagent tool surface"
     }
 
@@ -658,112 +683,4 @@ Lightweight Codex workflow reminder:
 - Completion: changed surfaces, direct checks, not-run reasons, PM verification, residual risks, rollback, status.
 - Hard blocks: secret access, irreversible destructive action, hook weakening without scope, evaluator/pass manipulation, out-of-scope mutation.
 "@
-}
-
-function Test-FinalAuditReady {
-    param([string]$Message)
-
-    if ([string]::IsNullOrWhiteSpace($Message)) {
-        return $false
-    }
-
-    $hasAuditSignal = $Message -match "(?i)(FINAL_GOAL_AUDIT|final goal audit|goal audit|completion audit)"
-    $hasChecked = $Message -match "(?i)(checked|checks? run|verified|verification|test|lint|typecheck|build|direct checks?)"
-    $hasNotRun = $Message -match "(?i)(not[-_ ]?run|checks? not run|not checked|unable to run|skipped)"
-    $hasRisks = $Message -match "(?i)(risk|risks|residual|remaining)"
-    $hasStatus = $Message -match "(?i)(status|decision|complete|blocked|continue|current status)"
-    $hasPmVerification = $Message -match "(?i)(PM independent|independent verification)"
-
-    return ($hasAuditSignal -and $hasChecked -and $hasNotRun -and $hasRisks -and $hasStatus -and $hasPmVerification)
-}
-
-function Test-WatcherCoverageReady {
-    param(
-        $State,
-        [string]$Message
-    )
-
-    if (-not [bool]$State.watcherExpected) {
-        return $true
-    }
-    if ([string]::IsNullOrWhiteSpace($Message)) {
-        return $false
-    }
-
-    $hasWatcherReport = $Message -match "(?i)(WATCHER_REPORT|OBS-|REV-|watcher report|watcher evidence|adversarial review)"
-    $hasWatcherNotUsed = $Message -match "(?i)(WATCHER_NOT_USED|watcher not used)"
-    $hasAcceptedRejectedEvidence = $Message -match "(?i)(accepted and rejected subagent evidence|accepted/rejected subagent evidence|accepted subagent evidence|rejected subagent evidence|subagent evidence)"
-    $hasWatcherNotUsedReason = $Message -match "(?i)(reason|because)"
-    $hasWatcherNotUsedRisk = $Message -match "(?i)(risk|residual)"
-    $hasWatcherNotUsedSubstitute = $Message -match "(?i)(substitute check|substitute evidence|pm independent verification|direct check)"
-    $hasWatcherNotUsedConfidence = $Message -match "(?i)(confidence impact|confidence)"
-
-    $watcherReportReady = $hasWatcherReport -and $hasAcceptedRejectedEvidence
-    $watcherOmissionReady = $hasWatcherNotUsed -and $hasWatcherNotUsedReason -and $hasWatcherNotUsedRisk -and $hasWatcherNotUsedSubstitute -and $hasWatcherNotUsedConfidence
-
-    return ($watcherReportReady -or $watcherOmissionReady)
-}
-
-function Test-AnomalyTraceReady {
-    param(
-        $State,
-        [string]$Message
-    )
-
-    if (-not [bool]$State.anomalyPauseExpected) {
-        return $true
-    }
-    if ([string]::IsNullOrWhiteSpace($Message)) {
-        return $false
-    }
-
-    $hasPause = $Message -match "(?i)(pause|paused|stop-the-line|anomaly pause|stop active path)"
-    $hasTrace = $Message -match "(?i)(trace|traced|root cause|first mismatch|failure point|mismatch)"
-    $hasOutcome = $Message -match "(?i)(verified|verification|blocked|continue|complete|risk|residual)"
-
-    return ($hasPause -and $hasTrace -and $hasOutcome)
-}
-
-function Test-SubagentDecisionReady {
-    param(
-        $State,
-        [string]$Message
-    )
-
-    $hasSubagentEvent = @($State.subagentEvents).Count -gt 0
-    if (-not ([bool]$State.subagentDecisionRequired -or $hasSubagentEvent)) {
-        return $true
-    }
-    if ([string]::IsNullOrWhiteSpace($Message)) {
-        return $false
-    }
-
-    $hasMarker = $Message -match "(?i)SUBAGENT_CALL\s+(used|not_used|not used)"
-    $hasReason = $Message -match "(?i)(reason|because)"
-    $hasEvidence = $Message -match "(?i)(evidence|verified|direct evidence|substitute check)"
-    $hasRisk = $Message -match "(?i)(risk|residual)"
-
-    return ($hasMarker -and $hasReason -and $hasEvidence -and $hasRisk)
-}
-
-function Test-SkillEvidenceReady {
-    param(
-        $State,
-        [string]$Message
-    )
-
-    $hasSkillEvent = @($State.skillEvents).Count -gt 0
-    if (-not ([bool]$State.skillEvidenceRequired -or $hasSkillEvent)) {
-        return $true
-    }
-    if ([string]::IsNullOrWhiteSpace($Message)) {
-        return $false
-    }
-
-    $hasMarker = $Message -match "(?i)SKILL_EVIDENCE\s+(used|not_used|not used)"
-    $hasReason = $Message -match "(?i)(reason|because)"
-    $hasEvidence = $Message -match "(?i)(evidence|direct evidence|checked|read|loaded)"
-    $hasRisk = $Message -match "(?i)(risk|residual)"
-
-    return ($hasMarker -and $hasReason -and $hasEvidence -and $hasRisk)
 }

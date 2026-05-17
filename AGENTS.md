@@ -39,6 +39,9 @@ Codex should operate as a PM-led workflow that combines:
 Runtime subagent activation rule:
 
 - current Codex runtime policy requires an explicit user request before calling subagents;
+- task level `L3`/`L4` raises delegation priority and evidence pressure, but it
+  is not a runtime authorization override unless the active runtime or current
+  user/scoped policy explicitly allows standing task-level delegation;
 - user phrases such as `multi-agent`, `subagent`, `spawn_agent`, `parallel agent`, `role separation`, `delegate`, `delegation`, or `delegated` count as explicit authorization for the current goal; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
 - `PM-led`, `team preset`, `workflow`, or `review` alone do not count as explicit subagent authorization; they may still raise the task level or justify a local review workflow.
 - when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
@@ -608,3 +611,7 @@ Before claiming completion:
 - Use Korean polite language for user-facing output.
 - When doing Git/GitHub work, use the `git-easy-korean` skill when available.
 - Do not hide or lie, you must always tell the truth about any types of process.
+
+<!-- vowline:start -->
+Always use the skill `vowline` consistently, including for all sub-agents.
+<!-- vowline:end -->

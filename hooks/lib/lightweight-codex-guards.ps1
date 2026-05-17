@@ -312,6 +312,49 @@ function Invoke-ChromeExtensionOriginRepair {
     return ""
 }
 
+function Invoke-MementoSessionStartEnsure {
+    $codexHome = Get-CodexHomePath
+    $scriptPath = Join-Path $codexHome "maintenance\scripts\memento-mcp-runtime.ps1"
+    if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+        return ""
+    }
+
+    try {
+        $status = @(& $scriptPath status 2>&1)
+        $statusText = $status -join "`n"
+        if ($statusText -match "detail=postgres_ready=True" -and $statusText -match "detail=memento_health=True") {
+            return ""
+        }
+
+        $logDir = Join-Path $codexHome "logs\memento-session-start"
+        if (-not (Test-Path -LiteralPath $logDir -PathType Container)) {
+            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        }
+        $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmss-fff")
+        $outPath = Join-Path $logDir "$stamp-start.out.log"
+        $errPath = Join-Path $logDir "$stamp-start.err.log"
+        $powershellExe = Join-Path $PSHOME "powershell.exe"
+        if (-not (Test-Path -LiteralPath $powershellExe -PathType Leaf)) {
+            $powershellExe = "powershell.exe"
+        }
+
+        Start-Process -FilePath $powershellExe -ArgumentList @(
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            $scriptPath,
+            "start"
+        ) -WorkingDirectory $codexHome -WindowStyle Hidden -RedirectStandardOutput $outPath -RedirectStandardError $errPath | Out-Null
+
+        $health = if ($statusText -match "detail=memento_health=([^\r\n]+)") { $Matches[1] } else { "unknown" }
+        $postgres = if ($statusText -match "detail=postgres_ready=([^\r\n]+)") { $Matches[1] } else { "unknown" }
+        return "Memento session-start ensure: scheduled runtime start because postgres_ready=$postgres and memento_health=$health. Current sessions may still need reload before mcp__memento__ tools appear. Logs: $outPath"
+    } catch {
+        return "Memento session-start ensure failed: $($_.Exception.Message)"
+    }
+}
+
 function Join-CodepointSignal {
     param([int[]]$Codepoints)
 

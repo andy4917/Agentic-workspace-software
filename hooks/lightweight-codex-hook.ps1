@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 $script:HookScriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 . (Join-Path $script:HookScriptRoot "lib\lightweight-codex-core.ps1")
 . (Join-Path $script:HookScriptRoot "lib\lightweight-codex-workflow.ps1")
+. (Join-Path $script:HookScriptRoot "lib\lightweight-codex-final-gates.ps1")
 . (Join-Path $script:HookScriptRoot "lib\lightweight-codex-guards.ps1")
 
 $policy = Read-Policy
@@ -12,7 +13,11 @@ $state = Normalize-WorkflowState -State (Read-State)
 try {
 switch ($eventName) {
     "SessionStart" {
-        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Calibration source: CALIBRATION.md. Treat selected answers, diagnoses, plans, and patch rationales as candidate until direct evidence supports them; do not imply unchecked claims are verified. Subagents require explicit user authorization by prompt, then should be used only for bounded non-blocking sidecar work. Goal is a long-running tracking marker only; PM owns parent-goal completion, and subagents produce evidence only. Hooks are reminders and narrow safety checks, not completion authority. When memento MCP tools are exposed, call context(workspace='global_pm') at session start, read get_skill_guide when tool behavior is unclear, use recall before hook/MCP/toolchain or prior-state work, send tool_feedback for recall results, and write only durable verified atomic memory through the PM write gate. Memento is support-only and legacy Memory/RAG paths are not active fallback."
+        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Calibration source: CALIBRATION.md. Treat selected answers, diagnoses, plans, and patch rationales as candidate until direct evidence supports them; do not imply unchecked claims are verified. Subagents follow active runtime and current user/scoped policy authorization; when authorized, use them only for bounded non-blocking sidecar work. Goal is a long-running tracking marker only; PM owns parent-goal completion, and subagents produce evidence only. Hooks are reminders and narrow safety checks, not completion authority. When memento MCP tools are exposed, call context(workspace='global_pm') at session start, read get_skill_guide when tool behavior is unclear, use recall before hook/MCP/toolchain or prior-state work, send tool_feedback for recall results, and write only durable verified atomic memory through the PM write gate. Memento is support-only and legacy Memory/RAG paths are not active fallback."
+        $mementoContext = Invoke-MementoSessionStartEnsure
+        if (-not [string]::IsNullOrWhiteSpace($mementoContext)) {
+            $context = $context + "`n`n" + $mementoContext
+        }
         $repairContext = Invoke-ChromeExtensionOriginRepair
         if (-not [string]::IsNullOrWhiteSpace($repairContext)) {
             $context = $context + "`n`n" + $repairContext
@@ -225,7 +230,7 @@ switch ($eventName) {
             $state.skillEvents = Add-Unique -Items $state.skillEvents -Value $skillEvidence
             $additional += "Skill workflow evidence observed: final audit must accept this evidence or record SKILL_EVIDENCE not_used with reason, direct evidence, and residual risk."
         }
-        $isSubagentTool = $toolName -match "(?i)(^|\.)(spawn_agent|wait_agent|send_input|close_agent|resume_agent)$"
+        $isSubagentTool = Test-SubagentToolUse -ToolName $toolName -Text $text
         if ($isSubagentTool) {
             $evidence = Get-ToolEvidenceSummary -ToolName $toolName -Text $text
             $state.subagentEvents = Add-Unique -Items $state.subagentEvents -Value $evidence
@@ -352,7 +357,7 @@ switch ($eventName) {
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
-                reason = "Final preflight: changed surfaces were observed. Before finalizing, produce a goal audit with checked items, not-run reasons, residual risks, current status complete|blocked|continue, and PM independent verification."
+                reason = "Final preflight: changed surfaces were observed. Before finalizing, include a short FINAL PREFLIGHT with Done, Fixed / changed, Verification, Remaining / separate issues, Related-scope compatibility, and Commit status."
             }
             break
         }

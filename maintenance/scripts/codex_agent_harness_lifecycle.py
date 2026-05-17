@@ -377,8 +377,6 @@ def parse_memento_log_timestamp(line: str) -> dt.datetime | None:
         return dt.datetime.fromisoformat(f"{match.group(1)}T{match.group(2)}")
     except ValueError:
         return None
-
-
 def memento_recent_log_risks(root: Path, started_at: str | None) -> dict[str, Any]:
     log_root = root / "state" / "memento-mcp" / "logs"
     if not log_root.exists():
@@ -400,6 +398,7 @@ def memento_recent_log_risks(root: Path, started_at: str | None) -> dict[str, An
     log_files = sorted(log_root.glob("*.log"), key=lambda path: path.stat().st_mtime, reverse=True)[:12]
     matches: list[dict[str, Any]] = []
     ignored_controlled_shutdown_count = 0
+    ignored_starting_up_count = 0
     for path in log_files:
         try:
             text = read_text(path)[-30000:]
@@ -408,6 +407,9 @@ def memento_recent_log_risks(root: Path, started_at: str | None) -> dict[str, An
         for number, line in enumerate(text.splitlines(), 1):
             if re.search(r"\bFATAL:\s+terminating connection due to administrator command\b", line, re.I):
                 ignored_controlled_shutdown_count += 1
+                continue
+            if re.search(r"\bFATAL:\s+the database system is starting up\b", line, re.I):
+                ignored_starting_up_count += 1
                 continue
             matched = [name for name, pattern in patterns if pattern.search(line)]
             if not matched:
@@ -435,6 +437,7 @@ def memento_recent_log_risks(root: Path, started_at: str | None) -> dict[str, An
         "match_count": len(matches),
         "after_current_start_count": after_current_start_count,
         "ignored_controlled_shutdown_count": ignored_controlled_shutdown_count,
+        "ignored_starting_up_count": ignored_starting_up_count,
         "matches": matches,
     }
 
@@ -787,8 +790,6 @@ def latest_benchmark_results_valid(root: Path) -> bool:
         return False
     checks = latest.get("checks")
     return isinstance(checks, list) and bool(checks) and all(isinstance(item, dict) for item in checks)
-
-
 def compact_summary_valid(root: Path) -> bool:
     summaries = sorted(path for path in (root / "artifacts" / "compact-summaries").glob("*.md") if path.name.lower() != "readme.md")
     if not summaries:

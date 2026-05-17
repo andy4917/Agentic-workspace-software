@@ -18,12 +18,8 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     agents_text = read_text(root / "AGENTS.md")
     charter_text = read_text(root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md")
     audit_text = read_text(root / "codex-goals" / "_template" / "FINAL_GOAL_AUDIT.md")
-    hook_files = [
-        root / "hooks" / "lightweight-codex-hook.ps1",
-        root / "hooks" / "lib" / "lightweight-codex-core.ps1",
-        root / "hooks" / "lib" / "lightweight-codex-workflow.ps1",
-        root / "hooks" / "lib" / "lightweight-codex-guards.ps1",
-    ]
+    hook_files = [root / "hooks" / "lightweight-codex-hook.ps1"]
+    hook_files.extend(sorted((root / "hooks" / "lib").glob("*.ps1")))
     hook_text = "\n".join(read_text(path) for path in hook_files if path.exists())
 
     add_check(
@@ -43,8 +39,15 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     )
     add_check(
         "stop_hook_audit_prompt",
-        all(term in hook_text for term in ["function Test-FinalAuditReady", "function Get-ToolEvidenceSummary", "Final preflight", "checked items", "PM independent verification"]),
-        "Stop hook should ask for an audit and keep hook evidence summaries compact.",
+        all(term in hook_text for term in ["function Test-FinalAuditReady", "function Get-ToolEvidenceSummary", "Final preflight", "FINAL PREFLIGHT", "Commit status"]),
+        "Stop hook should ask for a short final preflight and keep hook evidence summaries compact.",
+    )
+    main_hook_text = read_text(root / "hooks" / "lightweight-codex-hook.ps1")
+    add_check(
+        "stop_hook_loads_final_gate_module",
+        "lightweight-codex-final-gates.ps1" in main_hook_text
+        and (root / "hooks" / "lib" / "lightweight-codex-final-gates.ps1").exists(),
+        "Main hook should explicitly load the final gate module instead of passing from an orphaned library file.",
     )
 
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
@@ -213,8 +216,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             skill_state = {}
         skill_stop_missing = run_stop_hook_sample(
             root,
-            "FINAL_GOAL_AUDIT checked skill route sample. checks not run none. residual risk low. "
-            "status complete. PM independent verification complete.",
+            "FINAL PREFLIGHT Done: skill route sample. Fixed / changed: none. Verification: direct hook smoke. "
+            "Remaining / separate issues: none. Related-scope compatibility: unchanged. Commit status: not committed.",
         )
         run_post_tool_hook_sample(root, "functions.shell_command", "Get-Content skills/clean-all-slop/SKILL.md -Raw")
         try:
@@ -223,8 +226,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             skill_event_state = {}
         skill_stop_with_marker = run_stop_hook_sample(
             root,
-            "FINAL_GOAL_AUDIT checked skill route sample. checks not run none. residual risk low. "
-            "status complete. PM independent verification complete. "
+            "FINAL PREFLIGHT Done: skill route sample. Fixed / changed: none. Verification: direct hook smoke. "
+            "Remaining / separate issues: none. Related-scope compatibility: unchanged. Commit status: not committed. "
             "SKILL_EVIDENCE used reason clean-all-slop route direct evidence skills/clean-all-slop/SKILL.md residual risk low.",
         )
         add_check(
@@ -252,10 +255,26 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and len(reminders) == len(set(map(str, reminders))),
             "Hook state should define workflow variables and normalize event/reminder lists to remove empty values, duplicates, and state bloat.",
         )
+        vowline_probe = run_prompt_hook_sample(
+            root,
+            "Update a repository skill from the upstream repo and verify the installed paths.",
+        )
+        try:
+            vowline_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            vowline_state = {}
+        add_check(
+            "vowline_routes_for_substantive_work",
+            vowline_probe.get("status") == "pass"
+            and "vowline" in vowline_probe.get("stdout_preview", "").lower()
+            and vowline_state.get("skillEvidenceRequired") is True
+            and "vowline" in str(vowline_state.get("skillRoute", "")).lower(),
+            "UserPromptSubmit should route Vowline as the default operating skill for substantive non-trivial work.",
+        )
         run_prompt_hook_sample(root, workflow_prompt)
         state_only_final = (
-            "FINAL_GOAL_AUDIT checked state-only stop sample. checks not run none. residual risk low. "
-            "status complete. PM independent verification complete."
+            "FINAL PREFLIGHT Done: state-only stop sample. Fixed / changed: none. Verification: direct hook smoke. "
+            "Remaining / separate issues: residual risk low. Related-scope compatibility: unchanged. Commit status: not committed."
         )
         state_only_stop = run_stop_hook_sample(root, state_only_final)
         add_check(
@@ -343,15 +362,45 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "Documentation-only incident/report patches should be allowed to record a blocked cleanup case.",
         )
 
+        run_prompt_hook_sample(root, "Tiny local note.")
+        run_post_tool_hook_sample(root, "apply_patch", "apply_patch changed file test")
+        short_changed_final = (
+            "FINAL PREFLIGHT Done: changed-surface smoke. Fixed / changed: sample hook state only. "
+            "Verification: direct Stop hook sample. Remaining / separate issues: none. "
+            "Related-scope compatibility: unchanged. Commit status: not committed."
+        )
+        short_changed_stop = run_stop_hook_sample(root, short_changed_final)
+        add_check(
+            "stop_accepts_short_final_preflight",
+            '"continue":true' in short_changed_stop.get("stdout_preview", "").lower(),
+            "Stop should accept the short FINAL PREFLIGHT format for ordinary changed-surface evidence.",
+        )
+        weak_short_final = (
+            "Done: changed-surface smoke. Fixed / changed: sample hook state only. "
+            "Verification: direct Stop hook sample. Remaining / separate issues: none. "
+            "Related-scope compatibility: unchanged. Commit status: not committed."
+        )
+        weak_short_stop = run_stop_hook_sample(root, weak_short_final)
+        add_check(
+            "stop_rejects_short_preflight_without_marker",
+            '"decision":"block"' in weak_short_stop.get("stdout_preview", "").lower(),
+            "Stop should require the explicit FINAL PREFLIGHT marker, not just generic section labels.",
+        )
+
+        run_prompt_hook_sample(root, workflow_prompt)
         run_post_tool_hook_sample(root, "apply_patch", "apply_patch changed file test")
         delegated_final_without_marker = (
-            "FINAL_GOAL_AUDIT pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
-            "checked verification. checks not run none. residual risk low. status complete. PM independent verification complete. "
+            "FINAL PREFLIGHT Done: delegated hook state sample. Fixed / changed: sample hook state only. "
+            "Verification: direct hook smoke. Remaining / separate issues: residual risk low. "
+            "Related-scope compatibility: unchanged. Commit status: not committed. "
+            "pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
             "accepted/rejected subagent evidence none. WATCHER_NOT_USED reason direct smoke risk low substitute check hook sample confidence impact low."
         )
         delegated_final_with_marker = (
-            "FINAL_GOAL_AUDIT pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
-            "checked verification. checks not run none. residual risk low. status complete. PM independent verification complete. "
+            "FINAL PREFLIGHT Done: delegated hook state sample. Fixed / changed: sample hook state only. "
+            "Verification: direct hook smoke. Remaining / separate issues: residual risk low. "
+            "Related-scope compatibility: unchanged. Commit status: not committed. "
+            "pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
             "accepted/rejected subagent evidence none. WATCHER_NOT_USED reason direct smoke risk low substitute check hook sample confidence impact low. "
             "SUBAGENT_CALL not_used reason PM kept work local evidence direct hook sample. "
             "SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
@@ -365,18 +414,35 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "Stop should reject delegated finals without SUBAGENT_CALL used/not_used and allow the explicit marker with reason/evidence.",
         )
         watcherless_final = (
-            "FINAL_GOAL_AUDIT pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
-            "checked verification. checks not run none. residual risk low. status complete. PM independent verification complete. "
+            "FINAL PREFLIGHT Done: delegated watcher sample. Fixed / changed: sample hook state only. "
+            "Verification: direct hook smoke. Remaining / separate issues: residual risk low. "
+            "Related-scope compatibility: unchanged. Commit status: not committed. "
+            "pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
             "accepted/rejected subagent evidence reviewed. "
             "SUBAGENT_CALL used reason direct sample evidence hook state residual risk low. "
             "SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
         )
         watcherless_stop = run_stop_hook_sample(root, watcherless_final)
+        role_prefix_only_watcher_final = (
+            "FINAL PREFLIGHT Done: role-prefix watcher sample. Fixed / changed: sample hook state only. "
+            "Verification: direct hook smoke. Remaining / separate issues: residual risk low. "
+            "Related-scope compatibility: unchanged. Commit status: not committed. "
+            "pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
+            "accepted/rejected subagent evidence reviewed by REV-PreShip. "
+            "SUBAGENT_CALL used reason direct sample evidence hook state residual risk low. "
+            "SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
+        )
+        role_prefix_only_watcher_stop = run_stop_hook_sample(root, role_prefix_only_watcher_final)
         add_check(
             "stop_requires_concrete_watcher_artifact_or_omission_record",
             '"decision":"block"' in watcherless_stop.get("stdout_preview", "").lower()
             and "accepted/rejected subagent evidence plus watcher_report" in watcherless_stop.get("stdout_preview", "").lower(),
             "Stop should reject L4 delegated finals that mention subagent evidence but omit WATCHER_REPORT or complete WATCHER_NOT_USED.",
+        )
+        add_check(
+            "stop_rejects_role_prefix_only_watcher_signal",
+            '"decision":"block"' in role_prefix_only_watcher_stop.get("stdout_preview", "").lower(),
+            "Stop should not treat a generic role prefix such as REV- as watcher coverage without WATCHER_REPORT or WATCHER_NOT_USED.",
         )
 
         pm_led_probe = run_prompt_hook_sample(root, "Review PM-led team preset workflow routing and level escalation criteria.")
@@ -442,9 +508,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
 
         run_post_tool_hook_sample(root, "spawn_agent", '{"agent_type":"reviewer"}')
         event_final_without_marker = (
-            "FINAL_GOAL_AUDIT pause trigger: posttool governance incident. first mismatch/root cause traced. "
-            "checked direct subagent event state. checks not run none. "
-            "residual risk low. status complete. PM independent verification complete."
+            "FINAL PREFLIGHT Done: subagent event sample. Fixed / changed: sample hook state only. "
+            "Verification: direct subagent event state. Remaining / separate issues: residual risk low. "
+            "Related-scope compatibility: unchanged. Commit status: not committed. "
+            "pause trigger: posttool governance incident. first mismatch/root cause traced."
         )
         event_final_with_marker = (
             event_final_without_marker
@@ -458,6 +525,62 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "subagent use was explicitly authorized or a subagent tool event was observed" in event_stop_missing.get("stdout_preview", "").lower()
             and '"continue":true' in event_stop_with_marker.get("stdout_preview", "").lower(),
             "Stop should require SUBAGENT_CALL evidence when a subagent tool event exists, even without prompt authorization state.",
+        )
+
+        run_prompt_hook_sample(root, "Tiny local note.")
+        nested_subagent_probe = run_lightweight_hook_sample(
+            root,
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "multi_tool_use.parallel",
+                "tool_input": {
+                    "tool_uses": [
+                        {
+                            "recipient_name": "functions.spawn_agent",
+                            "parameters": {"agent_type": "explorer"},
+                        }
+                    ]
+                },
+            },
+        )
+        try:
+            nested_subagent_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            nested_subagent_state = {}
+        add_check(
+            "posttooluse_records_nested_parallel_subagent_event",
+            nested_subagent_probe.get("status") == "pass"
+            and nested_subagent_state.get("subagentEvents")
+            and any("multi_tool_use.parallel" in str(item) for item in nested_subagent_state.get("subagentEvents", [])),
+            "PostToolUse should record subagent activity when spawn_agent is nested inside multi_tool_use.parallel.",
+        )
+
+        run_prompt_hook_sample(root, "Tiny local note.")
+        nested_l4_probe = run_lightweight_hook_sample(
+            root,
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "multi_tool_use.parallel",
+                "tool_input": {
+                    "note": "apply_patch hooks/lib/lightweight-codex-workflow.ps1 root cause failed hidden fallback",
+                    "tool_uses": [
+                        {
+                            "recipient_name": "functions.spawn_agent",
+                            "parameters": {"agent_type": "explorer"},
+                        }
+                    ],
+                },
+            },
+        )
+        try:
+            nested_l4_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            nested_l4_state = {}
+        add_check(
+            "posttooluse_nested_subagent_does_not_downgrade_l4",
+            nested_l4_probe.get("status") == "pass"
+            and nested_l4_state.get("taskClass") == "L4",
+            "A nested subagent event must not lower an incident/governance tool adjustment from L4 to L3.",
         )
     finally:
         if original_state_exists:

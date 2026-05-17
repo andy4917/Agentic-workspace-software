@@ -190,6 +190,9 @@ def generated_output_tracking_status(root: Path) -> dict[str, Any]:
 def hook_subagent_vowline_status(root: Path) -> dict[str, Any]:
     hook_path = root / "hooks" / "lightweight-codex-hook.ps1"
     policy_path = root / "hooks" / "lightweight-codex-policy.json"
+    agents_path = root / "AGENTS.md"
+    primary_skill_path = Path.home() / ".agents" / "skills" / "vowline" / "SKILL.md"
+    mirror_skill_path = root / "skills" / "vowline" / "SKILL.md"
     missing = []
     if not hook_path.exists():
         return {"status": "fail", "missing": ["hooks/lightweight-codex-hook.ps1"]}
@@ -235,6 +238,18 @@ def hook_subagent_vowline_status(root: Path) -> dict[str, Any]:
             missing.append("subagents.required_start_skill_path")
         if subagents.get("start_hook_behavior") != "inject_vowline_context_for_subagent_session_start":
             missing.append("subagents.start_hook_behavior")
+    if not primary_skill_path.exists():
+        missing.append("~/.agents/skills/vowline/SKILL.md")
+    if not mirror_skill_path.exists():
+        missing.append("skills/vowline/SKILL.md compatibility mirror")
+    if not agents_path.exists():
+        missing.append("AGENTS.md")
+    else:
+        agents_text = read_text(agents_path).lower()
+        if agents_text.count("<!-- vowline:start -->") != 1 or agents_text.count("<!-- vowline:end -->") != 1:
+            missing.append("AGENTS.md one Vowline marked block")
+        if "always use the skill `vowline` consistently" not in agents_text:
+            missing.append("AGENTS.md Vowline activation body")
     return {"status": "pass" if not missing else "fail", "missing": missing}
 
 

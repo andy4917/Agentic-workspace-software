@@ -88,6 +88,19 @@ Use one primary type and optional secondary tags.
 - Verification: absolute script invocation succeeds from another cwd; `.codex\reports\verification.latest.md` shows all checks pass.
 - Do not claim: the harness is broken solely because a relative-root run failed from a non-root cwd.
 
+### Harness Relative Path Fails On Junctioned Plugin Cache
+
+- Type: `environment_path_issue`, `validation_gap`
+- Fingerprint: `codex_agent_harness.py doctor --json` fails in `rel(path, root)` with `ValueError: '<Program Files ... browser-client.mjs>' is not in the subpath of 'C:\\Users\\anise\\.codex'` while scanning `plugins/cache`.
+- Risk: a valid plugin cache junction to the installed Codex app bundle can make doctor fail before reporting the actual hook or harness status.
+- Likely cause: path reporting resolves junction targets before computing root-relative display paths.
+- Fix playbook:
+  1. Keep the resolved-path relative check for normal files.
+  2. Fall back to the logical root-relative path when the original path is under the root but resolves outside through a junction.
+  3. Return an absolute resolved path only for truly external paths.
+- Verification: `codex_agent_harness.py doctor --json` runs past `workspace_script_file_size` and reports normal check results.
+- Do not claim: that the external app bundle file is owned by `.codex`; the fallback is display/reporting only.
+
 ### Missing App Terminal Session
 
 - Type: `codex_app_error`
@@ -177,6 +190,20 @@ Use one primary type and optional secondary tags.
   3. Verify with `memento-mcp-runtime.ps1 verify`, `doctor --tier stress --json`, and live `context(workspace="global_pm")`.
 - Do not claim: that administrator permission is required for normal Memento runtime operation after installation.
 
+### Memento Runtime Healthy Too Late For MCP Tool Exposure
+
+- Type: `tool_runtime_error`, `workflow_hook_issue`, `validation_gap`
+- Fingerprint: `codex mcp get memento --json` shows the server configured and enabled, but the active session exposes no `mcp__memento__...` tools; `memento-mcp-runtime.ps1 status` reports `postgres_ready=True` and `memento_health=False` until `memento-mcp-runtime.ps1 verify` or `start` is run.
+- Risk: agents may treat Memento as unavailable and fall back to legacy Memory/RAG or final prose, even though the memory backend is repairable and should be support-only MCP evidence.
+- Likely cause: the old SessionStart hook only told the PM to use Memento after tools were exposed; it did not ensure the local HTTP runtime was healthy early enough for MCP tool schema loading.
+- Fix playbook:
+  1. Preserve `status`, `/health`, `codex mcp get memento --json`, and active-session tool exposure evidence.
+  2. Keep `memento-mcp-runtime.ps1 verify` as the direct repair and verification command.
+  3. Add or keep a SessionStart guard that checks `memento-mcp-runtime.ps1 status` and schedules `start` when the runtime is unhealthy.
+  4. Record that the current session may need a reload because MCP tool schemas are not retroactively injected after session start.
+- Verification: `memento-mcp-runtime.ps1 verify` reports required tools present plus `context=pass`, `recall=pass`, and `tool_feedback=pass`; a synthetic SessionStart hook sample returns normal context without failing when Memento is healthy.
+- Do not claim: that a background start proves current-session `mcp__memento__...` tool exposure unless the active tool namespace is actually visible.
+
 ### MCP Capability Works But Is Invisible In App Settings
 
 - Type: `codex_app_error`, `skill_or_doc_drift`
@@ -211,15 +238,58 @@ Use one primary type and optional secondary tags.
 - Risk: agents may treat runtime success as UI recovery, leaving the user with an invisible plugin card and no way to inspect or toggle it in the app.
 - Likely cause: `[marketplaces.openai-bundled].source` points at an active temporary or cache path such as `.tmp\bundled-marketplaces`, `tmp`, or `plugins\cache`, or `.codex-global-state.json` keeps `browser-use-bundled-plugin-auto-install-disabled` set to `true` after the browser plugin ID migrated from `browser-use` to `browser`.
 - Additional confirmed cause: `plugin/read` for `browser` can report `enabled=true` and `availability=AVAILABLE` while `installed=false`. In that state the skill can still appear from cache, but the app plugin UI may omit the Browser card or fail to show it as installed.
+- Additional confirmed cause: the repair helper can fail before checking plugin state when run under Windows PowerShell if it uses `ProcessStartInfo.ArgumentList`, sends generic JSON-RPC with a `jsonrpc` field, or runs the Python probe as `python -` from a hook process that already consumed hook JSON on stdin. Codex app-server accepts line JSON shaped as `id/method/params`; the maintained helper writes the Python probe to a temporary `.py` file and sends UTF-8 app-server requests.
+- Not a cause: `browserify/browserify` is a CommonJS browser bundler and is not required for Codex Browser, Chrome Browser Use, native bridge trust, app-server plugin install state, or Chrome native messaging.
 - Fix playbook:
   1. Preserve current `config.toml` and `.codex-global-state.json` backups before mutation.
   2. Point `[marketplaces.openai-bundled].source` at the installed Codex app bundle marketplace under `Program Files\WindowsApps\OpenAI.Codex_...\app\resources\plugins\openai-bundled` when available.
   3. Ensure `plugins\cache\openai-bundled\browser\<version>` exists; if the loader logs `failed to load plugin: plugin is not installed plugin="browser@openai-bundled"`, create a junction from that cache path to the installed app bundle `plugins\browser` directory.
-  4. Use the app-server `plugin/read` method against `openai-bundled\.agents\plugins\marketplace.json` and `pluginName=browser`. If `summary.installed=false`, call `plugin/install` for the same marketplace file and plugin name, then re-read until `summary.installed=true` and `summary.enabled=true`.
+  4. Run `maintenance\scripts\ensure-chrome-extension-origin.ps1`. It uses app-server `plugin/read` against `openai-bundled\.agents\plugins\marketplace.json` and `pluginName=browser`; if `summary.installed=false`, it calls `plugin/install` for the same marketplace file and plugin name, then re-reads until `summary.installed=true` and `summary.enabled=true`.
   5. Keep `[plugins."browser@openai-bundled"] enabled = true`; do not re-enable stale `[plugins."browser-use@openai-bundled"]` unless an active marketplace actually contains that plugin ID.
   6. Clear or set false the legacy `browser-use-bundled-plugin-auto-install-disabled` state flag after install because app state can reintroduce the stale flag.
-- Verification: `config.toml` parses, `ensure-chrome-extension-origin.ps1` reports an installed app bundle source and browser cache path, app-server `plugin/read` reports `browser@openai-bundled installed=true enabled=true`, keep-codex-fast reports `openai-bundled ok`, the loader no longer reports missing `browser@openai-bundled` cache on the next turn, and the Browser runtime can list the `iab` backend. UI drawer visibility still requires user- or app-side visual confirmation.
+- Verification: `config.toml` parses, `ensure-chrome-extension-origin.ps1` reports an installed app bundle source, browser cache path, and `browser@openai-bundled is installed and enabled`, keep-codex-fast reports `openai-bundled ok`, the loader no longer reports missing `browser@openai-bundled` cache on the next turn, and the Browser runtime can list the `iab` backend. If `agent.browsers.list()` shows `type=iab` but selecting it reports `No active Codex browser pane available`, treat that as an app pane activation state, not a missing Browserify or plugin-cache dependency. UI drawer visibility still requires user- or app-side visual confirmation.
 - Do not claim: UI recovery from runtime-only checks if the app drawer itself was not inspected.
+
+### Chrome Native Host Manifest Points At Removed Codex App Version
+
+- Type: `tool_runtime_error`, `environment_path_issue`
+- Fingerprint: Chrome extension discovery says the Codex Chrome extension is installed and enabled, but `agent.browsers.get("extension")` or equivalent Chrome backend discovery returns no `extension` backend. `%LOCALAPPDATA%\OpenAI\extension\com.openai.codexextension.json` has a `path` under `Program Files\WindowsApps\OpenAI.Codex_<old version>...\extension-host.exe`, and `Test-Path` for that exact path is false.
+- Risk: agents may trust `check-native-host-manifest.js --json` because it validates host name, registry path, and allowed origin, while missing that the manifest executable path no longer exists. This can lead to firewall, loopback, cache, or browser policy changes that do not address the root cause.
+- Likely cause: Codex Desktop was updated, but the Chrome native messaging manifest stayed pinned to the previous packaged app version. The HKCU native messaging registry entry can still be valid because it points to the JSON manifest, not to the executable inside that manifest.
+- Fix playbook:
+  1. Capture `Get-AppxPackage *Codex*` and the manifest JSON before editing.
+  2. Parse `%LOCALAPPDATA%\OpenAI\extension\com.openai.codexextension.json`; check `Test-Path -LiteralPath $manifest.path`.
+  3. Locate the current app bundle host at `Get-AppxPackage *Codex*.InstallLocation\app\resources\plugins\openai-bundled\plugins\chrome\extension-host\windows\x64\extension-host.exe` and verify it exists.
+  4. Back up the manifest, then update only the JSON `path` field to the current installed app bundle host. Keep `name`, `type`, and `allowed_origins` unchanged.
+  5. Do not run `installManifest.mjs` or mutate Chrome profile state unless the Chrome skill or current user instruction explicitly allows that route.
+- Verification: manifest JSON parses, `Test-Path` for the new `path` is true, `reg.exe query HKCU\Software\Google\Chrome\NativeMessagingHosts\com.openai.codexextension /ve` points at the same manifest, Chrome backend discovery lists `type="extension"`, and Chrome can open both a public page and local `127.0.0.1`/`localhost` smoke pages.
+- Do not claim: Chrome is fixed solely because the extension is installed/enabled, because the native-host registry key exists, or because `check-native-host-manifest.js` reports `correct=true`.
+
+### Browser And Chrome Recovery Must Not Fall Back To Project Browser Automation
+
+- Type: `validation_gap`, `skill_or_doc_drift`
+- Fingerprint: Browser or Chrome plugin verification is replaced with project-level browser automation, dependency installation, headless browser checks, or CDP-only checks after a Codex Browser/Chrome failure.
+- Risk: agents may prove that some browser can render localhost while leaving the requested Codex native Browser or Chrome plugin broken.
+- Fix playbook:
+  1. Verify local HTTP reachability from shell first.
+  2. Use the Codex native Browser backend for `iab` checks and the Codex Chrome extension backend for `extension` checks.
+  3. If native backends remain unavailable, report the product/runtime blocker with direct evidence instead of substituting another browser automation stack.
+- Verification: final evidence names the actual backend used (`iab` or `extension`) and includes URL/title/screenshot or navigation evidence from that backend.
+- Do not claim: project-level browser automation, headless browser success, or external CDP success as evidence that Codex Browser or Codex Chrome plugin is healthy.
+
+### Harness Self-Test Fixture Missing Current Hook Contract
+
+- Type: `validation_gap`, `workflow_hook_issue`
+- Fingerprint: live `doctor --tier full` passes, but `codex_agent_harness.py self-test` prints only `doctor failed in self-test`; rerunning doctor against the preserved temporary self-test root shows `hook_subagent_vowline` missing fixture-only files or markers.
+- Risk: agents may chase the live hook implementation even though the mismatch is in the self-test fixture's synthetic root.
+- Likely cause: a hook or skill contract changed, but `cmd_self_test` did not create the same minimal contract in its temporary root before calling `doctor_data(root)`.
+- Fix playbook:
+  1. Preserve the self-test temp root by monkeypatching or instrumenting `TemporaryDirectory`, then run `doctor --tier full --json --root <temp-root>`.
+  2. Patch the self-test fixture, not the live hook, when the missing item exists in the live root and is absent only in the fixture.
+  3. Keep the fixture minimal: create only the files and markers required by the doctor contract.
+  4. Rerun `self-test`, `benchmark`, and `verify`.
+- Verification: `self-test` exits `0`; `verify` exits `0` and `verification.latest.md` reports `self_test: pass` and `audit: pass`.
+- Do not claim: a live hook regression until the same missing condition is reproduced in the real `%USERPROFILE%\.codex` root.
 
 ### Subagent Not Spawned Before Explicit Authorization
 
@@ -234,6 +304,19 @@ Use one primary type and optional secondary tags.
   4. If authorization is absent and delegation would help, report the limitation instead of spawning.
 - Verification: target thread shows no `spawn_agent` before explicit authorization and shows `spawn_agent` only after the authorization text, or the final report records `SUBAGENT_CALL not_used` with reason and residual risk.
 - Do not claim: that `multi_agent = true`, a team preset, or a reviewer report proves subagents should have been spawned.
+
+### Nested Parallel Subagent Tool Event Not Recorded
+
+- Type: `workflow_hook_issue`, `validation_gap`
+- Fingerprint: the PM calls `multi_tool_use.parallel` with nested `functions.spawn_agent` or related subagent tools, but `hooks/state/lightweight-status.json` keeps `subagentEvents=[]` and later evidence implies subagents were not used.
+- Risk: final evidence can underreport PM-level delegation, and Stop-hook checks may rely only on prompt authorization instead of actual observed subagent tool use.
+- Likely cause: PostToolUse checks only the wrapper tool name, so `multi_tool_use.parallel` hides nested `spawn_agent`, `wait_agent`, `send_input`, `close_agent`, or `resume_agent` recipient names.
+- Fix playbook:
+  1. Detect subagent tool use from both direct tool names and nested `recipient_name` values inside `multi_tool_use.parallel` payloads.
+  2. Keep plain text mentions such as `WATCHER_REPORT` or `SUBAGENT_CALL` from creating subagent events.
+  3. Add hook smoke coverage that runs a nested parallel `functions.spawn_agent` sample and verifies `subagentEvents` records `multi_tool_use.parallel`.
+- Verification: `hook-policy-smoke` passes `posttooluse_records_nested_parallel_subagent_event` and still passes `posttooluse_text_mentions_do_not_create_subagent_events`.
+- Do not claim: that a subagent's own `SUBAGENT_CALL not_used` declaration describes the parent PM session when the parent used `spawn_agent`.
 
 ### Hook Overblocks Toolchain Or MCP Maintenance
 

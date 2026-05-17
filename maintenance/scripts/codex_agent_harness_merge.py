@@ -225,6 +225,9 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             root / "AGENTS.md",
             "# Test\n\n"
             "## Live Turn Calibration\n\n"
+            "<!-- vowline:start -->\n"
+            "Always use the skill `vowline` consistently, including for all sub-agents.\n"
+            "<!-- vowline:end -->\n\n"
             "- Use CALIBRATION.md as the canonical live-turn calibration policy.\n"
             "- use role-prefixed nicknames with PM-* reserved for the main coordinator and EXP-*, REV-*, DOC-*, SEC-*, VAL-*, IMP-*, ENV-*, and OBS-* for subagents\n"
             "- require each subagent to state its own concrete goal\n"
@@ -281,6 +284,14 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             root / "hooks" / "lib" / "lightweight-codex-workflow.ps1",
             "# selected answers, diagnoses, plans, and patch rationales stay candidate until direct evidence\n"
             "# incident terms inside read-only inspection output stay L3 compatibility evidence\n",
+        )
+        write_text(
+            root / "skills" / "vowline" / "SKILL.md",
+            "---\n"
+            "name: vowline\n"
+            "description: Universal operating skill for the self-test fixture.\n"
+            "---\n\n"
+            "# Vowline\n",
         )
         write_text(root / "evals" / "calibration-eval.yaml", "checks:\n  - confident_wrong\n  - unsupported_material_claim\n")
         for name in [

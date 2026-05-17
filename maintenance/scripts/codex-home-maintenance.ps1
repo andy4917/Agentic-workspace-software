@@ -261,6 +261,30 @@ function Get-NativeMessagingHostSummary {
         }
     }
 
+    $installedCodexLocations = @()
+    try {
+        $installedCodexLocations = @(
+            Get-AppxPackage -Name OpenAI.Codex -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.InstallLocation } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+    }
+    catch {
+        $installedCodexLocations = @()
+    }
+
+    $manifestHostExists = $false
+    $manifestHostMatchesInstalledCodex = $false
+    if (-not [string]::IsNullOrWhiteSpace($manifestHostPath) -and $manifestHostPath -ne '<unreadable>') {
+        $manifestHostExists = Test-Path -LiteralPath $manifestHostPath
+        foreach ($location in $installedCodexLocations) {
+            if ($manifestHostPath.StartsWith($location, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $manifestHostMatchesInstalledCodex = $true
+                break
+            }
+        }
+    }
+
     $staleFragments = @('plugins\cache', '\.tmp\', '\tmp\', 'bundled-marketplaces', 'codex-runtimes')
     $combined = @($registryDefault, $manifestHostPath) -join "`n"
     $hasStaleCacheReference = $false
@@ -277,6 +301,10 @@ function Get-NativeMessagingHostSummary {
         codex_extension_manifest_exists = (Test-Path -LiteralPath $manifestPath)
         codex_extension_manifest_path = $manifestPath
         codex_extension_host_path = $manifestHostPath
+        codex_extension_host_exists = $manifestHostExists
+        installed_codex_locations = $installedCodexLocations
+        codex_extension_host_matches_installed_codex = $manifestHostMatchesInstalledCodex
+        codex_extension_host_stale_or_missing = (-not $manifestHostExists -or -not $manifestHostMatchesInstalledCodex)
         stale_cache_reference = $hasStaleCacheReference
     }
 }
