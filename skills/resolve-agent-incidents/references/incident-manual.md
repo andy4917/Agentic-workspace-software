@@ -190,6 +190,34 @@ Use one primary type and optional secondary tags.
 - Verification: `codex mcp list` shows the intended MCP with `Status disabled` or `enabled`; `codex mcp get <name> --json` returns the expected config; the skill path exists when the concern is a Skill.
 - Do not claim: app UI visibility from a package probe alone.
 
+### Browser Use Native Bridge Trust Blocked By Patched Client
+
+- Type: `tool_runtime_error`, `skill_or_doc_drift`, `environment_path_issue`
+- Fingerprint: `browser-use:browser` setup through Node REPL fails with `privileged native pipe bridge is not available; browser-client is not trusted. Load browser-client from the openai-bundled marketplace directory.`
+- Risk: agents may use Chrome headless, CDP, or another browser surface and report the requested Browser plugin as verified.
+- Likely cause: `openai-bundled` points to a copied or patched marketplace, or the skill imports stale `plugins/cache/openai-bundled/browser-use/.../scripts/browser-client.mjs`; native bridge trust is granted only to official bundled `plugins/browser/scripts/browser-client.mjs` paths.
+- Fix playbook:
+  1. Preserve the exact Node REPL setup error and the imported `browser-client.mjs` path.
+  2. Check the active `[marketplaces.openai-bundled]` source in `config.toml`.
+  3. Prefer the official bundled marketplace that contains `plugins/browser/scripts/browser-client.mjs` and exports `setupBrowserRuntime`.
+  4. Do not mutate bundled `browser-client.mjs` copies to bypass origin policy; that can remove native bridge trust.
+- Verification: import the official bundled client with Node REPL, call `setupBrowserRuntime({ globals: globalThis })`, get `agent.browsers.get("iab")`, and confirm `browser.tabs.list()` succeeds.
+- Do not claim: Browser plugin verification from Chrome headless/CDP fallback alone.
+
+### Subagent Not Spawned Before Explicit Authorization
+
+- Type: `workflow_hook_issue`, `validation_gap`
+- Fingerprint: `[features].multi_agent = true` or PM workflow text exists, but no `spawn_agent` occurs until the user writes an explicit authorization phrase such as `subagent`, `spawn_agent`, `delegate`, or the configured localized equivalent.
+- Risk: agents or reviewers may misdiagnose this as disabled subagents rather than the runtime authorization gate, or may accept a subagent's own `SUBAGENT_CALL not_used` report as evidence about the PM session.
+- Likely cause: Codex runtime policy requires explicit user authorization before subagent tools are called; feature flags and workflow presets are capability only.
+- Fix playbook:
+  1. Inspect the target rollout JSONL for user text order and actual `spawn_agent` tool events.
+  2. Compare hook classification: `delegationAuthorized=false` before explicit text, `true` after explicit text.
+  3. Treat subagent notifications as candidate evidence; distinguish PM-level subagent use from nested subagent use.
+  4. If authorization is absent and delegation would help, report the limitation instead of spawning.
+- Verification: target thread shows no `spawn_agent` before explicit authorization and shows `spawn_agent` only after the authorization text, or the final report records `SUBAGENT_CALL not_used` with reason and residual risk.
+- Do not claim: that `multi_agent = true`, a team preset, or a reviewer report proves subagents should have been spawned.
+
 ### Hook Overblocks Toolchain Or MCP Maintenance
 
 - Type: `workflow_hook_issue`, `security_boundary`

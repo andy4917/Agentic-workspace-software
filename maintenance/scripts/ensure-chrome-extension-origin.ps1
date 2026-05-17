@@ -32,6 +32,46 @@ function Get-OpenAiBundledSource {
     return $null
 }
 
+function Test-ModernBrowserClient {
+    param([string]$MarketplaceSource)
+
+    if ([string]::IsNullOrWhiteSpace($MarketplaceSource)) {
+        return $false
+    }
+
+    $browserClient = Join-Path $MarketplaceSource "plugins\browser\scripts\browser-client.mjs"
+    if (-not (Test-Path -LiteralPath $browserClient)) {
+        return $false
+    }
+
+    $text = [System.IO.File]::ReadAllText($browserClient)
+    return $text.Contains("setupBrowserRuntime") -and $text.Contains("__codexNativePipe")
+}
+
+function Get-OfficialBundledMarketplace {
+    param([string]$CodexHome)
+
+    $localBundled = Join-Path $CodexHome ".tmp\bundled-marketplaces\openai-bundled"
+    if (Test-ModernBrowserClient -MarketplaceSource $localBundled) {
+        return $localBundled
+    }
+
+    $windowsAppsRoot = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "WindowsApps"
+    if (Test-Path -LiteralPath $windowsAppsRoot) {
+        $candidate = Get-ChildItem -LiteralPath $windowsAppsRoot -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "OpenAI.Codex_*" } |
+            Sort-Object LastWriteTime -Descending |
+            ForEach-Object { Join-Path $_.FullName "app\resources\plugins\openai-bundled" } |
+            Where-Object { Test-ModernBrowserClient -MarketplaceSource $_ } |
+            Select-Object -First 1
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
 function Set-OpenAiBundledSource {
     param(
         [string]$ConfigPath,
@@ -76,105 +116,17 @@ function Set-OpenAiBundledSource {
     return "patched-config: openai-bundled source set to $Source"
 }
 
-function Copy-PatchedMarketplace {
-    param(
-        [string]$Source,
-        [string]$Destination
-    )
-
-    if ([string]::IsNullOrWhiteSpace($Source) -or -not (Test-Path -LiteralPath $Source)) {
-        return "skipped: source marketplace not found at $Source"
-    }
-
-    if (-not (Test-Path -LiteralPath $Destination)) {
-        New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    }
-
-    Get-ChildItem -LiteralPath $Source -Force | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination $Destination -Recurse -Force
-    }
-    [System.IO.File]::WriteAllText(
-        (Join-Path $Destination ".codex-patched-source.txt"),
-        $Source,
-        [System.Text.UTF8Encoding]::new($false)
-    )
-    return "copied: openai-bundled marketplace to $Destination"
-}
-
-function Repair-BrowserClient {
-    param([string]$BrowserClient)
-
-    if (-not (Test-Path -LiteralPath $BrowserClient)) {
-        return "skipped: browser-client.mjs not found at $BrowserClient"
-    }
-
-    $oldPolicy = 'return e.protocol==="http:"||e.protocol==="https:"}'
-    $newPolicy = 'return e.protocol==="http:"||e.protocol==="https:"||e.protocol==="chrome-extension:"}'
-    $text = [System.IO.File]::ReadAllText($BrowserClient)
-
-    if ($text.Contains($newPolicy)) {
-        return "ok: chrome-extension origin already allowed at $BrowserClient"
-    }
-
-    $matchCount = ([regex]::Matches($text, [regex]::Escape($oldPolicy))).Count
-    if ($matchCount -ne 1) {
-        throw "Expected exactly one browser URL policy match in $BrowserClient, found $matchCount"
-    }
-
-    [System.IO.File]::WriteAllText(
-        $BrowserClient,
-        $text.Replace($oldPolicy, $newPolicy),
-        [System.Text.UTF8Encoding]::new($false)
-    )
-
-    if (-not $NoNodeCheck) {
-        $node = Join-Path $CodexHome "toolchains\shims\node.cmd"
-        if (Test-Path -LiteralPath $node) {
-            & $node --check $BrowserClient | Out-Null
-        }
-    }
-
-    return "patched: chrome-extension origin allowed at $BrowserClient"
-}
-
 $configPath = Join-Path $CodexHome "config.toml"
-$patchedMarketplace = Join-Path $CodexHome "plugins\patched\openai-bundled"
-$marketplaceSource = Get-OpenAiBundledSource -ConfigPath $configPath
-$setupResults = [System.Collections.Generic.List[string]]::new()
+$currentSource = Get-OpenAiBundledSource -ConfigPath $configPath
+$officialSource = Get-OfficialBundledMarketplace -CodexHome $CodexHome
 
-if (-not [string]::IsNullOrWhiteSpace($marketplaceSource) -and $marketplaceSource -match '\\WindowsApps\\') {
-    try {
-        $setupResults.Add((Copy-PatchedMarketplace -Source $marketplaceSource -Destination $patchedMarketplace))
-        $setupResults.Add((Set-OpenAiBundledSource -ConfigPath $configPath -Source $patchedMarketplace))
-        $marketplaceSource = $patchedMarketplace
-    } catch {
-        $setupResults.Add("failed: patched marketplace setup - $($_.Exception.Message)")
-    }
+if ([string]::IsNullOrWhiteSpace($officialSource)) {
+    Write-Output "failed: official openai-bundled marketplace with modern browser client was not found"
+} elseif ($currentSource -eq $officialSource) {
+    Write-Output "ok: openai-bundled source already uses official bundled marketplace"
+} elseif (-not [string]::IsNullOrWhiteSpace($currentSource) -and (Test-ModernBrowserClient -MarketplaceSource $currentSource)) {
+    Write-Output "ok: openai-bundled source already has modern browser client"
+} else {
+    Write-Output (Set-OpenAiBundledSource -ConfigPath $configPath -Source $officialSource)
+    Write-Output "note: legacy browser-client mutation disabled; native bridge trust is granted only to official bundled browser-client paths"
 }
-
-$targets = [System.Collections.Generic.List[string]]::new()
-$cacheClient = Join-Path $CodexHome "plugins\cache\openai-bundled\chrome\latest\scripts\browser-client.mjs"
-$targets.Add($cacheClient)
-
-if (-not [string]::IsNullOrWhiteSpace($marketplaceSource)) {
-    $bundleClient = Join-Path $marketplaceSource "plugins\chrome\scripts\browser-client.mjs"
-    if (-not $targets.Contains($bundleClient)) {
-        $targets.Add($bundleClient)
-    }
-} elseif (Test-Path -LiteralPath $patchedMarketplace) {
-    $patchedClient = Join-Path $patchedMarketplace "plugins\chrome\scripts\browser-client.mjs"
-    if (-not $targets.Contains($patchedClient)) {
-        $targets.Add($patchedClient)
-    }
-}
-
-$results = foreach ($target in $targets) {
-    try {
-        Repair-BrowserClient -BrowserClient $target
-    } catch {
-        "failed: $target - $($_.Exception.Message)"
-    }
-}
-
-$setupResults | ForEach-Object { Write-Output $_ }
-$results | ForEach-Object { Write-Output $_ }
