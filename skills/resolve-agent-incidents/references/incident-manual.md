@@ -204,6 +204,23 @@ Use one primary type and optional secondary tags.
 - Verification: import the official bundled client with Node REPL, call `setupBrowserRuntime({ globals: globalThis })`, get `agent.browsers.get("iab")`, and confirm `browser.tabs.list()` succeeds.
 - Do not claim: Browser plugin verification from Chrome headless/CDP fallback alone.
 
+### Browser Plugin Hidden In App UI After Restart
+
+- Type: `tool_runtime_error`, `environment_path_issue`, `workflow_hook_issue`
+- Fingerprint: Browser runtime can connect through the official `plugins/browser/scripts/browser-client.mjs`, but the app plugin UI does not show Browser/browser-use after restart.
+- Risk: agents may treat runtime success as UI recovery, leaving the user with an invisible plugin card and no way to inspect or toggle it in the app.
+- Likely cause: `[marketplaces.openai-bundled].source` points at an active temporary or cache path such as `.tmp\bundled-marketplaces`, `tmp`, or `plugins\cache`, or `.codex-global-state.json` keeps `browser-use-bundled-plugin-auto-install-disabled` set to `true` after the browser plugin ID migrated from `browser-use` to `browser`.
+- Additional confirmed cause: `plugin/read` for `browser` can report `enabled=true` and `availability=AVAILABLE` while `installed=false`. In that state the skill can still appear from cache, but the app plugin UI may omit the Browser card or fail to show it as installed.
+- Fix playbook:
+  1. Preserve current `config.toml` and `.codex-global-state.json` backups before mutation.
+  2. Point `[marketplaces.openai-bundled].source` at the installed Codex app bundle marketplace under `Program Files\WindowsApps\OpenAI.Codex_...\app\resources\plugins\openai-bundled` when available.
+  3. Ensure `plugins\cache\openai-bundled\browser\<version>` exists; if the loader logs `failed to load plugin: plugin is not installed plugin="browser@openai-bundled"`, create a junction from that cache path to the installed app bundle `plugins\browser` directory.
+  4. Use the app-server `plugin/read` method against `openai-bundled\.agents\plugins\marketplace.json` and `pluginName=browser`. If `summary.installed=false`, call `plugin/install` for the same marketplace file and plugin name, then re-read until `summary.installed=true` and `summary.enabled=true`.
+  5. Keep `[plugins."browser@openai-bundled"] enabled = true`; do not re-enable stale `[plugins."browser-use@openai-bundled"]` unless an active marketplace actually contains that plugin ID.
+  6. Clear or set false the legacy `browser-use-bundled-plugin-auto-install-disabled` state flag after install because app state can reintroduce the stale flag.
+- Verification: `config.toml` parses, `ensure-chrome-extension-origin.ps1` reports an installed app bundle source and browser cache path, app-server `plugin/read` reports `browser@openai-bundled installed=true enabled=true`, keep-codex-fast reports `openai-bundled ok`, the loader no longer reports missing `browser@openai-bundled` cache on the next turn, and the Browser runtime can list the `iab` backend. UI drawer visibility still requires user- or app-side visual confirmation.
+- Do not claim: UI recovery from runtime-only checks if the app drawer itself was not inspected.
+
 ### Subagent Not Spawned Before Explicit Authorization
 
 - Type: `workflow_hook_issue`, `validation_gap`
