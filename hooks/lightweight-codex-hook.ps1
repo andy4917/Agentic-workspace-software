@@ -89,7 +89,7 @@ switch ($eventName) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Subagent call declaration required: record SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk."
         }
         if ([bool]$state.skillEvidenceRequired) {
-            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Skill workflow evidence required: record SKILL_EVIDENCE used/not_used with reason, direct evidence, and residual risk."
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Skill workflow closure required: record SKILL_EVIDENCE used/not_used with reason and residual risk; include evidence detail only when skill use is missing, blocked, or abnormal."
         }
         if ([bool]$classification.anomalyPauseExpected) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Anomaly pause/trace required: preserve the first mismatch, stop the original path, and resume only with verified correction or blocked/continue status."
@@ -228,7 +228,7 @@ switch ($eventName) {
         $skillEvidence = Get-SkillEvidenceSummary -ToolName $toolName -Text $text -SkillRoute ([string]$state.skillRoute)
         if (-not [string]::IsNullOrWhiteSpace($skillEvidence)) {
             $state.skillEvents = Add-Unique -Items $state.skillEvents -Value $skillEvidence
-            $additional += "Skill workflow evidence observed: final audit must accept this evidence or record SKILL_EVIDENCE not_used with reason, direct evidence, and residual risk."
+            $additional += "Remaining risk: skill workflow closure can be missed. Next recommended action: include SKILL_EVIDENCE used/not_used with reason and residual risk; omit normal evidence details unless skill use was missing, blocked, or abnormal."
         }
         $isSubagentTool = Test-SubagentToolUse -ToolName $toolName -Text $text
         if ($isSubagentTool) {
@@ -317,7 +317,7 @@ switch ($eventName) {
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
-                reason = "Final preflight: an anomaly-calibration workflow was active. Before finalizing, state the pause/trace trigger, first mismatch/root cause, verification or blocked/continue status, and residual risk."
+                reason = "Final preflight: remaining risk: anomaly calibration is not closed. Next recommended action: state the pause/trace trigger, first mismatch/root cause, verification or blocked/continue status, and residual risk."
             }
             break
         }
@@ -327,7 +327,7 @@ switch ($eventName) {
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
-                reason = "Final preflight: subagent use was explicitly authorized or a subagent tool event was observed. Before finalizing, include SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, even if task_class was unavailable."
+                reason = "Final preflight: remaining risk: subagent activity or authorization is not closed. Next recommended action: include SUBAGENT_CALL used/not_used with reason and residual risk; add evidence detail only for missing, rejected, blocked, or abnormal subagent evidence."
             }
             break
         }
@@ -337,7 +337,7 @@ switch ($eventName) {
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
-                reason = "Final preflight: this prompt was classified as L4 with delegation authorized. Before finalizing, include accepted/rejected subagent evidence plus WATCHER_REPORT, or record WATCHER_NOT_USED with reason, risk, substitute check, and confidence impact."
+                reason = "Final preflight: remaining risk: delegated workflow lacks watcher closure. Next recommended action: include WATCHER_REPORT or WATCHER_NOT_USED with reason, risk, substitute check, and confidence impact; include evidence detail only for abnormal or rejected watcher findings."
             }
             break
         }
@@ -347,7 +347,7 @@ switch ($eventName) {
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
-                reason = "Final preflight: skill workflow evidence missing after matching skill workflows were routed or observed. Before finalizing, include SKILL_EVIDENCE used/not_used with reason, direct evidence, and residual risk."
+                reason = "Final preflight: remaining risk: routed skill workflow is not closed. Next recommended action: include SKILL_EVIDENCE used/not_used with reason and residual risk; add evidence detail only when skill use was missing, blocked, or abnormal."
             }
             break
         }
@@ -357,7 +357,7 @@ switch ($eventName) {
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
-                reason = "Final preflight: changed surfaces were observed. Before finalizing, include a short FINAL PREFLIGHT with Done, Fixed / changed, Verification, Remaining / separate issues, Related-scope compatibility, and Commit status."
+                reason = "Final preflight: remaining risk: changed surfaces are not closed. Next recommended action: include a short FINAL PREFLIGHT with Done, Fixed / changed, Verification, Remaining / separate issues, Related-scope compatibility, and Commit status; include proof details only for failed, not-run, blocked, or abnormal checks."
             }
             break
         }

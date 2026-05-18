@@ -230,15 +230,28 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "Remaining / separate issues: none. Related-scope compatibility: unchanged. Commit status: not committed. "
             "SKILL_EVIDENCE used reason clean-all-slop route direct evidence skills/clean-all-slop/SKILL.md residual risk low.",
         )
+        skill_stop_with_compact_marker = run_stop_hook_sample(
+            root,
+            "FINAL PREFLIGHT Done: skill route sample. Fixed / changed: none. Verification: direct hook smoke. "
+            "Remaining / separate issues: none. Related-scope compatibility: unchanged. Commit status: not committed. "
+            "SKILL_EVIDENCE used reason clean-all-slop route residual risk low.",
+        )
         add_check(
             "skill_route_requires_final_evidence",
             "clean-all-slop" in skill_stdout
             and skill_state.get("skillEvidenceRequired") is True
             and "clean-all-slop" in str(skill_state.get("skillRoute", ""))
-            and "skill workflow evidence" in skill_stop_missing.get("stdout_preview", "").lower()
+            and "remaining risk:" in skill_stop_missing.get("stdout_preview", "").lower()
+            and "next recommended action:" in skill_stop_missing.get("stdout_preview", "").lower()
             and bool(skill_event_state.get("skillEvents"))
             and '"continue":true' in skill_stop_with_marker.get("stdout_preview", "").lower(),
             "Prompt routing should persist matching skill workflow requirements, record SKILL.md access, and require SKILL_EVIDENCE before finalization.",
+        )
+        add_check(
+            "skill_evidence_observed_allows_compact_final",
+            bool(skill_event_state.get("skillEvents"))
+            and '"continue":true' in skill_stop_with_compact_marker.get("stdout_preview", "").lower(),
+            "Observed skill evidence should allow compact final closure without repeating normal evidence details.",
         )
         skill_events = skill_event_state.get("skillEvents", [])
         reminders = skill_event_state.get("requiredReminders", [])
@@ -280,7 +293,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         add_check(
             "stop_enforces_l4_state_without_tool_events",
             '"decision":"block"' in state_only_stop.get("stdout_preview", "").lower()
-            and "anomaly-calibration workflow was active" in state_only_stop.get("stdout_preview", "").lower(),
+            and "remaining risk: anomaly calibration is not closed" in state_only_stop.get("stdout_preview", "").lower()
+            and "next recommended action:" in state_only_stop.get("stdout_preview", "").lower(),
             "Stop should enforce L4 anomaly/subagent/watcher requirements even when no tool event or changed surface is recorded.",
         )
 
@@ -386,6 +400,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             '"decision":"block"' in weak_short_stop.get("stdout_preview", "").lower(),
             "Stop should require the explicit FINAL PREFLIGHT marker, not just generic section labels.",
         )
+        add_check(
+            "stop_feedback_is_risk_and_next_action",
+            "remaining risk:" in weak_short_stop.get("stdout_preview", "").lower()
+            and "next recommended action:" in weak_short_stop.get("stdout_preview", "").lower()
+            and "direct evidence" not in weak_short_stop.get("stdout_preview", "").lower(),
+            "Stop feedback should summarize remaining risk and next action, not repeat normal evidence detail.",
+        )
 
         run_prompt_hook_sample(root, workflow_prompt)
         run_post_tool_hook_sample(root, "apply_patch", "apply_patch changed file test")
@@ -409,7 +430,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         stop_with_subagent = run_stop_hook_sample(root, delegated_final_with_marker)
         add_check(
             "stop_requires_explicit_subagent_call_marker",
-            "subagent use was explicitly authorized or a subagent tool event was observed" in stop_missing_subagent.get("stdout_preview", "").lower()
+            "remaining risk: subagent activity or authorization is not closed" in stop_missing_subagent.get("stdout_preview", "").lower()
+            and "next recommended action:" in stop_missing_subagent.get("stdout_preview", "").lower()
             and '"continue":true' in stop_with_subagent.get("stdout_preview", "").lower(),
             "Stop should reject delegated finals without SUBAGENT_CALL used/not_used and allow the explicit marker with reason/evidence.",
         )
@@ -436,7 +458,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         add_check(
             "stop_requires_concrete_watcher_artifact_or_omission_record",
             '"decision":"block"' in watcherless_stop.get("stdout_preview", "").lower()
-            and "accepted/rejected subagent evidence plus watcher_report" in watcherless_stop.get("stdout_preview", "").lower(),
+            and "remaining risk: delegated workflow lacks watcher closure" in watcherless_stop.get("stdout_preview", "").lower()
+            and "next recommended action:" in watcherless_stop.get("stdout_preview", "").lower(),
             "Stop should reject L4 delegated finals that mention subagent evidence but omit WATCHER_REPORT or complete WATCHER_NOT_USED.",
         )
         add_check(
@@ -522,7 +545,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         event_stop_with_marker = run_stop_hook_sample(root, event_final_with_marker)
         add_check(
             "stop_requires_marker_after_actual_subagent_tool_event",
-            "subagent use was explicitly authorized or a subagent tool event was observed" in event_stop_missing.get("stdout_preview", "").lower()
+            "remaining risk: subagent activity or authorization is not closed" in event_stop_missing.get("stdout_preview", "").lower()
+            and "next recommended action:" in event_stop_missing.get("stdout_preview", "").lower()
             and '"continue":true' in event_stop_with_marker.get("stdout_preview", "").lower(),
             "Stop should require SUBAGENT_CALL evidence when a subagent tool event exists, even without prompt authorization state.",
         )

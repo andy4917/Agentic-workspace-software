@@ -641,12 +641,12 @@ function Get-PromptReminder {
 
     $subagentDecisionAction = "Subagent call declaration: not required unless the user explicitly authorizes subagents."
     if ([bool]$classification.subagentDecisionRequired) {
-        $subagentDecisionAction = "Subagent call declaration required: after this user instruction, final evidence must repeat SUBAGENT_CALL used or SUBAGENT_CALL not_used with reason, direct evidence, and residual risk even if task_class is unavailable."
+        $subagentDecisionAction = "Subagent call declaration required: close SUBAGENT_CALL used/not_used with reason and residual risk; evidence detail only for missing, rejected, blocked, or abnormal activity."
     }
 
     $skillEvidenceAction = "Skill evidence: not required unless a matching skill workflow is routed."
     if (Test-SkillEvidenceRequired -SkillRoute $SkillRoute) {
-        $skillEvidenceAction = "Skill evidence required: matching skill workflows were routed; before finalizing, include SKILL_EVIDENCE used/not_used with reason, direct evidence, and residual risk."
+        $skillEvidenceAction = "Skill closure required: close SKILL_EVIDENCE used/not_used with reason and residual risk; evidence detail only for missing, blocked, or abnormal skill use."
     }
 
     $goalAction = "Goal action: no persisted Codex Goal required unless the task becomes long-running or stateful."
@@ -671,7 +671,7 @@ function Get-PromptReminder {
     return @"
 Lightweight Codex workflow reminder:
 - Core brief: task_class=$($classification.level); goal=$goal; preset=$Workflow; phase=$Phase.
-- Output rule: user text should include only request summary, objective, task level, current status/action, direct evidence, and material blockers/risks; keep reasoning and internal frames private.
+- Output rule: include request summary, objective, task level, current status/action, material blockers/risks, and next recommended work; evidence detail only for abnormal, blocked, not-run, or disputed items; keep reasoning and internal frames private.
 - Route: skills=$SkillRoute; team=$TeamPreset; toolchain=$ToolchainHint.
 - $goalAction
 - Memory: $MemoryRoute; support-only, never completion authority.

@@ -88,11 +88,13 @@ function Test-SubagentDecisionReady {
     }
 
     $hasMarker = $Message -match "(?i)SUBAGENT_CALL\s+(used|not_used|not used)"
+    $hasNotUsedMarker = $Message -match "(?i)SUBAGENT_CALL\s+(not_used|not used)"
     $hasReason = $Message -match "(?i)(reason|because)"
     $hasEvidence = $Message -match "(?i)(evidence|verified|direct evidence|substitute check)"
     $hasRisk = $Message -match "(?i)(risk|residual)"
+    $needsEvidenceDetail = $hasNotUsedMarker -or -not $hasSubagentEvent
 
-    return ($hasMarker -and $hasReason -and $hasEvidence -and $hasRisk)
+    return ($hasMarker -and $hasReason -and $hasRisk -and ((-not $needsEvidenceDetail) -or $hasEvidence))
 }
 
 function Test-SkillEvidenceReady {
@@ -110,9 +112,11 @@ function Test-SkillEvidenceReady {
     }
 
     $hasMarker = $Message -match "(?i)SKILL_EVIDENCE\s+(used|not_used|not used)"
+    $hasNotUsedMarker = $Message -match "(?i)SKILL_EVIDENCE\s+(not_used|not used)"
     $hasReason = $Message -match "(?i)(reason|because)"
     $hasEvidence = $Message -match "(?i)(evidence|direct evidence|checked|read|loaded)"
     $hasRisk = $Message -match "(?i)(risk|residual)"
+    $needsEvidenceDetail = $hasNotUsedMarker -or -not $hasSkillEvent
 
-    return ($hasMarker -and $hasReason -and $hasEvidence -and $hasRisk)
+    return ($hasMarker -and $hasReason -and $hasRisk -and ((-not $needsEvidenceDetail) -or $hasEvidence))
 }
