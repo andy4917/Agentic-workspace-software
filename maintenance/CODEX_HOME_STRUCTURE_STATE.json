@@ -2,7 +2,7 @@
   "schema_version": 1,
   "record_class": "freshness_sensitive_state",
   "owner": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md and maintenance/scripts/check-codex-native-alignment.ps1",
-  "updated_at": "2026-05-20T02:55:00+09:00",
+  "updated_at": "2026-05-20T03:12:00+09:00",
   "purpose": "Machine-readable baseline for Codex home structure, native app alignment, and prior cleanup state that must stay current.",
   "records": {
     "structure_policy_md": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md",
@@ -125,7 +125,7 @@
     }
   },
   "maintenance_documentation": {
-    "updated_at": "2026-05-20T02:55:00+09:00",
+    "updated_at": "2026-05-20T03:12:00+09:00",
     "scope": "Root maintenance/*.md plus current maintenance JSON records.",
     "classification_rule": "Markdown is principle, rationale, status handoff, template, or historical provenance. Freshness-sensitive operational facts live in JSON and must be regenerated or verified before use.",
     "current_state_json": [
@@ -236,7 +236,7 @@
       "plugins/cache/openai-bundled/browser-use",
       "plugins/cache/openai-primary-runtime",
       ".tmp/bundled-marketplaces",
-      ".tmp/plugins",
+      ".tmp/plugins/plugins",
       ".tmp/plugins.sha",
       "plugins/local-marketplaces",
       ".codex-global-state.json.bak",
@@ -257,6 +257,8 @@
       "maintenance scripts no longer use local patched official marketplace copies",
       "check-codex-native-alignment validates enabled configured official bundled plugin paths instead of warning on disabled unconfigured manifest entries",
       "standing subagent authorization is reflected across config, hook policy, workflow reminders, and hook-policy smoke expectations",
+      "Codex 5.3 Spark read-only sidecar is standing-authorized across L1-L4 for long or many-file reads without prompt-specific delegation wording",
+      "persistent model_reasoning_effort is restored to medium; per-task escalation remains session-local",
       "historical reports with superseded latex or delegation wording are marked as historical instead of current state",
       "hook runtime state now records the intentionally active SessionStart and UserPromptSubmit hooks and inactive lifecycle guard hooks",
       "naming convention checks now block same-name nested directories and active cross-root skill duplicates",

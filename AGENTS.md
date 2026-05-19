@@ -40,6 +40,11 @@ Runtime subagent activation rule:
 
 - current config carries standing user authorization for bounded sidecar
   subagents when delegation is useful;
+- `gpt-5.3-codex-spark` is standing-authorized as a read-only
+  exploration/search sidecar across `L1`, `L2`, `L3`, and `L4` without requiring
+  the current prompt to explicitly request subagents; prefer it for long or
+  many-file reads, broad search, inventory, and independent context gathering
+  when that materially reduces PM uncertainty;
 - task level `L3`/`L4` raises delegation priority and evidence pressure, but it
   is not a mandate to spawn when the immediate next step is local or delegation
   would not improve the result;
@@ -47,7 +52,7 @@ Runtime subagent activation rule:
 - `PM-led`, `team preset`, `workflow`, or `review` alone do not require subagent use; they may still raise the task level, justify local review, or use standing authorization when a bounded sidecar agent would materially improve the result.
 - when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
 - enabled feature flags are capability, not evidence of actual subagent use.
-- when authorization is present or a subagent tool is used, the PM must repeat
+- when prompt-specific authorization is present or a subagent tool is used, the PM must repeat
   the subagent call decision in final evidence as `SUBAGENT_CALL used` or
   `SUBAGENT_CALL not_used` with reason, direct evidence or substitute check, and
   residual risk; this declaration is required even if a hook reminder omits or

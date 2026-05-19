@@ -14,6 +14,7 @@
     "Stop enforces L4 anomaly, subagent, and watcher requirements even when no tool event or changed surface is recorded",
     "Stop rejects delegated final output that omits SUBAGENT_CALL used/not_used and allows an explicit marker with reason, direct evidence, and residual risk",
     "PM-led/team preset wording alone does not create subagent authorization or require SUBAGENT_CALL evidence",
+    "Many-file read/search prompts surface Codex 5.3 Spark sidecar standing authorization without requiring explicit delegation wording",
     "Stop rejects final output missing SUBAGENT_CALL evidence after an actual subagent tool event",
     "Stop rejects L4 delegated finals that mention subagent evidence but omit WATCHER_REPORT or complete WATCHER_NOT_USED",
     "PostToolUse does not record subagent activity from read-only text mentions of WATCHER_REPORT or WATCHER_NOT_USED",

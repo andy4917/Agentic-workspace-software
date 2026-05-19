@@ -32,7 +32,24 @@
     "default_spawn_policy": "conditional_after_standing_user_authorization_when_useful",
     "standing_user_authorization_from_developer_instructions": true,
     "standing_user_authorization_satisfies_runtime_policy": true,
-    "task_level_autonomy_boundary": "task_class_L3_L4_raises_delegation_priority_and_standing_authorization_allows_bounded_sidecar_delegation_when_useful_but_does_not_require_spawning_for_tiny_or_immediate_blocking_work",
+    "spark_read_sidecar": {
+      "model": "gpt-5.3-codex-spark",
+      "authorization": "standing_read_only_exploration_search_sidecar_without_prompt_specific_request",
+      "task_levels": [
+        "L1",
+        "L2",
+        "L3",
+        "L4"
+      ],
+      "prefer_for": [
+        "long_or_many_file_reads",
+        "broad_search",
+        "inventory",
+        "independent_context_gathering"
+      ],
+      "authority": "candidate_evidence_only"
+    },
+    "task_level_autonomy_boundary": "task_class_L3_L4_raises_delegation_priority_but_spark_read_sidecar_is_authorized_across_L1_L2_L3_L4_for_long_or_many_file_reads_when_useful",
     "required_start_skill": "vowline",
     "required_start_skill_path": "%USERPROFILE%\\.agents\\skills\\vowline\\SKILL.md",
     "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",
@@ -54,10 +71,11 @@
     "no_subagent_for": [
       "simple_conversation",
       "simple_explanation",
-      "tiny_single_file_edit_without_risk",
+      "tiny_single_file_edit_without_risk_unless_long_or_many_file_reading_is_needed",
       "image_generation_without_code_or_policy_work"
     ],
     "spawn_when": [
+      "long_or_many_file_reading_can_be_parallelized_with_codex_spark",
       "independent_exploration_needed",
       "review_dimensions_are_separable",
       "verification_can_run_in_parallel",
@@ -187,6 +205,7 @@
       "store classification in hook state for diagnostics only",
       "keep detailed prompt decomposition and English intent framing out of user-facing prose",
       "record delegation_authorized only when the current prompt requests delegation",
+      "treat spark_read_sidecar as standing-authorized for read-only long or many-file exploration without making delegation_authorized true by itself",
       "suggest a persisted goal only for L4, long-running, or explicitly stateful work",
       "suggest watcher coverage only for prompt-delegated high-risk incidents"
     ],

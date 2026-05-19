@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import json
 import os
 import subprocess
@@ -9,7 +8,6 @@ from typing import Any
 
 from codex_agent_harness_base import *
 from codex_agent_harness_naming import normalize_hook_event_name
-
 
 def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
@@ -503,6 +501,18 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and pm_led_state.get("delegationAuthorized") is False
             and pm_led_state.get("subagentDecisionRequired") is False,
             "PM-led/team preset wording alone should not become subagent authorization or require SUBAGENT_CALL evidence.",
+        )
+        spark_probe = run_prompt_hook_sample(root, "Inspect many files across hooks and maintenance with broad search before editing.")
+        spark_stdout = spark_probe.get("stdout_preview", "").lower()
+        spark_state = json.loads(read_text(state_path))
+        add_check(
+            "spark_read_sidecar_standing_authorized_without_prompt_delegation",
+            spark_probe.get("status") == "pass"
+            and "spark sidecar" in spark_stdout
+            and "no extra prompt authorization required" in spark_stdout
+            and spark_state.get("delegationAuthorized") is False
+            and spark_state.get("subagentDecisionRequired") is False,
+            "Many-file read/search prompts should surface Spark sidecar standing authorization without creating explicit delegation closure pressure.",
         )
         run_post_tool_hook_sample(root, "functions.shell_command", "rg WATCHER_REPORT maintenance")
         try:

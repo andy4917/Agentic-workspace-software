@@ -288,6 +288,26 @@ function Test-StandingDelegationAuthorized {
     return ($null -ne $Policy.subagents -and [bool]$Policy.subagents.standing_user_authorization_from_developer_instructions)
 }
 
+function Test-SparkReadSidecarAuthorized {
+    param($Policy)
+
+    return (
+        $null -ne $Policy.subagents -and
+        $null -ne $Policy.subagents.spark_read_sidecar -and
+        [string]$Policy.subagents.spark_read_sidecar.model -eq "gpt-5.3-codex-spark"
+    )
+}
+
+function Test-SparkReadSidecarUseful {
+    param([string]$Prompt)
+
+    if ([string]::IsNullOrWhiteSpace($Prompt)) {
+        return $false
+    }
+
+    return ($Prompt -match "(?i)(many files|multiple files|large file|long file|broad search|inventory|scan|search|inspect|rg|grep|repository|repo|workspace|tree|hooks?|config|maintenance)")
+}
+
 function Test-RootCauseOrIncidentSignal {
     param([string]$Prompt)
 
@@ -343,6 +363,8 @@ function Get-TaskClassification {
     $reasons = @()
     $promptDelegationSignal = Test-DelegationAuthorized -Prompt $Prompt
     $standingDelegationAuthorized = Test-StandingDelegationAuthorized -Policy $Policy
+    $sparkReadSidecarAuthorized = Test-SparkReadSidecarAuthorized -Policy $Policy
+    $sparkReadSidecarUseful = ($sparkReadSidecarAuthorized -and (Test-SparkReadSidecarUseful -Prompt $Prompt))
     $delegationAuthorized = $promptDelegationSignal
     $hasRootCauseSignal = Test-RootCauseOrIncidentSignal -Prompt $Prompt
     $hasWorkflowGovernanceSignal = Test-WorkflowGovernanceSignal -Prompt $Prompt
@@ -391,6 +413,8 @@ function Get-TaskClassification {
         anomalyPauseExpected = ($level -eq "L4" -and $hasRootCauseSignal -and ($hasWorkflowGovernanceSignal -or $promptDelegationSignal))
         subagentDecisionRequired = $promptDelegationSignal
         standingDelegationAvailable = $standingDelegationAuthorized
+        sparkReadSidecarAuthorized = $sparkReadSidecarAuthorized
+        sparkReadSidecarUseful = $sparkReadSidecarUseful
     }
 }
 
@@ -518,6 +542,9 @@ function Get-IntentFrame {
     }
 
     $subagentPolicy = "Delegation is optional; use only bounded non-blocking sidecar agents when they materially reduce risk."
+    if ([bool]$Classification.sparkReadSidecarAuthorized) {
+        $subagentPolicy = "Spark read sidecar is standing-authorized across L1-L4 for long or many-file read/search work; outputs are candidate evidence only."
+    }
     if ([bool]$Classification.delegationAuthorized) {
         $subagentPolicy = "Delegation requested by the user; spawn only bounded non-blocking sidecar agents and independently verify candidate evidence."
     }
@@ -644,9 +671,15 @@ function Get-PromptReminder {
     $goal = Get-PromptSummary -Prompt $Prompt
     $classification = Get-TaskClassification -Prompt $Prompt -Workflow $Workflow -Phase $Phase -Policy $Policy
 
+    $sparkModel = "gpt-5.3-codex-spark"
+    $sparkReadSidecarAuthorized = Test-SparkReadSidecarAuthorized -Policy $Policy
+    $sparkReadSidecarUseful = Test-SparkReadSidecarUseful -Prompt $Prompt
+
     $delegationAuthorization = "Subagents optional; use only if requested or clearly useful under current runtime policy."
     if (Test-DelegationAuthorized -Prompt $Prompt) {
         $delegationAuthorization = "Subagents requested; use bounded non-blocking sidecar agents only where they reduce risk."
+    } elseif ($sparkReadSidecarAuthorized -and $sparkReadSidecarUseful) {
+        $delegationAuthorization = "Spark sidecar ($sparkModel) is useful here for read/search; no extra prompt authorization required."
     }
 
     $subagentDecisionAction = "Subagent closure: only required when the prompt requests subagents or a subagent tool is used."

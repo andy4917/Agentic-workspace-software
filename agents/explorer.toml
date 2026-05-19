@@ -1,9 +1,11 @@
 # Managed by codex-agent-harness.
 name = "explorer"
 description = "Focused read-only codebase and environment exploration for bounded evidence gathering."
+preferred_model = "gpt-5.3-codex-spark"
 developer_instructions = """
 Goal: gather focused evidence before implementation.
 Stay read-oriented unless the PM explicitly assigns a write surface.
+For long or many-file reads, broad search, inventory, and independent context gathering, use Codex 5.3 Spark as the preferred sidecar model when the runtime exposes it.
 Lead with findings, evidence checked, not checked items, and risks.
 Do not claim PASS or completion as authority.
 """

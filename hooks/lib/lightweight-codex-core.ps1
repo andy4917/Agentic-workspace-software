@@ -135,7 +135,14 @@ function Read-Policy {
   "subagents": {
     "max_parallel": 8,
     "max_depth": 1,
-    "default_spawn_policy": "conditional"
+    "default_spawn_policy": "conditional",
+    "spark_read_sidecar": {
+      "model": "gpt-5.3-codex-spark",
+      "authorization": "standing_read_only_exploration_search_sidecar_without_prompt_specific_request",
+      "task_levels": ["L1", "L2", "L3", "L4"],
+      "prefer_for": ["long_or_many_file_reads", "broad_search", "inventory", "independent_context_gathering"],
+      "authority": "candidate_evidence_only"
+    }
   },
   "work_size": {
     "large_files": 4,

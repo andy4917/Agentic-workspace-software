@@ -34,7 +34,7 @@
     },
     {
       "action": "unchanged",
-      "digest": "547f76fa41e6b544715344ad6627f8f69ec76ffa982fde2a2d6a8d21fdc6abe9",
+      "digest": "071defb104046a5c3af56c8c96a9165ba8362e6befd58c881a713ca1573a79f5",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "agents/explorer.toml",

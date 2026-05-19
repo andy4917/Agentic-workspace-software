@@ -5,7 +5,6 @@ operating rules into reversible, state-tracked commands.
 """
 
 from __future__ import annotations
-
 import argparse
 import datetime as dt
 import hashlib
@@ -19,7 +18,6 @@ import sys
 import tomllib
 from pathlib import Path
 from typing import Any
-
 from codex_agent_harness_calibration import CALIBRATION_EVAL_TEMPLATE, CALIBRATION_ROLE_CONFIG
 SCHEMA_VERSION = "1"
 RUBRIC_VERSION = "codex-harness-audit-v1"
@@ -82,9 +80,11 @@ ROLE_CONFIGS = {
     "agents/explorer.toml": """# Managed by codex-agent-harness.
 name = "explorer"
 description = "Focused read-only codebase and environment exploration for bounded evidence gathering."
+preferred_model = "gpt-5.3-codex-spark"
 developer_instructions = \"\"\"
 Goal: gather focused evidence before implementation.
 Stay read-oriented unless the PM explicitly assigns a write surface.
+For long or many-file reads, broad search, inventory, and independent context gathering, use Codex 5.3 Spark as the preferred sidecar model when the runtime exposes it.
 Lead with findings, evidence checked, not checked items, and risks.
 Do not claim PASS or completion as authority.
 \"\"\"
