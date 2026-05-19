@@ -6,7 +6,6 @@ import json
 import os
 import re
 import shutil
-import stat
 import sys
 import tomllib
 from pathlib import Path
@@ -14,6 +13,7 @@ from typing import Any
 
 from codex_agent_harness_base import *
 from codex_agent_harness_calibration import check_calibration_policy
+from codex_agent_harness_naming import hook_runtime_state_status, naming_convention_status
 from codex_agent_harness_status import (
     app_runtime_state_writable_status,
     generated_output_tracking_status,
@@ -191,7 +191,7 @@ def stale_active_references(root: Path) -> list[dict[str, Any]]:
     return matches
 
 
-def sentinel_checks(root: Path) -> list[dict[str, Any]]:
+def removed_blocker_path_checks(root: Path) -> list[dict[str, Any]]:
     targets = [
         "vendor_imports",
         "plugins/plugins",
@@ -199,18 +199,12 @@ def sentinel_checks(root: Path) -> list[dict[str, Any]]:
     out = []
     for item in targets:
         path = root / item
-        readonly = False
-        if path.exists():
-            try:
-                readonly = bool(path.stat().st_file_attributes & stat.FILE_ATTRIBUTE_READONLY)
-            except AttributeError:
-                readonly = not os.access(path, os.W_OK)
         out.append(
             {
                 "path": item,
                 "exists": path.exists(),
                 "is_file": path.is_file(),
-                "readonly": readonly,
+                "expected": "absent",
             }
         )
     return out
@@ -533,17 +527,21 @@ def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
         "subagent_nickname_policy": lambda: subagent_nickname_policy_status(root),
         "calibration_policy": lambda: check_calibration_policy(root),
         "hook_tool_routing": lambda: hook_tool_routing_status(root),
+        "hook_runtime_state": lambda: hook_runtime_state_status(root),
         "managed_files": lambda: check_managed_files(root),
         "skill_frontmatter": lambda: check_skill_frontmatter(root),
         "harness_file_size": lambda: harness_line_count_status(root),
         "workspace_script_file_size": lambda: workspace_script_line_count_status(root),
         "memento_runtime": lambda: memento_runtime_status(root),
         "stale_active_references": lambda: {"status": "pass", "matches": stale_active_references(root)},
-        "sentinel_blockers": lambda: {"status": "pass", "items": sentinel_checks(root)},
+        "removed_blocker_paths": lambda: {"status": "pass", "items": removed_blocker_path_checks(root)},
+        "naming_convention": lambda: naming_convention_status(root),
     }
     checks = {name: builders[name]() for name in selected}
     if checks["stale_active_references"]["matches"]:
         checks["stale_active_references"]["status"] = "fail"
+    if "removed_blocker_paths" in checks and any(item["exists"] for item in checks["removed_blocker_paths"]["items"]):
+        checks["removed_blocker_paths"]["status"] = "fail"
     failed = [name for name, result in checks.items() if result.get("status") != "pass"]
     return {"generated_at": utc_now(), "root": str(root), "tier": tier, "status": "pass" if not failed else "fail", "failed": failed, "checks": checks}
 
@@ -654,6 +652,7 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("subagent session start injects Vowline context", hook_subagent_vowline_status(root).get("status") == "pass"),
             ("subagent nicknames are role-prefixed", subagent_nickname_policy_status(root).get("status") == "pass"),
             ("hook tool routing covers active namespaces", hook_tool_routing_status(root).get("status") == "pass"),
+            ("hook runtime state matches intended active events", hook_runtime_state_status(root).get("status") == "pass"),
             ("hook script parses by existence", (root / "hooks" / "lightweight-codex-hook.ps1").exists()),
             ("core doctor currently passes", doctor.get("status") == "pass"),
             ("latest verification report exists", bool(verification)),
@@ -684,6 +683,7 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("global scan active hits absent", global_scan.get("active_hit_count", 0) == 0),
             ("global scan had no scan errors", global_scan.get("scan_error_count", 1) == 0),
             ("global scan matches current harness source", global_scan_fresh),
+            ("naming convention check passes", naming_convention_status(root).get("status") == "pass"),
         ],
         "Cost Efficiency": [
             ("tool result artifact directory exists", (root / "artifacts" / "tool-results").exists()),

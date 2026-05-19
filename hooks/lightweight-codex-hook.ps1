@@ -54,7 +54,7 @@ switch ($eventName) {
         $teamPreset = Get-TeamPresetHint -Workflow $workflow
         $toolchainHint = Get-PurposeToolchainHint -Prompt $prompt
         $memoryRoute = Get-MementoMemoryRoute -Prompt $prompt
-        $classification = Get-TaskClassification -Prompt $prompt -Workflow $workflow -Phase $phase
+        $classification = Get-TaskClassification -Prompt $prompt -Workflow $workflow -Phase $phase -Policy $policy
         $intentFrame = Get-IntentFrame -Prompt $prompt -Workflow $workflow -Phase $phase -ToolchainHint $toolchainHint -MemoryRoute $memoryRoute -Classification $classification
         $state.currentGoal = $promptSummary
         $state.workflow = $workflow

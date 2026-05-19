@@ -197,6 +197,17 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "skill_mcp_dependency_install = true\n"
             "workspace_dependencies = true\n"
             "\n"
+            "[hooks.state.'hooks.json:permission_request:0:0']\n"
+            "enabled = false\n"
+            "[hooks.state.'hooks.json:post_tool_use:0:0']\n"
+            "enabled = false\n"
+            "[hooks.state.'hooks.json:pre_tool_use:0:0']\n"
+            "enabled = false\n"
+            "[hooks.state.'hooks.json:session_start:0:0']\n"
+            "[hooks.state.'hooks.json:stop:0:0']\n"
+            "enabled = false\n"
+            "[hooks.state.'hooks.json:user_prompt_submit:0:0']\n"
+            "\n"
             "[agents]\n"
             "max_threads = 8\n"
             "max_depth = 1\n"
@@ -277,7 +288,13 @@ def cmd_self_test(args: argparse.Namespace) -> int:
                     "required_start_skill": "vowline",
                     "required_start_skill_path": str(Path.home() / ".agents" / "skills" / "vowline" / "SKILL.md"),
                     "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",
-                }
+                },
+                "hooks": {
+                    "runtime_state": {
+                        "active_events": ["SessionStart", "UserPromptSubmit"],
+                        "inactive_events": ["PreToolUse", "PermissionRequest", "PostToolUse", "Stop"],
+                    }
+                },
             },
         )
         write_text(
@@ -285,21 +302,21 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "# selected answers, diagnoses, plans, and patch rationales stay candidate until direct evidence\n"
             "# incident terms inside read-only inspection output stay L3 compatibility evidence\n",
         )
-        write_text(
-            root / "skills" / "vowline" / "SKILL.md",
-            "---\n"
-            "name: vowline\n"
-            "description: Universal operating skill for the self-test fixture.\n"
-            "---\n\n"
-            "# Vowline\n",
-        )
         write_text(root / "evals" / "calibration-eval.yaml", "checks:\n  - confident_wrong\n  - unsupported_material_claim\n")
+        write_text(
+            root / "maintenance" / "scripts" / "check-naming-conventions.ps1",
+            "param([switch]$Json)\n"
+            "$result = [ordered]@{ status = 'pass'; finding_count = 0; blocking_count = 0; findings = @() }\n"
+            "if ($Json) { $result | ConvertTo-Json -Depth 4 } else { 'status=pass' }\n"
+            "exit 0\n",
+        )
         for name in [
             "codex_agent_harness.py",
             "codex_agent_harness_base.py",
             "codex_agent_harness_calibration.py",
             "codex_agent_harness_lifecycle.py",
             "codex_agent_harness_merge.py",
+            "codex_agent_harness_naming.py",
             "codex_agent_harness_smoke.py",
             "codex_agent_harness_status.py",
             "codex_agent_harness_workflows.py",
@@ -334,8 +351,9 @@ def cmd_self_test(args: argparse.Namespace) -> int:
                 "harness_digest": harness_source_digest(root),
             },
         )
-        if doctor_data(root)["status"] != "pass":
-            print("doctor failed in self-test", file=sys.stderr)
+        doctor = doctor_data(root)
+        if doctor["status"] != "pass":
+            print(f"doctor failed in self-test: {doctor.get('failed', [])}", file=sys.stderr)
             return 1
         source = root / "source.toml"
         target = root / "target.toml"

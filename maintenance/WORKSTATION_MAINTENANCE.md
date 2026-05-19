@@ -18,6 +18,11 @@ Apply this protocol when the user asks for any of these:
 Before mutating files, installing tools, changing config, moving logs, or
 publishing externally, classify the request by workstation surface and risk
 level. Use `maintenance/WORKSTATION_CONTROL_RUNBOOK.md` for the full taxonomy.
+For operating-level `%USERPROFILE%\.codex` maintenance, also read
+`maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md` and
+`maintenance/CODEX_HOME_STRUCTURE_STATE.json`. Use Markdown only for
+stale-tolerant rationale and JSON for current normal tree, official/user
+ownership, and native-alignment facts.
 When the request is specifically about control-plane drift, duplication,
 contradictions, stale guidance, hidden fallback, or workflow bloat, use that
 runbook's Control-Plane Alignment section instead of creating a separate
@@ -156,6 +161,10 @@ exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
 - `scope`: Codex-global PM memory support only; not project completion
   authority and not a replacement for AGENTS, hooks, scorecard, Memento gates,
   tests, runtime output, or PM verification.
+- `config_posture`: local `config.toml` keeps `[mcp_servers.memento].enabled=true`
+  and `developer_instructions` says to use Memento by default for PM support
+  context and relevant recall, even when the user does not explicitly mention
+  memory.
 - `verification`:
   `maintenance\scripts\memento-mcp-runtime.ps1 verify`.
 - `session_start_guard`: the lightweight SessionStart hook checks
@@ -185,25 +194,27 @@ exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
 - `source_version`: commit `4c7e24015efd1faae2489b3dd6fce1c5b1178c86`,
   Vowline 0.6.0 source tree; installed `SKILL.md` SHA256
   `8E427BB48AF926119A531380FB781B3F97AB704E6229ABD6059428616B5535A4`.
-- `exact_path`: primary `%USERPROFILE%\.agents\skills\vowline`; Codex
-  compatibility mirror `%USERPROFILE%\.codex\skills\vowline`.
+- `exact_path`: primary `%USERPROFILE%\.agents\skills\vowline`.
+- `duplicate_policy`: do not keep a `%USERPROFILE%\.codex\skills\vowline`
+  compatibility mirror. It duplicates the shared user-global skill and violates
+  the current no-active-duplicate naming convention.
 - `config_surface`: `%USERPROFILE%\.codex\AGENTS.md` Vowline marked block,
   `%USERPROFILE%\.agents\skills\vowline\agents\openai.yaml`, and
   `hooks\lib\lightweight-codex-workflow.ps1` prompt skill routing.
 - `dependency_chain`: GitHub source checkout -> `install.py global
-  --harnesses codex` -> `.agents` primary skill -> `.codex` compatibility
-  mirror -> AGENTS activation block -> UserPromptSubmit Vowline route.
+  --harnesses codex` -> `.agents` primary skill -> AGENTS activation block ->
+  UserPromptSubmit Vowline route.
 - `scope`: Codex-global operating discipline for substantive work and all
   delegated subagents; not completion authority and not a subagent runtime
   authorization override.
-- `verification`: `install.py verify-global --harnesses codex`, two
-  `quick_validate.py` runs for primary and mirror paths,
-  `codex_agent_harness.py doctor --json`, `repo-verify`,
+- `verification`: `install.py verify-global --harnesses codex`,
+  `quick_validate.py` for the primary path,
+  `check-naming-conventions.ps1`, `codex_agent_harness.py doctor --json`, `repo-verify`,
   `eval --eval-id hook-policy-smoke`, and `git diff --check`.
 - `rollback`: clone the same upstream repo and run
-  `python uninstall.py global --harnesses codex`, or restore the previous
-  Vowline skill directories and remove only the `<!-- vowline:start -->`
-  block if a manual rollback is required.
+  `python uninstall.py global --harnesses codex`, or restore the primary
+  Vowline skill directory and remove only the `<!-- vowline:start -->` block if
+  a manual rollback is required.
 
 ## Handoff Requirement
 
@@ -213,6 +224,8 @@ handoff surface:
 - the current thread `COMPACT_HANDOFF.md` when working inside a thread workspace;
 - `maintenance/MCP_RUNTIME_STATUS.md` for MCP behavior or scope;
 - `maintenance/AGENT_TOOL_REQUIREMENTS.md` for tool source policy;
+- `maintenance/CODEX_HOME_STRUCTURE_STATE.json` for current normal tree,
+  official app, runtime, plugin cache, or native alignment facts;
 - `maintenance/NAMING_CONVENTION.md` for source class or naming rules;
 - a maintenance report under `maintenance/reports` when recording inventory.
 
@@ -257,6 +270,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
 %USERPROFILE%\.codex\toolchains\shims\python.cmd %USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py doctor --json
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\memento-mcp-runtime.ps1 verify
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-codex-native-alignment.ps1 -Json -WriteReport
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-staged-sensitive-diff.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-worktree-sensitive-diff.ps1
 git -C %USERPROFILE%\.codex status --short

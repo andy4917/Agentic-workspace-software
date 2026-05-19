@@ -139,6 +139,38 @@ function Invoke-WithWritableConfig {
     }
 }
 
+function Write-Utf8NoBomLines {
+    param(
+        [Parameter(Mandatory = $true)][string] $Path,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [AllowEmptyCollection()]
+        [string[]] $Lines
+    )
+
+    [System.IO.File]::WriteAllLines(
+        $Path,
+        $Lines,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
+
+function Stop-ChromeDevtoolsMcpProcesses {
+    $processes = @(
+        Get-CimInstance Win32_Process |
+            Where-Object {
+                $_.Name -eq "node.exe" -and
+                $_.CommandLine -like "*chrome-devtools-mcp*"
+            }
+    )
+
+    foreach ($process in $processes) {
+        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+
+    return $processes.Count
+}
+
 function Get-DesiredArgs {
     $args = @("-y", "chrome-devtools-mcp@latest")
 
@@ -191,7 +223,7 @@ function Set-McpServerEnabledInConfig {
 
     $sectionHeader = "[mcp_servers.$ServerName]"
     $lines = [System.Collections.Generic.List[string]]::new()
-    foreach ($line in (Get-Content -LiteralPath $ConfigPath)) {
+    foreach ($line in ([System.IO.File]::ReadAllLines($ConfigPath, [System.Text.Encoding]::UTF8))) {
         $lines.Add($line)
     }
 
@@ -217,13 +249,13 @@ function Set-McpServerEnabledInConfig {
 
         if ($lines[$i] -match "^\s*enabled\s*=") {
             $lines[$i] = $enabledLine
-            Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding utf8NoBOM
+            Write-Utf8NoBomLines -Path $ConfigPath -Lines $lines
             return
         }
     }
 
     $lines.Insert($insertIndex, $enabledLine)
-    Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding utf8NoBOM
+    Write-Utf8NoBomLines -Path $ConfigPath -Lines $lines
 }
 
 function Show-HelpText {
@@ -318,6 +350,7 @@ if ($Action -eq "off") {
 
     Write-Host "state=off"
     Write-Host "server=$ServerName registered and disabled for UI visibility"
+    Write-Host ("stopped_stale_processes=" + [string](Stop-ChromeDevtoolsMcpProcesses))
     Invoke-CodexCli -Arguments @("mcp", "get", $ServerName, "--json")
     return
 }

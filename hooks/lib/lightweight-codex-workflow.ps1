@@ -282,6 +282,12 @@ function Test-DelegationAuthorized {
     return $false
 }
 
+function Test-StandingDelegationAuthorized {
+    param($Policy)
+
+    return ($null -ne $Policy.subagents -and [bool]$Policy.subagents.standing_user_authorization_from_developer_instructions)
+}
+
 function Test-RootCauseOrIncidentSignal {
     param([string]$Prompt)
 
@@ -330,11 +336,14 @@ function Get-TaskClassification {
     param(
         [string]$Prompt,
         [string]$Workflow,
-        [string]$Phase
+        [string]$Phase,
+        $Policy = $null
     )
 
     $reasons = @()
-    $delegationAuthorized = Test-DelegationAuthorized -Prompt $Prompt
+    $promptDelegationSignal = Test-DelegationAuthorized -Prompt $Prompt
+    $standingDelegationAuthorized = Test-StandingDelegationAuthorized -Policy $Policy
+    $delegationAuthorized = ($promptDelegationSignal -or $standingDelegationAuthorized)
     $hasRootCauseSignal = Test-RootCauseOrIncidentSignal -Prompt $Prompt
     $hasWorkflowGovernanceSignal = Test-WorkflowGovernanceSignal -Prompt $Prompt
     $p = $Prompt.ToLowerInvariant()
@@ -342,8 +351,10 @@ function Get-TaskClassification {
     if ($Prompt.Length -gt 1200) {
         $reasons += "long prompt"
     }
-    if ($delegationAuthorized) {
+    if ($promptDelegationSignal) {
         $reasons += "explicit delegation authorization"
+    } elseif ($standingDelegationAuthorized) {
+        $reasons += "standing delegation authorization available"
     }
     if ($hasRootCauseSignal) {
         $reasons += "P0/repeated-failure/root-cause signal"
@@ -359,9 +370,9 @@ function Get-TaskClassification {
     }
 
     $level = "L2"
-    if ($hasRootCauseSignal -and ($hasWorkflowGovernanceSignal -or $delegationAuthorized)) {
+    if ($hasRootCauseSignal -and ($hasWorkflowGovernanceSignal -or $promptDelegationSignal)) {
         $level = "L4"
-    } elseif ($hasWorkflowGovernanceSignal -or $delegationAuthorized -or $Prompt.Length -gt 1200) {
+    } elseif ($hasWorkflowGovernanceSignal -or $promptDelegationSignal -or $Prompt.Length -gt 1200) {
         $level = "L3"
     } elseif ($p -match "(?i)(explain|question|simple|one file|tiny)") {
         $level = "L1"
@@ -379,8 +390,8 @@ function Get-TaskClassification {
         delegationAuthorized = $delegationAuthorized
         goalActionRequired = ($level -in @("L3", "L4"))
         watcherCoverageRequired = ($delegationAuthorized -and $level -eq "L4")
-        anomalyPauseExpected = ($level -eq "L4" -and $hasRootCauseSignal -and ($hasWorkflowGovernanceSignal -or $delegationAuthorized))
-        subagentDecisionRequired = $delegationAuthorized
+        anomalyPauseExpected = ($level -eq "L4" -and $hasRootCauseSignal -and ($hasWorkflowGovernanceSignal -or $promptDelegationSignal))
+        subagentDecisionRequired = ($promptDelegationSignal -or ($standingDelegationAuthorized -and $level -eq "L4"))
     }
 }
 
@@ -507,7 +518,7 @@ function Get-IntentFrame {
         $evidenceTarget = "Structured plan, direct file/runtime evidence, relevant tests or not-run reason, and final goal audit if surfaces changed."
     }
 
-    $subagentPolicy = "No delegation unless the user explicitly authorizes it."
+    $subagentPolicy = "Delegation is not available in this scoped state unless current user/config authorization enables it."
     if ([bool]$Classification.delegationAuthorized) {
         $subagentPolicy = "Delegation is authorized by the user; spawn only bounded non-blocking sidecar agents and independently verify candidate evidence."
     }
@@ -520,7 +531,7 @@ function Get-IntentFrame {
         evidence_target = $evidenceTarget
         memory_action = $MemoryRoute
         subagent_policy = $subagentPolicy
-        subagent_call_declaration = "If the user explicitly authorizes subagents or a subagent tool is used, final evidence must repeat SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, regardless of task-class reminder availability."
+        subagent_call_declaration = "If standing config/current prompt authorizes subagents or a subagent tool is used, final evidence must repeat SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, regardless of task-class reminder availability."
         calibration_action = "Use CALIBRATION.md: selected answers, diagnoses, plans, and patch rationales remain candidate until direct evidence supports them. If hook state, tool output, validation, or final preflight contradicts the current workflow, pause the active path, preserve evidence, trace the anomaly, and resume only with direct verification or an explicit blocked/continue decision."
     }
 }
@@ -632,14 +643,16 @@ function Get-PromptReminder {
     )
 
     $goal = Get-PromptSummary -Prompt $Prompt
-    $classification = Get-TaskClassification -Prompt $Prompt -Workflow $Workflow -Phase $Phase
+    $classification = Get-TaskClassification -Prompt $Prompt -Workflow $Workflow -Phase $Phase -Policy $Policy
 
-    $delegationAuthorization = "No subagent authorization detected; keep work local unless the user explicitly asks for delegation."
-    if (Test-DelegationAuthorized -Prompt $Prompt) {
+    $delegationAuthorization = "No current subagent authorization route detected; keep work local unless user/config authorization enables delegation."
+    if (Test-StandingDelegationAuthorized -Policy $Policy) {
+        $delegationAuthorization = "Delegation authorized by standing user config. Spawn only bounded non-blocking sidecar agents when they reduce risk, then verify outputs."
+    } elseif (Test-DelegationAuthorized -Prompt $Prompt) {
         $delegationAuthorization = "Delegation authorized: user has instructed subagent calls as needed. Spawn bounded non-blocking sidecar agents when they reduce risk, then verify outputs."
     }
 
-    $subagentDecisionAction = "Subagent call declaration: not required unless the user explicitly authorizes subagents."
+    $subagentDecisionAction = "Subagent call declaration: required when the current prompt contains a delegation request, an L4 standing-authorized incident expects watcher coverage, or a subagent tool is used."
     if ([bool]$classification.subagentDecisionRequired) {
         $subagentDecisionAction = "Subagent call declaration required: close SUBAGENT_CALL used/not_used with reason and residual risk; evidence detail only for missing, rejected, blocked, or abnormal activity."
     }

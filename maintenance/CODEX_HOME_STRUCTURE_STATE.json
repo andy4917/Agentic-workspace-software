@@ -1,0 +1,260 @@
+{
+  "schema_version": 1,
+  "record_class": "freshness_sensitive_state",
+  "owner": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md and maintenance/scripts/check-codex-native-alignment.ps1",
+  "updated_at": "2026-05-20T02:42:30+09:00",
+  "purpose": "Machine-readable baseline for Codex home structure, native app alignment, and prior cleanup state that must stay current.",
+  "records": {
+    "structure_policy_md": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md",
+    "latest_alignment_report": "maintenance/reports/codex-native-alignment.latest.json",
+    "historical_reports_glob": "maintenance/reports/*.md"
+  },
+  "record_policy": {
+    "md_stale_allowed": [
+      "principles",
+      "rationale",
+      "historical incident reports",
+      "human-readable handoff summaries",
+      "procedural runbooks that point to JSON for current facts"
+    ],
+    "json_must_be_current": [
+      "expected root and cache path sets",
+      "forbidden active paths",
+      "enabled official plugin ids",
+      "toolchain version-match command list",
+      "hook runtime active and inactive event sets",
+      "current duplicate naming check surfaces",
+      "recurring automation id and schedule",
+      "latest generated alignment status"
+    ]
+  },
+  "normal_root": {
+    "allowed_static_entries": [
+      "AGENTS.md",
+      "agent.md",
+      "CALIBRATION.md",
+      "hooks.json"
+    ],
+    "allowed_managed_dirs": [
+      "maintenance",
+      "hooks",
+      "skills",
+      "agents",
+      "toolchains/shims",
+      "plugins/cache",
+      ".tmp/marketplaces",
+      "cache/codex_apps_tools",
+      "state",
+      "logs",
+      "sessions",
+      "rules",
+      "docs",
+      "local-environments",
+      "automations"
+    ]
+  },
+  "native_alignment": {
+    "store_app_package_name": "OpenAI.Codex",
+    "openai_bundled_source_kind": "discover_from_store_app",
+    "openai_bundled_source_suffix": "app/resources/plugins/openai-bundled",
+    "primary_runtime_marketplace_source_template": "%USERPROFILE%/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime",
+    "required_features": {
+      "workspace_dependencies": true
+    },
+    "enabled_official_plugins": {
+      "openai-bundled": [
+        "browser",
+        "chrome"
+      ],
+      "openai-primary-runtime": [
+        "documents",
+        "spreadsheets",
+        "presentations"
+      ]
+    },
+    "required_primary_runtime_plugins": [
+      "documents",
+      "presentations",
+      "spreadsheets"
+    ],
+    "allowed_plugin_cache_roots": [
+      "openai-bundled",
+      "openai-curated"
+    ],
+    "forbidden_active_paths": [
+      "plugins/patched",
+      "vendor_imports",
+      "plugins/plugins",
+      "plugins/cache/openai-bundled/browser-use",
+      "plugins/cache/openai-primary-runtime",
+      "plugins/local-marketplaces",
+      ".tmp/bundled-marketplaces",
+      ".tmp/plugins"
+    ],
+    "stale_backup_paths": [],
+    "chrome_devtools": {
+      "server_name": "chrome_devtools_observe",
+      "default_enabled": false,
+      "process_pattern": "chrome-devtools-mcp"
+    },
+    "toolchain": {
+      "allowed_command_prefix_templates": [
+        "%USERPROFILE%/.codex/toolchains/shims",
+        "%LOCALAPPDATA%/OpenAI/Codex/bin",
+        "OFFICIAL_APP_RESOURCES"
+      ],
+      "version_match_commands": [
+        "node",
+        "rg",
+        "codex"
+      ],
+      "resolution_only_commands": [
+        "node_repl"
+      ],
+      "version_args": {
+        "node": [
+          "--version"
+        ],
+        "rg": [
+          "--version"
+        ],
+        "codex": [
+          "--version"
+        ]
+      }
+    }
+  },
+  "maintenance_documentation": {
+    "updated_at": "2026-05-20T02:42:30+09:00",
+    "scope": "Root maintenance/*.md plus current maintenance JSON records.",
+    "classification_rule": "Markdown is principle, rationale, status handoff, template, or historical provenance. Freshness-sensitive operational facts live in JSON and must be regenerated or verified before use.",
+    "current_state_json": [
+      {
+        "path": "maintenance/CODEX_HOME_STRUCTURE_STATE.json",
+        "class": "baseline_current_state",
+        "purpose": "Expected Codex home shape, active-source boundaries, official plugin ids, root maintenance Markdown classification, and native alignment criteria."
+      },
+      {
+        "path": "maintenance/reports/codex-native-alignment.latest.json",
+        "class": "generated_current_observation",
+        "purpose": "Latest direct observation from check-codex-native-alignment.ps1."
+      },
+      {
+        "path": "maintenance/reports/codex-home-maintenance.latest.json",
+        "class": "generated_inventory_observation",
+        "purpose": "Latest broad maintenance inventory; use as evidence, not baseline authority."
+      }
+    ],
+    "root_markdown_classification": {
+      "principle_md": [
+        "maintenance/AGENT_TOOL_REQUIREMENTS.md",
+        "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md",
+        "maintenance/GOAL_INTEGRITY_GATE.md",
+        "maintenance/NAMING_CONVENTION.md",
+        "maintenance/PM_WORKSPACE_ALIGNED_DESIGN.md",
+        "maintenance/PROJECT_WORKFLOW_CHAIN.md",
+        "maintenance/SUBAGENT_DELEGATION_CHARTER.md",
+        "maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md",
+        "maintenance/WORKSTATION_CONTROL_RUNBOOK.md",
+        "maintenance/WORKSTATION_LAYERING.md",
+        "maintenance/WORKSTATION_MAINTENANCE.md"
+      ],
+      "stale_tolerant_status_or_capability_handoff_md": [
+        "maintenance/CHROME_DEVTOOLS_MCP_OBSERVER.md",
+        "maintenance/MCP_RUNTIME_STATUS.md",
+        "maintenance/MULTI_AGENT_WORKFLOW_STATUS.md",
+        "maintenance/SHADCN_MCP.md"
+      ],
+      "historical_or_generated_report_md_globs": [
+        "maintenance/reports/*.md"
+      ],
+      "template_md_globs": [
+        "maintenance/templates/*.md"
+      ]
+    },
+    "current_fact_policy": {
+      "root_md_disposition": "Root maintenance Markdown may point to current JSON or verification commands, but must not be used as the only source for current app versions, plugin path existence, enabled runtime state, or active-session tool exposure.",
+      "status_heading_disposition": "Headings such as Current Finding are handoff snapshots unless supported by current JSON or a fresh command."
+    }
+  },
+  "hook_runtime_state": {
+    "updated_at": "2026-05-20T02:42:30+09:00",
+    "policy_source": "hooks/lightweight-codex-policy.json",
+    "config_source": "config.toml [hooks.state]",
+    "active_events": [
+      "SessionStart",
+      "UserPromptSubmit"
+    ],
+    "inactive_events": [
+      "PreToolUse",
+      "PermissionRequest",
+      "PostToolUse",
+      "Stop"
+    ],
+    "classification": "Session and prompt hooks are active support surfaces. Disabled lifecycle hooks are dormant contract-test surfaces unless intentionally re-enabled."
+  },
+  "naming_hygiene": {
+    "updated_at": "2026-05-20T02:42:30+09:00",
+    "policy_source": "maintenance/NAMING_CONVENTION.md",
+    "check_script": "maintenance/scripts/check-naming-conventions.ps1",
+    "checked_roots": [
+      "%USERPROFILE%/.codex",
+      "%USERPROFILE%/.agents"
+    ],
+    "forbidden_current_patterns": [
+      "<name>/<same-name> under active roots",
+      "skills/skills",
+      "agents/agents",
+      "plugins/plugins",
+      "active cross-root skill duplicates without a transition record"
+    ],
+    "latest_direct_check": {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File maintenance/scripts/check-naming-conventions.ps1 -Json",
+      "status": "pass",
+      "finding_count": 0,
+      "blocking_count": 0
+    }
+  },
+  "automation": {
+    "id": "codex-native-alignment-check",
+    "name": "Codex Native Alignment Check",
+    "rrule": "FREQ=DAILY;INTERVAL=2;BYHOUR=9;BYMINUTE=0;BYSECOND=0",
+    "script": "maintenance/scripts/check-codex-native-alignment.ps1"
+  },
+  "prior_cleanup_baseline": {
+    "date": "2026-05-20",
+    "removed_or_recycled_paths": [
+      "plugins/patched",
+      "vendor_imports",
+      "plugins/plugins",
+      "plugins/cache/openai-bundled/browser-use",
+      "plugins/cache/openai-primary-runtime",
+      ".tmp/bundled-marketplaces",
+      ".tmp/plugins",
+      ".tmp/plugins.sha",
+      "plugins/local-marketplaces",
+      ".codex-global-state.json.bak",
+      "tmp/app-server-schema-probe-live-20260517-195157",
+      "tmp/codex-ui-current-screen.png",
+      "tmp/codex-ui-after-plugins-click.png",
+      "tmp/codex-ui-after-plugins-click-2.png",
+      ".pytest_cache",
+      "archived_runtime_state",
+      "managed-marketplaces",
+      "maintenance/backups",
+      "state/memento-mcp/config-backups",
+      "state/memento-mcp/pg_hba.conf.bootstrap-20260515-041033.bak",
+      "logs_2.zip"
+    ],
+    "repaired_surfaces": [
+      "toolchains/shims/codex.cmd now prefers the current Store app resource",
+      "maintenance scripts no longer use local patched official marketplace copies",
+      "check-codex-native-alignment validates enabled configured official bundled plugin paths instead of warning on disabled unconfigured manifest entries",
+      "standing subagent authorization is reflected across config, hook policy, workflow reminders, and hook-policy smoke expectations",
+      "historical reports with superseded latex or delegation wording are marked as historical instead of current state",
+      "hook runtime state now records the intentionally active SessionStart and UserPromptSubmit hooks and inactive lifecycle guard hooks",
+      "naming convention checks now block same-name nested directories and active cross-root skill duplicates",
+      "duplicate skills/vowline mirror was moved to the Windows Recycle Bin; the primary skill remains under .agents/skills/vowline"
+    ]
+  }
+}

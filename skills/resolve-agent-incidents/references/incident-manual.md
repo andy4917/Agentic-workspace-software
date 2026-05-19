@@ -217,19 +217,49 @@ Use one primary type and optional secondary tags.
 - Verification: `codex mcp list` shows the intended MCP with `Status disabled` or `enabled`; `codex mcp get <name> --json` returns the expected config; the skill path exists when the concern is a Skill.
 - Do not claim: app UI visibility from a package probe alone.
 
+### Disabled Chrome DevTools MCP Leaves Stale Node Processes
+
+- Type: `tool_runtime_error`, `state_failure`, `workflow_hook_issue`
+- Fingerprint: `codex mcp get chrome_devtools_observe --json` reports `enabled=false`, but `Get-CimInstance Win32_Process` still shows `node.exe` processes whose command line contains `chrome-devtools-mcp`.
+- Risk: agents may report the MCP as disabled while stale observer processes continue running and consuming runtime resources.
+- Likely cause: disabling the MCP config does not retroactively stop already-started stdio server processes in the active app session.
+- Fix playbook:
+  1. Preserve the disabled MCP config evidence and the stale process count.
+  2. Use `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 off`; the script must keep the server registered with `enabled=false` and stop stale `chrome-devtools-mcp` Node processes.
+  3. Remove any toggle backup directory that is no longer needed after `codex mcp get chrome_devtools_observe --json` parses and reports `enabled=false`.
+- Verification: `chrome-devtools-mcp-toggle.ps1 off` reports `stopped_stale_processes=<n>`, `codex mcp get chrome_devtools_observe --json` reports `enabled=false`, and the stale `chrome-devtools-mcp` process count is `0`.
+- Do not claim: process cleanup from config text alone.
+
 ### Browser Use Native Bridge Trust Blocked By Patched Client
 
 - Type: `tool_runtime_error`, `skill_or_doc_drift`, `environment_path_issue`
 - Fingerprint: `browser-use:browser` setup through Node REPL fails with `privileged native pipe bridge is not available; browser-client is not trusted. Load browser-client from the openai-bundled marketplace directory.`
 - Risk: agents may use Chrome headless, CDP, or another browser surface and report the requested Browser plugin as verified.
-- Likely cause: `openai-bundled` points to a copied or patched marketplace, or the skill imports stale `plugins/cache/openai-bundled/browser-use/.../scripts/browser-client.mjs`; native bridge trust is granted only to official bundled `plugins/browser/scripts/browser-client.mjs` paths.
+- Likely cause: `openai-bundled` points to an unregistered copied or patched marketplace, or the skill imports stale `plugins/cache/openai-bundled/browser-use/.../scripts/browser-client.mjs`; native bridge trust is normally granted to the active `openai-bundled` marketplace source, not arbitrary cache paths.
 - Fix playbook:
   1. Preserve the exact Node REPL setup error and the imported `browser-client.mjs` path.
   2. Check the active `[marketplaces.openai-bundled]` source in `config.toml`.
-  3. Prefer the official bundled marketplace that contains `plugins/browser/scripts/browser-client.mjs` and exports `setupBrowserRuntime`.
-  4. Do not mutate bundled `browser-client.mjs` copies to bypass origin policy; that can remove native bridge trust.
+  3. Prefer the active configured marketplace that contains `plugins/browser/scripts/browser-client.mjs`, exports `setupBrowserRuntime`, and is not under `.tmp`, `tmp`, or `plugins/cache`.
+  4. Do not import arbitrary patched `browser-client.mjs` copies to bypass origin policy; that can remove native bridge trust. If the official WindowsApps bundle itself appears to have an overblocking URL policy, keep `[marketplaces.openai-bundled].source` pointed at the official bundle, preserve the evidence, and treat the fix path as an official app update or product/runtime issue. Do not patch WindowsApps, cache copies, or mirrors as a durable repair unless the user explicitly asks for that specific file.
 - Verification: import the official bundled client with Node REPL, call `setupBrowserRuntime({ globals: globalThis })`, get `agent.browsers.get("iab")`, and confirm `browser.tabs.list()` succeeds.
 - Do not claim: Browser plugin verification from Chrome headless/CDP fallback alone.
+
+### Browser URL Policy Overblocks Chrome Extension Pages
+
+- Type: `tool_runtime_error`, `policy_overblock`, `environment_path_issue`
+- Fingerprint: Chrome backend discovery succeeds, but `tab.goto("chrome-extension://.../sidepanel.html")` fails with `Browser Use cannot visit the requested page because its URL is blocked by the Browser Use URL policy.` Local inspection shows the official URL gate only allows `about:blank`, `http:`, and `https:`.
+- Risk: agents may substitute standalone Playwright, CDP, or an in-app browser preview and falsely report the actual Chrome extension UI as verified.
+- Likely cause: the trusted `browser-client.mjs` URL gate was narrower than the Chrome extension product surface. Chrome side panels are extension pages, and the Codex Chrome documentation describes Chrome as the profile-backed browser surface while in-app browser remains the first choice for ordinary localhost/public previews.
+- Fix playbook:
+  1. Preserve the blocked URL, backend type, selected browser metadata, and the exact `Qv`/origin-gate snippets before changing anything.
+  2. Do not force a headless/CDP workaround and do not make a mirror or cache path the active source.
+  3. Do not run local repair scripts that take ownership of, grant permissions on, or patch the installed WindowsApps bundle. Official bundle behavior should be corrected by an official app update unless the user explicitly asks to edit a specific official file.
+  4. Keep `[marketplaces.openai-bundled].source` pointed at the official WindowsApps bundle to avoid mirror drift, and keep stale `browser-use@openai-bundled` config absent or disabled unless the active official marketplace contains that plugin ID.
+  5. Treat the running session as stale after official app updates; restart/reload Codex before claiming runtime verification.
+- Verification: confirm `config.toml` parses, the active `openai-bundled` source is the installed Codex Desktop bundle, the official marketplace manifest contains the plugin ID being enabled, `ensure-chrome-extension-origin.ps1 -NoNodeCheck` does not depend on cache or mirror clients, and a fresh Codex session can import the official client and observe the requested backend. If the official client still rejects `chrome-extension://...`, report the product/runtime limitation instead of patching it locally.
+- Do not patch `plugins\cache` as a durable fix. Modified cache clients can lose native bridge trust and fail before URL-policy verification with `browser-client is not trusted`.
+- If an official app update or replacement changes the file text but `setupBrowserRuntime` then fails with `browser-client is not trusted`, restore only user-owned changes and escalate as a native bridge trust/content-integrity issue rather than trying a mirror, cache patch, raw CDP, or global monkeypatch.
+- Do not claim: actual extension UI verification while the current session still returns the URL policy block or native bridge trust block.
 
 ### Browser Plugin Hidden In App UI After Restart
 
@@ -246,7 +276,7 @@ Use one primary type and optional secondary tags.
   3. Ensure `plugins\cache\openai-bundled\browser\<version>` exists; if the loader logs `failed to load plugin: plugin is not installed plugin="browser@openai-bundled"`, create a junction from that cache path to the installed app bundle `plugins\browser` directory.
   4. Run `maintenance\scripts\ensure-chrome-extension-origin.ps1`. It uses app-server `plugin/read` against `openai-bundled\.agents\plugins\marketplace.json` and `pluginName=browser`; if `summary.installed=false`, it calls `plugin/install` for the same marketplace file and plugin name, then re-reads until `summary.installed=true` and `summary.enabled=true`.
   5. Keep `[plugins."browser@openai-bundled"] enabled = true`; do not re-enable stale `[plugins."browser-use@openai-bundled"]` unless an active marketplace actually contains that plugin ID.
-  6. Clear or set false the legacy `browser-use-bundled-plugin-auto-install-disabled` state flag after install because app state can reintroduce the stale flag.
+  6. Observe the legacy `browser-use-bundled-plugin-auto-install-disabled` state flag, but do not fight the official app by repeatedly rewriting generated state. Treat it as a residual app-state signal only when `browser@openai-bundled` is installed/enabled incorrectly despite the official marketplace source.
 - Verification: `config.toml` parses, `ensure-chrome-extension-origin.ps1` reports an installed app bundle source, browser cache path, and `browser@openai-bundled is installed and enabled`, keep-codex-fast reports `openai-bundled ok`, the loader no longer reports missing `browser@openai-bundled` cache on the next turn, and the Browser runtime can list the `iab` backend. If `agent.browsers.list()` shows `type=iab` but selecting it reports `No active Codex browser pane available`, treat that as an app pane activation state, not a missing Browserify or plugin-cache dependency. UI drawer visibility still requires user- or app-side visual confirmation.
 - Do not claim: UI recovery from runtime-only checks if the app drawer itself was not inspected.
 

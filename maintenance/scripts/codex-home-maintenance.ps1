@@ -190,7 +190,7 @@ function Remove-TransientRoot {
     }
 }
 
-function Get-SentinelBlockerSummary {
+function Get-RemovedBlockerPathSummary {
     param([string]$Root)
 
     $targets = @(
@@ -205,8 +205,27 @@ function Get-SentinelBlockerSummary {
             exists = ($null -ne $item)
             item_type = if ($null -eq $item) { $null } elseif ($item.PSIsContainer) { 'directory' } else { 'file' }
             readonly = ($null -ne $item -and $item.IsReadOnly)
+            expected = 'absent'
         }
     })
+}
+
+function Get-TopLevelJsonValue {
+    param(
+        [object]$JsonObject,
+        [string]$Name
+    )
+
+    if ($null -eq $JsonObject) {
+        return $null
+    }
+
+    $property = $JsonObject.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
 }
 
 function Get-RuntimeGuardSummary {
@@ -214,8 +233,16 @@ function Get-RuntimeGuardSummary {
 
     $configPath = Join-Path $Root 'config.toml'
     $statePath = Join-Path $Root '.codex-global-state.json'
-    $config = if (Test-Path -LiteralPath $configPath) { Get-Content -LiteralPath $configPath -Raw } else { '' }
-    $state = if (Test-Path -LiteralPath $statePath) { Get-Content -LiteralPath $statePath -Raw } else { '' }
+    $config = if (Test-Path -LiteralPath $configPath) { Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 } else { '' }
+    $stateObject = if (Test-Path -LiteralPath $statePath) {
+        try {
+            Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        } catch {
+            $null
+        }
+    } else {
+        $null
+    }
     $configItem = if (Test-Path -LiteralPath $configPath) { Get-Item -LiteralPath $configPath -Force } else { $null }
     $stateItem = if (Test-Path -LiteralPath $statePath) { Get-Item -LiteralPath $statePath -Force } else { $null }
 
@@ -226,11 +253,11 @@ function Get-RuntimeGuardSummary {
         workspace_dependencies_enabled = ($config -match '(?m)^\s*workspace_dependencies\s*=\s*true\s*$')
         bundled_marketplace_source_is_installed_app_bundle = ($config -match '(?s)\[marketplaces\.[^\]]*openai-bundled[^\]]*\].*?Program Files\\WindowsApps\\OpenAI\.Codex_')
         temp_or_bundled_source_absent = ($config -notmatch '(?i)(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\cache)')
-        bundled_browser_plugin_disabled = ($config -match '(?s)\[plugins\."browser-use@openai-bundled"\].*?enabled\s*=\s*false')
+        legacy_browser_use_plugin_absent_or_disabled = ($config -notmatch '(?s)\[plugins\."browser-use@openai-bundled"\].*?enabled\s*=\s*true')
         curated_github_plugin_disabled_to_avoid_temp_marketplace_clone = ($config -match '(?s)\[plugins\."github@openai-curated"\].*?enabled\s*=\s*false')
-        browser_use_auto_install_disabled = ($state -match '"browser-use-bundled-plugin-auto-install-disabled"\s*:\s*true')
-        site_creator_auto_install_disabled = ($state -match '"site-creator-bundled-plugin-auto-install-disabled"\s*:\s*true')
-        run_codex_in_wsl_disabled = ($state -match '"runCodexInWindowsSubsystemForLinux"\s*:\s*false')
+        browser_use_auto_install_disabled = [bool](Get-TopLevelJsonValue -JsonObject $stateObject -Name 'browser-use-bundled-plugin-auto-install-disabled')
+        site_creator_auto_install_disabled = [bool](Get-TopLevelJsonValue -JsonObject $stateObject -Name 'site-creator-bundled-plugin-auto-install-disabled')
+        run_codex_in_wsl_disabled = ((Get-TopLevelJsonValue -JsonObject $stateObject -Name 'runCodexInWindowsSubsystemForLinux') -eq $false)
     }
 }
 
@@ -527,7 +554,7 @@ $report = [ordered]@{
     active_reference_matches = $activeReferenceMatches
     runtime_guards = Get-RuntimeGuardSummary -Root $CodexHome
     native_messaging_hosts = Get-NativeMessagingHostSummary -Root $CodexHome
-    sentinel_blockers = Get-SentinelBlockerSummary -Root $CodexHome
+    removed_blocker_paths = Get-RemovedBlockerPathSummary -Root $CodexHome
     naming_convention = [ordered]@{
         document = (Join-Path $maintenanceRoot 'NAMING_CONVENTION.md')
         tool_and_cache_surfaces_visible_in_gitignore = $true
@@ -538,15 +565,15 @@ $report = [ordered]@{
     transient_root_moves = $moves
     transient_roots_after = $after
     app_tool_cache = $appToolCache
-    root_cause = 'Codex bundled marketplace registration uses .tmp/marketplaces as a runtime work directory. File sentinels at .tmp or tmp break plugin loading; guard temp paths by auditing active references and bounded contents instead of blocking directory creation.'
+    root_cause = 'Codex bundled marketplace registration uses .tmp/marketplaces as a runtime work directory. Do not block regeneration paths with file sentinels; guard temp paths by auditing active references and bounded contents, and remove stale exact-name residues.'
     policy = [ordered]@{
         keep_active_plugin_cache = @('plugins\cache as Codex plugin runtime cache only')
         keep_app_connector_tool_cache = @('cache\codex_apps_tools entries where connector_name is GitHub')
         plugin_feature_allowed = $true
         do_not_use_as_active_source = @('.tmp', 'tmp', 'vendor_imports', 'bundled-marketplaces', 'plugins\cache', 'plugins\plugins')
         remove_native_messaging_hosts_that_point_to_runtime_cache = $true
-        temp_roots_are_not_blocked_by_sentinel = $true
-        plugin_cache_roots_are_blocked_by_sentinel_until_runtime_fix = $false
+        temp_roots_are_runtime_only_not_blocked = $true
+        plugin_cache_roots_are_audited_not_blocked = $true
         legacy_cleanup_target = 'Recycle Bin'
     }
 }

@@ -3,6 +3,10 @@
 This document is an audit rule for `%USERPROFILE%\.codex`.
 It is not app configuration and it is not a completion gate.
 
+Use `maintenance\CODEX_HOME_STRUCTURE_STATE.json` as the current normal-tree and
+official/user ownership baseline before changing these names during
+operating-level maintenance. This Markdown file records naming rationale only.
+
 ## Active Names
 
 Use these names only for live, intentionally managed surfaces:
@@ -35,7 +39,7 @@ Use these terms in maintenance docs, reports, and review notes:
   SDK, or MCP server used because Codex does not bundle that capability.
 - `runtime-cache`: app-generated cache that may be active but must not become a
   configured source of truth.
-- `quarantine-archive`: reversible archive or Recycle Bin staging area for
+- `recycle-bin-removal`: Recycle Bin move or direct removal record for
   deprecated local tools, duplicate wrappers, and stale caches.
 - `managed-install-record`: a durable maintenance note that names the exact
   active path, source class, owner, dependency chain, verification, rollback, and
@@ -43,8 +47,8 @@ Use these terms in maintenance docs, reports, and review notes:
 
 Do not call a copied official bundle a local-chain package. Do not call a
 package-manager shim an official-bundle tool just because Codex can execute it.
-For bundled tools, local duplicate installs must be removed, quarantined, or
-explicitly marked unused by Codex wrappers.
+For bundled tools, local duplicate installs must be removed, moved to the
+Recycle Bin, or explicitly marked unused by Codex wrappers.
 
 When a user requests a future installation or configuration, add the resulting
 surface to these source classes instead of leaving it as an unnamed local tool.
@@ -67,14 +71,53 @@ These names must not be active marketplace, plugin, toolchain, or config sources
 - `vendor_imports`
 - `bundled-marketplaces`
 - `codex-runtimes`
-- `openai-primary-runtime`
-- `plugins\cache`
+- `plugins\cache\openai-primary-runtime`
 - `plugins\plugins`
+- `plugins\local-marketplaces`
 - `skills\skills`
 - `agents\agents`
 - `wshobson-agents-scan`
-- `quarantine`
-- `quarantined`
+
+## Duplicate Prevention Rule
+
+No active directory may contain a direct child directory with the same name,
+case-insensitively. This is a hard workstation-maintenance rule, not a style
+preference. Examples that must stay absent:
+
+- `skills\skills`
+- `agents\agents`
+- `plugins\plugins`
+- `toolchains\toolchains`
+- `local-environments\local-environments`
+- any `<name>\<same-name>` pair under `%USERPROFILE%\.codex` or
+  `%USERPROFILE%\.agents`
+
+Do not solve a duplicate by leaving an empty placeholder, sentinel, hidden
+folder, `.bak` folder, or "old/new/copy" sibling in an active lookup path. Pick
+one canonical active owner and move the other copy to the Recycle Bin or to a
+dated archive/quarantine root that is not used for runtime discovery.
+
+Cross-root skill duplicates are also forbidden as active surfaces unless a
+written transition record names the primary owner, the compatibility reason, and
+the removal condition. The normal primary skill roots are:
+
+- `%USERPROFILE%\.agents\skills`: shared user-global skills.
+- `%USERPROFILE%\.codex\skills`: Codex-home-specific operational skills that do
+  not duplicate a shared user-global skill.
+
+If the same skill exists in both roots, prefer `%USERPROFILE%\.agents\skills`
+unless a current config, hook, or skill loader requires the `.codex` copy. Do
+not create new compatibility mirrors.
+
+Run this check after directory-level maintenance:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-naming-conventions.ps1 -Json
+```
+
+The check is a guardrail for current and future work. A pass means no known
+same-name nested active directory or forbidden duplicate root is present in the
+checked roots; it does not prove every archived copy is semantically obsolete.
 
 ## Visibility Rule
 
@@ -92,29 +135,25 @@ Runtime-generated temporary directories may exist only while the creating proces
 is using them. They must not be persisted in config, native messaging manifests,
 marketplace sources, PATH, or hook policy.
 
-Do not block `.tmp` or `tmp` with sentinel files. Codex uses `.tmp/marketplaces`
-while registering and loading plugin marketplaces, so file sentinels at those
-paths break the plugin UI. Audit these paths for size and active references
-instead.
+Do not block `.tmp`, `tmp`, or any other regeneration path with sentinel files.
+Codex uses `.tmp/marketplaces` while registering and loading plugin marketplaces,
+so file sentinels at those paths break the plugin UI. Audit these paths for size
+and active references instead.
 
-Exact path-name sentinel blockers may be used for confirmed non-runtime roots
-only:
+Exact stale names such as `vendor_imports` or `plugins\plugins` must stay absent.
+If they reappear inside `%USERPROFILE%\.codex`, remove them or move them to the
+Recycle Bin after confirming the resolved path stays under `.codex`. Do not leave
+placeholder files or managed empty directories as blockers.
 
-- `vendor_imports`
-- `plugins\plugins`
+Do not block `plugins\cache` with a sentinel file: Codex loads installed plugins
+from that runtime cache path. Treat `plugins\cache` as an allowed runtime cache,
+audit its contents for unexpected plugin IDs, and remove stale cache entries that
+are not present in the active official marketplace when safe.
 
-These blockers are files or managed empty directories, not active sources.
-Do not block `plugins\cache` with a sentinel file: Codex loads installed
-plugins from that runtime cache path. Treat `plugins\cache` as an allowed
-runtime cache and audit its contents for unexpected connectors instead.
-
-When blocking a confirmed runtime recontamination path, `config.toml` may be kept
-read-only after verified edits. Remove the read-only bit only for intentional app
-configuration changes, then re-run the maintenance report.
-
-If the app rewrites global runtime flags that control bundled auto-install or WSL
-usage, `.codex-global-state.json` may also be kept read-only after verified edits.
-This is a guard state, not a normal app preference editing mode.
+Do not use read-only attributes as a routine guard for `config.toml` or
+`.codex-global-state.json`. Make intentional edits with a backup, verify the
+loaded state, and keep the files writable for the official app unless the user
+explicitly asks for a temporary read-only investigation.
 
 ## Archive Rule
 

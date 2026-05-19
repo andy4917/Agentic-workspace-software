@@ -81,6 +81,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     checks.append({"name": "global_scan", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "global-scan"], root, timeout=240)})
     checks.append({"name": "context_inspection", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "context"], root)})
     checks.append({"name": "memento_mcp_status", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/memento-mcp-runtime.ps1", "verify"], root, timeout=180)})
+    checks.append({"name": "naming_convention", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-naming-conventions.ps1", "-Json"], root, timeout=120)})
     checks.append({"name": "retrieval_report", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "retrieve", "--query", "codex harness verification workflow", "--limit", "5"], root)})
     checks.append({"name": "staged_sensitive_diff_scan", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-staged-sensitive-diff.ps1"], root)})
     checks.append({"name": "worktree_sensitive_diff_scan", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-worktree-sensitive-diff.ps1"], root)})
@@ -96,6 +97,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
                     "maintenance/scripts/codex_agent_harness_base.py",
                     "maintenance/scripts/codex_agent_harness_lifecycle.py",
                     "maintenance/scripts/codex_agent_harness_merge.py",
+                    "maintenance/scripts/codex_agent_harness_naming.py",
                     "maintenance/scripts/codex_agent_harness_smoke.py",
                     "maintenance/scripts/codex_agent_harness_status.py",
                     "maintenance/scripts/codex_agent_harness_workflows.py",
@@ -181,6 +183,7 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
                     "maintenance/scripts/codex_agent_harness_calibration.py",
                     "maintenance/scripts/codex_agent_harness_lifecycle.py",
                     "maintenance/scripts/codex_agent_harness_merge.py",
+                    "maintenance/scripts/codex_agent_harness_naming.py",
                     "maintenance/scripts/codex_agent_harness_smoke.py",
                     "maintenance/scripts/codex_agent_harness_status.py",
                     "maintenance/scripts/codex_agent_harness_workflows.py",

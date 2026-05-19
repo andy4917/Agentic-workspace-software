@@ -1,5 +1,9 @@
 # MCP Runtime Status
 
+This Markdown file is a stale-tolerant handoff and rationale log. Verify current
+MCP exposure, app versions, and native alignment from config, tool discovery,
+and the JSON records named in `maintenance\CODEX_HOME_STRUCTURE_STATE.json`.
+
 Updated for the 2026-05-16 Codex app update clean pass.
 
 ## Current Finding
@@ -138,6 +142,11 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
 - `postgres_port`: `55432`.
 - `memento_url`: `http://127.0.0.1:57332/mcp`.
 - `codex_mcp_name`: `memento`.
+- `config_posture`: `[mcp_servers.memento].enabled=true` in local
+  `config.toml`; `developer_instructions` directs PMs to use Memento by default
+  for support context and relevant recall before hook, MCP, toolchain,
+  memory-policy, workstation, or repeated-failure work even when the user does
+  not explicitly mention memory.
 - `current_version`: local source package version `4.1.0`; upstream
   `origin/main` and tag `v4.1.0` both resolve to commit
   `98289226527f8be0138b7e34d3f843d040b09817`. The local runtime keeps the
@@ -173,6 +182,12 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
   a later manual `verify`. It does not claim that an already-running Codex
   session receives `mcp__memento__...` tools retroactively; reload may still be
   required when tools were missing at session creation.
+- `active_use_rule`: Memento MCP support should be attempted when tools are
+  exposed and the task touches prior state, hooks, MCP, toolchains, workstation
+  policy, repeated failures, or durable decisions. If the runtime is healthy but
+  `mcp__memento__...` tools are not exposed in the active session, record that
+  as a session-load issue and use `memento-mcp-runtime.ps1 verify/status` as the
+  direct fallback evidence.
 - `doctor_coverage`: `maintenance\scripts\codex_agent_harness.py doctor --json`
   remains the full backward-compatible local check and includes
   `memento_runtime`. `doctor --tier core --json` intentionally excludes

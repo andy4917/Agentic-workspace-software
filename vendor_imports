@@ -1,3 +1,0 @@
-Blocked by Codex runtime contamination guard.
-This file intentionally prevents an app/runtime process from creating a directory at this exact path name.
-Remove only after the bundled marketplace/cache regeneration bug is fixed and verified.

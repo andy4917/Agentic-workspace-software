@@ -64,11 +64,6 @@ function Get-OfficialBundledMarketplace {
         }
     }
 
-    $localBundled = Join-Path $CodexHome ".tmp\bundled-marketplaces\openai-bundled"
-    if (Test-ModernBrowserClient -MarketplaceSource $localBundled) {
-        return $localBundled
-    }
-
     return $null
 }
 
@@ -141,7 +136,7 @@ function Ensure-BrowserPluginCache {
     return ($messages -join [Environment]::NewLine)
 }
 
-function Clear-LegacyBrowserUseAutoInstallDisabled {
+function Get-LegacyBrowserUseAutoInstallDisabledStatus {
     param([string]$CodexHome)
 
     $statePath = Join-Path $CodexHome ".codex-global-state.json"
@@ -149,22 +144,18 @@ function Clear-LegacyBrowserUseAutoInstallDisabled {
         return "skipped: global state not found at $statePath"
     }
 
-    $text = [System.IO.File]::ReadAllText($statePath)
-    $pattern = '"browser-use-bundled-plugin-auto-install-disabled"\s*:\s*true'
-    if (-not [regex]::IsMatch($text, $pattern)) {
-        return "ok: legacy browser-use auto-install disabled flag is not true"
+    try {
+        $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        return "failed: global state JSON could not be parsed"
     }
 
-    $backupDir = Join-Path $CodexHome "state\browser-plugin-ui-repair"
-    if (-not (Test-Path -LiteralPath $backupDir)) {
-        New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+    $property = $state.PSObject.Properties['browser-use-bundled-plugin-auto-install-disabled']
+    if ($null -eq $property) {
+        return "ok: legacy browser-use auto-install disabled flag is absent"
     }
-    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    Copy-Item -LiteralPath $statePath -Destination (Join-Path $backupDir ".codex-global-state.before-auto-install-flag.$stamp.json") -Force
 
-    $newText = [regex]::Replace($text, $pattern, '"browser-use-bundled-plugin-auto-install-disabled":false', 1)
-    [System.IO.File]::WriteAllText($statePath, $newText, [System.Text.UTF8Encoding]::new($false))
-    return "patched-state: browser-use bundled plugin auto-install disabled flag set to false"
+    return "observed-app-state: legacy browser-use auto-install disabled flag is $($property.Value)"
 }
 
 function Get-CodexAppServerExe {
@@ -583,4 +574,4 @@ if ([string]::IsNullOrWhiteSpace($officialSource)) {
 
 Write-Output (Ensure-BrowserPluginCache -CodexHome $CodexHome -MarketplaceSource $officialSource)
 Write-Output (Ensure-BrowserPluginInstalled -CodexHome $CodexHome -MarketplaceSource $officialSource)
-Write-Output (Clear-LegacyBrowserUseAutoInstallDisabled -CodexHome $CodexHome)
+Write-Output (Get-LegacyBrowserUseAutoInstallDisabledStatus -CodexHome $CodexHome)

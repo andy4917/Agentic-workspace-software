@@ -15,9 +15,10 @@
   "subagents": {
     "max_parallel": 8,
     "max_depth": 1,
-    "default_spawn_policy": "conditional_after_explicit_user_authorization",
-    "explicit_user_authorization_required_by_runtime": true,
-    "task_level_autonomy_boundary": "task_class_L3_L4_raises_delegation_priority_but_is_not_a_runtime_authorization_override_unless_current_runtime_or_user_scoped_policy_allows_it",
+    "default_spawn_policy": "conditional_after_standing_user_authorization_when_useful",
+    "standing_user_authorization_from_developer_instructions": true,
+    "standing_user_authorization_satisfies_runtime_policy": true,
+    "task_level_autonomy_boundary": "task_class_L3_L4_raises_delegation_priority_and_standing_authorization_allows_bounded_sidecar_delegation_when_useful_but_does_not_require_spawning_for_tiny_or_immediate_blocking_work",
     "required_start_skill": "vowline",
     "required_start_skill_path": "%USERPROFILE%\\.agents\\skills\\vowline\\SKILL.md",
     "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",
@@ -163,7 +164,7 @@
     },
     "escalation_rules": [
       "Start at L2 for ordinary bounded engineering; downgrade to L1 only for tiny no-risk answers or one-file edits with no durable state change.",
-      "Escalate to L3 for workflow, hook, harness, toolchain, debugger-tool, MCP, multi-surface, long-running, commit/push, or explicit subagent authorization work.",
+      "Escalate to L3 for workflow, hook, harness, toolchain, debugger-tool, MCP, multi-surface, long-running, commit/push, or subagent authorization work.",
       "Escalate to L4 when a root-cause, repeated-failure, false-pass, stale-state, hidden-fallback, or P0 incident signal intersects workflow, hook, harness, toolchain, subagent, watcher, or goal-governance surfaces.",
       "Task level is a workflow routing signal, not completion authority; direct verification and final evidence still decide completion."
     ],
@@ -171,7 +172,7 @@
       "emit concise task_class and goal summary in UserPromptSubmit additionalContext",
       "store classification and English intent frame in hook state",
       "keep detailed prompt decomposition and English intent framing out of user-facing prose",
-      "record delegation_authorized when the prompt authorizes subagents",
+      "record delegation_authorized when prompt or standing config authorizes subagents",
       "require goal action for L3/L4",
       "require watcher coverage or WATCHER_NOT_USED for L4 delegated incidents"
     ],
@@ -197,6 +198,20 @@
     "finalization_blocking": "false_unless_size_growth_hides_behavior_or_breaks_validation"
   },
   "hooks": {
+    "runtime_state": {
+      "role": "thin startup and prompt-context support only unless a user intentionally re-enables lifecycle guard hooks",
+      "active_events": [
+        "SessionStart",
+        "UserPromptSubmit"
+      ],
+      "inactive_events": [
+        "PreToolUse",
+        "PermissionRequest",
+        "PostToolUse",
+        "Stop"
+      ],
+      "synthetic_tests_policy": "disabled lifecycle hook smoke checks are contract tests only and must not be reported as active runtime enforcement"
+    },
     "workflow_reminder": "inject",
     "safe_read_only_inspection": "observe",
     "ordinary_implementation": "observe",

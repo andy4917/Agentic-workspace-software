@@ -32,21 +32,21 @@ TRAJECTORY_VERSION = "codex-trajectory-v1"
 DOCTOR_TIERS = {
     "core": [
         "config", "harness_engine_modules", "generated_outputs_untracked",
-        "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter",
-        "harness_file_size", "stale_active_references", "sentinel_blockers",
+        "calibration_policy", "hook_tool_routing", "hook_runtime_state", "managed_files", "skill_frontmatter",
+        "harness_file_size", "stale_active_references", "removed_blocker_paths", "naming_convention",
     ],
     "extended": [
         "config", "pm_subagent_protocol", "harness_engine_modules",
         "app_runtime_state_writable", "generated_outputs_untracked",
         "hook_subagent_vowline", "subagent_nickname_policy",
-        "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter",
+        "calibration_policy", "hook_tool_routing", "hook_runtime_state", "managed_files", "skill_frontmatter",
         "harness_file_size", "workspace_script_file_size",
-        "stale_active_references", "sentinel_blockers",
+        "stale_active_references", "removed_blocker_paths", "naming_convention",
     ],
     "stress": [
         "config", "harness_engine_modules", "generated_outputs_untracked",
         "calibration_policy", "managed_files", "harness_file_size", "memento_runtime",
-        "stale_active_references", "sentinel_blockers",
+        "stale_active_references", "removed_blocker_paths", "naming_convention",
     ],
 }
 DOCTOR_TIERS["full"] = list(dict.fromkeys(DOCTOR_TIERS["extended"] + DOCTOR_TIERS["stress"]))
@@ -699,7 +699,7 @@ def discovery_data(root: Path) -> dict[str, Any]:
         ],
         "risks": [
             "Already-running Codex sessions may not reload newly enabled MCP tools until restart.",
-            "Sentinel blocker files intentionally cause PATH/temp creation warnings for commands that try to create blocked roots.",
+            "Stale blocker-path residues such as vendor_imports or plugins/plugins should be absent, not replaced by sentinel files.",
             "SQLite runtime DB files are live and are audited metadata-only.",
         ],
     }

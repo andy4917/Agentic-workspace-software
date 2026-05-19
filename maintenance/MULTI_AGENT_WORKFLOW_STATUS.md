@@ -1,12 +1,18 @@
 # Multi-Agent Workflow Status
 
-Updated: 2026-05-14
+This Markdown file records workflow rationale and historical status. Treat live
+subagent authorization, hook state, and current tool exposure as runtime facts
+that must be verified from the active session or current JSON state.
+
+Updated: 2026-05-20
 
 ## Direct Finding
 
 The multi-agent workflow was configured as a capability, but the local workflow text and hook reminder did not make the runtime authorization rule explicit.
 
-Current higher-priority runtime behavior requires an explicit user request before `spawn_agent` can be used. That means `multi_agent = true` and `child_agents_md = true` make the tool path available, but they do not by themselves authorize automatic subagent creation for every large task.
+Current config carries standing user authorization in `developer_instructions`.
+That makes `spawn_agent` available when delegation is useful, but it still does
+not require automatic subagent creation for every task.
 
 ## Current Config
 
@@ -24,28 +30,35 @@ Current higher-priority runtime behavior requires an explicit user request befor
 
 1. `config.toml` already had the stable `multi_agent` flag enabled, so missing stable feature activation was not the primary blocker.
 2. `hooks\lightweight-codex-hook.ps1` only injected a generic "conditional use" reminder. It did not distinguish explicit authorization from ordinary large-task context.
-3. `AGENTS.md` said to delegate when useful and allowed, but did not spell out the higher-priority runtime condition that subagents need an explicit user request.
+3. `AGENTS.md` said to delegate when useful and allowed. The current config now
+   provides standing user authorization, while PM judgment still decides whether
+   delegation is useful for the specific task.
 4. `openaiDeveloperDocs` is enabled in config, but this already-running session does not expose its MCP tools. That points to MCP tool loading requiring a fresh app/session tool refresh after config changes, not a TOML syntax issue.
 
 ## Applied Fix
 
 - `AGENTS.md` now records the runtime subagent activation rule and Korean/English authorization phrases.
-- `hooks\lightweight-codex-policy.json` now records that explicit user authorization is required by runtime policy.
+- `hooks\lightweight-codex-policy.json` now records that standing user authorization from `developer_instructions` satisfies the runtime authorization path when delegation is useful.
 - `hooks\lightweight-codex-hook.ps1` now detects prompts containing subagent, multi-agent, delegation, role separation, or parallel-agent phrases and injects a stronger instruction to use `spawn_agent` for bounded non-blocking sidecar work.
 - `config.toml` now explicitly enables the stable workflow-adjacent feature flags recognized by the installed CLI, while leaving under-development fanout/v2 flags disabled.
 - `config.toml` now carries a compact top-level `developer_instructions` loop overlay so the PM evidence loop is injected as a developer message instead of relying only on user-scoped `AGENTS.md`.
+- `config.toml` now records standing explicit user authorization for bounded
+  sidecar subagents when useful. Hook policy mirrors this as
+  `standing_user_authorization_from_developer_instructions=true` and
+  `standing_user_authorization_satisfies_runtime_policy=true`.
 - `config.toml` now defines the `worker` role with `agents/worker.toml`, matching the existing explorer, reviewer, docs-researcher, and observer role pattern.
 - `model_reasoning_effort` is reset to `medium` as the persistent default; individual tasks can still escalate reasoning effort when justified.
 
 ## 2026-05-14 Review Finding
 
-The 2026-05-14 review found one contradictory local edit in `AGENTS.md`: "The user always authorizes all types of sub-agent calls" weakened the runtime rule below it. That sentence has been removed. The active rule remains explicit per-prompt authorization before spawning subagents.
+The 2026-05-14 review found one contradictory local edit in `AGENTS.md`: "The user always authorizes all types of sub-agent calls" weakened the runtime rule below it. That sentence was removed at the time. On 2026-05-20 the user explicitly requested standing authorization in `config.toml`; the active rule is now standing authorization with PM judgment, not mandatory spawning.
 
 The active session exposed `mcp__openaiDeveloperDocs__*` tools after tool discovery, so the older note that the OpenAI Docs MCP was not exposed is no longer current for this session. Keep the general MCP load rule: config presence is not proof of active tool availability; verify exposure in each session when the task depends on it.
 
 ## Operating Rule
 
-When the user explicitly asks for multi-agent, subagent, delegation, role separation, or parallel agent work:
+When standing authorization is configured, or when the user explicitly asks for
+multi-agent, subagent, delegation, role separation, or parallel agent work:
 
 - the main session remains PM;
 - spawn sidecar agents for independent exploration, validation, review, or disjoint file ownership;
@@ -53,11 +66,13 @@ When the user explicitly asks for multi-agent, subagent, delegation, role separa
 - review subagent output before integrating;
 - report direct evidence, checks not run, and remaining risks.
 
-When the prompt does not explicitly authorize subagents:
+When the prompt is tiny, immediate-blocking, or does not benefit from parallel
+work:
 
 - keep work local;
 - use skills directly when their trigger matches;
-- record why subagents were not used if the task looked large enough to raise the question.
+- record why subagents were not used if the task looked large enough to raise
+  the question or if the final gate requires `SUBAGENT_CALL`.
 
 ## 2026-05-18 Follow-Up
 
@@ -80,11 +95,9 @@ the candidate adjustment back to L3. `Get-ToolTaskAdjustment` now selects the
 higher task level instead of assigning levels in last-match order, and
 `hook-policy-smoke` covers the nested-subagent-plus-L4 case.
 
-Task level remains workflow routing and evidence pressure. It is not a reliable
-runtime override for higher-priority subagent authorization rules by itself. If a
-future Codex runtime exposes standing task-level authorization as a supported
-policy, update this document and the hook policy together with a live tool-call
-proof.
+Task level remains workflow routing and evidence pressure. Standing
+authorization allows bounded sidecar delegation when useful; task level alone is
+not a reason to spawn if the immediate next step is local or the work is tiny.
 
 ## Evidence Sources
 

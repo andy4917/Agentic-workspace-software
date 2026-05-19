@@ -1,6 +1,8 @@
 # Chrome DevTools MCP Observer
 
 This is the managed record for the frontend-only Chrome DevTools MCP observer.
+It records policy and setup rationale; current enabled state must be verified by
+the toggle script or active-session tool exposure.
 
 ## Purpose
 

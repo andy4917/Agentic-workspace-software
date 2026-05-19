@@ -1,5 +1,11 @@
 # 2026-05-15 P0 Workflow Hook Enforcement
 
+Superseded note: this report is a historical incident record. As of
+2026-05-20, standing delegation authorization may come from
+`config.toml`/`hooks/lightweight-codex-policy.json`, so current hook state
+records `delegation_authorized` when either standing config or the prompt
+authorizes subagents.
+
 ## Scope
 
 - Source class: managed Codex workflow/harness control plane.
@@ -20,7 +26,7 @@ The prior hook behavior was advisory. `UserPromptSubmit` injected reminder text,
 - `hooks/lightweight-codex-hook.ps1`
   - Adds L1-L4 prompt classification for root-cause/workflow/subagent incidents.
   - Persists structured intent and workflow fields in hook state.
-  - Records `delegation_authorized` when the prompt authorizes subagents.
+  - Records `delegation_authorized` when prompt or standing config authorizes subagents.
   - Emits an actionable PM startup packet with English intent-frame and goal/watcher actions.
   - Tracks subagent-related tool events.
   - Blocks Stop for active L4 delegated incidents unless final output includes accepted/rejected subagent evidence plus watcher coverage, or explicit `WATCHER_NOT_USED`.

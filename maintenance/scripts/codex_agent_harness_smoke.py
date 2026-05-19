@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
 from codex_agent_harness_base import *
+from codex_agent_harness_naming import normalize_hook_event_name
 
 
 def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
@@ -136,6 +138,30 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "prompt_secret_like_value_blocked",
             '"decision":"block"' in prompt_probe.get("stdout_preview", ""),
             "UserPromptSubmit should block secret-like values before they reach the model.",
+        )
+        try:
+            config = tomllib.loads(read_text(root / "config.toml"))
+            hook_state = config.get("hooks", {}).get("state", {})
+            event_enabled: dict[str, bool] = {}
+            for key, value in hook_state.items():
+                if not isinstance(value, dict):
+                    continue
+                parts = str(key).split(":")
+                if len(parts) >= 3:
+                    event_enabled[normalize_hook_event_name(parts[-3])] = bool(value.get("enabled", True))
+            for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "Stop"]:
+                event_enabled.setdefault(event, True)
+        except (OSError, tomllib.TOMLDecodeError):
+            event_enabled = {}
+        add_check(
+            "hook_smoke_respects_runtime_active_state",
+            event_enabled.get("SessionStart") is True
+            and event_enabled.get("UserPromptSubmit") is True
+            and event_enabled.get("PreToolUse") is False
+            and event_enabled.get("PermissionRequest") is False
+            and event_enabled.get("PostToolUse") is False
+            and event_enabled.get("Stop") is False,
+            "Runtime state should keep only SessionStart and UserPromptSubmit active; disabled lifecycle hook samples are synthetic contract tests only.",
         )
 
         korean_failure = "".join(chr(codepoint) for codepoint in [0xC2E4, 0xD328])
@@ -474,11 +500,11 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         except (OSError, json.JSONDecodeError):
             pm_led_state = {}
         add_check(
-            "pm_led_team_preset_not_subagent_authorization",
+            "pm_led_team_preset_not_subagent_decision_requirement",
             pm_led_probe.get("status") == "pass"
-            and pm_led_state.get("delegationAuthorized") is False
+            and pm_led_state.get("delegationAuthorized") is True
             and pm_led_state.get("subagentDecisionRequired") is False,
-            "PM-led/team preset wording alone should not require SUBAGENT_CALL evidence.",
+            "Standing authorization may be present, but PM-led/team preset wording alone should not require SUBAGENT_CALL evidence.",
         )
         run_post_tool_hook_sample(root, "functions.shell_command", "rg WATCHER_REPORT maintenance")
         try:

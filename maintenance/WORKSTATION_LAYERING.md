@@ -14,7 +14,7 @@ Use the smallest layer that proves the current task.
 | Layer | Purpose | Command |
 | --- | --- | --- |
 | `repo` | CI-capable tracked managed-source checks that do not require ignored private runtime state such as `config.toml`. | `python maintenance/scripts/codex_agent_harness.py repo-verify` |
-| `core` | Local managed-source health: config parse, harness files, generated-output tracking, hook routing, managed files, file size, stale references, and sentinels. | `python maintenance/scripts/codex_agent_harness.py doctor --tier core --json` |
+| `core` | Local managed-source health: config parse, harness files, generated-output tracking, hook routing, managed files, file size, stale references, and removed-path checks. | `python maintenance/scripts/codex_agent_harness.py doctor --tier core --json` |
 | `extended` | Core plus agent/workflow ergonomics and active app runtime writability. | `python maintenance/scripts/codex_agent_harness.py doctor --tier extended --json` |
 | `stress` | Runtime-heavy checks such as Memento/PostgreSQL health, memory ceiling, and recent log risk patterns. | `python maintenance/scripts/codex_agent_harness.py doctor --tier stress --json` |
 | `full` | Backward-compatible complete local verification tier. | `python maintenance/scripts/codex_agent_harness.py doctor --json` |

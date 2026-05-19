@@ -1,0 +1,13 @@
+version = 1
+id = "codex-native-alignment-check"
+kind = "cron"
+name = "Codex Native Alignment Check"
+prompt = "Run the Codex native alignment maintenance check from %USERPROFILE%\\.codex. Use `maintenance\\CODEX_HOME_STRUCTURE_STATE.json` as the freshness-sensitive baseline and run `maintenance\\scripts\\check-codex-native-alignment.ps1 -Json -WriteReport -CheckStoreUpgrade` to verify the Windows Store app package, official bundled marketplace source, primary workspace runtime source, enabled workspace runtime plugins, forbidden fallback/patched/cache paths, Chrome DevTools observer default state, and official toolchain wrapper version alignment. If the script reports failures, summarize exact failing checks and avoid unsupported success claims. If the official app/runtime structure, normal `.codex` tree, forbidden path set, plugin ids, toolchain criteria, or this automation schedule changes, update `maintenance\\CODEX_HOME_STRUCTURE_STATE.json` narrowly with direct evidence and rerun the script. Update Markdown only for stale-tolerant principles or historical reports; do not add Markdown inventories for current operational facts. Do not patch WindowsApps official files. Do not recreate local fallback or patched official copies."
+status = "ACTIVE"
+rrule = "FREQ=DAILY;INTERVAL=2;BYHOUR=9;BYMINUTE=0;BYSECOND=0"
+model = "gpt-5.2"
+reasoning_effort = "medium"
+execution_environment = "local"
+cwds = ["C:\\Users\\anise\\.codex"]
+created_at = 1779202542276
+updated_at = 1779203180308

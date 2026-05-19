@@ -20,8 +20,8 @@ Source selection rule:
 2. If Codex does not bundle the capability, use the local toolchain or local MCP
    server with an explicit wrapper or absolute command path.
 3. Do not call bare commands when both a bundled tool and a local install exist.
-4. Broken package-manager shims must be quarantined or marked unused; they must
-   not remain the first resolved command.
+4. Broken package-manager shims must be removed or marked unused; they must not
+   remain the first resolved command.
 
 `rg` has an extra Windows rule: prefer bare `rg` only when `Get-Command rg -All`
 shows a Codex-owned `rg.exe` first, or call the bundled `rg.exe`/`rg.ps1` shim
@@ -34,6 +34,7 @@ Quick check:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-codex-native-alignment.ps1 -Json -WriteReport
 ```
 
 ## Temporary Windows Sandbox Restriction
@@ -57,7 +58,7 @@ repair a workstation-level capability, follow
 
 Do not leave a new tool as an implicit side effect. Record the source class,
 exact active path, owning config, dependency chain, scope, verification command,
-rollback or quarantine route, and handoff update.
+rollback, Recycle Bin, or removal route, and handoff update.
 
 If the tool is unrelated to the active task, mark it out of scope. If it is
 related, tie it to the exact dependency chain that will use it, for example:
@@ -65,8 +66,8 @@ related, tie it to the exact dependency chain that will use it, for example:
 - MCP stdio package -> `.codex\toolchains\shims\npx.cmd` -> bundled Node.
 - Python maintenance script -> `.codex\toolchains\shims\python.cmd` or official
   workspace runtime Python.
-- Browser/plugin runtime -> patched marketplace path plus original official
-  bundle source.
+- Browser/plugin runtime -> official marketplace source plus user-owned wrappers
+  or caches only for capabilities not shipped by Codex Desktop.
 
 ## Project Workflow Chain
 
@@ -215,9 +216,10 @@ The plugin feature may stay enabled, but active source paths must not point at
 `.tmp`, `tmp`, `vendor_imports`, `bundled-marketplaces`, `plugins\cache`, or
 `plugins\plugins`.
 
-Do not use sentinel files to block `.tmp`, `tmp`, or `plugins\cache`. Codex uses
-`.tmp/marketplaces` for marketplace registration/loading and `plugins\cache` for
-installed plugin runtime material. Guard these paths by checking that they are
-not active config sources and that their contents stay bounded. Sentinel
-blockers are allowed only for confirmed non-runtime roots such as
-`vendor_imports` and `plugins\plugins`.
+Do not use sentinel files to block `.tmp`, `tmp`, `plugins\cache`,
+`vendor_imports`, or `plugins\plugins`. Codex uses `.tmp/marketplaces` for
+marketplace registration/loading and `plugins\cache` for installed plugin
+runtime material. Guard these paths by checking that they are not active config
+sources and that their contents stay bounded. Confirmed stale roots such as
+`vendor_imports` and `plugins\plugins` should be absent; if they reappear, move
+or remove them instead of leaving blocker files behind.

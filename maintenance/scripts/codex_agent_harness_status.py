@@ -130,6 +130,7 @@ def harness_engine_module_status(root: Path) -> dict[str, Any]:
         "codex_agent_harness_lifecycle.py",
         "codex_agent_harness_workflows.py",
         "codex_agent_harness_merge.py",
+        "codex_agent_harness_naming.py",
         "codex_agent_harness_smoke.py",
         "codex_agent_harness_status.py",
         "worker_watcher_templates.py",
@@ -192,7 +193,7 @@ def hook_subagent_vowline_status(root: Path) -> dict[str, Any]:
     policy_path = root / "hooks" / "lightweight-codex-policy.json"
     agents_path = root / "AGENTS.md"
     primary_skill_path = Path.home() / ".agents" / "skills" / "vowline" / "SKILL.md"
-    mirror_skill_path = root / "skills" / "vowline" / "SKILL.md"
+    duplicate_skill_path = root / "skills" / "vowline" / "SKILL.md"
     missing = []
     if not hook_path.exists():
         return {"status": "fail", "missing": ["hooks/lightweight-codex-hook.ps1"]}
@@ -240,8 +241,8 @@ def hook_subagent_vowline_status(root: Path) -> dict[str, Any]:
             missing.append("subagents.start_hook_behavior")
     if not primary_skill_path.exists():
         missing.append("~/.agents/skills/vowline/SKILL.md")
-    if not mirror_skill_path.exists():
-        missing.append("skills/vowline/SKILL.md compatibility mirror")
+    if duplicate_skill_path.exists():
+        missing.append("remove duplicate skills/vowline; primary owner is ~/.agents/skills/vowline")
     if not agents_path.exists():
         missing.append("AGENTS.md")
     else:

@@ -1,6 +1,8 @@
 # shadcn MCP
 
 This is the managed record for the global shadcn/ui MCP server.
+It records policy and setup rationale, not a guarantee that tools are exposed in
+the current Codex session.
 
 ## Managed Capability
 

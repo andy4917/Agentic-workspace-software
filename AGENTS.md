@@ -38,12 +38,13 @@ Codex should operate as a PM-led workflow that combines:
 
 Runtime subagent activation rule:
 
-- current Codex runtime policy requires an explicit user request before calling subagents;
+- current config carries standing user authorization for bounded sidecar
+  subagents when delegation is useful;
 - task level `L3`/`L4` raises delegation priority and evidence pressure, but it
-  is not a runtime authorization override unless the active runtime or current
-  user/scoped policy explicitly allows standing task-level delegation;
-- user phrases such as `multi-agent`, `subagent`, `spawn_agent`, `parallel agent`, `role separation`, `delegate`, `delegation`, or `delegated` count as explicit authorization for the current goal; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
-- `PM-led`, `team preset`, `workflow`, or `review` alone do not count as explicit subagent authorization; they may still raise the task level or justify a local review workflow.
+  is not a mandate to spawn when the immediate next step is local or delegation
+  would not improve the result;
+- user phrases such as `multi-agent`, `subagent`, `spawn_agent`, `parallel agent`, `role separation`, `delegate`, `delegation`, or `delegated` still count as explicit current-goal delegation requests and should trigger the stricter subagent evidence path; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
+- `PM-led`, `team preset`, `workflow`, or `review` alone do not require subagent use; they may still raise the task level, justify local review, or use standing authorization when a bounded sidecar agent would materially improve the result.
 - when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
 - enabled feature flags are capability, not evidence of actual subagent use.
 - when authorization is present or a subagent tool is used, the PM must repeat
@@ -326,7 +327,10 @@ The user is constantly monitoring all the work.
 ## Memento PM Memory Loop
 
 Memento MCP is the active Codex PM memory substrate when the `memento` MCP
-server is enabled and its tools are exposed in the current session. Memory is
+server is enabled and its tools are exposed in the current session. Current
+workstation config keeps `memento` enabled and instructs PMs to use it by
+default for support context and relevant recall, even when the user does not
+explicitly mention memory. Memory is
 support-only: current user instructions, scoped `AGENTS.md`, repository files,
 runtime output, direct tests, and PM verification always outrank recalled memory.
 
@@ -519,6 +523,11 @@ it as out of scope with direct evidence.
   managed source, inventory, toolchain, logs, secrets, project repositories,
   generated state, and external publishing. Apply its risk levels before edits:
   observe, draft, controlled-change, or high-risk-change.
+- For operating-level `%USERPROFILE%\.codex` maintenance, read
+  `maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md` and
+  `maintenance/CODEX_HOME_STRUCTURE_STATE.json` before cleanup, plugin cache,
+  official app/runtime, or toolchain alignment work. Keep stale-tolerant
+  rationale in Markdown, and keep current operational facts in JSON.
 - For control-plane alignment or drift remediation across config, instructions,
   hooks, scripts, skills, MCP/runtime notes, toolchain policy, generated state,
   logs, or operational workflows, use the runbook's Control-Plane Alignment
@@ -553,12 +562,26 @@ Before adopting or changing a skill, role, prompt recipe, hook, or capability pa
 ## Lightweight Hooks
 
 Hooks support the PM workflow; they do not replace PM judgment or user review.
+On the current workstation, only `SessionStart` and `UserPromptSubmit` are
+intentionally active. `PreToolUse`, `PermissionRequest`, `PostToolUse`, and
+`Stop` are intentionally inactive unless the user re-enables them. Synthetic
+hook smoke tests may exercise those inactive paths as contract tests, but they
+must not be reported as active runtime enforcement.
 
 - Session and prompt hooks may inject compact workflow reminders.
 - Pre-tool hooks should block only immediate high-risk actions.
 - Post-tool hooks may record changed surfaces and validation reminders.
 - Stop hooks may ask for missing evidence, but must avoid broad gate cascades.
 - Hook state must remain small, local, and non-authoritative.
+
+## Naming Hygiene
+
+Use `maintenance/NAMING_CONVENTION.md` and
+`maintenance/scripts/check-naming-conventions.ps1` for Codex-home and
+user-global agent naming. Do not create same-name nested directories such as
+`skills/skills`, `agents/agents`, `plugins/plugins`, or any `<name>/<same-name>`
+pair. Do not keep active cross-root skill duplicates; choose one primary owner
+and move duplicates out of active lookup paths after reference checks.
 
 ## Log Hygiene
 
