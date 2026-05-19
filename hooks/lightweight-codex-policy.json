@@ -1,5 +1,19 @@
 {
-  "profile": "anti_reward_pm_workflow_v1",
+  "profile": "lightweight_guardrail_v2",
+  "guardrail_principles": {
+    "role": "stale-tolerant guidance, narrow safety checks, and small context reminders",
+    "not_role": "completion authority, heavyweight workflow gate, automatic repair runner, or substitute for PM judgment",
+    "active_hook_budget": "SessionStart and UserPromptSubmit should stay fast, short, and side-effect-light",
+    "block_only_for": [
+      "secret-like prompt content",
+      "direct secret file access if lifecycle hooks are re-enabled",
+      "irreversible destructive action if lifecycle hooks are re-enabled",
+      "hook weakening without explicit scope if lifecycle hooks are re-enabled",
+      "evaluator or fake-success manipulation if lifecycle hooks are re-enabled"
+    ],
+    "context_policy": "Inject hints, not full contracts. Prefer one compact reminder over repeated finalization requirements.",
+    "automation_policy": "Do not run heavy verification or unrelated repairs from hooks; use explicit scripts, doctor, verify, or automations instead."
+  },
   "autonomy": {
     "user_role": "reviewer_not_operator",
     "create_files_inside_scope": "allow",
@@ -169,12 +183,12 @@
       "Task level is a workflow routing signal, not completion authority; direct verification and final evidence still decide completion."
     ],
     "prompt_runtime_contract": [
-      "emit concise task_class and goal summary in UserPromptSubmit additionalContext",
-      "store classification and English intent frame in hook state",
+      "emit compact task class and route hints in UserPromptSubmit additionalContext",
+      "store classification in hook state for diagnostics only",
       "keep detailed prompt decomposition and English intent framing out of user-facing prose",
-      "record delegation_authorized when prompt or standing config authorizes subagents",
-      "require goal action for L3/L4",
-      "require watcher coverage or WATCHER_NOT_USED for L4 delegated incidents"
+      "record delegation_authorized only when the current prompt requests delegation",
+      "suggest a persisted goal only for L4, long-running, or explicitly stateful work",
+      "suggest watcher coverage only for prompt-delegated high-risk incidents"
     ],
     "tool_runtime_adjustment_contract": [
       "PreToolUse and PostToolUse may raise stored task_class from direct tool evidence",
@@ -199,7 +213,7 @@
   },
   "hooks": {
     "runtime_state": {
-      "role": "thin startup and prompt-context support only unless a user intentionally re-enables lifecycle guard hooks",
+      "role": "thin startup and prompt-context support only; lifecycle guard hooks remain dormant unless intentionally re-enabled",
       "active_events": [
         "SessionStart",
         "UserPromptSubmit"
@@ -210,7 +224,8 @@
         "PostToolUse",
         "Stop"
       ],
-      "synthetic_tests_policy": "disabled lifecycle hook smoke checks are contract tests only and must not be reported as active runtime enforcement"
+      "synthetic_tests_policy": "disabled lifecycle hook smoke checks are contract tests only and must not be reported as active runtime enforcement",
+      "side_effect_policy": "SessionStart may do bounded Memento health ensure only; it must not run unrelated repairs. UserPromptSubmit may block prompt secrets and emit compact hints only."
     },
     "workflow_reminder": "inject",
     "safe_read_only_inspection": "observe",

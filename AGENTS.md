@@ -568,10 +568,22 @@ intentionally active. `PreToolUse`, `PermissionRequest`, `PostToolUse`, and
 hook smoke tests may exercise those inactive paths as contract tests, but they
 must not be reported as active runtime enforcement.
 
-- Session and prompt hooks may inject compact workflow reminders.
+- Hooks are guardrails: stale-tolerant hints, narrow safety checks, and small
+  context reminders. They are not completion authority, PM replacement,
+  heavyweight final gates, automatic repair runners, or general test runners.
+- Session and prompt hooks may inject compact workflow reminders only. Keep
+  injected text short enough to scan and avoid repeating full workflow contracts.
+- `SessionStart` may perform a bounded Memento health ensure because Memento is
+  workstation support infrastructure. It must not run unrelated repairs.
+- `UserPromptSubmit` may block secret-like prompt content and emit compact route
+  hints. It should not turn standing authorization, task class, or workflow
+  routing into mandatory final declarations by itself.
 - Pre-tool hooks should block only immediate high-risk actions.
-- Post-tool hooks may record changed surfaces and validation reminders.
-- Stop hooks may ask for missing evidence, but must avoid broad gate cascades.
+- Post-tool hooks, if re-enabled, may record changed surfaces and validation
+  reminders. They must not run heavyweight `doctor`, `verify`, or broad scans
+  automatically.
+- Stop hooks, if re-enabled, may ask for missing evidence, but must avoid broad
+  gate cascades and must not make final prose the completion authority.
 - Hook state must remain small, local, and non-authoritative.
 
 ## Naming Hygiene

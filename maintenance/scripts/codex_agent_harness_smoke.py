@@ -173,21 +173,19 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         workflow_probe = run_prompt_hook_sample(root, workflow_prompt)
         workflow_stdout = workflow_probe.get("stdout_preview", "").lower()
         add_check(
-            "workflow_prompt_emits_l4_contract",
+            "workflow_prompt_emits_compact_l4_guardrail",
             all(
                 term in workflow_stdout
                 for term in [
-                    "task_class=l4",
-                    "output rule",
-                    "reasoning and internal frames private",
-                    "goal action required",
-                    "watcher action required",
-                    "delegation authorized",
-                    "subagent call declaration required",
-                    "calibration action required",
+                    "codex guardrail",
+                    "class=l4",
+                    "use direct evidence",
+                    "memory:",
+                    "subagents requested",
+                    "hard blocks stay narrow",
                 ]
             ),
-            "UserPromptSubmit should emit an actionable concise L4 PM contract without exposing the full reasoning frame.",
+            "UserPromptSubmit should emit a compact L4 guardrail without becoming a heavyweight workflow contract.",
         )
         add_check(
             "workflow_prompt_hides_internal_reasoning_labels",
@@ -286,7 +284,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "workflow_variable_catalog_and_state_normalization",
             isinstance(variable_catalog, list)
             and any("skillRoute:" in str(item) for item in variable_catalog)
-            and any("autonomousHarnessChecks:" in str(item) for item in variable_catalog)
+            and any("controlPlaneReminders:" in str(item) for item in variable_catalog)
             and isinstance(skill_events, list)
             and all(str(item).strip() for item in skill_events)
             and len(skill_events) == len(set(map(str, skill_events)))
@@ -502,9 +500,9 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         add_check(
             "pm_led_team_preset_not_subagent_decision_requirement",
             pm_led_probe.get("status") == "pass"
-            and pm_led_state.get("delegationAuthorized") is True
+            and pm_led_state.get("delegationAuthorized") is False
             and pm_led_state.get("subagentDecisionRequired") is False,
-            "Standing authorization may be present, but PM-led/team preset wording alone should not require SUBAGENT_CALL evidence.",
+            "PM-led/team preset wording alone should not become subagent authorization or require SUBAGENT_CALL evidence.",
         )
         run_post_tool_hook_sample(root, "functions.shell_command", "rg WATCHER_REPORT maintenance")
         try:
@@ -547,12 +545,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and any("Compatibility review required" in str(item) for item in post_level_state.get("requiredReminders", [])),
             "PostToolUse should raise to L4 when incident language intersects workflow/harness surfaces.",
         )
-        autonomous_text = str(post_level_state.get("autonomousHarnessChecks", "")).lower()
+        control_plane_text = str(post_level_state.get("controlPlaneReminders", "")).lower()
         add_check(
-            "posttooluse_autonomous_harness_checks_for_control_plane_edits",
-            "autonomous_doctor:smoke_probe" in autonomous_text
-            and "autonomous_verify:smoke_probe" in autonomous_text,
-            "PostToolUse should autonomously invoke doctor and verify evidence paths for control-plane edits.",
+            "posttooluse_does_not_run_autonomous_harness_checks",
+            "run doctor/verify explicitly" in control_plane_text
+            and "status" not in control_plane_text
+            and "passed" not in control_plane_text,
+            "PostToolUse should only remind about explicit doctor/verify checks, not run heavy harness commands autonomously.",
         )
 
         run_post_tool_hook_sample(root, "spawn_agent", '{"agent_type":"reviewer"}')

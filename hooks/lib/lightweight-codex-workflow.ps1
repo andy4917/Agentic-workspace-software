@@ -182,7 +182,7 @@ function Get-MementoMemoryRoute {
     $p = $Prompt.ToLowerInvariant()
     $routes = @()
 
-    $routes += "context at session start when memento tools are exposed"
+    $routes += "context/recall when memento tools are exposed and relevant"
     if ($p -match "previous|before|again|regression|error|fail|failure|hook|mcp|toolchain|memory|memento|configuration|config|runtime|install|upgrade" -or (Test-RootCauseOrIncidentSignal -Prompt $Prompt) -or (Test-WorkflowGovernanceSignal -Prompt $Prompt)) {
         $routes += "recall before acting with topic/workspace/case filters"
     }
@@ -343,7 +343,7 @@ function Get-TaskClassification {
     $reasons = @()
     $promptDelegationSignal = Test-DelegationAuthorized -Prompt $Prompt
     $standingDelegationAuthorized = Test-StandingDelegationAuthorized -Policy $Policy
-    $delegationAuthorized = ($promptDelegationSignal -or $standingDelegationAuthorized)
+    $delegationAuthorized = $promptDelegationSignal
     $hasRootCauseSignal = Test-RootCauseOrIncidentSignal -Prompt $Prompt
     $hasWorkflowGovernanceSignal = Test-WorkflowGovernanceSignal -Prompt $Prompt
     $p = $Prompt.ToLowerInvariant()
@@ -353,8 +353,6 @@ function Get-TaskClassification {
     }
     if ($promptDelegationSignal) {
         $reasons += "explicit delegation authorization"
-    } elseif ($standingDelegationAuthorized) {
-        $reasons += "standing delegation authorization available"
     }
     if ($hasRootCauseSignal) {
         $reasons += "P0/repeated-failure/root-cause signal"
@@ -388,10 +386,11 @@ function Get-TaskClassification {
         workflow = $Workflow
         phase = $Phase
         delegationAuthorized = $delegationAuthorized
-        goalActionRequired = ($level -in @("L3", "L4"))
-        watcherCoverageRequired = ($delegationAuthorized -and $level -eq "L4")
+        goalActionRequired = ($level -eq "L4" -or $p -match "(?i)(codex goal|persisted goal|long[- ]?running|multi[- ]?turn|continue later|resume later)")
+        watcherCoverageRequired = ($promptDelegationSignal -and $level -eq "L4")
         anomalyPauseExpected = ($level -eq "L4" -and $hasRootCauseSignal -and ($hasWorkflowGovernanceSignal -or $promptDelegationSignal))
-        subagentDecisionRequired = ($promptDelegationSignal -or ($standingDelegationAuthorized -and $level -eq "L4"))
+        subagentDecisionRequired = $promptDelegationSignal
+        standingDelegationAvailable = $standingDelegationAuthorized
     }
 }
 
@@ -513,14 +512,14 @@ function Get-IntentFrame {
 
     $evidenceTarget = "Direct inspection plus the smallest relevant command or runtime check."
     if ($Classification.level -eq "L4") {
-        $evidenceTarget = "Hook sample output, persisted hook state, Stop-hook negative behavior, harness/eval result, subagent/watcher evidence or WATCHER_NOT_USED, and rollback notes."
+        $evidenceTarget = "Root-cause evidence, current runtime/config observation, targeted regression check, and residual risk."
     } elseif ($Classification.level -eq "L3") {
-        $evidenceTarget = "Structured plan, direct file/runtime evidence, relevant tests or not-run reason, and final goal audit if surfaces changed."
+        $evidenceTarget = "Short plan, direct file/runtime evidence, relevant checks or not-run reason."
     }
 
-    $subagentPolicy = "Delegation is not available in this scoped state unless current user/config authorization enables it."
+    $subagentPolicy = "Delegation is optional; use only bounded non-blocking sidecar agents when they materially reduce risk."
     if ([bool]$Classification.delegationAuthorized) {
-        $subagentPolicy = "Delegation is authorized by the user; spawn only bounded non-blocking sidecar agents and independently verify candidate evidence."
+        $subagentPolicy = "Delegation requested by the user; spawn only bounded non-blocking sidecar agents and independently verify candidate evidence."
     }
 
     return [ordered]@{
@@ -531,7 +530,7 @@ function Get-IntentFrame {
         evidence_target = $evidenceTarget
         memory_action = $MemoryRoute
         subagent_policy = $subagentPolicy
-        subagent_call_declaration = "If standing config/current prompt authorizes subagents or a subagent tool is used, final evidence must repeat SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, regardless of task-class reminder availability."
+        subagent_call_declaration = "Close subagent use only when the prompt requested subagents or a subagent tool was actually used."
         calibration_action = "Use CALIBRATION.md: selected answers, diagnoses, plans, and patch rationales remain candidate until direct evidence supports them. If hook state, tool output, validation, or final preflight contradicts the current workflow, pause the active path, preserve evidence, trace the anomaly, and resume only with direct verification or an explicit blocked/continue decision."
     }
 }
@@ -645,26 +644,24 @@ function Get-PromptReminder {
     $goal = Get-PromptSummary -Prompt $Prompt
     $classification = Get-TaskClassification -Prompt $Prompt -Workflow $Workflow -Phase $Phase -Policy $Policy
 
-    $delegationAuthorization = "No current subagent authorization route detected; keep work local unless user/config authorization enables delegation."
-    if (Test-StandingDelegationAuthorized -Policy $Policy) {
-        $delegationAuthorization = "Delegation authorized by standing user config. Spawn only bounded non-blocking sidecar agents when they reduce risk, then verify outputs."
-    } elseif (Test-DelegationAuthorized -Prompt $Prompt) {
-        $delegationAuthorization = "Delegation authorized: user has instructed subagent calls as needed. Spawn bounded non-blocking sidecar agents when they reduce risk, then verify outputs."
+    $delegationAuthorization = "Subagents optional; use only if requested or clearly useful under current runtime policy."
+    if (Test-DelegationAuthorized -Prompt $Prompt) {
+        $delegationAuthorization = "Subagents requested; use bounded non-blocking sidecar agents only where they reduce risk."
     }
 
-    $subagentDecisionAction = "Subagent call declaration: required when the current prompt contains a delegation request, an L4 standing-authorized incident expects watcher coverage, or a subagent tool is used."
+    $subagentDecisionAction = "Subagent closure: only required when the prompt requests subagents or a subagent tool is used."
     if ([bool]$classification.subagentDecisionRequired) {
-        $subagentDecisionAction = "Subagent call declaration required: close SUBAGENT_CALL used/not_used with reason and residual risk; evidence detail only for missing, rejected, blocked, or abnormal activity."
+        $subagentDecisionAction = "Subagent closure: close used/not_used with reason and residual risk."
     }
 
-    $skillEvidenceAction = "Skill evidence: not required unless a matching skill workflow is routed."
+    $skillEvidenceAction = "Skill closure: compact; detailed evidence only for missing, blocked, or abnormal skill use."
     if (Test-SkillEvidenceRequired -SkillRoute $SkillRoute) {
-        $skillEvidenceAction = "Skill closure required: close SKILL_EVIDENCE used/not_used with reason and residual risk; evidence detail only for missing, blocked, or abnormal skill use."
+        $skillEvidenceAction = "Skill closure: routed skills should be closed compactly."
     }
 
     $goalAction = "Goal action: no persisted Codex Goal required unless the task becomes long-running or stateful."
     if ([bool]$classification.goalActionRequired) {
-        $goalAction = "Goal action required: create or update one Codex Goal before build/repair work, then keep it as tracking only."
+        $goalAction = "Goal action: use one Codex Goal as tracking only for this long-running/stateful task."
     }
 
     $watcherAction = "Watcher action: use only if a non-trivial delegated worker or pre-ship integrity risk exists."
@@ -682,18 +679,12 @@ function Get-PromptReminder {
     }
 
     return @"
-Lightweight Codex workflow reminder:
-- Core brief: task_class=$($classification.level); goal=$goal; preset=$Workflow; phase=$Phase.
-- Output rule: include request summary, objective, task level, current status/action, material blockers/risks, and next recommended work; evidence detail only for abnormal, blocked, not-run, or disputed items; keep reasoning and internal frames private.
-- Route: skills=$SkillRoute; team=$TeamPreset; toolchain=$ToolchainHint.
-- $goalAction
-- Memory: $MemoryRoute; support-only, never completion authority.
-- Subagents: max=$($Policy.subagents.max_parallel), depth=$($Policy.subagents.max_depth). $delegationAuthorization
-- $subagentDecisionAction
-- $skillEvidenceAction
-- $watcherAction
-- $calibrationAction
-- Completion: changed surfaces, direct checks, not-run reasons, PM verification, residual risks, rollback, status.
-- Hard blocks: secret access, irreversible destructive action, hook weakening without scope, evaluator/pass manipulation, out-of-scope mutation.
+Codex guardrail:
+- class=$($classification.level); preset=$Workflow/$Phase; goal=$goal.
+- Routes: skills=$SkillRoute; toolchain=$ToolchainHint.
+- Use direct evidence; keep output concise; surface blockers, not-run checks, residual risks.
+- Memory: $MemoryRoute; support-only. $goalAction
+- $delegationAuthorization $subagentDecisionAction $skillEvidenceAction
+- Hard blocks stay narrow: secret content, irreversible destructive action, hook weakening without scope, evaluator/pass manipulation.
 "@
 }

@@ -13,14 +13,10 @@ $state = Normalize-WorkflowState -State (Read-State)
 try {
 switch ($eventName) {
     "SessionStart" {
-        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Calibration source: CALIBRATION.md. Treat selected answers, diagnoses, plans, and patch rationales as candidate until direct evidence supports them; do not imply unchecked claims are verified. Subagents follow active runtime and current user/scoped policy authorization; when authorized, use them only for bounded non-blocking sidecar work. Goal is a long-running tracking marker only; PM owns parent-goal completion, and subagents produce evidence only. Hooks are reminders and narrow safety checks, not completion authority. When memento MCP tools are exposed, call context(workspace='global_pm') at session start, read get_skill_guide when tool behavior is unclear, use recall before hook/MCP/toolchain or prior-state work, send tool_feedback for recall results, and write only durable verified atomic memory through the PM write gate. Memento is support-only and legacy Memory/RAG paths are not active fallback."
+        $context = "Codex guardrail: hooks are lightweight reminders and narrow safety checks, not completion authority. Keep Memento as support-only memory: use context/recall when exposed, and rely on direct file/tool evidence for completion. For long work, preserve current goal, changed surfaces, checks, risks, and next step in PM state rather than expecting hooks to enforce it."
         $mementoContext = Invoke-MementoSessionStartEnsure
         if (-not [string]::IsNullOrWhiteSpace($mementoContext)) {
             $context = $context + "`n`n" + $mementoContext
-        }
-        $repairContext = Invoke-ChromeExtensionOriginRepair
-        if (-not [string]::IsNullOrWhiteSpace($repairContext)) {
-            $context = $context + "`n`n" + $repairContext
         }
         if (Test-SubagentSessionStart -InputObject $inputObject) {
             $context = $context + "`n`n" + (Get-VowlineSubagentContext -Policy $policy)
@@ -72,27 +68,27 @@ switch ($eventName) {
         $state.memoryRoute = $memoryRoute
         $state.changedSurfaces = @()
         $state.checksRun = @()
-        $state.autonomousHarnessChecks = @()
+        $state.controlPlaneReminders = @()
         $state.skillEvents = @()
         $state.requiredReminders = @()
         $state.toolEvents = @()
         $state.subagentEvents = @()
         $state.userAuthorizations = @()
-        $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "PM startup packet required: L1/L2/L3/L4 class, English intent frame, workflow continuation, evidence target."
+        $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Guardrail reminder: keep the task scoped, use direct evidence, and report real blockers."
         if ([bool]$classification.goalActionRequired) {
-            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Codex Goal required before build/repair work; Goal is tracking only, not completion authority."
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Use one Codex Goal only for coherent long-running work; Goal is tracking only."
         }
         if ([bool]$classification.watcherCoverageRequired) {
-            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Watcher coverage required by default; provide WATCHER_REPORT/subagent evidence or WATCHER_NOT_USED before finalization."
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Consider watcher coverage for a delegated high-risk incident; do not treat omission as a pass."
         }
         if ([bool]$classification.subagentDecisionRequired) {
-            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Subagent call declaration required: record SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk."
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Close subagent use only when requested or actually used."
         }
         if ([bool]$state.skillEvidenceRequired) {
-            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Skill workflow closure required: record SKILL_EVIDENCE used/not_used with reason and residual risk; include evidence detail only when skill use is missing, blocked, or abnormal."
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Close routed skills compactly; detailed evidence only for missing, blocked, or abnormal skill use."
         }
         if ([bool]$classification.anomalyPauseExpected) {
-            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Anomaly pause/trace required: preserve the first mismatch, stop the original path, and resume only with verified correction or blocked/continue status."
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "For anomalies, preserve the first mismatch and switch to debug trace before continuing."
         }
         if (Test-HookMaintenanceAuthorized -Prompt $prompt) {
             $state.userAuthorizations = Add-Unique -Items $state.userAuthorizations -Value "hook_policy_change"
@@ -270,19 +266,12 @@ switch ($eventName) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Review changed product/control surfaces for hardcoded or fake-success contamination."
         }
 
-        if (Test-AutonomousHarnessCheckRequired -ToolName $toolName -Text $text) {
+        if (Test-ControlPlaneReminderRequired -ToolName $toolName -Text $text) {
             $state.changedSurfaces = Add-Unique -Items $state.changedSurfaces -Value "control-plane"
             $logChangedSurfaces += "control-plane"
-            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Autonomous harness checks invoked for control-plane edits; confirm doctor/verify evidence before finalizing."
-
-            $doctorEvidence = Invoke-AutonomousHarnessCheck -Mode "doctor" -TimeoutSeconds 45
-            $verifyEvidence = Invoke-AutonomousHarnessCheck -Mode "verify" -TimeoutSeconds 600
-            foreach ($evidence in @($doctorEvidence, $verifyEvidence)) {
-                $state.checksRun = Add-Unique -Items $state.checksRun -Value $evidence
-                $state.autonomousHarnessChecks = Add-Unique -Items $state.autonomousHarnessChecks -Value $evidence
-                $logValidationResults += $evidence
-            }
-            $additional += "Autonomous harness checks invoked for control-plane edit: doctor plus bounded verify. Use recorded logs or rerun verify directly if the autonomous verify timed out."
+            $state.controlPlaneReminders = Add-Unique -Items $state.controlPlaneReminders -Value "Control-plane edit detected; run doctor/verify explicitly or record a not-run reason."
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Control-plane edit detected; run doctor/verify explicitly or record a not-run reason."
+            $additional += "Control-plane edit detected: run doctor/verify explicitly or record a not-run reason."
         }
 
         Save-State -State $state

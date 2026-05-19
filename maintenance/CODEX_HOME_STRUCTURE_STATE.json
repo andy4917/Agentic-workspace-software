@@ -2,7 +2,7 @@
   "schema_version": 1,
   "record_class": "freshness_sensitive_state",
   "owner": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md and maintenance/scripts/check-codex-native-alignment.ps1",
-  "updated_at": "2026-05-20T02:42:30+09:00",
+  "updated_at": "2026-05-20T02:55:00+09:00",
   "purpose": "Machine-readable baseline for Codex home structure, native app alignment, and prior cleanup state that must stay current.",
   "records": {
     "structure_policy_md": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md",
@@ -125,7 +125,7 @@
     }
   },
   "maintenance_documentation": {
-    "updated_at": "2026-05-20T02:42:30+09:00",
+    "updated_at": "2026-05-20T02:55:00+09:00",
     "scope": "Root maintenance/*.md plus current maintenance JSON records.",
     "classification_rule": "Markdown is principle, rationale, status handoff, template, or historical provenance. Freshness-sensitive operational facts live in JSON and must be regenerated or verified before use.",
     "current_state_json": [
@@ -191,7 +191,13 @@
       "PostToolUse",
       "Stop"
     ],
-    "classification": "Session and prompt hooks are active support surfaces. Disabled lifecycle hooks are dormant contract-test surfaces unless intentionally re-enabled."
+    "classification": "Session and prompt hooks are active lightweight guardrails. Disabled lifecycle hooks are dormant contract-test surfaces unless intentionally re-enabled.",
+    "guardrail_policy": {
+      "session_start": "compact context plus bounded Memento health ensure only; no unrelated repairs",
+      "user_prompt_submit": "prompt secret block plus compact route hints only",
+      "post_tool_use_if_reenabled": "record/remind only; do not run doctor or verify autonomously",
+      "stop_if_reenabled": "ask for missing evidence only; avoid broad final-gate cascades"
+    }
   },
   "naming_hygiene": {
     "updated_at": "2026-05-20T02:42:30+09:00",

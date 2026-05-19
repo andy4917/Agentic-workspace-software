@@ -177,11 +177,12 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
   `Invoke-MementoSessionStartEnsure` during `SessionStart`. The guard runs
   `memento-mcp-runtime.ps1 status`; if PostgreSQL or Memento HTTP is unhealthy,
   it schedules `memento-mcp-runtime.ps1 start` in a hidden background
-  PowerShell and returns a context note with log paths. This prevents the
-  previous hidden failure mode where a configured Memento MCP stayed down until
-  a later manual `verify`. It does not claim that an already-running Codex
-  session receives `mcp__memento__...` tools retroactively; reload may still be
-  required when tools were missing at session creation.
+  PowerShell and returns a short context note with log paths. This is the only
+  allowed SessionStart repair because Memento is support infrastructure. The
+  hook must not perform unrelated repairs or heavyweight verification. It does
+  not claim that an already-running Codex session receives `mcp__memento__...`
+  tools retroactively; reload may still be required when tools were missing at
+  session creation.
 - `active_use_rule`: Memento MCP support should be attempted when tools are
   exposed and the task touches prior state, hooks, MCP, toolchains, workstation
   policy, repeated failures, or durable decisions. If the runtime is healthy but

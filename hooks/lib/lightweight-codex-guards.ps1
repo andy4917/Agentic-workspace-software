@@ -293,25 +293,6 @@ function Get-ChangedLineCount {
     return $count
 }
 
-function Invoke-ChromeExtensionOriginRepair {
-    $scriptPath = Join-Path (Get-CodexHomePath) "maintenance\scripts\ensure-chrome-extension-origin.ps1"
-    if (-not (Test-Path -LiteralPath $scriptPath)) {
-        return ""
-    }
-
-    try {
-        $results = @(& $scriptPath -NoNodeCheck 2>&1)
-        $important = @($results | Where-Object { [string]$_ -match "^(patched|failed|error):" })
-        if ($important.Count -gt 0) {
-            return "Chrome extension origin repair: $($important -join '; ')"
-        }
-    } catch {
-        return "Chrome extension origin repair failed: $($_.Exception.Message)"
-    }
-
-    return ""
-}
-
 function Invoke-MementoSessionStartEnsure {
     $codexHome = Get-CodexHomePath
     $scriptPath = Join-Path $codexHome "maintenance\scripts\memento-mcp-runtime.ps1"

@@ -245,7 +245,7 @@ function Read-State {
             memoryRoute = ""
             changedSurfaces = @()
             checksRun = @()
-            autonomousHarnessChecks = @()
+            controlPlaneReminders = @()
             skillEvents = @()
             requiredReminders = @()
             toolEvents = @()
@@ -257,6 +257,10 @@ function Read-State {
 
     try {
         $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+        $controlPlaneReminders = @()
+        if ($state.PSObject.Properties.Name -contains "controlPlaneReminders") {
+            $controlPlaneReminders = @($state.controlPlaneReminders)
+        }
         return [ordered]@{
             currentGoal = [string]$state.currentGoal
             workflow = [string]$state.workflow
@@ -275,7 +279,7 @@ function Read-State {
             memoryRoute = [string]$state.memoryRoute
             changedSurfaces = @($state.changedSurfaces | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
             checksRun = @($state.checksRun | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
-            autonomousHarnessChecks = @($state.autonomousHarnessChecks | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
+            controlPlaneReminders = @($controlPlaneReminders | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             skillEvents = @($state.skillEvents | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             requiredReminders = @($state.requiredReminders | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 240 })
             toolEvents = @($state.toolEvents | ForEach-Object { Get-StateSummaryText -Value ([string]$_) -Limit 120 })
@@ -302,7 +306,7 @@ function Read-State {
             memoryRoute = ""
             changedSurfaces = @()
             checksRun = @()
-            autonomousHarnessChecks = @()
+            controlPlaneReminders = @()
             skillEvents = @()
             requiredReminders = @("Hook state could not be parsed; refresh evidence before finalizing.")
             toolEvents = @()
@@ -357,7 +361,7 @@ function Get-WorkflowVariableCatalog {
         "skillEvidenceRequired:SKILL_EVIDENCE final evidence gate",
         "changedSurfaces:deduped changed surface list",
         "checksRun:deduped validation evidence list",
-        "autonomousHarnessChecks:deduped autonomous doctor/verify evidence",
+        "controlPlaneReminders:deduped explicit-check reminders for control-plane edits",
         "skillEvents:deduped skill workflow evidence",
         "requiredReminders:deduped final evidence reminders",
         "toolEvents:deduped tool event names",
@@ -428,7 +432,7 @@ function Normalize-WorkflowState {
     )
     $State.changedSurfaces = Normalize-StateList -Items @($State.changedSurfaces) -Limit 120 -MaxItems 24
     $State.checksRun = Normalize-StateList -Items @($State.checksRun) -Limit 240 -MaxItems 48
-    $State.autonomousHarnessChecks = Normalize-StateList -Items @($State.autonomousHarnessChecks) -Limit 240 -MaxItems 24
+    $State.controlPlaneReminders = Normalize-StateList -Items @($State.controlPlaneReminders) -Limit 240 -MaxItems 24
     $State.skillEvents = Normalize-StateList -Items @($State.skillEvents) -Limit 240 -MaxItems 24
     $State.requiredReminders = Normalize-StateList -Items @($State.requiredReminders) -Limit 240 -MaxItems 32
     $State.toolEvents = Normalize-StateList -Items @($State.toolEvents) -Limit 120 -MaxItems 24
@@ -437,13 +441,13 @@ function Normalize-WorkflowState {
     return $State
 }
 
-function Test-AutonomousHarnessCheckRequired {
+function Test-ControlPlaneReminderRequired {
     param(
         [string]$ToolName,
         [string]$Text
     )
 
-    if ($env:CODEX_HOOK_AUTONOMOUS_DISABLE -eq "1") {
+    if ($env:CODEX_HOOK_CONTROL_PLANE_REMINDER_DISABLE -eq "1") {
         return $false
     }
     if ($ToolName -notmatch "(?i)(apply_patch|Edit|Write)") {
@@ -454,74 +458,6 @@ function Test-AutonomousHarnessCheckRequired {
     }
 
     return ($Text -match "(?i)(hooks[\\/]|hooks\.json|evals[\\/]hook-policy-smoke\.json|maintenance[\\/]scripts[\\/]codex_agent_harness|maintenance[\\/]scripts[\\/]codex-[^\\/]+\.ps1|skills[\\/][^\\/]+[\\/]SKILL\.md|AGENTS\.md)")
-}
-
-function Stop-HookProcessTree {
-    param([int]$ProcessId)
-
-    try {
-        $children = @(Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $ProcessId })
-        foreach ($child in $children) {
-            Stop-HookProcessTree -ProcessId ([int]$child.ProcessId)
-        }
-        Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
-    } catch {
-    }
-}
-
-function Invoke-AutonomousHarnessCheck {
-    param(
-        [ValidateSet("doctor", "verify")]
-        [string]$Mode,
-        [int]$TimeoutSeconds = 45
-    )
-
-    $codexHome = Get-CodexHomePath
-    $python = Join-Path $codexHome "toolchains\shims\python.cmd"
-    $harness = Join-Path $codexHome "maintenance\scripts\codex_agent_harness.py"
-    if (-not (Test-Path -LiteralPath $python)) {
-        return "autonomous_${Mode}:blocked; reason=missing_python_shim; path=$python"
-    }
-    if (-not (Test-Path -LiteralPath $harness)) {
-        return "autonomous_${Mode}:blocked; reason=missing_harness; path=$harness"
-    }
-
-    if ($env:CODEX_HOOK_SMOKE -eq "1") {
-        return "autonomous_${Mode}:smoke_probe; command=codex_agent_harness.py $Mode"
-    }
-
-    $logDir = Join-Path $codexHome "logs\hook-autonomous"
-    if (-not (Test-Path -LiteralPath $logDir)) {
-        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-    }
-
-    $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmss-fff")
-    $outPath = Join-Path $logDir "$stamp-$Mode.out.log"
-    $errPath = Join-Path $logDir "$stamp-$Mode.err.log"
-    $arguments = @($harness, $Mode)
-    if ($Mode -eq "doctor") {
-        $arguments += "--json"
-    }
-
-    try {
-        $process = Start-Process -FilePath $python -ArgumentList $arguments -WorkingDirectory $codexHome -WindowStyle Hidden -RedirectStandardOutput $outPath -RedirectStandardError $errPath -PassThru
-        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-            Stop-HookProcessTree -ProcessId ([int]$process.Id)
-            return "autonomous_${Mode}:timeout; seconds=$TimeoutSeconds; out=$outPath; err=$errPath"
-        }
-        $process.Refresh()
-        $stdout = ""
-        if (Test-Path -LiteralPath $outPath) {
-            $stdout = Get-Content -LiteralPath $outPath -Raw -ErrorAction SilentlyContinue
-        }
-        $digest = ""
-        if (-not [string]::IsNullOrWhiteSpace($stdout)) {
-            $digest = Get-StateDigest -Text $stdout
-        }
-        return "autonomous_${Mode}:exit=$($process.ExitCode); out=$outPath; err=$errPath; sha256:$digest"
-    } catch {
-        return "autonomous_${Mode}:error; reason=$($_.Exception.Message)"
-    }
 }
 
 function Write-CodexStructuredLog {

@@ -7,8 +7,8 @@
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\lightweight-codex-hook.ps1') }\"",
-            "timeout": 30,
-            "statusMessage": "Loading lightweight PM workflow"
+            "timeout": 10,
+            "statusMessage": "Loading guardrails"
           }
         ]
       }
@@ -19,8 +19,8 @@
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\lightweight-codex-hook.ps1') }\"",
-            "timeout": 30,
-            "statusMessage": "Classifying workflow"
+            "timeout": 10,
+            "statusMessage": "Applying guardrails"
           }
         ]
       }
