@@ -92,9 +92,17 @@ residual risks, and rollback notes.
 
 ### Subagents And Role System
 
-Current runtime policy requires explicit user authorization before calling
-subagents. Capability flags and large task size are not authorization by
-themselves.
+Current workspace policy carries standing user authorization for bounded
+sidecar subagents when delegation is useful. Active higher-priority runtime
+rules still decide whether a live session may call `spawn_agent`; when the
+current prompt explicitly requests subagents, delegation, role separation, or
+parallel agents, that explicit authorization should be treated as present rather
+than blocked by older "no subagent before explicit request" wording.
+
+Capability flags and large task size are not completion authority by
+themselves. L3/L4 raises delegation priority and evidence pressure, especially
+for parallelizable exploration, review, verification, or ambiguity-heavy design
+choices.
 
 When authorization exists, use the active local limits from
 `hooks/lightweight-codex-policy.json` and the dispatch shape in
@@ -201,7 +209,7 @@ A future change to this design passes only when all applicable items are true:
 - current instruction priority is not weakened;
 - Goal remains a tracking marker, not completion authority;
 - Memory/RAG remains support-only;
-- subagent use remains explicit-authorization-bound and evidence-only;
+- subagent use remains authorization-bound and evidence-only;
 - worker-watcher and goal-integrity gates remain candidate evidence, not final
   authority;
 - score/reward language penalizes fake success and hidden fallback;

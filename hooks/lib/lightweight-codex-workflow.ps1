@@ -308,6 +308,40 @@ function Test-SparkReadSidecarUseful {
     return ($Prompt -match "(?i)(many files|multiple files|large file|long file|broad search|inventory|scan|search|inspect|rg|grep|repository|repo|workspace|tree|hooks?|config|maintenance)")
 }
 
+function Test-BestOfNUseful {
+    param([string]$Prompt)
+
+    if ([string]::IsNullOrWhiteSpace($Prompt)) {
+        return $false
+    }
+
+    if ($Prompt -match "(?i)(best[- ]?of[- ]?n|--attempts|multiple solutions?|compare approaches?|alternative approaches?|test strategy|complex refactor|refactoring direction|auth[/ -]?memory design|memory design)") {
+        return $true
+    }
+
+    return (Test-PromptContainsAnyCodepointSignal -Prompt $Prompt -Signals @(
+        @([int]0xBCF5, [int]0xC218, [int]0xC548),
+        @([int]0xBE44, [int]0xAD50),
+        @([int]0xB9AC, [int]0xD329, [int]0xD130, [int]0xB9C1),
+        @([int]0xC124, [int]0xACC4),
+        @([int]0xD14C, [int]0xC2A4, [int]0xD2B8),
+        @([int]0xC804, [int]0xB7B5)
+    ))
+}
+
+function Test-StandingDelegationUseful {
+    param([string]$Prompt)
+
+    if ([string]::IsNullOrWhiteSpace($Prompt)) {
+        return $false
+    }
+
+    if (Test-SparkReadSidecarUseful -Prompt $Prompt) { return $true }
+    if (Test-BestOfNUseful -Prompt $Prompt) { return $true }
+
+    return ($Prompt -match "(?i)(parallelizable|independent|review|audit|verify|validation|security|auth|memento|memory|mcp|hook|workflow|toolchain|large|multi[- ]?surface|migration|refactor)")
+}
+
 function Test-RootCauseOrIncidentSignal {
     param([string]$Prompt)
 
@@ -365,7 +399,7 @@ function Get-TaskClassification {
     $standingDelegationAuthorized = Test-StandingDelegationAuthorized -Policy $Policy
     $sparkReadSidecarAuthorized = Test-SparkReadSidecarAuthorized -Policy $Policy
     $sparkReadSidecarUseful = ($sparkReadSidecarAuthorized -and (Test-SparkReadSidecarUseful -Prompt $Prompt))
-    $delegationAuthorized = $promptDelegationSignal
+    $delegationAuthorized = $false
     $hasRootCauseSignal = Test-RootCauseOrIncidentSignal -Prompt $Prompt
     $hasWorkflowGovernanceSignal = Test-WorkflowGovernanceSignal -Prompt $Prompt
     $p = $Prompt.ToLowerInvariant()
@@ -398,6 +432,12 @@ function Get-TaskClassification {
         $level = "L1"
     }
 
+    $standingDelegationUseful = ($standingDelegationAuthorized -and ($level -in @("L3", "L4")) -and (Test-StandingDelegationUseful -Prompt $Prompt))
+    $delegationAuthorized = ($promptDelegationSignal -or $standingDelegationUseful -or $sparkReadSidecarUseful)
+    if ($standingDelegationUseful) {
+        $reasons += "standing delegation useful for L3/L4"
+    }
+
     if ($reasons.Count -eq 0) {
         $reasons += "bounded implementation or review"
     }
@@ -411,8 +451,9 @@ function Get-TaskClassification {
         goalActionRequired = ($level -eq "L4" -or $p -match "(?i)(codex goal|persisted goal|long[- ]?running|multi[- ]?turn|continue later|resume later)")
         watcherCoverageRequired = ($promptDelegationSignal -and $level -eq "L4")
         anomalyPauseExpected = ($level -eq "L4" -and $hasRootCauseSignal -and ($hasWorkflowGovernanceSignal -or $promptDelegationSignal))
-        subagentDecisionRequired = $promptDelegationSignal
+        subagentDecisionRequired = ($promptDelegationSignal -or $standingDelegationUseful -or $sparkReadSidecarUseful)
         standingDelegationAvailable = $standingDelegationAuthorized
+        standingDelegationUseful = $standingDelegationUseful
         sparkReadSidecarAuthorized = $sparkReadSidecarAuthorized
         sparkReadSidecarUseful = $sparkReadSidecarUseful
     }
@@ -545,8 +586,11 @@ function Get-IntentFrame {
     if ([bool]$Classification.sparkReadSidecarAuthorized) {
         $subagentPolicy = "Spark read sidecar is standing-authorized across L1-L4 for long or many-file read/search work; outputs are candidate evidence only."
     }
+    if ([bool]$Classification.standingDelegationUseful) {
+        $subagentPolicy = "Standing delegation authorization is useful for this L3/L4 task; use bounded sidecars when they reduce risk and independently verify candidate evidence."
+    }
     if ([bool]$Classification.delegationAuthorized) {
-        $subagentPolicy = "Delegation requested by the user; spawn only bounded non-blocking sidecar agents and independently verify candidate evidence."
+        $subagentPolicy = "Delegation authorized for this task; spawn only bounded non-blocking sidecar agents and independently verify candidate evidence."
     }
 
     return [ordered]@{
@@ -557,7 +601,7 @@ function Get-IntentFrame {
         evidence_target = $evidenceTarget
         memory_action = $MemoryRoute
         subagent_policy = $subagentPolicy
-        subagent_call_declaration = "Close subagent use only when the prompt requested subagents or a subagent tool was actually used."
+        subagent_call_declaration = "Close subagent use when current authorization requires a delegation decision or a subagent tool was actually used."
         calibration_action = "Use CALIBRATION.md: selected answers, diagnoses, plans, and patch rationales remain candidate until direct evidence supports them. If hook state, tool output, validation, or final preflight contradicts the current workflow, pause the active path, preserve evidence, trace the anomaly, and resume only with direct verification or an explicit blocked/continue decision."
     }
 }
@@ -675,14 +719,19 @@ function Get-PromptReminder {
     $sparkReadSidecarAuthorized = Test-SparkReadSidecarAuthorized -Policy $Policy
     $sparkReadSidecarUseful = Test-SparkReadSidecarUseful -Prompt $Prompt
 
-    $delegationAuthorization = "Subagents optional; use only if requested or clearly useful under current runtime policy."
+    $delegationAuthorization = "Subagents available under standing/current authorization; prefer bounded sidecars for L3/L4 independent read, review, verification, or design comparison when useful."
     if (Test-DelegationAuthorized -Prompt $Prompt) {
-        $delegationAuthorization = "Subagents requested; use bounded non-blocking sidecar agents only where they reduce risk."
+        $delegationAuthorization = "Subagents requested/authorized; use bounded non-blocking sidecar agents where they reduce risk or improve comparison quality."
     } elseif ($sparkReadSidecarAuthorized -and $sparkReadSidecarUseful) {
         $delegationAuthorization = "Spark sidecar ($sparkModel) is useful here for read/search; no extra prompt authorization required."
     }
 
-    $subagentDecisionAction = "Subagent closure: only required when the prompt requests subagents or a subagent tool is used."
+    $bestOfNAction = "Best-of-N: not needed unless multiple plausible approaches would materially improve the decision."
+    if (Test-BestOfNUseful -Prompt $Prompt -or (($classification.level -in @("L3", "L4")) -and ($Workflow -in @("debug", "migration", "security", "research")))) {
+        $bestOfNAction = "Best-of-N: actively compare candidates for complex refactor direction, Memento auth/memory design, or test strategy; use sidecars or Codex Cloud --attempts when available, then record chosen/rejected rationale."
+    }
+
+    $subagentDecisionAction = "Subagent closure: only required when current authorization requires a delegation decision or a subagent tool is used."
     if ([bool]$classification.subagentDecisionRequired) {
         $subagentDecisionAction = "Subagent closure: close used/not_used with reason and residual risk."
     }
@@ -713,11 +762,12 @@ function Get-PromptReminder {
 
     return @"
 Codex guardrail:
-- class=$($classification.level); preset=$Workflow/$Phase; goal=$goal.
+- Task level: $($classification.level); class=$($classification.level); preset=$Workflow/$Phase; goal=$goal.
 - Routes: skills=$SkillRoute; toolchain=$ToolchainHint.
 - Use direct evidence; keep output concise; surface blockers, not-run checks, residual risks.
 - Memory: $MemoryRoute; support-only. $goalAction
 - $delegationAuthorization $subagentDecisionAction $skillEvidenceAction
+- $bestOfNAction
 - Hard blocks stay narrow: secret content, irreversible destructive action, hook weakening without scope, evaluator/pass manipulation.
 "@
 }

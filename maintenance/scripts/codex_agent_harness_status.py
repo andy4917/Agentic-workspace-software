@@ -15,6 +15,14 @@ MAX_WORKSPACE_SCRIPT_LINES = 800
 WORKSPACE_SCRIPT_SUFFIXES = {".js", ".mjs", ".py", ".ps1", ".ts", ".tsx", ".md"}
 
 
+def is_upstream_system_skill_file(path: Path, root: Path) -> bool:
+    try:
+        parts = path.relative_to(root).parts
+    except ValueError:
+        return False
+    return len(parts) >= 3 and parts[0] == "skills" and parts[1] == ".system"
+
+
 def harness_line_count_status(root: Path) -> dict[str, Any]:
     files = sorted((root / "maintenance" / "scripts").glob("codex_agent_harness*.py"))
     files.append(root / "maintenance" / "scripts" / "worker_watcher_templates.py")
@@ -43,12 +51,22 @@ def workspace_script_line_count_status(root: Path) -> dict[str, Any]:
                 files.append(path)
     counts = []
     oversized = []
+    system_skill_large = []
     for path in sorted(files):
         line_count = len(read_text(path).splitlines())
         item = {"path": rel(path, root), "lines": line_count, "max_lines": MAX_WORKSPACE_SCRIPT_LINES}
         counts.append(item)
         if line_count > MAX_WORKSPACE_SCRIPT_LINES:
-            oversized.append(item)
+            if is_upstream_system_skill_file(path, root):
+                system_skill_large.append(
+                    {
+                        **item,
+                        "classification": "ignored_upstream_system_skill",
+                        "reason": "System skill material is upstream-managed; preserve the skill contract and do not force local source splitting.",
+                    }
+                )
+            else:
+                oversized.append(item)
 
     cache_large = []
     cache_root = root / "plugins" / "cache"
@@ -76,6 +94,7 @@ def workspace_script_line_count_status(root: Path) -> dict[str, Any]:
         "status": "pass" if not oversized else "fail",
         "files": counts,
         "oversized": oversized,
+        "classified_system_skill_large_files": system_skill_large,
         "classified_cache_large_files": cache_large,
     }
 

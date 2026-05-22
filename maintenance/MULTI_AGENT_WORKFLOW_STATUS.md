@@ -4,15 +4,26 @@ This Markdown file records workflow rationale and historical status. Treat live
 subagent authorization, hook state, and current tool exposure as runtime facts
 that must be verified from the active session or current JSON state.
 
-Updated: 2026-05-20
+Updated: 2026-05-21
 
 ## Direct Finding
 
-The multi-agent workflow was configured as a capability, but the local workflow text and hook reminder did not make the runtime authorization rule explicit.
+The multi-agent workflow was configured as a capability, but local workflow text
+and hook reminders must distinguish three cases: standing configured
+authorization, explicit current-prompt authorization, and actual subagent tool
+use.
 
 Current config carries standing user authorization in `developer_instructions`.
-That makes `spawn_agent` available when delegation is useful, but it still does
-not require automatic subagent creation for every task.
+When the active runtime exposes `spawn_agent`, this supports bounded sidecar
+delegation when it materially reduces risk. Current prompts that explicitly say
+`subagent`, `spawn_agent`, `multi-agent`, `delegation`, or localized equivalents
+are not blocked by the old "no subagent before explicit request" rationale; they
+enter the stricter subagent evidence path.
+
+L3/L4 raises delegation priority and evidence pressure. It is not a blanket
+mandate to spawn for tiny or immediate-blocking work, but it should no longer be
+worded as a reason to avoid subagents when the task is parallelizable,
+workflow-sensitive, security-sensitive, or ambiguity-heavy.
 
 ## Current Config
 
@@ -96,8 +107,28 @@ higher task level instead of assigning levels in last-match order, and
 `hook-policy-smoke` covers the nested-subagent-plus-L4 case.
 
 Task level remains workflow routing and evidence pressure. Standing
-authorization allows bounded sidecar delegation when useful; task level alone is
-not a reason to spawn if the immediate next step is local or the work is tiny.
+authorization and explicit prompt authorization allow bounded sidecar delegation
+when useful. L3/L4 should trigger a PM delegation decision and prefer sidecars
+for parallelizable, ambiguity-heavy, or independently reviewable work; keep work
+local only when the immediate next step is tightly coupled, tiny, or delegation
+would not improve evidence.
+
+## Best-Of-N Use
+
+Best-of-N is now an explicit comparison option for ambiguity-heavy L3/L4 work.
+Use it for complex refactor direction comparisons, Memento auth/memory design
+changes, and test strategy design when multiple plausible approaches exist.
+
+Allowed forms:
+
+- local bounded sidecars with separate hypotheses or review dimensions;
+- PM-created candidate sketches followed by direct comparison;
+- Codex Cloud `--attempts` in the documented 1-4 range when a cloud environment
+  is available and the task is suitable for cloud execution.
+
+Best-of-N output is candidate evidence only. The PM must select or reject
+approaches with direct evidence, acceptance criteria, maintenance cost,
+rollback impact, and residual risk.
 
 ## Evidence Sources
 

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "record_class": "freshness_sensitive_state",
   "owner": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md and maintenance/scripts/check-codex-native-alignment.ps1",
-  "updated_at": "2026-05-20T03:12:00+09:00",
+  "updated_at": "2026-05-21T21:01:00+09:00",
   "purpose": "Machine-readable baseline for Codex home structure, native app alignment, and prior cleanup state that must stay current.",
   "records": {
     "structure_policy_md": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md",
@@ -89,7 +89,8 @@
       "plugins/cache/openai-primary-runtime",
       "plugins/local-marketplaces",
       ".tmp/bundled-marketplaces",
-      ".tmp/plugins"
+      ".tmp/plugins",
+      ".tmp/plugins.sha"
     ],
     "stale_backup_paths": [],
     "chrome_devtools": {
@@ -227,8 +228,15 @@
     "rrule": "FREQ=DAILY;INTERVAL=2;BYHOUR=9;BYMINUTE=0;BYSECOND=0",
     "script": "maintenance/scripts/check-codex-native-alignment.ps1"
   },
+  "weekly_workstation_health_automation": {
+    "id": "weekly-workstation-workflow-health-check",
+    "name": "Weekly Workstation Workflow Health Check",
+    "rrule": "FREQ=WEEKLY;BYDAY=TH;BYHOUR=18;BYMINUTE=0;BYSECOND=0",
+    "added_contract_check": "memento-mcp security contract",
+    "script": "maintenance/scripts/memento-security-contract-check.ps1"
+  },
   "prior_cleanup_baseline": {
-    "date": "2026-05-20",
+    "date": "2026-05-21",
     "removed_or_recycled_paths": [
       "plugins/patched",
       "vendor_imports",
@@ -236,7 +244,10 @@
       "plugins/cache/openai-bundled/browser-use",
       "plugins/cache/openai-primary-runtime",
       ".tmp/bundled-marketplaces",
+      ".tmp/plugins",
       ".tmp/plugins/plugins",
+      ".tmp/plugins-clone-mXPgol",
+      ".tmp/plugins-clone-WZSamh",
       ".tmp/plugins.sha",
       "plugins/local-marketplaces",
       ".codex-global-state.json.bak",

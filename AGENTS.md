@@ -24,9 +24,16 @@ Adopt `CODEX_WORKFLOW_APPLIED_REVIEW`,'CODEX_WORKFLOW_CONFIGURATION_INTERVIEW'as
 
 ## Instruction File Priority
 
-- `AGENTS.md` is the primary file Codex agents should read first for scoped instructions.
-- `agent.md` is a secondary, lower-priority instruction file when both names exist in the same scope.
-- Use the uppercase/lowercase distinction intentionally to communicate priority.
+- Codex official instruction discovery checks `AGENTS.override.md`, then
+  `AGENTS.md`, then any names listed in `project_doc_fallback_filenames`.
+- `AGENTS.md` is the primary scoped instruction file for this workspace.
+- `agent.md` is a configured legacy fallback name only when no
+  `AGENTS.override.md` or `AGENTS.md` is present in that directory. If both
+  names exist in the same scope, official discovery loads the uppercase
+  `AGENTS.md`; treat lowercase `agent.md` as secondary human reference, not as
+  active completion authority.
+- Keep alternate instruction filenames listed in `project_doc_fallback_filenames`
+  before relying on them for Codex discovery.
 - User allowed, recommends to download and use any Tools you need.
 
 ## Default Workflow
@@ -45,9 +52,11 @@ Runtime subagent activation rule:
   the current prompt to explicitly request subagents; prefer it for long or
   many-file reads, broad search, inventory, and independent context gathering
   when that materially reduces PM uncertainty;
-- task level `L3`/`L4` raises delegation priority and evidence pressure, but it
-  is not a mandate to spawn when the immediate next step is local or delegation
-  would not improve the result;
+- task level `L3`/`L4` raises delegation priority and should trigger an explicit
+  PM delegation decision. Use bounded sidecars when work is parallelizable,
+  ambiguity-heavy, or independently reviewable; keep it local only when the
+  immediate next step is tightly coupled, tiny, or delegation would not improve
+  evidence;
 - user phrases such as `multi-agent`, `subagent`, `spawn_agent`, `parallel agent`, `role separation`, `delegate`, `delegation`, or `delegated` still count as explicit current-goal delegation requests and should trigger the stricter subagent evidence path; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
 - `PM-led`, `team preset`, `workflow`, or `review` alone do not require subagent use; they may still raise the task level, justify local review, or use standing authorization when a bounded sidecar agent would materially improve the result.
 - when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
@@ -445,6 +454,24 @@ Delegation anti-reward-hacking contract:
 - claims that cannot be independently verified from paths, commands, line references, diffs, or reproducible observations are treated as unsupported;
 - finding a blocker is a successful subagent outcome when the blocker is real, scoped, and evidenced;
 - unsupported success claims reduce trust in the entire subagent output and require PM re-verification or replacement.
+
+## Best-Of-N Comparison
+
+Use Best-of-N as a comparison workflow, not as completion authority.
+
+- For L3/L4 work with high ambiguity or design branching, actively consider
+  multiple candidate approaches before choosing one.
+- Prefer Best-of-N for complex refactor direction comparisons, Memento
+  auth/memory design changes, test strategy design, and other cases where one
+  local path could prematurely lock in a weak architecture.
+- Acceptable local forms include bounded sidecar subagents with separate
+  hypotheses, independent PM candidate sketches, or Codex Cloud `--attempts`
+  when a cloud environment is available and appropriate.
+- The PM must compare candidates against acceptance criteria, direct evidence,
+  maintenance cost, rollback path, and residual risk. Record the rejected
+  alternatives briefly when their rejection informs future work.
+- Do not use Best-of-N to create multiple overlapping writers on the same files
+  unless file ownership is explicitly disjoint and integration is planned.
 
 ## Workflow Presets
 

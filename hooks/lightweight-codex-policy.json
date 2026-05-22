@@ -49,7 +49,8 @@
       ],
       "authority": "candidate_evidence_only"
     },
-    "task_level_autonomy_boundary": "task_class_L3_L4_raises_delegation_priority_but_spark_read_sidecar_is_authorized_across_L1_L2_L3_L4_for_long_or_many_file_reads_when_useful",
+    "task_level_autonomy_boundary": "task_class_L3_L4_raises_delegation_priority_and_should_not_block_bounded_sidecars_when_parallelizable_or_ambiguity_heavy",
+    "best_of_n_policy": "for_L3_L4_complex_refactor_memento_auth_memory_or_test_strategy_design_compare_multiple_candidates_with_sidecars_or_codex_cloud_attempts_when_available",
     "required_start_skill": "vowline",
     "required_start_skill_path": "%USERPROFILE%\\.agents\\skills\\vowline\\SKILL.md",
     "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",

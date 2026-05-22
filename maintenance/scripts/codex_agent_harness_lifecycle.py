@@ -247,18 +247,19 @@ def check_config(root: Path) -> dict[str, Any]:
             missing_agent_roles.append(role)
     fallback_files = data.get("project_doc_fallback_filenames", [])
     fallback_max_bytes = data.get("project_doc_max_bytes")
-    missing_calibration_fallback = not (
+    missing_instruction_fallback = not (
         isinstance(fallback_files, list)
         and "CALIBRATION.md" in fallback_files
+        and "agent.md" in fallback_files
         and fallback_max_bytes == 65536
     )
     return {
-        "status": "pass" if not missing and not unexpected and not wrong_false and not missing_agent_roles and not missing_calibration_fallback else "fail",
+        "status": "pass" if not missing and not unexpected and not wrong_false and not missing_agent_roles and not missing_instruction_fallback else "fail",
         "missing_true": missing,
         "unexpected_true": unexpected,
         "missing_false": wrong_false,
         "missing_agent_roles": missing_agent_roles,
-        "missing_calibration_fallback": missing_calibration_fallback,
+        "missing_instruction_fallback": missing_instruction_fallback,
     }
 
 

@@ -10,6 +10,7 @@ from typing import Any
 
 from codex_agent_harness_base import *
 from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, cmd_apply, doctor_data, load_state
+from codex_agent_harness_status import workspace_script_line_count_status
 from codex_agent_harness_workflows import cmd_compact_summary, cmd_context, cmd_retrieve, write_verification_report
 
 def cmd_merge_config(args: argparse.Namespace) -> int:
@@ -184,7 +185,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         root = Path(td)
         write_text(
             root / "config.toml",
-            'project_doc_fallback_filenames = ["CALIBRATION.md"]\n'
+            'project_doc_fallback_filenames = ["CALIBRATION.md", "agent.md"]\n'
             "project_doc_max_bytes = 65536\n"
             "\n"
             "[features]\n"
@@ -355,6 +356,31 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         if doctor["status"] != "pass":
             print(f"doctor failed in self-test: {doctor.get('failed', [])}", file=sys.stderr)
             return 1
+        upstream_script = root / "skills" / ".system" / "imagegen" / "scripts" / "image_gen.py"
+        ensure_dir(upstream_script.parent)
+        write_text(upstream_script, "\n".join("# upstream system skill" for _ in range(805)) + "\n")
+        workspace_size = workspace_script_line_count_status(root)
+        if (
+            workspace_size["status"] != "pass"
+            or not any(
+                item.get("classification") == "ignored_upstream_system_skill"
+                and item.get("path") == "skills/.system/imagegen/scripts/image_gen.py"
+                for item in workspace_size.get("classified_system_skill_large_files", [])
+            )
+        ):
+            print("upstream system skill size classification failed in self-test", file=sys.stderr)
+            return 1
+        local_script = root / "skills" / "local-test" / "scripts" / "too_big.py"
+        ensure_dir(local_script.parent)
+        write_text(local_script, "\n".join("# local oversized skill" for _ in range(805)) + "\n")
+        workspace_size = workspace_script_line_count_status(root)
+        if workspace_size["status"] != "fail" or not any(
+            item.get("path") == "skills/local-test/scripts/too_big.py"
+            for item in workspace_size.get("oversized", [])
+        ):
+            print("local skill size enforcement failed in self-test", file=sys.stderr)
+            return 1
+        local_script.unlink()
         source = root / "source.toml"
         target = root / "target.toml"
         write_text(source, 'model = "gpt-test"\n[features]\nplugins = true\nmulti_agent = true\n[mcp_servers.docs]\nenabled = true\n')

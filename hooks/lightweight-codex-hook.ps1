@@ -82,7 +82,7 @@ switch ($eventName) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Consider watcher coverage for a delegated high-risk incident; do not treat omission as a pass."
         }
         if ([bool]$classification.subagentDecisionRequired) {
-            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Close subagent use only when requested or actually used."
+            $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Close subagent use when current authorization requires a delegation decision or a subagent tool was actually used."
         }
         if ([bool]$state.skillEvidenceRequired) {
             $state.requiredReminders = Add-Unique -Items $state.requiredReminders -Value "Close routed skills compactly; detailed evidence only for missing, blocked, or abnormal skill use."
@@ -249,7 +249,7 @@ switch ($eventName) {
         }
         $postAdjustment = Get-ToolTaskAdjustment -Stage "PostToolUse" -ToolName $toolName -Text $text -ChangedFileCount $changedFileCount -ChangedLineCount $changedLineCount -Policy $policy
         if (Apply-TaskLevelAdjustment -State $state -Adjustment $postAdjustment) {
-            $additional += "Task level adjusted to $($state.taskClass) from PostToolUse evidence; include compatibility impact review."
+            $additional += "Task level: $($state.taskClass). Adjusted from PostToolUse evidence; include compatibility impact review."
         }
         if ($text -match "(?i)(package\.json|pyproject\.toml|Cargo\.toml|requirements\.txt|uv\.lock|package-lock\.json|pnpm-lock\.yaml|Cargo\.lock)") {
             $state.changedSurfaces = Add-Unique -Items $state.changedSurfaces -Value "dependencies"

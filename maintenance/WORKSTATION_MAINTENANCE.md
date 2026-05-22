@@ -167,6 +167,12 @@ exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
   memory.
 - `verification`:
   `maintenance\scripts\memento-mcp-runtime.ps1 verify`.
+- `weekly_security_contract`:
+  `maintenance\scripts\memento-security-contract-check.ps1 -Json` checks RBAC
+  default-deny, tenant-isolation forbidden SQL patterns, migration lint,
+  `test:ci`, and README/package script alignment. The existing
+  `weekly-workstation-workflow-health-check` automation includes this report-only
+  check.
 - `session_start_guard`: the lightweight SessionStart hook checks
   `memento-mcp-runtime.ps1 status` and schedules a hidden background `start`
   when Memento is unhealthy. Treat this as a startup repair aid, not as proof

@@ -41,7 +41,7 @@ CALIBRATION_EVAL_TEMPLATE: dict[str, Any] = {
     "success_criteria": [
         "CALIBRATION.md exists and defines answer statuses, claim-level evidence, falsifier-first checks, and completion authority",
         "AGENTS.md points to CALIBRATION.md without duplicating it as a second source of truth",
-        "config.toml registers CALIBRATION.md as a project doc fallback",
+        "config.toml registers CALIBRATION.md and agent.md as project doc fallback names",
         "calibration-verifier agent TOML parses",
         "calibration scoring manifest exists",
         "lightweight policy and prompt reminder point to calibration without making hooks completion authority",
@@ -80,7 +80,7 @@ def check_calibration_policy(root: Path) -> dict[str, Any]:
     checks.append(("falsifier-first documented", "Falsifier-First" in calibration_text))
     checks.append(("completion authority documented", "Completion Authority" in calibration_text))
     checks.append(("AGENTS references canonical calibration", "CALIBRATION.md" in agents_text and "Live Turn Calibration" in agents_text))
-    checks.append(("config registers calibration fallback", "project_doc_fallback_filenames" in config_text and "CALIBRATION.md" in config_text and "project_doc_max_bytes = 65536" in config_text))
+    checks.append(("config registers instruction fallbacks", "project_doc_fallback_filenames" in config_text and "CALIBRATION.md" in config_text and "agent.md" in config_text and "project_doc_max_bytes = 65536" in config_text))
     checks.append(("policy references calibration source", '"calibration"' in policy_text and '"source_path": "CALIBRATION.md"' in policy_text))
     checks.append(("prompt reminder references calibration", "selected answers, diagnoses, plans, and patch rationales stay candidate" in workflow_text))
     checks.append(("read-only incident terms stay out of L4", "incident terms inside read-only inspection output" in workflow_text))

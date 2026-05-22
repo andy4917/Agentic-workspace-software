@@ -13,6 +13,20 @@ function Get-CodexBundleRoot {
     return ""
 }
 
+function Get-CodexStoreResourcePath {
+    $package = Get-AppxPackage -Name OpenAI.Codex -ErrorAction SilentlyContinue |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+    if (-not $package) {
+        return ""
+    }
+    $candidate = Join-Path $package.InstallLocation "app\resources\codex.exe"
+    if (Test-Path -LiteralPath $candidate) {
+        return $candidate
+    }
+    return ""
+}
+
 function Resolve-ScoopShimTarget {
     param([string]$ShimExe)
 
@@ -126,6 +140,24 @@ foreach ($tool in $officialBundleTools) {
     })
 }
 
+$codexWrapperPath = Join-Path $shimDir "codex.cmd"
+$codexStoreResource = Get-CodexStoreResourcePath
+$codexWrapperProbe = Invoke-WrapperProbe -WrapperPath $codexWrapperPath -Arguments @("--version")
+$codexStoreProbe = if ($codexStoreResource) {
+    Invoke-WrapperProbe -WrapperPath $codexStoreResource -Arguments @("--version")
+} else {
+    [ordered]@{ ok = $false; output = ""; exit_code = -1; error = "missing OpenAI.Codex Store app resource" }
+}
+$checks.Add([ordered]@{
+    name = "official-app-wrapper:codex"
+    status = if ($codexWrapperProbe.ok -and $codexStoreProbe.ok -and $codexWrapperProbe.output -eq $codexStoreProbe.output) { "pass" } else { "fail" }
+    source_class = "official-app-resource"
+    wrapper = $codexWrapperPath
+    store_resource = $codexStoreResource
+    wrapper_output = Get-PreviewText -Value $codexWrapperProbe.output -Limit 120
+    store_output = Get-PreviewText -Value $codexStoreProbe.output -Limit 120
+})
+
 foreach ($runtimeTool in @(
     @{ name = "node"; relative = "node\bin\node.exe" },
     @{ name = "python"; relative = "python\python.exe" }
@@ -184,6 +216,9 @@ foreach ($shim in Get-ChildItem -LiteralPath $shimDir -Filter "*.cmd" -ErrorActi
             continue
         }
         if ($target -like "$bundleRoot\*") {
+            continue
+        }
+        if ($shim.Name -ieq "codex.cmd" -and $target -like "*\scoop\apps\codex\current\codex.exe") {
             continue
         }
         $exists = Test-Path -LiteralPath $target

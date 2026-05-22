@@ -217,6 +217,20 @@ Use one primary type and optional secondary tags.
 - Verification: `codex mcp list` shows the intended MCP with `Status disabled` or `enabled`; `codex mcp get <name> --json` returns the expected config; the skill path exists when the concern is a Skill.
 - Do not claim: app UI visibility from a package probe alone.
 
+### Skill Discovery Recreates Vendor Import Residue
+
+- Type: `environment_path_issue`, `validation_gap`
+- Fingerprint: `check-codex-native-alignment.ps1 -Json` fails on `vendor_imports`, `.tmp/bundled-marketplaces`, or `.tmp/plugins`; `check-naming-conventions.ps1 -Json` reports same-name nested paths such as `vendor_imports\skills\skills` or `.tmp\plugins\plugins`.
+- Risk: agents may report naming or native-alignment failure after a prior cleanup, even though the active cause is newly recreated vendor/tool discovery residue rather than a durable policy regression.
+- Likely cause: tool or skill discovery cloned marketplace material into active `.codex` fallback/import paths.
+- Fix playbook:
+  1. Preserve the failing command output and timestamps.
+  2. Quarantine the residue to `.codex-archives` after resolving each target and confirming it is under `%USERPROFILE%\.codex`.
+  3. Do not delete Recycle Bin or archive material as part of the live fix.
+  4. Rerun native alignment, naming convention, and harness doctor checks.
+- Verification: `check-codex-native-alignment.ps1 -Json`, `check-naming-conventions.ps1 -Json`, and `codex-harness-doctor.ps1` all pass.
+- Do not claim: a permanent upstream fix unless the discovery mechanism that recreated the residue has been changed or disabled.
+
 ### Disabled Chrome DevTools MCP Leaves Stale Node Processes
 
 - Type: `tool_runtime_error`, `state_failure`, `workflow_hook_issue`
