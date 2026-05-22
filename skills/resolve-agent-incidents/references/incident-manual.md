@@ -220,15 +220,16 @@ Use one primary type and optional secondary tags.
 ### Skill Discovery Recreates Vendor Import Residue
 
 - Type: `environment_path_issue`, `validation_gap`
-- Fingerprint: `check-codex-native-alignment.ps1 -Json` fails on `vendor_imports`, `.tmp/bundled-marketplaces`, or `.tmp/plugins`; `check-naming-conventions.ps1 -Json` reports same-name nested paths such as `vendor_imports\skills\skills` or `.tmp\plugins\plugins`.
+- Fingerprint: `check-codex-native-alignment.ps1 -Json` fails on `vendor_imports`, `.tmp/plugins`, or active config references to `.tmp/bundled-marketplaces`; `check-naming-conventions.ps1 -Json` reports same-name nested paths such as `vendor_imports\skills\skills` or `.tmp\plugins\plugins`.
 - Risk: agents may report naming or native-alignment failure after a prior cleanup, even though the active cause is newly recreated vendor/tool discovery residue rather than a durable policy regression.
-- Likely cause: tool or skill discovery cloned marketplace material into active `.codex` fallback/import paths.
+- Likely cause: tool or skill discovery cloned marketplace material into active `.codex` fallback/import paths, or `github@openai-curated` is enabled while `openai-curated` has no explicit marketplace source and falls back to `.tmp\plugins`.
 - Fix playbook:
   1. Preserve the failing command output and timestamps.
-  2. Quarantine the residue to `.codex-archives` after resolving each target and confirming it is under `%USERPROFILE%\.codex`.
-  3. Do not delete Recycle Bin or archive material as part of the live fix.
-  4. Rerun native alignment, naming convention, and harness doctor checks.
-- Verification: `check-codex-native-alignment.ps1 -Json`, `check-naming-conventions.ps1 -Json`, and `codex-harness-doctor.ps1` all pass.
+  2. If `codex plugin list` shows `openai-curated` from `.tmp\plugins`, pin `[marketplaces.openai-curated]` to the managed `maintenance\marketplaces\openai-curated` source or disable/remove the curated plugin that requires it.
+  3. Add script-level guards so plugin and skill helpers refuse `CODEX_HOME\.tmp`, `CODEX_HOME\vendor_imports`, duplicate roots, and active plugin-cache source destinations.
+  4. Move true residue to the Windows Recycle Bin after resolving each target and confirming it is under `%USERPROFILE%\.codex`; do not treat app-regenerated `.tmp\bundled-marketplaces` as a removable blocker unless config points at it or it contains unexpected marketplace roots.
+  5. Rerun native alignment, naming convention, plugin listing, and harness doctor checks.
+- Verification: `codex plugin list` no longer references `.tmp\plugins`; `check-codex-native-alignment.ps1 -Json`, `check-naming-conventions.ps1 -Json`, and `codex_agent_harness.py doctor --json` all pass.
 - Do not claim: a permanent upstream fix unless the discovery mechanism that recreated the residue has been changed or disabled.
 
 ### Disabled Chrome DevTools MCP Leaves Stale Node Processes

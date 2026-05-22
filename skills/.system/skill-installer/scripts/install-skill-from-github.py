@@ -244,6 +244,28 @@ def _default_dest() -> str:
     return os.path.join(_codex_home(), "skills")
 
 
+def _is_relative_to(path: str, parent: str) -> bool:
+    try:
+        rel = os.path.relpath(os.path.normcase(path), os.path.normcase(parent))
+    except ValueError:
+        return False
+    return rel == "." or not rel.startswith(".." + os.sep) and rel != ".."
+
+
+def _validate_dest_root(dest_root: str) -> str:
+    resolved = os.path.realpath(os.path.expanduser(dest_root))
+    codex_root = os.path.realpath(os.path.expanduser(_codex_home()))
+    codex_skills = os.path.realpath(os.path.join(codex_root, "skills"))
+    if not _is_relative_to(resolved, codex_root):
+        return resolved
+    if resolved == codex_skills:
+        return resolved
+    raise InstallError(
+        "Destination inside CODEX_HOME must be exactly CODEX_HOME/skills. "
+        "Refusing transient, duplicate, cache, or nested skill roots."
+    )
+
+
 def _parse_args(argv: list[str]) -> Args:
     parser = argparse.ArgumentParser(description="Install a skill from GitHub.")
     parser.add_argument("--repo", help="owner/repo")
@@ -275,7 +297,7 @@ def main(argv: list[str]) -> int:
             raise InstallError("No skill paths provided.")
         for path in source.paths:
             _validate_relative_path(path)
-        dest_root = args.dest or _default_dest()
+        dest_root = _validate_dest_root(args.dest or _default_dest())
         tmp_dir = tempfile.mkdtemp(prefix="skill-install-", dir=_tmp_root())
         try:
             repo_root = _prepare_repo(source, args.method, tmp_dir)

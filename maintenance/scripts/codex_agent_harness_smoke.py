@@ -5,10 +5,8 @@ import subprocess
 import tomllib
 from pathlib import Path
 from typing import Any
-
 from codex_agent_harness_base import *
 from codex_agent_harness_naming import normalize_hook_event_name
-
 def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
 
@@ -250,12 +248,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             root,
             "FINAL PREFLIGHT Done: skill route sample. Fixed / changed: none. Verification: direct hook smoke. "
             "Remaining / separate issues: none. Related-scope compatibility: unchanged. Commit status: not committed. "
+            "SUBAGENT_CALL not_used reason standing authorization did not need a sidecar residual risk low. "
             "SKILL_EVIDENCE used reason clean-all-slop route direct evidence skills/clean-all-slop/SKILL.md residual risk low.",
         )
         skill_stop_with_compact_marker = run_stop_hook_sample(
             root,
             "FINAL PREFLIGHT Done: skill route sample. Fixed / changed: none. Verification: direct hook smoke. "
             "Remaining / separate issues: none. Related-scope compatibility: unchanged. Commit status: not committed. "
+            "SUBAGENT_CALL not_used reason standing authorization did not need a sidecar residual risk low. "
             "SKILL_EVIDENCE used reason clean-all-slop route residual risk low.",
         )
         add_check(
@@ -496,23 +496,23 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         except (OSError, json.JSONDecodeError):
             pm_led_state = {}
         add_check(
-            "pm_led_team_preset_not_subagent_decision_requirement",
+            "pm_led_team_preset_uses_standing_authorization_only",
             pm_led_probe.get("status") == "pass"
-            and pm_led_state.get("delegationAuthorized") is False
-            and pm_led_state.get("subagentDecisionRequired") is False,
-            "PM-led/team preset wording alone should not become subagent authorization or require SUBAGENT_CALL evidence.",
+            and pm_led_state.get("delegationAuthorized") is True and pm_led_state.get("subagentDecisionRequired") is True
+            and "delegation_authorized" in pm_led_state.get("userAuthorizations", []),
+            "PM-led/team preset wording should use standing L3/L4 authorization without implying that a sidecar was actually used.",
         )
         spark_probe = run_prompt_hook_sample(root, "Inspect many files across hooks and maintenance with broad search before editing.")
         spark_stdout = spark_probe.get("stdout_preview", "").lower()
         spark_state = json.loads(read_text(state_path))
         add_check(
-            "spark_read_sidecar_standing_authorized_without_prompt_delegation",
+            "spark_read_sidecar_standing_authorized_with_closure",
             spark_probe.get("status") == "pass"
             and "spark sidecar" in spark_stdout
             and "no extra prompt authorization required" in spark_stdout
-            and spark_state.get("delegationAuthorized") is False
-            and spark_state.get("subagentDecisionRequired") is False,
-            "Many-file read/search prompts should surface Spark sidecar standing authorization without creating explicit delegation closure pressure.",
+            and spark_state.get("delegationAuthorized") is True and spark_state.get("subagentDecisionRequired") is True
+            and "delegation_authorized" in spark_state.get("userAuthorizations", []),
+            "Many-file read/search prompts should surface Spark sidecar standing authorization and preserve final SUBAGENT_CALL closure.",
         )
         run_post_tool_hook_sample(root, "functions.shell_command", "rg WATCHER_REPORT maintenance")
         try:

@@ -329,7 +329,6 @@ $forbiddenPaths = Get-StateArray $nativeCriteria.forbidden_active_paths @(
     "plugins\cache\openai-bundled\browser-use",
     "plugins\cache\openai-primary-runtime",
     "plugins\local-marketplaces",
-    ".tmp\bundled-marketplaces",
     ".tmp\plugins"
 )
 $presentForbidden = @()
@@ -345,6 +344,23 @@ if ($presentForbidden.Count -eq 0) {
 } else {
     Add-Check "forbidden_active_sources_absent" "fail" "Forbidden active fallback, patched, duplicate, or stale cache paths are present." @{
         present = $presentForbidden
+    }
+}
+
+$boundedRuntimeTempPaths = Get-StateArray $nativeCriteria.bounded_runtime_temp_paths @(".tmp\bundled-marketplaces")
+$presentRuntimeTemp = @()
+foreach ($relative in $boundedRuntimeTempPaths) {
+    $relative = $relative -replace '/', '\'
+    $candidate = Join-Path $codexHomePath $relative
+    if (Test-Path -LiteralPath $candidate) {
+        $presentRuntimeTemp += $candidate
+    }
+}
+if ($presentRuntimeTemp.Count -eq 0) {
+    Add-Check "bounded_runtime_temp_paths" "pass" "No bounded app-generated runtime temp marketplace mirrors are present." @{}
+} else {
+    Add-Check "bounded_runtime_temp_paths" "pass" "Bounded app-generated runtime temp marketplace mirrors are present but not active config sources." @{
+        present = $presentRuntimeTemp
     }
 }
 

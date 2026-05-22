@@ -219,7 +219,10 @@ The plugin feature may stay enabled, but active source paths must not point at
 Do not use sentinel files to block `.tmp`, `tmp`, `plugins\cache`,
 `vendor_imports`, or `plugins\plugins`. Codex uses `.tmp/marketplaces` for
 marketplace registration/loading and `plugins\cache` for installed plugin
-runtime material. Guard these paths by checking that they are not active config
-sources and that their contents stay bounded. Confirmed stale roots such as
-`vendor_imports` and `plugins\plugins` should be absent; if they reappear, move
-or remove them instead of leaving blocker files behind.
+runtime material. The Codex Desktop app may also recreate
+`.tmp\bundled-marketplaces` as a bounded mirror of the official bundled
+marketplace while the app server is live. Guard these paths by checking that
+they are not active config sources and that their contents stay bounded.
+Confirmed stale roots such as `vendor_imports`, `.tmp\plugins`, and
+`plugins\plugins` should be absent; if they reappear, move or remove them
+instead of leaving blocker files behind.

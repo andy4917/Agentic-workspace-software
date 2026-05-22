@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,46 @@ DEFAULT_MARKETPLACE_NAME = "personal"
 DEFAULT_MARKETPLACE_DISPLAY_NAME = "Personal"
 VALID_INSTALL_POLICIES = {"NOT_AVAILABLE", "AVAILABLE", "INSTALLED_BY_DEFAULT"}
 VALID_AUTH_POLICIES = {"ON_INSTALL", "ON_USE"}
+
+
+def codex_home() -> Path:
+    return Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
+
+
+def is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        relative = os.path.relpath(os.path.normcase(str(path)), os.path.normcase(str(parent)))
+    except ValueError:
+        return False
+    return relative == "." or (relative != ".." and not relative.startswith(".." + os.sep))
+
+
+def has_prefix(parts: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
+    return parts[: len(prefix)] == prefix
+
+
+def validate_not_codex_transient_path(path: Path, label: str) -> None:
+    resolved = path.expanduser().resolve()
+    root = codex_home()
+    if not is_relative_to(resolved, root):
+        return
+
+    relative_path = Path(os.path.relpath(str(resolved), str(root)))
+    relative_parts = tuple(part.lower() for part in relative_path.parts)
+    forbidden_prefixes = (
+        (".tmp",),
+        ("tmp",),
+        ("vendor_imports",),
+        ("plugins",),
+        ("skills", "skills"),
+        ("agents", "agents"),
+    )
+    for prefix in forbidden_prefixes:
+        if has_prefix(relative_parts, prefix):
+            raise ValueError(
+                f"{label} must not be inside CODEX_HOME/{'/'.join(prefix)}. "
+                "Use a project repository path or the default personal marketplace path."
+            )
 
 
 def normalize_plugin_name(plugin_name: str) -> str:
@@ -235,7 +276,14 @@ def main() -> None:
         print(f"Note: Normalized plugin name from '{raw_plugin_name}' to '{plugin_name}'.")
     validate_plugin_name(plugin_name)
 
-    plugin_root = (Path(args.path).expanduser().resolve() / plugin_name)
+    plugin_parent = Path(args.path).expanduser().resolve()
+    validate_not_codex_transient_path(plugin_parent, "--path")
+    marketplace_path = None
+    if args.with_marketplace:
+        marketplace_path = Path(args.marketplace_path).expanduser().resolve()
+        validate_not_codex_transient_path(marketplace_path, "--marketplace-path")
+
+    plugin_root = plugin_parent / plugin_name
     plugin_root.mkdir(parents=True, exist_ok=True)
 
     plugin_json_path = plugin_root / ".codex-plugin" / "plugin.json"
@@ -272,7 +320,7 @@ def main() -> None:
         )
 
     if args.with_marketplace:
-        marketplace_path = Path(args.marketplace_path).expanduser().resolve()
+        assert marketplace_path is not None
         update_marketplace_json(
             marketplace_path,
             plugin_name,

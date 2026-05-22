@@ -2,7 +2,7 @@
   "schema_version": 1,
   "record_class": "freshness_sensitive_state",
   "owner": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md and maintenance/scripts/check-codex-native-alignment.ps1",
-  "updated_at": "2026-05-21T21:01:00+09:00",
+  "updated_at": "2026-05-22T19:58:00+09:00",
   "purpose": "Machine-readable baseline for Codex home structure, native app alignment, and prior cleanup state that must stay current.",
   "records": {
     "structure_policy_md": "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md",
@@ -58,6 +58,7 @@
     "openai_bundled_source_kind": "discover_from_store_app",
     "openai_bundled_source_suffix": "app/resources/plugins/openai-bundled",
     "primary_runtime_marketplace_source_template": "%USERPROFILE%/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime",
+    "openai_curated_marketplace_source_template": "%USERPROFILE%/.codex/maintenance/marketplaces/openai-curated",
     "required_features": {
       "workspace_dependencies": true
     },
@@ -70,6 +71,9 @@
         "documents",
         "spreadsheets",
         "presentations"
+      ],
+      "openai-curated": [
+        "github"
       ]
     },
     "required_primary_runtime_plugins": [
@@ -81,6 +85,9 @@
       "openai-bundled",
       "openai-curated"
     ],
+    "bounded_runtime_temp_paths": [
+      ".tmp/bundled-marketplaces"
+    ],
     "forbidden_active_paths": [
       "plugins/patched",
       "vendor_imports",
@@ -88,7 +95,6 @@
       "plugins/cache/openai-bundled/browser-use",
       "plugins/cache/openai-primary-runtime",
       "plugins/local-marketplaces",
-      ".tmp/bundled-marketplaces",
       ".tmp/plugins",
       ".tmp/plugins.sha"
     ],
@@ -274,6 +280,12 @@
       "hook runtime state now records the intentionally active SessionStart and UserPromptSubmit hooks and inactive lifecycle guard hooks",
       "naming convention checks now block same-name nested directories and active cross-root skill duplicates",
       "duplicate skills/vowline mirror was moved to the Windows Recycle Bin; the primary skill remains under .agents/skills/vowline"
+    ],
+    "current_repaired_surfaces": [
+      "openai-curated marketplace source is pinned to maintenance/marketplaces/openai-curated so github@openai-curated does not require .tmp/plugins fallback clone",
+      "plugin creator rejects CODEX_HOME .tmp, tmp, vendor_imports, plugins, skills/skills, and agents/agents output paths",
+      "skill installer rejects CODEX_HOME destinations other than the canonical skills root",
+      ".tmp/bundled-marketplaces is tracked as Codex app-generated runtime temp only, not as an active marketplace source or removable blocker path"
     ]
   }
 }

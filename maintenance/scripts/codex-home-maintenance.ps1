@@ -245,6 +245,10 @@ function Get-RuntimeGuardSummary {
     }
     $configItem = if (Test-Path -LiteralPath $configPath) { Get-Item -LiteralPath $configPath -Force } else { $null }
     $stateItem = if (Test-Path -LiteralPath $statePath) { Get-Item -LiteralPath $statePath -Force } else { $null }
+    $bundledOrPrimaryUsesPluginCache = (
+        $config -match '(?is)\[marketplaces\.openai-bundled\](?:(?!\r?\n\[).)*plugins\\cache' -or
+        $config -match '(?is)\[marketplaces\.openai-primary-runtime\](?:(?!\r?\n\[).)*plugins\\cache'
+    )
 
     return [ordered]@{
         config_readonly = ($null -ne $configItem -and $configItem.IsReadOnly)
@@ -252,9 +256,13 @@ function Get-RuntimeGuardSummary {
         features_plugins_enabled = ($config -match '(?m)^\s*plugins\s*=\s*true\s*$')
         workspace_dependencies_enabled = ($config -match '(?m)^\s*workspace_dependencies\s*=\s*true\s*$')
         bundled_marketplace_source_is_installed_app_bundle = ($config -match '(?s)\[marketplaces\.[^\]]*openai-bundled[^\]]*\].*?Program Files\\WindowsApps\\OpenAI\.Codex_')
-        temp_or_bundled_source_absent = ($config -notmatch '(?i)(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\cache)')
+        temp_or_bundled_source_absent = (
+            $config -notmatch '(?i)(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\plugins)' -and
+            -not $bundledOrPrimaryUsesPluginCache
+        )
         legacy_browser_use_plugin_absent_or_disabled = ($config -notmatch '(?s)\[plugins\."browser-use@openai-bundled"\].*?enabled\s*=\s*true')
-        curated_github_plugin_disabled_to_avoid_temp_marketplace_clone = ($config -match '(?s)\[plugins\."github@openai-curated"\].*?enabled\s*=\s*false')
+        curated_github_marketplace_source_is_managed = ($config -match '(?s)\[marketplaces\.openai-curated\].*?maintenance\\marketplaces\\openai-curated')
+        curated_github_plugin_enabled_without_temp_clone = ($config -match '(?s)\[plugins\."github@openai-curated"\].*?enabled\s*=\s*true')
         browser_use_auto_install_disabled = [bool](Get-TopLevelJsonValue -JsonObject $stateObject -Name 'browser-use-bundled-plugin-auto-install-disabled')
         site_creator_auto_install_disabled = [bool](Get-TopLevelJsonValue -JsonObject $stateObject -Name 'site-creator-bundled-plugin-auto-install-disabled')
         run_codex_in_wsl_disabled = ((Get-TopLevelJsonValue -JsonObject $stateObject -Name 'runCodexInWindowsSubsystemForLinux') -eq $false)
@@ -570,7 +578,7 @@ $report = [ordered]@{
         keep_active_plugin_cache = @('plugins\cache as Codex plugin runtime cache only')
         keep_app_connector_tool_cache = @('cache\codex_apps_tools entries where connector_name is GitHub')
         plugin_feature_allowed = $true
-        do_not_use_as_active_source = @('.tmp', 'tmp', 'vendor_imports', 'bundled-marketplaces', 'plugins\cache', 'plugins\plugins')
+        do_not_use_as_active_source = @('.tmp', 'tmp', 'vendor_imports', 'bundled-marketplaces', 'plugins\plugins', 'plugins\cache for bundled or primary-runtime official sources')
         remove_native_messaging_hosts_that_point_to_runtime_cache = $true
         temp_roots_are_runtime_only_not_blocked = $true
         plugin_cache_roots_are_audited_not_blocked = $true
