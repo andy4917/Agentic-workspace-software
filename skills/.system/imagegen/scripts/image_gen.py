@@ -10,6 +10,7 @@ Defaults to gpt-image-2 and a structured prompt augmentation workflow.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import json
 import os
@@ -20,10 +21,6 @@ import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from io import BytesIO
-
-_SCRIPT_DIR = Path(__file__).resolve().parent
-if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
 
 DEFAULT_MODEL = "gpt-image-2"
 DEFAULT_SIZE = "auto"
@@ -509,29 +506,207 @@ def _job_output_paths(
     ]
 
 
+def _extract_retry_after_seconds(exc: Exception) -> Optional[float]:
+    # Best-effort: openai SDK errors vary by version. Prefer a conservative fallback.
+    for attr in ("retry_after", "retry_after_seconds"):
+        val = getattr(exc, attr, None)
+        if isinstance(val, (int, float)) and val >= 0:
+            return float(val)
+    msg = str(exc)
+    m = re.search(r"retry[- ]after[:= ]+([0-9]+(?:\\.[0-9]+)?)", msg, re.IGNORECASE)
+    if m:
+        try:
+            return float(m.group(1))
+        except Exception:
+            return None
+    return None
 
-from image_gen_batch import generate_batch as _run_generate_batch_command
-from image_gen_files import _open_files, _open_mask
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    name = exc.__class__.__name__.lower()
+    if "ratelimit" in name or "rate_limit" in name:
+        return True
+    msg = str(exc).lower()
+    return "429" in msg or "rate limit" in msg or "too many requests" in msg
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    if _is_rate_limit_error(exc):
+        return True
+    name = exc.__class__.__name__.lower()
+    if "timeout" in name or "timedout" in name or "tempor" in name:
+        return True
+    msg = str(exc).lower()
+    return "timeout" in msg or "timed out" in msg or "connection reset" in msg
+
+
+async def _generate_one_with_retries(
+    client: Any,
+    payload: Dict[str, Any],
+    *,
+    attempts: int,
+    job_label: str,
+) -> Any:
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return await client.images.generate(**payload)
+        except Exception as exc:
+            last_exc = exc
+            if not _is_transient_error(exc):
+                raise
+            if attempt == attempts:
+                raise
+            sleep_s = _extract_retry_after_seconds(exc)
+            if sleep_s is None:
+                sleep_s = min(60.0, 2.0**attempt)
+            print(
+                f"{job_label} attempt {attempt}/{attempts} failed ({exc.__class__.__name__}); retrying in {sleep_s:.1f}s",
+                file=sys.stderr,
+            )
+            await asyncio.sleep(sleep_s)
+    raise last_exc or RuntimeError("unknown error")
+
+
+async def _run_generate_batch(args: argparse.Namespace) -> int:
+    jobs = _read_jobs_jsonl(args.input)
+    out_dir = Path(args.out_dir)
+
+    base_fields = _fields_from_args(args)
+    base_payload = {
+        "model": args.model,
+        "n": args.n,
+        "size": args.size,
+        "quality": args.quality,
+        "background": args.background,
+        "output_format": args.output_format,
+        "output_compression": args.output_compression,
+        "moderation": args.moderation,
+    }
+
+    if args.dry_run:
+        for i, job in enumerate(jobs, start=1):
+            prompt = str(job["prompt"]).strip()
+            fields = _merge_non_null(base_fields, job.get("fields", {}))
+            # Allow flat job keys as well (use_case, scene, etc.)
+            fields = _merge_non_null(fields, {k: job.get(k) for k in base_fields.keys()})
+            augmented = _augment_prompt_fields(args.augment, prompt, fields)
+
+            job_payload = dict(base_payload)
+            job_payload["prompt"] = augmented
+            job_payload = _merge_non_null(job_payload, {k: job.get(k) for k in base_payload.keys()})
+            job_payload = {k: v for k, v in job_payload.items() if v is not None}
+
+            _validate_generate_payload(job_payload)
+            effective_output_format = _normalize_output_format(job_payload.get("output_format"))
+            _validate_transparency(job_payload.get("background"), effective_output_format)
+            job_payload["output_format"] = effective_output_format
+
+            n = int(job_payload.get("n", 1))
+            outputs = _job_output_paths(
+                out_dir=out_dir,
+                output_format=effective_output_format,
+                idx=i,
+                prompt=prompt,
+                n=n,
+                explicit_out=job.get("out"),
+            )
+            downscaled = None
+            if args.downscale_max_dim is not None:
+                downscaled = [
+                    str(_derive_downscale_path(p, args.downscale_suffix)) for p in outputs
+                ]
+            _print_request(
+                {
+                    "endpoint": "/v1/images/generations",
+                    "job": i,
+                    "outputs": [str(p) for p in outputs],
+                    "outputs_downscaled": downscaled,
+                    **job_payload,
+                }
+            )
+        return 0
+
+    client = _create_async_client()
+    sem = asyncio.Semaphore(args.concurrency)
+
+    any_failed = False
+
+    async def run_job(i: int, job: Dict[str, Any]) -> Tuple[int, Optional[str]]:
+        nonlocal any_failed
+        prompt = str(job["prompt"]).strip()
+        job_label = f"[job {i}/{len(jobs)}]"
+
+        fields = _merge_non_null(base_fields, job.get("fields", {}))
+        fields = _merge_non_null(fields, {k: job.get(k) for k in base_fields.keys()})
+        augmented = _augment_prompt_fields(args.augment, prompt, fields)
+
+        payload = dict(base_payload)
+        payload["prompt"] = augmented
+        payload = _merge_non_null(payload, {k: job.get(k) for k in base_payload.keys()})
+        payload = {k: v for k, v in payload.items() if v is not None}
+
+        n = int(payload.get("n", 1))
+        _validate_generate_payload(payload)
+        effective_output_format = _normalize_output_format(payload.get("output_format"))
+        _validate_transparency(payload.get("background"), effective_output_format)
+        payload["output_format"] = effective_output_format
+        outputs = _job_output_paths(
+            out_dir=out_dir,
+            output_format=effective_output_format,
+            idx=i,
+            prompt=prompt,
+            n=n,
+            explicit_out=job.get("out"),
+        )
+        try:
+            async with sem:
+                print(f"{job_label} starting", file=sys.stderr)
+                started = time.time()
+                result = await _generate_one_with_retries(
+                    client,
+                    payload,
+                    attempts=args.max_attempts,
+                    job_label=job_label,
+                )
+                elapsed = time.time() - started
+                print(f"{job_label} completed in {elapsed:.1f}s", file=sys.stderr)
+            images = [item.b64_json for item in result.data]
+            _decode_write_and_downscale(
+                images,
+                outputs,
+                force=args.force,
+                downscale_max_dim=args.downscale_max_dim,
+                downscale_suffix=args.downscale_suffix,
+                output_format=effective_output_format,
+            )
+            return i, None
+        except Exception as exc:
+            any_failed = True
+            print(f"{job_label} failed: {exc}", file=sys.stderr)
+            if args.fail_fast:
+                raise
+            return i, str(exc)
+
+    tasks = [asyncio.create_task(run_job(i, job)) for i, job in enumerate(jobs, start=1)]
+
+    try:
+        await asyncio.gather(*tasks)
+    except Exception:
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        raise
+
+    return 1 if any_failed else 0
 
 
 def _generate_batch(args: argparse.Namespace) -> None:
-    _run_generate_batch_command(
-        args,
-        {
-            "read_jobs_jsonl": _read_jobs_jsonl,
-            "fields_from_args": _fields_from_args,
-            "merge_non_null": _merge_non_null,
-            "augment_prompt_fields": _augment_prompt_fields,
-            "validate_generate_payload": _validate_generate_payload,
-            "normalize_output_format": _normalize_output_format,
-            "validate_transparency": _validate_transparency,
-            "job_output_paths": _job_output_paths,
-            "derive_downscale_path": _derive_downscale_path,
-            "print_request": _print_request,
-            "create_async_client": _create_async_client,
-            "decode_write_and_downscale": _decode_write_and_downscale,
-        },
-    )
+    exit_code = asyncio.run(_run_generate_batch(args))
+    if exit_code:
+        raise SystemExit(exit_code)
+
+
 def _generate(args: argparse.Namespace) -> None:
     prompt = _read_prompt(args.prompt, args.prompt_file)
     prompt = _augment_prompt(args, prompt)
@@ -666,6 +841,60 @@ def _edit(args: argparse.Namespace) -> None:
         downscale_suffix=args.downscale_suffix,
         output_format=output_format,
     )
+
+
+def _open_files(paths: List[Path]):
+    return _FileBundle(paths)
+
+
+def _open_mask(mask_path: Optional[Path]):
+    if mask_path is None:
+        return _NullContext()
+    return _SingleFile(mask_path)
+
+
+class _NullContext:
+    def __enter__(self):
+        return None
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class _SingleFile:
+    def __init__(self, path: Path):
+        self._path = path
+        self._handle = None
+
+    def __enter__(self):
+        self._handle = self._path.open("rb")
+        return self._handle
+
+    def __exit__(self, exc_type, exc, tb):
+        if self._handle:
+            try:
+                self._handle.close()
+            except Exception:
+                pass
+        return False
+
+
+class _FileBundle:
+    def __init__(self, paths: List[Path]):
+        self._paths = paths
+        self._handles: List[object] = []
+
+    def __enter__(self):
+        self._handles = [p.open("rb") for p in self._paths]
+        return self._handles
+
+    def __exit__(self, exc_type, exc, tb):
+        for handle in self._handles:
+            try:
+                handle.close()
+            except Exception:
+                pass
+        return False
 
 
 def _add_shared_args(parser: argparse.ArgumentParser) -> None:
