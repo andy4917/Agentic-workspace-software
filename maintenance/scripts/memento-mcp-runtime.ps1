@@ -629,9 +629,26 @@ function Invoke-MementoVerify {
     Write-Detail ("vector_types=" + $vectorTypes)
 
     if (-not [string]::IsNullOrWhiteSpace($CodexExe)) {
-        $mcpInfo = @(& $CodexExe mcp get memento --json 2>&1)
-        if ($LASTEXITCODE -eq 0) {
-            $mcp = ($mcpInfo | Out-String).Trim() | ConvertFrom-Json
+        $psi = [System.Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = $CodexExe
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $psi.Arguments = "mcp get memento --json"
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $mcpStdout = $process.StandardOutput.ReadToEnd()
+        $mcpStderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        if (-not [string]::IsNullOrWhiteSpace($mcpStderr)) {
+            Write-Detail "codex_mcp_stderr=suppressed"
+        }
+        if ($process.ExitCode -eq 0) {
+            $mcpJson = ($mcpStdout -split "`r?`n" | Where-Object { $_.TrimStart().StartsWith("{") } | Select-Object -First 1)
+            if ([string]::IsNullOrWhiteSpace($mcpJson)) {
+                $mcpJson = $mcpStdout.Trim()
+            }
+            $mcp = $mcpJson | ConvertFrom-Json
             Write-Detail ("codex_mcp_enabled=" + [string]$mcp.enabled)
             $mcpUrl = [string]$mcp.url
             if ([string]::IsNullOrWhiteSpace($mcpUrl) -and $null -ne $mcp.transport) {

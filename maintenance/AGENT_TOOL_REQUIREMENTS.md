@@ -221,8 +221,10 @@ Do not use sentinel files to block `.tmp`, `tmp`, `plugins\cache`,
 marketplace registration/loading and `plugins\cache` for installed plugin
 runtime material. The Codex Desktop app may also recreate
 `.tmp\bundled-marketplaces` as a bounded mirror of the official bundled
-marketplace while the app server is live. Guard these paths by checking that
-they are not active config sources and that their contents stay bounded.
-Confirmed stale roots such as `vendor_imports`, `.tmp\plugins`, and
-`plugins\plugins` should be absent; if they reappear, move or remove them
-instead of leaving blocker files behind.
+marketplace while the app server is live. Current Codex CLI plugin listing can
+recreate `.tmp\plugins` plus `.tmp\plugins.sha` from
+`https://github.com/openai/plugins.git`; under this workstation baseline those
+paths are cleanup targets, not accepted runtime state. Confirmed stale roots
+such as `vendor_imports`, `.tmp\plugins`, incomplete `.tmp\plugins-clone-*`
+directories, and `plugins\plugins` should be absent; if they reappear, move or
+remove them instead of leaving blocker files behind.

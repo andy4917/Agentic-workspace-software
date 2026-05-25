@@ -44,7 +44,7 @@ CALIBRATION_EVAL_TEMPLATE: dict[str, Any] = {
         "config.toml registers CALIBRATION.md and agent.md as project doc fallback names",
         "calibration-verifier agent TOML parses",
         "calibration scoring manifest exists",
-        "lightweight policy and prompt reminder point to calibration without making hooks completion authority",
+        "compact hook policy and prompt frame point to calibration without making hooks completion authority",
     ],
     "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id calibration-policy-smoke",
     "timeout_seconds": 30,
@@ -61,8 +61,8 @@ def check_calibration_policy(root: Path) -> dict[str, Any]:
     calibration_path = root / "CALIBRATION.md"
     agents_path = root / "AGENTS.md"
     config_path = root / "config.toml"
-    policy_path = root / "hooks" / "lightweight-codex-policy.json"
-    workflow_path = root / "hooks" / "lib" / "lightweight-codex-workflow.ps1"
+    policy_path = root / "hooks" / "policy.compact.json"
+    workflow_path = root / "hooks" / "compact-codex-hook.ps1"
     agent_path = root / "agents" / "calibration-verifier.toml"
     scoring_path = root / "evals" / "calibration-eval.yaml"
     eval_path = root / "evals" / "calibration-policy-smoke.json"
@@ -82,8 +82,8 @@ def check_calibration_policy(root: Path) -> dict[str, Any]:
     checks.append(("AGENTS references canonical calibration", "CALIBRATION.md" in agents_text and "Live Turn Calibration" in agents_text))
     checks.append(("config registers instruction fallbacks", "project_doc_fallback_filenames" in config_text and "CALIBRATION.md" in config_text and "agent.md" in config_text and "project_doc_max_bytes = 65536" in config_text))
     checks.append(("policy references calibration source", '"calibration"' in policy_text and '"source_path": "CALIBRATION.md"' in policy_text))
-    checks.append(("prompt reminder references calibration", "selected answers, diagnoses, plans, and patch rationales stay candidate" in workflow_text))
-    checks.append(("read-only incident terms stay out of L4", "incident terms inside read-only inspection output" in workflow_text))
+    checks.append(("compact hook keeps Stop non-authoritative", "Stop will not ask for answer correction" in workflow_text and "return continue:true" in policy_text))
+    checks.append(("support-only evidence reminder exists", "Memento is support-only" in workflow_text and "candidate evidence only" in policy_text))
     checks.append(("calibration verifier exists", agent_path.exists()))
     checks.append(("calibration scoring manifest exists", scoring_path.exists() and "confident_wrong" in scoring_text and "unsupported_material_claim" in scoring_text))
     checks.append(("calibration eval definition exists", eval_path.exists()))

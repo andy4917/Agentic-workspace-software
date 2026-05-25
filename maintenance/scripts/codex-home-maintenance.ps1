@@ -261,7 +261,7 @@ function Get-RuntimeGuardSummary {
             -not $bundledOrPrimaryUsesPluginCache
         )
         legacy_browser_use_plugin_absent_or_disabled = ($config -notmatch '(?s)\[plugins\."browser-use@openai-bundled"\].*?enabled\s*=\s*true')
-        curated_github_marketplace_source_is_managed = ($config -match '(?s)\[marketplaces\.openai-curated\].*?maintenance\\marketplaces\\openai-curated')
+        curated_github_marketplace_source_removed = ($config -notmatch '(?s)\[marketplaces\.openai-curated\]')
         curated_github_plugin_enabled_without_temp_clone = ($config -match '(?s)\[plugins\."github@openai-curated"\].*?enabled\s*=\s*true')
         browser_use_auto_install_disabled = [bool](Get-TopLevelJsonValue -JsonObject $stateObject -Name 'browser-use-bundled-plugin-auto-install-disabled')
         site_creator_auto_install_disabled = [bool](Get-TopLevelJsonValue -JsonObject $stateObject -Name 'site-creator-bundled-plugin-auto-install-disabled')
@@ -573,7 +573,7 @@ $report = [ordered]@{
     transient_root_moves = $moves
     transient_roots_after = $after
     app_tool_cache = $appToolCache
-    root_cause = 'Codex bundled marketplace registration uses .tmp/marketplaces as a runtime work directory. Do not block regeneration paths with file sentinels; guard temp paths by auditing active references and bounded contents, and remove stale exact-name residues.'
+    root_cause = 'Codex bundled marketplace registration uses .tmp/marketplaces as a runtime work directory. Do not block regeneration paths with file sentinels; remove .tmp/plugins, .tmp/plugins.sha, vendor_imports, and stale exact-name residues when they reappear.'
     policy = [ordered]@{
         keep_active_plugin_cache = @('plugins\cache as Codex plugin runtime cache only')
         keep_app_connector_tool_cache = @('cache\codex_apps_tools entries where connector_name is GitHub')

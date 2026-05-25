@@ -34,6 +34,9 @@
     "standing_user_authorization_satisfies_runtime_policy": true,
     "spark_read_sidecar": {
       "model": "gpt-5.3-codex-spark",
+      "model_reasoning_effort": "xhigh",
+      "fallback_model": "gpt-5.4-mini",
+      "fallback_model_reasoning_effort": "xhigh",
       "authorization": "standing_read_only_exploration_search_sidecar_without_prompt_specific_request",
       "task_levels": [
         "L1",

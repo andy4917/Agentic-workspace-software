@@ -36,7 +36,8 @@ $patterns = @(
     },
     @{
         name = "env_sensitive_assignment"
-        regex = "(?i)\b[A-Z0-9_]*(API_KEY|CREDENTIAL|PASSWORD|SECRET|TOKEN)[A-Z0-9_]*\s*="
+        regex = "\b[A-Z0-9_]*(API_KEY|CREDENTIAL|PASSWORD|SECRET|TOKEN)[A-Z0-9_]*\s*="
+        case_sensitive = $true
     }
 )
 
@@ -61,7 +62,12 @@ foreach ($line in $diff) {
     $addedLines += 1
     $content = $text.Substring(1)
     foreach ($pattern in $patterns) {
-        if ($content -match [string]$pattern.regex) {
+        $isMatch = if ($pattern.case_sensitive -eq $true) {
+            $content -cmatch [string]$pattern.regex
+        } else {
+            $content -match [string]$pattern.regex
+        }
+        if ($isMatch) {
             $findings.Add([pscustomobject]@{
                 file = $currentFile
                 category = [string]$pattern.name

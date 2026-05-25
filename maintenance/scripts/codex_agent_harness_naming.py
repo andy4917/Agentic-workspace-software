@@ -30,17 +30,26 @@ def normalize_hook_event_name(name: str) -> str:
 
 def hook_runtime_state_status(root: Path) -> dict[str, Any]:
     config_path = root / "config.toml"
-    policy_path = root / "hooks" / "lightweight-codex-policy.json"
+    policy_path = root / "hooks" / "policy.compact.json"
+    hooks_path = root / "hooks.json"
     if not config_path.exists():
         return {"status": "fail", "error": "config.toml missing"}
     try:
         config = tomllib.loads(read_text(config_path))
     except tomllib.TOMLDecodeError as exc:
         return {"status": "fail", "error": str(exc)}
+    state_doc = load_json(root / "maintenance" / "CODEX_HOME_STRUCTURE_STATE.json", {})
+    expected = state_doc.get("hook_runtime_state", {}) if isinstance(state_doc, dict) else {}
     policy = load_json(policy_path, {})
-    expected = policy.get("hooks", {}).get("runtime_state", {}) if isinstance(policy, dict) else {}
-    active_events = set(expected.get("active_events", ["SessionStart", "UserPromptSubmit"]))
-    inactive_events = set(expected.get("inactive_events", ["PreToolUse", "PermissionRequest", "PostToolUse", "Stop"]))
+    if not expected and isinstance(policy, dict):
+        expected = {
+            "active_events": policy.get("hook_events_used", []),
+            "inactive_events": policy.get("hook_events_excluded", []),
+        }
+    active_events = set(expected.get("active_events", ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]))
+    inactive_events = set(expected.get("inactive_events", ["PermissionRequest"]))
+    hooks_doc = load_json(hooks_path, {})
+    configured_events = set((hooks_doc.get("hooks", {}) if isinstance(hooks_doc, dict) else {}).keys())
     state = config.get("hooks", {}).get("state", {}) if isinstance(config.get("hooks"), dict) else {}
     observed: dict[str, bool] = {}
     for key, value in state.items():
@@ -51,7 +60,7 @@ def hook_runtime_state_status(root: Path) -> dict[str, Any]:
             continue
         observed[normalize_hook_event_name(parts[-3])] = bool(value.get("enabled", True))
     for event in active_events | inactive_events:
-        observed.setdefault(event, True)
+        observed.setdefault(event, event in configured_events)
     mismatches = []
     for event in sorted(active_events):
         if observed.get(event) is not True:

@@ -138,6 +138,9 @@ function Read-Policy {
     "default_spawn_policy": "conditional",
     "spark_read_sidecar": {
       "model": "gpt-5.3-codex-spark",
+      "model_reasoning_effort": "xhigh",
+      "fallback_model": "gpt-5.4-mini",
+      "fallback_model_reasoning_effort": "xhigh",
       "authorization": "standing_read_only_exploration_search_sidecar_without_prompt_specific_request",
       "task_levels": ["L1", "L2", "L3", "L4"],
       "prefer_for": ["long_or_many_file_reads", "broad_search", "inventory", "independent_context_gathering"],

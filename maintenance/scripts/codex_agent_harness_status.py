@@ -26,7 +26,7 @@ def is_upstream_system_skill_file(path: Path, root: Path) -> bool:
 def harness_line_count_status(root: Path) -> dict[str, Any]:
     files = sorted((root / "maintenance" / "scripts").glob("codex_agent_harness*.py"))
     files.append(root / "maintenance" / "scripts" / "worker_watcher_templates.py")
-    files.append(root / "hooks" / "lightweight-codex-hook.ps1")
+    files.append(root / "hooks" / "compact-codex-hook.ps1")
     files.extend(sorted((root / "hooks" / "lib").glob("*.ps1")))
     files = [path for path in files if path.exists()]
     counts = []
@@ -208,56 +208,42 @@ def generated_output_tracking_status(root: Path) -> dict[str, Any]:
 
 
 def hook_subagent_vowline_status(root: Path) -> dict[str, Any]:
-    hook_path = root / "hooks" / "lightweight-codex-hook.ps1"
-    policy_path = root / "hooks" / "lightweight-codex-policy.json"
+    hook_path = root / "hooks" / "compact-codex-hook.ps1"
+    policy_path = root / "hooks" / "policy.compact.json"
     agents_path = root / "AGENTS.md"
     primary_skill_path = Path.home() / ".agents" / "skills" / "vowline" / "SKILL.md"
     duplicate_skill_path = root / "skills" / "vowline" / "SKILL.md"
     missing = []
     if not hook_path.exists():
-        return {"status": "fail", "missing": ["hooks/lightweight-codex-hook.ps1"]}
+        return {"status": "fail", "missing": ["hooks/compact-codex-hook.ps1"]}
     hook_parts = [read_text(hook_path).lower()]
-    if "lightweight-codex-core.ps1" in hook_parts[0]:
-        for relative_path in [
-            "hooks/lib/lightweight-codex-core.ps1",
-            "hooks/lib/lightweight-codex-workflow.ps1",
-            "hooks/lib/lightweight-codex-guards.ps1",
-        ]:
-            path = root / relative_path
-            if path.exists():
-                hook_parts.append(read_text(path).lower())
-            else:
-                missing.append(relative_path)
     hook_text = "\n".join(hook_parts)
     for term in [
-        "test-subagentsessionstart",
-        "get-vowlinesubagentcontext",
-        "vowline",
-        "required operating skill",
-        "subagent startup requirement",
-        "agents.md",
-        "agent_tool_requirements.md",
-        "define -> plan -> build -> verify -> review -> ship",
+        "next_turn_work_items",
+        "subagent_call",
+        "delegation hint",
         "support-only memory",
-        "subagent_delegation_charter.md",
+        "memento is support-only",
     ]:
         if term not in hook_text:
             missing.append(term)
     if not policy_path.exists():
-        missing.append("hooks/lightweight-codex-policy.json")
+        missing.append("hooks/policy.compact.json")
     else:
         try:
             policy = json.loads(read_text(policy_path))
         except json.JSONDecodeError:
             policy = {}
             missing.append("valid hook policy json")
+        used_events = set(policy.get("hook_events_used", [])) if isinstance(policy, dict) else set()
+        excluded_events = set(policy.get("hook_events_excluded", [])) if isinstance(policy, dict) else set()
+        if not {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}.issubset(used_events):
+            missing.append("compact v3 hook_events_used")
+        if "PermissionRequest" not in excluded_events:
+            missing.append("PermissionRequest excluded")
         subagents = policy.get("subagents", {}) if isinstance(policy, dict) else {}
-        if subagents.get("required_start_skill") != "vowline":
-            missing.append("subagents.required_start_skill=vowline")
-        if "vowline" not in str(subagents.get("required_start_skill_path", "")).lower():
-            missing.append("subagents.required_start_skill_path")
-        if subagents.get("start_hook_behavior") != "inject_vowline_context_for_subagent_session_start":
-            missing.append("subagents.start_hook_behavior")
+        if subagents.get("enabled_when_explicitly_authorized") is not True:
+            missing.append("subagents.enabled_when_explicitly_authorized=true")
     if not primary_skill_path.exists():
         missing.append("~/.agents/skills/vowline/SKILL.md")
     if duplicate_skill_path.exists():

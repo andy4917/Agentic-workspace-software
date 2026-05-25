@@ -364,6 +364,97 @@ if ($presentRuntimeTemp.Count -eq 0) {
     }
 }
 
+$curatedSnapshot = if ($nativeCriteria -and $nativeCriteria.official_curated_temp_snapshot) {
+    $nativeCriteria.official_curated_temp_snapshot
+} else {
+    $null
+}
+if ($curatedSnapshot) {
+    $snapshotRelative = if ($curatedSnapshot.path) { [string]$curatedSnapshot.path } else { ".tmp\plugins" }
+    $snapshotShaRelative = if ($curatedSnapshot.sha_path) { [string]$curatedSnapshot.sha_path } else { ".tmp\plugins.sha" }
+    $snapshotManifestRelative = if ($curatedSnapshot.manifest) { [string]$curatedSnapshot.manifest } else { ".agents\plugins\marketplace.json" }
+    $snapshotRemoteExpected = if ($curatedSnapshot.remote_url) { [string]$curatedSnapshot.remote_url } else { "https://github.com/openai/plugins.git" }
+    $snapshotNameExpected = if ($curatedSnapshot.marketplace_name) { [string]$curatedSnapshot.marketplace_name } else { "openai-curated" }
+    $snapshotPath = Join-Path $codexHomePath ($snapshotRelative -replace '/', '\')
+    $snapshotShaPath = Join-Path $codexHomePath ($snapshotShaRelative -replace '/', '\')
+    if (Test-Path -LiteralPath $snapshotPath) {
+        $snapshotManifestPath = Join-Path $snapshotPath ($snapshotManifestRelative -replace '/', '\')
+        $snapshotGitConfigPath = Join-Path $snapshotPath ".git\config"
+        $remoteOk = $false
+        $manifestOk = $false
+        $shaOk = $false
+        $manifestName = $null
+        $manifestPluginCount = $null
+        $shaValue = $null
+        if (Test-Path -LiteralPath $snapshotGitConfigPath) {
+            $snapshotGitConfig = Get-Content -Raw -LiteralPath $snapshotGitConfigPath
+            $remoteOk = $snapshotGitConfig -match [regex]::Escape("url = $snapshotRemoteExpected")
+        }
+        if (Test-Path -LiteralPath $snapshotManifestPath) {
+            try {
+                $snapshotManifest = Get-Content -Raw -LiteralPath $snapshotManifestPath | ConvertFrom-Json
+                $manifestName = [string]$snapshotManifest.name
+                $manifestPluginCount = @($snapshotManifest.plugins).Count
+                $manifestOk = ($manifestName -eq $snapshotNameExpected -and $manifestPluginCount -gt 0)
+            } catch {
+                $manifestOk = $false
+            }
+        }
+        if (Test-Path -LiteralPath $snapshotShaPath) {
+            $shaValue = (Get-Content -Raw -LiteralPath $snapshotShaPath).Trim()
+            $shaOk = $shaValue -match '^[0-9a-fA-F]{40}$'
+        }
+        if ($remoteOk -and $manifestOk -and $shaOk) {
+            Add-Check "official_curated_temp_snapshot" "pass" "The configured .tmp plugins snapshot matches the expected official runtime snapshot shape." @{
+                path = $snapshotPath
+                remote = $snapshotRemoteExpected
+                marketplace = $manifestName
+                plugin_count = $manifestPluginCount
+                sha = $shaValue
+            }
+        } else {
+            Add-Check "official_curated_temp_snapshot" "fail" "The configured .tmp plugins snapshot is present but does not match the expected official runtime snapshot shape." @{
+                path = $snapshotPath
+                remote_ok = $remoteOk
+                manifest_ok = $manifestOk
+                sha_ok = $shaOk
+                marketplace = $manifestName
+                plugin_count = $manifestPluginCount
+                sha = $shaValue
+            }
+        }
+    } else {
+        Add-Check "official_curated_temp_snapshot" "pass" "No configured .tmp plugins snapshot is present." @{}
+    }
+} else {
+    $snapshotPath = Join-Path $codexHomePath ".tmp\plugins"
+    $snapshotShaPath = Join-Path $codexHomePath ".tmp\plugins.sha"
+    $presentCuratedTemp = @()
+    if (Test-Path -LiteralPath $snapshotPath) { $presentCuratedTemp += $snapshotPath }
+    if (Test-Path -LiteralPath $snapshotShaPath) { $presentCuratedTemp += $snapshotShaPath }
+    if ($presentCuratedTemp.Count -eq 0) {
+        Add-Check "official_curated_temp_snapshot" "pass" "Curated .tmp plugins snapshot acceptance is disabled and no snapshot is present." @{}
+    } else {
+        Add-Check "official_curated_temp_snapshot" "fail" "Curated .tmp plugins snapshot acceptance is disabled; remove the regenerated snapshot." @{
+            present = $presentCuratedTemp
+        }
+    }
+}
+
+$tmpRoot = Join-Path $codexHomePath ".tmp"
+$pluginCloneResidues = @()
+if (Test-Path -LiteralPath $tmpRoot) {
+    $pluginCloneResidues = @(Get-ChildItem -LiteralPath $tmpRoot -Directory -Force -Filter "plugins-clone-*" -ErrorAction SilentlyContinue |
+        ForEach-Object { $_.FullName })
+}
+if ($pluginCloneResidues.Count -eq 0) {
+    Add-Check "stale_plugin_clone_residue_absent" "pass" "No incomplete temporary plugin clone directories are present." @{}
+} else {
+    Add-Check "stale_plugin_clone_residue_absent" "fail" "Incomplete temporary plugin clone directories are present." @{
+        paths = $pluginCloneResidues
+    }
+}
+
 $staleBackupPaths = Get-StateArray $nativeCriteria.stale_backup_paths @(".codex-global-state.json.bak")
 $presentBackups = @()
 foreach ($relativeBackup in $staleBackupPaths) {

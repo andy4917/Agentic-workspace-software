@@ -313,23 +313,21 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         return {"status": "fail", "error": str(exc)}
     hooks = data.get("hooks", {})
-    events = ["PreToolUse", "PermissionRequest", "PostToolUse"]
-    required_fragments = [
-        "apply_patch",
-        "functions\\..*",
-        "mcp__.*",
-        "multi_tool_use\\..*",
-        "tool_search\\..*",
-        "web\\..*",
-        "image_gen\\..*",
-    ]
+    policy = load_json(root / "hooks" / "policy.compact.json", {})
+    active_events = set(policy.get("hook_events_used", [])) if isinstance(policy, dict) else set()
+    excluded_events = set(policy.get("hook_events_excluded", [])) if isinstance(policy, dict) else set()
+    if not active_events:
+        active_events = {"PreToolUse", "PostToolUse"}
+    events = [event for event in ["PreToolUse", "PostToolUse", "PermissionRequest"] if event in active_events]
+    required_fragments = ["apply_patch", "functions\\..*", "mcp__.*", "multi_tool_use\\..*", "tool_search\\..*", "web\\..*", "image_gen\\..*"]
     missing: dict[str, list[str]] = {}
     for event in events:
         matcher_text = " ".join(str(item.get("matcher", "")) for item in hooks.get(event, []) if isinstance(item, dict))
         absent = [fragment for fragment in required_fragments if fragment not in matcher_text]
         if absent:
             missing[event] = absent
-    return {"status": "pass" if not missing else "fail", "missing": missing}
+    unexpected = [event for event in sorted(excluded_events) if event in hooks]
+    return {"status": "pass" if not missing and not unexpected else "fail", "checked_events": events, "missing": missing, "unexpected_events": unexpected}
 
 
 def parse_detail_lines(stdout: str) -> dict[str, str]:
@@ -654,7 +652,7 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("subagent nicknames are role-prefixed", subagent_nickname_policy_status(root).get("status") == "pass"),
             ("hook tool routing covers active namespaces", hook_tool_routing_status(root).get("status") == "pass"),
             ("hook runtime state matches intended active events", hook_runtime_state_status(root).get("status") == "pass"),
-            ("hook script parses by existence", (root / "hooks" / "lightweight-codex-hook.ps1").exists()),
+            ("hook script parses by existence", (root / "hooks" / "compact-codex-hook.ps1").exists()),
             ("core doctor currently passes", doctor.get("status") == "pass"),
             ("latest verification report exists", bool(verification)),
             ("latest verification matches current harness source", verification_fresh),

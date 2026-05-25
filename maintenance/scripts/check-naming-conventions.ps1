@@ -26,6 +26,10 @@ function Test-IsSkippedDirectory {
     }
 
     $full = $Directory.FullName
+    if ($full -match '\\\.tmp\\(bundled-marketplaces|marketplaces|plugins)(\\|$)') {
+        return $true
+    }
+
     $skipFragments = @(
         "\state\memento-mcp\pgdata",
         "\sessions",

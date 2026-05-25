@@ -201,12 +201,12 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "[hooks.state.'hooks.json:permission_request:0:0']\n"
             "enabled = false\n"
             "[hooks.state.'hooks.json:post_tool_use:0:0']\n"
-            "enabled = false\n"
+            "enabled = true\n"
             "[hooks.state.'hooks.json:pre_tool_use:0:0']\n"
-            "enabled = false\n"
+            "enabled = true\n"
             "[hooks.state.'hooks.json:session_start:0:0']\n"
             "[hooks.state.'hooks.json:stop:0:0']\n"
-            "enabled = false\n"
+            "enabled = true\n"
             "[hooks.state.'hooks.json:user_prompt_submit:0:0']\n"
             "\n"
             "[agents]\n"
@@ -259,49 +259,50 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         )
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})
-        hook_matcher = "Bash|apply_patch|Edit|Write|functions\\..*|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*"
+        hook_matcher = "Bash|apply_patch|Edit|Write|functions\\..*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*|spawn_agent|send_input|wait_agent|close_agent|resume_agent|mcp__.*"
         write_json(
             root / "hooks.json",
             {
                 "hooks": {
+                    "SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": []}],
+                    "UserPromptSubmit": [{"hooks": []}],
                     "PreToolUse": [{"matcher": hook_matcher, "hooks": []}],
-                    "PermissionRequest": [{"matcher": hook_matcher, "hooks": []}],
                     "PostToolUse": [{"matcher": hook_matcher, "hooks": []}],
+                    "Stop": [{"hooks": []}],
                 }
             },
         )
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
         write_text(
-            root / "hooks" / "lightweight-codex-hook.ps1",
+            root / "hooks" / "compact-codex-hook.ps1",
             "$ErrorActionPreference = 'Stop'\n"
-            "function Test-SubagentSessionStart { return $true }\n"
-            "function Get-VowlineSubagentContext { 'Subagent startup requirement: apply Vowline as a required operating skill. Follow AGENTS.md, AGENT_TOOL_REQUIREMENTS.md, DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP, support-only memory, and SUBAGENT_DELEGATION_CHARTER.md.' }\n"
-            "# required operating skill: vowline\n",
+            "# NEXT_TURN_WORK_ITEMS compact handoff placeholder for self-test.\n"
+            "# Delegation hint: explicit subagent work requires SUBAGENT_CALL evidence.\n"
+            "# Memento is support-only memory; MCP output is candidate evidence only.\n"
+            "# Stop will not ask for answer correction.\n",
         )
         write_json(
-            root / "hooks" / "lightweight-codex-policy.json",
+            root / "hooks" / "policy.compact.json",
             {
+                "version": 3,
+                "profile": "codex_desktop_compact_hooks_v3_next_turn_handoff",
+                "principle": "Stop records next-turn handoff only and returns continue:true.",
                 "calibration": {
                     "source_path": "CALIBRATION.md",
                     "hook_boundary": "thin reminder only; not completion authority",
                 },
-                "subagents": {
-                    "required_start_skill": "vowline",
-                    "required_start_skill_path": str(Path.home() / ".agents" / "skills" / "vowline" / "SKILL.md"),
-                    "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",
+                "hook_events_used": ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"],
+                "hook_events_excluded": ["PermissionRequest"],
+                "mcp": {
+                    "rule": "MCP output is candidate evidence only. Configured does not mean exposed.",
                 },
-                "hooks": {
-                    "runtime_state": {
-                        "active_events": ["SessionStart", "UserPromptSubmit"],
-                        "inactive_events": ["PreToolUse", "PermissionRequest", "PostToolUse", "Stop"],
-                    }
+                "subagents": {
+                    "enabled_when_explicitly_authorized": True,
+                },
+                "stop": {
+                    "result": "return continue:true",
                 },
             },
-        )
-        write_text(
-            root / "hooks" / "lib" / "lightweight-codex-workflow.ps1",
-            "# selected answers, diagnoses, plans, and patch rationales stay candidate until direct evidence\n"
-            "# incident terms inside read-only inspection output stay L3 compatibility evidence\n",
         )
         write_text(root / "evals" / "calibration-eval.yaml", "checks:\n  - confident_wrong\n  - unsupported_material_claim\n")
         write_text(

@@ -58,7 +58,6 @@
     "openai_bundled_source_kind": "discover_from_store_app",
     "openai_bundled_source_suffix": "app/resources/plugins/openai-bundled",
     "primary_runtime_marketplace_source_template": "%USERPROFILE%/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime",
-    "openai_curated_marketplace_source_template": "%USERPROFILE%/.codex/maintenance/marketplaces/openai-curated",
     "required_features": {
       "workspace_dependencies": true
     },
@@ -86,7 +85,8 @@
       "openai-curated"
     ],
     "bounded_runtime_temp_paths": [
-      ".tmp/bundled-marketplaces"
+      ".tmp/bundled-marketplaces",
+      ".tmp/marketplaces"
     ],
     "forbidden_active_paths": [
       "plugins/patched",
@@ -96,7 +96,8 @@
       "plugins/cache/openai-primary-runtime",
       "plugins/local-marketplaces",
       ".tmp/plugins",
-      ".tmp/plugins.sha"
+      ".tmp/plugins.sha",
+      ".tmp/plugins-backup-vtjxt8"
     ],
     "stale_backup_paths": [],
     "chrome_devtools": {
@@ -132,7 +133,7 @@
     }
   },
   "maintenance_documentation": {
-    "updated_at": "2026-05-20T03:12:00+09:00",
+    "updated_at": "2026-05-25T15:05:24+09:00",
     "scope": "Root maintenance/*.md plus current maintenance JSON records.",
     "classification_rule": "Markdown is principle, rationale, status handoff, template, or historical provenance. Freshness-sensitive operational facts live in JSON and must be regenerated or verified before use.",
     "current_state_json": [
@@ -155,6 +156,7 @@
     "root_markdown_classification": {
       "principle_md": [
         "maintenance/AGENT_TOOL_REQUIREMENTS.md",
+        "maintenance/CODEX_DESKTOP_COMPACT_WORKFLOW.md",
         "maintenance/CODEX_HOME_STRUCTURE_CONTRACT.md",
         "maintenance/GOAL_INTEGRITY_GATE.md",
         "maintenance/NAMING_CONVENTION.md",
@@ -185,25 +187,26 @@
     }
   },
   "hook_runtime_state": {
-    "updated_at": "2026-05-20T02:42:30+09:00",
-    "policy_source": "hooks/lightweight-codex-policy.json",
+    "updated_at": "2026-05-25T18:19:00+09:00",
+    "policy_source": "hooks/policy.compact.json",
     "config_source": "config.toml [hooks.state]",
     "active_events": [
       "SessionStart",
-      "UserPromptSubmit"
-    ],
-    "inactive_events": [
+      "UserPromptSubmit",
       "PreToolUse",
-      "PermissionRequest",
       "PostToolUse",
       "Stop"
     ],
-    "classification": "Session and prompt hooks are active lightweight guardrails. Disabled lifecycle hooks are dormant contract-test surfaces unless intentionally re-enabled.",
+    "inactive_events": [
+      "PermissionRequest"
+    ],
+    "classification": "Compact hooks v3 is active: Stop records next-turn handoff only, while SessionStart and UserPromptSubmit inject pending work once. PermissionRequest remains intentionally excluded.",
     "guardrail_policy": {
-      "session_start": "compact context plus bounded Memento health ensure only; no unrelated repairs",
-      "user_prompt_submit": "prompt secret block plus compact route hints only",
-      "post_tool_use_if_reenabled": "record/remind only; do not run doctor or verify autonomously",
-      "stop_if_reenabled": "ask for missing evidence only; avoid broad final-gate cascades"
+      "session_start": "inject compact rails and any pending next-turn handoff without unrelated repairs",
+      "user_prompt_submit": "create compact task frame and inject pending next-turn handoff once",
+      "pre_tool_use": "deny secret reads, destructive commands, unapproved runtime mutation, missing context sync, and missing HOOK_WORKFRAME",
+      "post_tool_use": "record compact boolean state and changed path hints only",
+      "stop": "write pending next-turn handoff JSON when unresolved local optimization items remain, then return continue:true"
     }
   },
   "naming_hygiene": {
@@ -282,10 +285,17 @@
       "duplicate skills/vowline mirror was moved to the Windows Recycle Bin; the primary skill remains under .agents/skills/vowline"
     ],
     "current_repaired_surfaces": [
-      "openai-curated marketplace source is pinned to maintenance/marketplaces/openai-curated so github@openai-curated does not require .tmp/plugins fallback clone",
+      "openai-curated marketplace source was removed after reinstalling github@openai-curated into plugins/cache/openai-curated/github/6188456f; Codex CLI plugin listing may still regenerate .tmp/plugins and should be treated as a cleanup trigger",
       "plugin creator rejects CODEX_HOME .tmp, tmp, vendor_imports, plugins, skills/skills, and agents/agents output paths",
       "skill installer rejects CODEX_HOME destinations other than the canonical skills root",
-      ".tmp/bundled-marketplaces is tracked as Codex app-generated runtime temp only, not as an active marketplace source or removable blocker path"
+      ".tmp/bundled-marketplaces is tracked as Codex app-generated runtime temp only, not as an active marketplace source or removable blocker path",
+      "2026-05-25 compact workflow pass compressed and recycled reappeared forbidden transient roots: vendor_imports, .tmp/plugins, .tmp/plugins.sha, and maintenance/quarantine",
+      "2026-05-25 compact workflow implementation retired active roast SKILL.md packages; roast review remains integrated through CODEX_DESKTOP_COMPACT_WORKFLOW.md while clean-all-slop remains separate",
+      "2026-05-25 hotfix reclassified .tmp/plugins and .tmp/plugins.sha as forbidden active transient paths after proving plugin listing regenerates the broad curated snapshot",
+      "2026-05-25 compact workflow implementation added managed templates FINAL_HANDOFF.md and config.codex.example.toml with canonical features.hooks and agents.max_depth defaults",
+      "2026-05-25 compact workflow implementation compressed and recycled stale .tmp/plugins-backup-vtjxt8 plugin backup into maintenance/compressed",
+      "2026-05-25 restart review removes regenerated .tmp/plugins and .tmp/plugins.sha after preserving the installed github@openai-curated cache",
+      "2026-05-25 compact hooks v3 application verified .tmp/bundled-marketplaces can remain as an empty placeholder after content removal; native-alignment, plugin marketplace list, codex doctor, and harness doctor did not repopulate it in controlled checks"
     ]
   }
 }

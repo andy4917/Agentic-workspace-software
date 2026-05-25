@@ -30,6 +30,12 @@ maintenance\reports\codex-native-alignment.latest.json
   patch official bundles.
 - Official marketplace path checks validate enabled configured plugins. Disabled
   or unconfigured official manifest entries are not local `.codex` drift.
+- App-generated `.tmp` runtime state is not all equivalent:
+  `.tmp\bundled-marketplaces` and `.tmp\marketplaces` can be bounded app-owned
+  runtime state. Their contents may be removed when they grow stale or large;
+  leaving an empty placeholder directory is acceptable when current checks do
+  not repopulate it. `.tmp\plugins`, `.tmp\plugins.sha`, `vendor_imports`, and
+  incomplete `.tmp\plugins-clone-*` directories are cleanup targets.
 - If an MD file and a JSON file disagree on a current operational fact, treat the
   JSON file as the maintenance baseline and update the MD only if the principle
   changed.

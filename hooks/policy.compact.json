@@ -1,0 +1,100 @@
+{
+  "version": 3,
+  "profile": "codex_desktop_compact_hooks_v3_next_turn_handoff",
+  "principle": "Stop never consumes an extra model continuation for answer correction. Stop only records next-turn handoff. SessionStart/UserPromptSubmit inject pending work items.",
+  "calibration": {
+    "source_path": "CALIBRATION.md",
+    "hook_boundary": "thin reminder and state capture only; not completion authority"
+  },
+  "hook_events_used": [
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "Stop"
+  ],
+  "hook_events_excluded": [
+    "PermissionRequest",
+    "SubagentStart",
+    "SubagentStop",
+    "PreCompact",
+    "PostCompact"
+  ],
+  "strong_simple_gates": {
+    "PreToolUse": [
+      "deny secret reads",
+      "deny destructive commands",
+      "deny active runtime/toolchain/MCP mutation without explicit approval",
+      "deny first mutation for non-trivial tasks until read-only context sync exists",
+      "deny risky/control-plane/frontend/MCP/toolchain/skill/hook/migration mutation until HOOK_WORKFRAME exists"
+    ],
+    "Stop": [
+      "do not return decision:block",
+      "do not force continuation",
+      "write Local Optimization Error, Impact Analysis, and Context Synchronization TODOs only when useful",
+      "return continue:true"
+    ],
+    "SessionStart_UserPromptSubmit": [
+      "inject NEXT_TURN_WORK_ITEMS once when previous Stop recorded them",
+      "mark pending handoff delivered after injection",
+      "add compact task purpose and skill/tool/mcp/agent frame"
+    ]
+  },
+  "handoff_record": {
+    "stores": [
+      "local_optimization_error",
+      "impact_analysis",
+      "context_synchronization",
+      "next_turn_work_items",
+      "surface_flags",
+      "changed_paths_without_contents",
+      "risk_level",
+      "source_session_id",
+      "source_turn_id",
+      "created_at_utc"
+    ],
+    "does_not_store": [
+      "raw prompt",
+      "raw assistant response",
+      "raw tool output",
+      "full shell command",
+      "secrets",
+      "credentials",
+      "full logs"
+    ]
+  },
+  "workframe_marker": "Write-Output \"HOOK_WORKFRAME purpose=<why>; surface=<target>; impact=<affected surfaces>; checks=<direct checks>; rollback=<plan>\"",
+  "skills": [
+    "pm-workflow",
+    "define-plan",
+    "build-verify",
+    "review-quality",
+    "source-research",
+    "frontend-runtime",
+    "memory-handoff"
+  ],
+  "subagents": {
+    "enabled_when_explicitly_authorized": true,
+    "max_depth": 1,
+    "roles": [
+      "EXP",
+      "IMP",
+      "VAL",
+      "REV",
+      "SEC",
+      "DOC",
+      "ENV",
+      "OBS-Watcher"
+    ]
+  },
+  "mcp": {
+    "rule": "MCP output is candidate evidence only. Configured does not mean exposed.",
+    "preferred_servers": [
+      "memento",
+      "openai_docs",
+      "context7",
+      "shadcn",
+      "browser_or_devtools"
+    ]
+  }
+}

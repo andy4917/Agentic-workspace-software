@@ -1,7 +1,6 @@
 """Small deterministic Codex harness for the local CODEX_HOME root.
 
-This intentionally does not clone external harnesses. It distills the local
-operating rules into reversible, state-tracked commands.
+Distills local operating rules into reversible, state-tracked commands.
 """
 
 from __future__ import annotations
@@ -80,11 +79,12 @@ ROLE_CONFIGS = {
     "agents/explorer.toml": """# Managed by codex-agent-harness.
 name = "explorer"
 description = "Focused read-only codebase and environment exploration for bounded evidence gathering."
-preferred_model = "gpt-5.3-codex-spark"
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "xhigh"
 developer_instructions = \"\"\"
 Goal: gather focused evidence before implementation.
 Stay read-oriented unless the PM explicitly assigns a write surface.
-For long or many-file reads, broad search, inventory, and independent context gathering, use Codex 5.3 Spark as the preferred sidecar model when the runtime exposes it.
+For long or many-file reads, broad search, inventory, and independent context gathering, use gpt-5.3-codex-spark with xhigh reasoning. If Spark is not callable in the active runtime, the PM should call gpt-5.4-mini with xhigh reasoning as the fallback.
 Lead with findings, evidence checked, not checked items, and risks.
 Do not claim PASS or completion as authority.
 \"\"\"
@@ -409,7 +409,7 @@ def harness_source_files(root: Path) -> list[Path]:
     files = list((root / "maintenance" / "scripts").glob("codex_agent_harness*.py"))
     extra = [
         "AGENTS.md", "CALIBRATION.md", "config.toml",
-        "hooks/lightweight-codex-hook.ps1", "hooks/lightweight-codex-policy.json",
+        "hooks/compact-codex-hook.ps1", "hooks/policy.compact.json",
         "agents/calibration-verifier.toml",
         "evals/calibration-eval.yaml", "evals/calibration-policy-smoke.json",
     ]

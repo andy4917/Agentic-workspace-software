@@ -1,0 +1,17 @@
+# Sanitized Codex Desktop configuration example.
+# Do not copy secrets, auth fields, local machine paths, or private runtime state
+# into a public repository.
+
+model_reasoning_effort = "medium"
+
+[features]
+hooks = true
+multi_agent = true
+goals = true
+child_agents_md = true
+tool_search = true
+workspace_dependencies = true
+
+[agents]
+max_threads = 6
+max_depth = 1

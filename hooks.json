@@ -2,13 +2,13 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|clear",
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\lightweight-codex-hook.ps1') }\"",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\compact-codex-hook.ps1') }\"",
             "timeout": 10,
-            "statusMessage": "Loading guardrails"
+            "statusMessage": "Loading compact workspace rails"
           }
         ]
       }
@@ -18,48 +18,35 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\lightweight-codex-hook.ps1') }\"",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\compact-codex-hook.ps1') }\"",
             "timeout": 10,
-            "statusMessage": "Applying guardrails"
+            "statusMessage": "Adding pending handoff and task frame"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|spawn_agent|send_input|wait_agent|close_agent|resume_agent|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*",
+        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*|spawn_agent|send_input|wait_agent|close_agent|resume_agent|mcp__.*",
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\lightweight-codex-hook.ps1') }\"",
-            "timeout": 30,
-            "statusMessage": "Checking immediate action safety"
-          }
-        ]
-      }
-    ],
-    "PermissionRequest": [
-      {
-        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|spawn_agent|send_input|wait_agent|close_agent|resume_agent|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\lightweight-codex-hook.ps1') }\"",
-            "timeout": 30,
-            "statusMessage": "Checking approval request"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\compact-codex-hook.ps1') }\"",
+            "timeout": 10,
+            "statusMessage": "Checking compact safety gates"
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|spawn_agent|send_input|wait_agent|close_agent|resume_agent|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*",
+        "matcher": "Bash|apply_patch|Edit|Write|functions\\..*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*|spawn_agent|send_input|wait_agent|close_agent|resume_agent|mcp__.*",
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\lightweight-codex-hook.ps1') }\"",
-            "timeout": 30,
-            "statusMessage": "Recording lightweight evidence"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\compact-codex-hook.ps1') }\"",
+            "timeout": 10,
+            "statusMessage": "Recording compact turn state"
           }
         ]
       }
@@ -69,9 +56,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\lightweight-codex-hook.ps1') }\"",
-            "timeout": 30,
-            "statusMessage": "Checking final evidence"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& { & (Join-Path $env:USERPROFILE '.codex\\hooks\\compact-codex-hook.ps1') }\"",
+            "timeout": 10,
+            "statusMessage": "Recording next-turn handoff"
           }
         ]
       }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import hashlib
 import os
 import subprocess
 import tomllib
@@ -16,14 +17,14 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     agents_text = read_text(root / "AGENTS.md")
     charter_text = read_text(root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md")
     audit_text = read_text(root / "codex-goals" / "_template" / "FINAL_GOAL_AUDIT.md")
-    hook_files = [root / "hooks" / "lightweight-codex-hook.ps1"]
+    hook_files = [root / "hooks" / "compact-codex-hook.ps1"]
     hook_files.extend(sorted((root / "hooks" / "lib").glob("*.ps1")))
     hook_text = "\n".join(read_text(path) for path in hook_files if path.exists())
 
     add_check(
         "agents_goal_governance",
-        all(term in agents_text for term in ["## Goal Governance", "tracking marker", "final goal audit", "Subagents receive contractual subgoals"]),
-        "AGENTS.md should define parent-goal ownership and audit requirements.",
+        all(term in agents_text for term in ["## Goals", "tracking marker", "final goal audit", "maintenance/GOAL_INTEGRITY_GATE.md"]),
+        "AGENTS.md should keep compact parent-goal ownership and point to the detailed gate runbook.",
     )
     add_check(
         "subagent_authority_boundary",
@@ -36,16 +37,17 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
         "Final audit template should require checked, not-run, risks, PM verification, and status.",
     )
     add_check(
-        "stop_hook_audit_prompt",
-        all(term in hook_text for term in ["function Test-FinalAuditReady", "function Get-ToolEvidenceSummary", "Final preflight", "FINAL PREFLIGHT", "Commit status"]),
-        "Stop hook should ask for a short final preflight and keep hook evidence summaries compact.",
+        "stop_hook_next_turn_handoff",
+        all(term in hook_text for term in ["function Compute-Handoff", "NEXT_TURN_WORK_ITEMS", "Continue-Ok", "Get-SessionPendingPath"]),
+        "Stop hook should record next-turn handoff instead of forcing a final-answer correction pass.",
     )
-    main_hook_text = read_text(root / "hooks" / "lightweight-codex-hook.ps1")
+    main_hook_text = read_text(root / "hooks" / "compact-codex-hook.ps1")
     add_check(
-        "stop_hook_loads_final_gate_module",
-        "lightweight-codex-final-gates.ps1" in main_hook_text
-        and (root / "hooks" / "lib" / "lightweight-codex-final-gates.ps1").exists(),
-        "Main hook should explicitly load the final gate module instead of passing from an orphaned library file.",
+        "compact_hook_single_file",
+        "PermissionRequest" not in read_text(root / "hooks.json")
+        and "decision:block" in main_hook_text
+        and "permissionDecision" in main_hook_text,
+        "Compact v3 should be a single active hook file and exclude PermissionRequest from hooks.json.",
     )
 
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
@@ -59,7 +61,7 @@ def run_lightweight_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str
     env["CODEX_HOOK_SMOKE"] = "1"
     try:
         completed = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "hooks/lightweight-codex-hook.ps1"],
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "hooks/compact-codex-hook.ps1"],
             cwd=root,
             env=env,
             input=json.dumps(payload),
@@ -120,548 +122,266 @@ def run_stop_hook_sample(root: Path, message: str) -> dict[str, Any]:
 
 def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
-    state_path = root / "hooks" / "state" / "lightweight-status.json"
-    original_state_exists = state_path.exists()
-    original_state_bytes = state_path.read_bytes() if original_state_exists else None
 
     def add_check(name: str, passed: bool, detail: str) -> None:
         checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
 
-    try:
-        fake_marker = "sk-" + "test-not-real-" + ("0" * 20)
-        prompt_probe = run_prompt_hook_sample(root, f"Please use {fake_marker} for this run.")
-        add_check(
-            "prompt_secret_like_value_blocked",
-            '"decision":"block"' in prompt_probe.get("stdout_preview", ""),
-            "UserPromptSubmit should block secret-like values before they reach the model.",
-        )
+    session_id = "harness-v3-" + os.urandom(8).hex()
+    cwd = str(root / f".hook-smoke-{session_id}")
+    turn = "t1"
+    temp_dir = Path(os.environ.get("TEMP", str(root))) / "codex-compact-hooks-v3"
+    cwd_hash = hashlib.sha256(cwd.encode("utf-8")).hexdigest()[:12]
+
+    def sample(event: str, **fields: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "hook_event_name": event,
+            "session_id": session_id,
+            "turn_id": fields.pop("turn_id", turn),
+            "cwd": cwd,
+        }
+        payload.update(fields)
+        return run_lightweight_hook_sample(root, payload)
+
+    def stdout(probe: dict[str, Any]) -> str:
+        return str(probe.get("stdout_preview", ""))
+
+    def stderr(probe: dict[str, Any]) -> str:
+        return str(probe.get("stderr_preview", ""))
+
+    def read_pending_json(path: Path) -> dict[str, Any]:
         try:
-            config = tomllib.loads(read_text(root / "config.toml"))
-            hook_state = config.get("hooks", {}).get("state", {})
-            event_enabled: dict[str, bool] = {}
-            for key, value in hook_state.items():
-                if not isinstance(value, dict):
-                    continue
-                parts = str(key).split(":")
-                if len(parts) >= 3:
-                    event_enabled[normalize_hook_event_name(parts[-3])] = bool(value.get("enabled", True))
-            for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "Stop"]:
-                event_enabled.setdefault(event, True)
-        except (OSError, tomllib.TOMLDecodeError):
-            event_enabled = {}
+            return json.loads(read_text(path).lstrip("\ufeff"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    try:
+        config = tomllib.loads(read_text(root / "config.toml"))
+        hook_state = config.get("hooks", {}).get("state", {})
+        event_enabled: dict[str, bool] = {}
+        for key, value in hook_state.items():
+            if not isinstance(value, dict):
+                continue
+            parts = str(key).split(":")
+            if len(parts) >= 3:
+                event_enabled[normalize_hook_event_name(parts[-3])] = bool(value.get("enabled", True))
+        for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]:
+            event_enabled.setdefault(event, True)
+        event_enabled.setdefault("PermissionRequest", False)
+    except (OSError, tomllib.TOMLDecodeError):
+        event_enabled = {}
+
+    try:
         add_check(
-            "hook_smoke_respects_runtime_active_state",
+            "compact_v3_runtime_active_state",
             event_enabled.get("SessionStart") is True
             and event_enabled.get("UserPromptSubmit") is True
-            and event_enabled.get("PreToolUse") is False
-            and event_enabled.get("PermissionRequest") is False
-            and event_enabled.get("PostToolUse") is False
-            and event_enabled.get("Stop") is False,
-            "Runtime state should keep only SessionStart and UserPromptSubmit active; disabled lifecycle hook samples are synthetic contract tests only.",
+            and event_enabled.get("PreToolUse") is True
+            and event_enabled.get("PostToolUse") is True
+            and event_enabled.get("Stop") is True
+            and event_enabled.get("PermissionRequest") is False,
+            "Runtime hook state should enable compact v3 events and keep PermissionRequest excluded.",
         )
 
-        korean_failure = "".join(chr(codepoint) for codepoint in [0xC2E4, 0xD328])
-        korean_hook = "".join(chr(codepoint) for codepoint in [0xD6C5])
-        workflow_prompt = (
-            f"{korean_failure} {korean_hook} P0 root cause: user authorized subagent and watcher work. "
-            "Classify L1/L2/L3/L4, compile English intent, set goal, and continue workflow."
-        )
-        workflow_probe = run_prompt_hook_sample(root, workflow_prompt)
-        workflow_stdout = workflow_probe.get("stdout_preview", "").lower()
+        prompt_probe = sample("UserPromptSubmit", prompt="Apply a hook config update and verify it.")
         add_check(
-            "workflow_prompt_emits_compact_l4_guardrail",
-            all(
-                term in workflow_stdout
-                for term in [
-                    "codex guardrail",
-                    "class=l4",
-                    "use direct evidence",
-                    "memory:",
-                    "subagents requested",
-                    "hard blocks stay narrow",
-                ]
-            ),
-            "UserPromptSubmit should emit a compact L4 guardrail without becoming a heavyweight workflow contract.",
-        )
-        add_check(
-            "workflow_prompt_hides_internal_reasoning_labels",
-            "meta-decompose" not in workflow_stdout
-            and "internal english intent frame" not in workflow_stdout
-            and "required pm startup packet" not in workflow_stdout,
-            "UserPromptSubmit should keep decomposition and English intent framing as internal PM state, not user-visible prose.",
-        )
-        session_start_probe = run_subagent_session_start_sample(root)
-        session_start_stdout = session_start_probe.get("stdout_preview", "").lower()
-        add_check(
-            "subagent_session_start_vowline_fixture",
-            session_start_probe.get("status") == "pass"
-            and all(
-                term in session_start_stdout
-                for term in [
-                    "subagent startup requirement",
-                    "vowline",
-                    "agents.md",
-                    "agent_tool_requirements.md",
-                    "support-only memory",
-                ]
-            ),
-            "SessionStart should inject the current workspace Vowline fixture for subagent sessions.",
+            "user_prompt_submit_emits_compact_frame",
+            prompt_probe.get("status") == "pass"
+            and "TASK_PURPOSE" in stdout(prompt_probe)
+            and "HOOK_WORKFRAME" in stdout(prompt_probe)
+            and not stderr(prompt_probe),
+            "UserPromptSubmit should emit the compact task frame without PowerShell errors.",
         )
 
-        try:
-            hook_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError) as exc:
-            hook_state = {"_error": str(exc)}
-        add_check(
-            "workflow_prompt_persists_structured_state",
-            hook_state.get("taskClass") == "L4"
-            and hook_state.get("delegationAuthorized") is True
-            and hook_state.get("goalRequired") is True
-            and hook_state.get("watcherExpected") is True
-            and hook_state.get("anomalyPauseExpected") is True
-            and hook_state.get("subagentDecisionRequired") is True
-            and "delegation_authorized" in hook_state.get("userAuthorizations", [])
-            and isinstance(hook_state.get("intentFrame"), dict)
-            and bool(hook_state.get("intentFrame", {}).get("english_normalized_goal"))
-            and bool(hook_state.get("intentFrame", {}).get("subagent_call_declaration"))
-            and bool(hook_state.get("intentFrame", {}).get("calibration_action")),
-            "Hook state should retain task class, delegation authorization, goal requirement, watcher expectation, subagent call decision, anomaly calibration, and English intent frame.",
-        )
-        skill_prompt = "Use clean-all-slop to clean legacy fallback and dead hook harness scripts."
-        skill_probe = run_prompt_hook_sample(root, skill_prompt)
-        skill_stdout = skill_probe.get("stdout_preview", "").lower()
-        try:
-            skill_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError):
-            skill_state = {}
-        skill_stop_missing = run_stop_hook_sample(
-            root,
-            "FINAL PREFLIGHT Done: skill route sample. Fixed / changed: none. Verification: direct hook smoke. "
-            "Remaining / separate issues: none. Related-scope compatibility: unchanged. Commit status: not committed.",
-        )
-        run_post_tool_hook_sample(root, "functions.shell_command", "Get-Content skills/clean-all-slop/SKILL.md -Raw")
-        try:
-            skill_event_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError):
-            skill_event_state = {}
-        skill_stop_with_marker = run_stop_hook_sample(
-            root,
-            "FINAL PREFLIGHT Done: skill route sample. Fixed / changed: none. Verification: direct hook smoke. "
-            "Remaining / separate issues: none. Related-scope compatibility: unchanged. Commit status: not committed. "
-            "SUBAGENT_CALL not_used reason standing authorization did not need a sidecar residual risk low. "
-            "SKILL_EVIDENCE used reason clean-all-slop route direct evidence skills/clean-all-slop/SKILL.md residual risk low.",
-        )
-        skill_stop_with_compact_marker = run_stop_hook_sample(
-            root,
-            "FINAL PREFLIGHT Done: skill route sample. Fixed / changed: none. Verification: direct hook smoke. "
-            "Remaining / separate issues: none. Related-scope compatibility: unchanged. Commit status: not committed. "
-            "SUBAGENT_CALL not_used reason standing authorization did not need a sidecar residual risk low. "
-            "SKILL_EVIDENCE used reason clean-all-slop route residual risk low.",
+        secret_probe = sample(
+            "PreToolUse",
+            tool_name="functions.shell_command",
+            tool_input={"command": "Get-Content .env"},
         )
         add_check(
-            "skill_route_requires_final_evidence",
-            "clean-all-slop" in skill_stdout
-            and skill_state.get("skillEvidenceRequired") is True
-            and "clean-all-slop" in str(skill_state.get("skillRoute", ""))
-            and "remaining risk:" in skill_stop_missing.get("stdout_preview", "").lower()
-            and "next recommended action:" in skill_stop_missing.get("stdout_preview", "").lower()
-            and bool(skill_event_state.get("skillEvents"))
-            and '"continue":true' in skill_stop_with_marker.get("stdout_preview", "").lower(),
-            "Prompt routing should persist matching skill workflow requirements, record SKILL.md access, and require SKILL_EVIDENCE before finalization.",
-        )
-        add_check(
-            "skill_evidence_observed_allows_compact_final",
-            bool(skill_event_state.get("skillEvents"))
-            and '"continue":true' in skill_stop_with_compact_marker.get("stdout_preview", "").lower(),
-            "Observed skill evidence should allow compact final closure without repeating normal evidence details.",
-        )
-        skill_events = skill_event_state.get("skillEvents", [])
-        reminders = skill_event_state.get("requiredReminders", [])
-        variable_catalog = skill_event_state.get("workflowVariables", [])
-        add_check(
-            "workflow_variable_catalog_and_state_normalization",
-            isinstance(variable_catalog, list)
-            and any("skillRoute:" in str(item) for item in variable_catalog)
-            and any("controlPlaneReminders:" in str(item) for item in variable_catalog)
-            and isinstance(skill_events, list)
-            and all(str(item).strip() for item in skill_events)
-            and len(skill_events) == len(set(map(str, skill_events)))
-            and isinstance(reminders, list)
-            and len(reminders) == len(set(map(str, reminders))),
-            "Hook state should define workflow variables and normalize event/reminder lists to remove empty values, duplicates, and state bloat.",
-        )
-        vowline_probe = run_prompt_hook_sample(
-            root,
-            "Update a repository skill from the upstream repo and verify the installed paths.",
-        )
-        try:
-            vowline_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError):
-            vowline_state = {}
-        add_check(
-            "vowline_routes_for_substantive_work",
-            vowline_probe.get("status") == "pass"
-            and "vowline" in vowline_probe.get("stdout_preview", "").lower()
-            and vowline_state.get("skillEvidenceRequired") is True
-            and "vowline" in str(vowline_state.get("skillRoute", "")).lower(),
-            "UserPromptSubmit should route Vowline as the default operating skill for substantive non-trivial work.",
-        )
-        run_prompt_hook_sample(root, workflow_prompt)
-        state_only_final = (
-            "FINAL PREFLIGHT Done: state-only stop sample. Fixed / changed: none. Verification: direct hook smoke. "
-            "Remaining / separate issues: residual risk low. Related-scope compatibility: unchanged. Commit status: not committed."
-        )
-        state_only_stop = run_stop_hook_sample(root, state_only_final)
-        add_check(
-            "stop_enforces_l4_state_without_tool_events",
-            '"decision":"block"' in state_only_stop.get("stdout_preview", "").lower()
-            and "remaining risk: anomaly calibration is not closed" in state_only_stop.get("stdout_preview", "").lower()
-            and "next recommended action:" in state_only_stop.get("stdout_preview", "").lower(),
-            "Stop should enforce L4 anomaly/subagent/watcher requirements even when no tool event or changed surface is recorded.",
+            "pre_tool_use_denies_secret_read",
+            '"permissionDecision":"deny"' in stdout(secret_probe)
+            and "secret/credential" in stdout(secret_probe)
+            and not stderr(secret_probe),
+            "PreToolUse should deny secret-like file reads.",
         )
 
-        selector = "Select-" + "String"
-        search_terms = "|".join(["pass" + "word", "api[_-]?key", "sec" + "ret", "to" + "ken", "credential", "private key"])
-        staged_scan_command = (
-            "$diff = git -C 'C:\\Work\\repo' diff --cached; "
-            f"$matches = $diff | {selector} -Pattern '{search_terms}' -CaseSensitive:$false"
+        destructive_probe = sample(
+            "PreToolUse",
+            tool_name="functions.shell_command",
+            tool_input={"command": "git reset --hard"},
         )
-        staged_scan = run_hook_sample(root, staged_scan_command)
         add_check(
-            "staged_diff_sensitive_scan_allowed",
-            staged_scan.get("status") == "pass" and "permissionDecision" not in staged_scan.get("stdout_preview", ""),
-            "Staged git diff validation should not be confused with direct credential file reads.",
+            "pre_tool_use_denies_destructive_command",
+            '"permissionDecision":"deny"' in stdout(destructive_probe)
+            and "destructive" in stdout(destructive_probe)
+            and not stderr(destructive_probe),
+            "PreToolUse should deny destructive commands.",
         )
 
-        direct_read_command = "Get-" + "Content C:\\Users\\example\\.codex\\auth.json"
-        direct_read = run_hook_sample(root, direct_read_command)
+        mutation_before_sync = sample(
+            "PreToolUse",
+            tool_name="functions.apply_patch",
+            tool_input={"patch": "*** Update File: C:\\Users\\anise\\.codex\\hooks.json"},
+        )
         add_check(
-            "direct_auth_file_read_blocked",
-            "permissionDecision" in direct_read.get("stdout_preview", "") and "deny" in direct_read.get("stdout_preview", "").lower(),
-            "Direct auth file reads must remain blocked.",
+            "pre_tool_use_denies_mutation_before_context_sync",
+            '"permissionDecision":"deny"' in stdout(mutation_before_sync)
+            and "context sync required" in stdout(mutation_before_sync).lower()
+            and not stderr(mutation_before_sync),
+            "PreToolUse should deny first mutation on non-trivial work before context sync.",
         )
 
-        mixed_read_command = (
-            ("Get-" + "Content C:\\Users\\example\\.codex\\secret.txt; ")
-            + staged_scan_command
+        mixed_context_mutation_before_sync = sample(
+            "PreToolUse",
+            tool_name="functions.shell_command",
+            tool_input={"command": "git status --short; Set-Content hooks.json '{}'"},
         )
-        mixed_read = run_hook_sample(root, mixed_read_command)
         add_check(
-            "mixed_direct_read_staged_scan_blocked",
-            "permissionDecision" in mixed_read.get("stdout_preview", "") and "deny" in mixed_read.get("stdout_preview", "").lower(),
-            "Staged diff validation must not allow a mixed direct protected-file read.",
+            "pre_tool_use_denies_mixed_context_and_mutation_before_sync",
+            '"permissionDecision":"deny"' in stdout(mixed_context_mutation_before_sync)
+            and "context sync required" in stdout(mixed_context_mutation_before_sync).lower()
+            and not stderr(mixed_context_mutation_before_sync),
+            "PreToolUse should deny a mixed read/mutation command before context sync.",
         )
 
-        scanner_script = run_hook_sample(root, "powershell.exe -NoProfile -ExecutionPolicy Bypass -File maintenance/scripts/check-staged-sensitive-diff.ps1")
-        add_check(
-            "redacted_staged_scanner_allowed",
-            scanner_script.get("status") == "pass" and "permissionDecision" not in scanner_script.get("stdout_preview", ""),
-            "The redacted staged-diff scanner should be allowed as the preferred validation path.",
-        )
-        cleanup_verb = "Remove" + "-Item"
-        permanent_cleanup = run_hook_sample(root, f"{cleanup_verb} -LiteralPath C:\\Users\\example\\AppData\\Local\\Temp\\demo -Recurse -Force")
-        add_check(
-            "permanent_recursive_cleanup_still_blocked",
-            "permissionDecision" in permanent_cleanup.get("stdout_preview", "") and "deny" in permanent_cleanup.get("stdout_preview", "").lower(),
-            "Permanent recursive cleanup should remain blocked unless another scoped allow rule applies.",
-        )
-        recycle_cleanup = run_hook_sample(
-            root,
-            "$path='C:\\Users\\example\\AppData\\Local\\Temp\\demo.txt'; "
-            "Add-Type -AssemblyName Microsoft.VisualBasic; "
-            "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($path, "
-            "[Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, "
-            "[Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)",
+        context_probe = sample(
+            "PostToolUse",
+            tool_name="functions.shell_command",
+            tool_input={"command": "git status --short"},
+            tool_response={"exit_code": 0, "stdout": ""},
         )
         add_check(
-            "recycle_bin_cleanup_allowed",
-            recycle_cleanup.get("status") == "pass" and "permissionDecision" not in recycle_cleanup.get("stdout_preview", ""),
-            "Recycle Bin cleanup should be allowed as the reversible cleanup path.",
+            "post_tool_use_records_context_sync",
+            context_probe.get("status") == "pass" and stdout(context_probe).strip() == "" and not stderr(context_probe),
+            "PostToolUse should record context sync without emitting raw output.",
         )
-        documented_block = run_lightweight_hook_sample(
-            root,
-            {
-                "hook_event_name": "PreToolUse",
-                "tool_name": "apply_patch",
-                "tool_input": {
-                    "patch": (
-                        "*** Begin Patch\n*** Update File: maintenance/reports/example.md\n@@\n"
-                        f"+- Not run: `{cleanup_verb} -LiteralPath <temp> -Recurse -Force` was blocked by the safety hook.\n"
-                        "*** End Patch\n"
-                    )
-                },
+
+        mutation_before_workframe = sample(
+            "PreToolUse",
+            tool_name="functions.apply_patch",
+            tool_input={"patch": "*** Update File: C:\\Users\\anise\\.codex\\hooks.json"},
+        )
+        add_check(
+            "pre_tool_use_denies_control_plane_mutation_before_workframe",
+            '"permissionDecision":"deny"' in stdout(mutation_before_workframe)
+            and "impact frame required" in stdout(mutation_before_workframe).lower()
+            and not stderr(mutation_before_workframe),
+            "PreToolUse should deny control-plane mutation before HOOK_WORKFRAME.",
+        )
+
+        mixed_workframe_mutation_before_workframe = sample(
+            "PreToolUse",
+            tool_name="functions.shell_command",
+            tool_input={
+                "command": 'Write-Output "HOOK_WORKFRAME purpose=test; surface=hooks; impact=hooks; checks=smoke; rollback=restore"; Set-Content hooks.json "{}"'
             },
         )
         add_check(
-            "documented_blocked_cleanup_case_allowed",
-            documented_block.get("status") == "pass" and "permissionDecision" not in documented_block.get("stdout_preview", ""),
-            "Documentation-only incident/report patches should be allowed to record a blocked cleanup case.",
+            "pre_tool_use_denies_mixed_workframe_and_mutation_before_workframe",
+            '"permissionDecision":"deny"' in stdout(mixed_workframe_mutation_before_workframe)
+            and "impact frame required" in stdout(mixed_workframe_mutation_before_workframe).lower()
+            and not stderr(mixed_workframe_mutation_before_workframe),
+            "PreToolUse should not treat a mixed workframe/mutation command as a prior impact frame.",
         )
 
-        run_prompt_hook_sample(root, "Tiny local note.")
-        run_post_tool_hook_sample(root, "apply_patch", "apply_patch changed file test")
-        short_changed_final = (
-            "FINAL PREFLIGHT Done: changed-surface smoke. Fixed / changed: sample hook state only. "
-            "Verification: direct Stop hook sample. Remaining / separate issues: none. "
-            "Related-scope compatibility: unchanged. Commit status: not committed."
-        )
-        short_changed_stop = run_stop_hook_sample(root, short_changed_final)
-        add_check(
-            "stop_accepts_short_final_preflight",
-            '"continue":true' in short_changed_stop.get("stdout_preview", "").lower(),
-            "Stop should accept the short FINAL PREFLIGHT format for ordinary changed-surface evidence.",
-        )
-        weak_short_final = (
-            "Done: changed-surface smoke. Fixed / changed: sample hook state only. "
-            "Verification: direct Stop hook sample. Remaining / separate issues: none. "
-            "Related-scope compatibility: unchanged. Commit status: not committed."
-        )
-        weak_short_stop = run_stop_hook_sample(root, weak_short_final)
-        add_check(
-            "stop_rejects_short_preflight_without_marker",
-            '"decision":"block"' in weak_short_stop.get("stdout_preview", "").lower(),
-            "Stop should require the explicit FINAL PREFLIGHT marker, not just generic section labels.",
-        )
-        add_check(
-            "stop_feedback_is_risk_and_next_action",
-            "remaining risk:" in weak_short_stop.get("stdout_preview", "").lower()
-            and "next recommended action:" in weak_short_stop.get("stdout_preview", "").lower()
-            and "direct evidence" not in weak_short_stop.get("stdout_preview", "").lower(),
-            "Stop feedback should summarize remaining risk and next action, not repeat normal evidence detail.",
-        )
-
-        run_prompt_hook_sample(root, workflow_prompt)
-        run_post_tool_hook_sample(root, "apply_patch", "apply_patch changed file test")
-        delegated_final_without_marker = (
-            "FINAL PREFLIGHT Done: delegated hook state sample. Fixed / changed: sample hook state only. "
-            "Verification: direct hook smoke. Remaining / separate issues: residual risk low. "
-            "Related-scope compatibility: unchanged. Commit status: not committed. "
-            "pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
-            "accepted/rejected subagent evidence none. WATCHER_NOT_USED reason direct smoke risk low substitute check hook sample confidence impact low."
-        )
-        delegated_final_with_marker = (
-            "FINAL PREFLIGHT Done: delegated hook state sample. Fixed / changed: sample hook state only. "
-            "Verification: direct hook smoke. Remaining / separate issues: residual risk low. "
-            "Related-scope compatibility: unchanged. Commit status: not committed. "
-            "pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
-            "accepted/rejected subagent evidence none. WATCHER_NOT_USED reason direct smoke risk low substitute check hook sample confidence impact low. "
-            "SUBAGENT_CALL not_used reason PM kept work local evidence direct hook sample. "
-            "SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
-        )
-        stop_missing_subagent = run_stop_hook_sample(root, delegated_final_without_marker)
-        stop_with_subagent = run_stop_hook_sample(root, delegated_final_with_marker)
-        add_check(
-            "stop_requires_explicit_subagent_call_marker",
-            "remaining risk: subagent activity or authorization is not closed" in stop_missing_subagent.get("stdout_preview", "").lower()
-            and "next recommended action:" in stop_missing_subagent.get("stdout_preview", "").lower()
-            and '"continue":true' in stop_with_subagent.get("stdout_preview", "").lower(),
-            "Stop should reject delegated finals without SUBAGENT_CALL used/not_used and allow the explicit marker with reason/evidence.",
-        )
-        watcherless_final = (
-            "FINAL PREFLIGHT Done: delegated watcher sample. Fixed / changed: sample hook state only. "
-            "Verification: direct hook smoke. Remaining / separate issues: residual risk low. "
-            "Related-scope compatibility: unchanged. Commit status: not committed. "
-            "pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
-            "accepted/rejected subagent evidence reviewed. "
-            "SUBAGENT_CALL used reason direct sample evidence hook state residual risk low. "
-            "SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
-        )
-        watcherless_stop = run_stop_hook_sample(root, watcherless_final)
-        role_prefix_only_watcher_final = (
-            "FINAL PREFLIGHT Done: role-prefix watcher sample. Fixed / changed: sample hook state only. "
-            "Verification: direct hook smoke. Remaining / separate issues: residual risk low. "
-            "Related-scope compatibility: unchanged. Commit status: not committed. "
-            "pause trigger: anomaly pause from delegated hook state. first mismatch/root cause traced. "
-            "accepted/rejected subagent evidence reviewed by REV-PreShip. "
-            "SUBAGENT_CALL used reason direct sample evidence hook state residual risk low. "
-            "SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
-        )
-        role_prefix_only_watcher_stop = run_stop_hook_sample(root, role_prefix_only_watcher_final)
-        add_check(
-            "stop_requires_concrete_watcher_artifact_or_omission_record",
-            '"decision":"block"' in watcherless_stop.get("stdout_preview", "").lower()
-            and "remaining risk: delegated workflow lacks watcher closure" in watcherless_stop.get("stdout_preview", "").lower()
-            and "next recommended action:" in watcherless_stop.get("stdout_preview", "").lower(),
-            "Stop should reject L4 delegated finals that mention subagent evidence but omit WATCHER_REPORT or complete WATCHER_NOT_USED.",
-        )
-        add_check(
-            "stop_rejects_role_prefix_only_watcher_signal",
-            '"decision":"block"' in role_prefix_only_watcher_stop.get("stdout_preview", "").lower(),
-            "Stop should not treat a generic role prefix such as REV- as watcher coverage without WATCHER_REPORT or WATCHER_NOT_USED.",
-        )
-
-        pm_led_probe = run_prompt_hook_sample(root, "Review PM-led team preset workflow routing and level escalation criteria.")
-        try:
-            pm_led_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError):
-            pm_led_state = {}
-        add_check(
-            "pm_led_team_preset_uses_standing_authorization_only",
-            pm_led_probe.get("status") == "pass"
-            and pm_led_state.get("delegationAuthorized") is True and pm_led_state.get("subagentDecisionRequired") is True
-            and "delegation_authorized" in pm_led_state.get("userAuthorizations", []),
-            "PM-led/team preset wording should use standing L3/L4 authorization without implying that a sidecar was actually used.",
-        )
-        spark_probe = run_prompt_hook_sample(root, "Inspect many files across hooks and maintenance with broad search before editing.")
-        spark_stdout = spark_probe.get("stdout_preview", "").lower()
-        spark_state = json.loads(read_text(state_path))
-        add_check(
-            "spark_read_sidecar_standing_authorized_with_closure",
-            spark_probe.get("status") == "pass"
-            and "spark sidecar" in spark_stdout
-            and "no extra prompt authorization required" in spark_stdout
-            and spark_state.get("delegationAuthorized") is True and spark_state.get("subagentDecisionRequired") is True
-            and "delegation_authorized" in spark_state.get("userAuthorizations", []),
-            "Many-file read/search prompts should surface Spark sidecar standing authorization and preserve final SUBAGENT_CALL closure.",
-        )
-        run_post_tool_hook_sample(root, "functions.shell_command", "rg WATCHER_REPORT maintenance")
-        try:
-            text_scan_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError):
-            text_scan_state = {}
-        add_check(
-            "posttooluse_text_mentions_do_not_create_subagent_events",
-            not text_scan_state.get("subagentEvents"),
-            "PostToolUse should not treat read-only text mentions of WATCHER_REPORT or WATCHER_NOT_USED as subagent activity.",
-        )
-
-        run_prompt_hook_sample(root, "Tiny local note.")
-        pre_level_probe = run_hook_sample(root, "python skills/ui-ux-pro-max/scripts/design_system.py --help")
-        try:
-            pre_level_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError):
-            pre_level_state = {}
-        add_check(
-            "pretooluse_can_raise_level_for_skill_script_surface",
-            pre_level_probe.get("status") == "pass"
-            and pre_level_state.get("taskClass") == "L3"
-            and any("Compatibility review required" in str(item) for item in pre_level_state.get("requiredReminders", [])),
-            "PreToolUse should raise task class and require compatibility review for skill script surfaces.",
-        )
-
-        run_post_tool_hook_sample(
-            root,
-            "apply_patch",
-            "*** Update File: hooks/lightweight-codex-hook.ps1\n+root cause workflow harness adjustment\n",
-        )
-        try:
-            post_level_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError):
-            post_level_state = {}
-        add_check(
-            "posttooluse_can_raise_l4_for_incident_governance_surface",
-            post_level_state.get("taskClass") == "L4"
-            and post_level_state.get("anomalyPauseExpected") is True
-            and any("Compatibility review required" in str(item) for item in post_level_state.get("requiredReminders", [])),
-            "PostToolUse should raise to L4 when incident language intersects workflow/harness surfaces.",
-        )
-        control_plane_text = str(post_level_state.get("controlPlaneReminders", "")).lower()
-        add_check(
-            "posttooluse_does_not_run_autonomous_harness_checks",
-            "run doctor/verify explicitly" in control_plane_text
-            and "status" not in control_plane_text
-            and "passed" not in control_plane_text,
-            "PostToolUse should only remind about explicit doctor/verify checks, not run heavy harness commands autonomously.",
-        )
-
-        run_post_tool_hook_sample(root, "spawn_agent", '{"agent_type":"reviewer"}')
-        event_final_without_marker = (
-            "FINAL PREFLIGHT Done: subagent event sample. Fixed / changed: sample hook state only. "
-            "Verification: direct subagent event state. Remaining / separate issues: residual risk low. "
-            "Related-scope compatibility: unchanged. Commit status: not committed. "
-            "pause trigger: posttool governance incident. first mismatch/root cause traced."
-        )
-        event_final_with_marker = (
-            event_final_without_marker
-            + " SUBAGENT_CALL used reason subagent tool event observed direct evidence spawn_agent residual risk low."
-            + " SKILL_EVIDENCE used reason agent-harness route direct evidence hook workflow sample residual risk low."
-        )
-        event_stop_missing = run_stop_hook_sample(root, event_final_without_marker)
-        event_stop_with_marker = run_stop_hook_sample(root, event_final_with_marker)
-        add_check(
-            "stop_requires_marker_after_actual_subagent_tool_event",
-            "remaining risk: subagent activity or authorization is not closed" in event_stop_missing.get("stdout_preview", "").lower()
-            and "next recommended action:" in event_stop_missing.get("stdout_preview", "").lower()
-            and '"continue":true' in event_stop_with_marker.get("stdout_preview", "").lower(),
-            "Stop should require SUBAGENT_CALL evidence when a subagent tool event exists, even without prompt authorization state.",
-        )
-
-        run_prompt_hook_sample(root, "Tiny local note.")
-        nested_subagent_probe = run_lightweight_hook_sample(
-            root,
-            {
-                "hook_event_name": "PostToolUse",
-                "tool_name": "multi_tool_use.parallel",
-                "tool_input": {
-                    "tool_uses": [
-                        {
-                            "recipient_name": "functions.spawn_agent",
-                            "parameters": {"agent_type": "explorer"},
-                        }
-                    ]
-                },
+        workframe_probe = sample(
+            "PostToolUse",
+            tool_name="functions.shell_command",
+            tool_input={
+                "command": 'Write-Output "HOOK_WORKFRAME purpose=test; surface=hooks; impact=hooks; checks=smoke; rollback=restore"'
+            },
+            tool_response={
+                "exit_code": 0,
+                "stdout": "HOOK_WORKFRAME purpose=test; surface=hooks; impact=hooks; checks=smoke; rollback=restore",
             },
         )
-        try:
-            nested_subagent_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError):
-            nested_subagent_state = {}
         add_check(
-            "posttooluse_records_nested_parallel_subagent_event",
-            nested_subagent_probe.get("status") == "pass"
-            and nested_subagent_state.get("subagentEvents")
-            and any("multi_tool_use.parallel" in str(item) for item in nested_subagent_state.get("subagentEvents", [])),
-            "PostToolUse should record subagent activity when spawn_agent is nested inside multi_tool_use.parallel.",
+            "post_tool_use_records_workframe",
+            workframe_probe.get("status") == "pass" and stdout(workframe_probe).strip() == "" and not stderr(workframe_probe),
+            "PostToolUse should record a compact workframe marker.",
         )
 
-        run_prompt_hook_sample(root, "Tiny local note.")
-        nested_l4_probe = run_lightweight_hook_sample(
-            root,
-            {
-                "hook_event_name": "PostToolUse",
-                "tool_name": "multi_tool_use.parallel",
-                "tool_input": {
-                    "note": "apply_patch hooks/lib/lightweight-codex-workflow.ps1 root cause failed hidden fallback",
-                    "tool_uses": [
-                        {
-                            "recipient_name": "functions.spawn_agent",
-                            "parameters": {"agent_type": "explorer"},
-                        }
-                    ],
-                },
-            },
+        mutation_after_workframe = sample(
+            "PreToolUse",
+            tool_name="functions.apply_patch",
+            tool_input={"patch": "*** Update File: C:\\Users\\anise\\.codex\\hooks.json"},
         )
-        try:
-            nested_l4_state = json.loads(read_text(state_path))
-        except (OSError, json.JSONDecodeError):
-            nested_l4_state = {}
         add_check(
-            "posttooluse_nested_subagent_does_not_downgrade_l4",
-            nested_l4_probe.get("status") == "pass"
-            and nested_l4_state.get("taskClass") == "L4",
-            "A nested subagent event must not lower an incident/governance tool adjustment from L4 to L3.",
+            "pre_tool_use_allows_mutation_after_sync_and_workframe",
+            mutation_after_workframe.get("status") == "pass"
+            and stdout(mutation_after_workframe).strip() == ""
+            and not stderr(mutation_after_workframe),
+            "PreToolUse should allow mutation after context sync and HOOK_WORKFRAME.",
+        )
+
+        changed_probe = sample(
+            "PostToolUse",
+            tool_name="functions.apply_patch",
+            tool_input={"patch": "*** Update File: C:\\Users\\anise\\.codex\\hooks.json"},
+            tool_response={"exit_code": 0, "stdout": "Success"},
+        )
+        add_check(
+            "post_tool_use_records_changed_state",
+            changed_probe.get("status") == "pass" and stdout(changed_probe).strip() == "" and not stderr(changed_probe),
+            "PostToolUse should record changed state without storing raw tool output.",
+        )
+
+        stop_probe = sample(
+            "Stop",
+            last_assistant_message="Changed compact hooks. SUBAGENT_CALL not_used reason=smoke substitute=direct hook samples residual risk=low.",
+        )
+        add_check(
+            "stop_returns_continue_true_without_block",
+            stop_probe.get("status") == "pass"
+            and '"continue":true' in stdout(stop_probe)
+            and '"decision":"block"' not in stdout(stop_probe).lower()
+            and not stderr(stop_probe),
+            "Stop should write pending handoff if needed and return continue:true, never decision:block.",
+        )
+
+        pending_path = temp_dir / f"{session_id}.pending.json"
+        pending = read_pending_json(pending_path)
+        pending_text = json.dumps(pending, sort_keys=True)
+        add_check(
+            "stop_writes_sanitized_pending_handoff",
+            pending.get("kind") == "next_turn_handoff"
+            and "SECRET_READ_BLOCKED" in pending_text
+            and "DESTRUCTIVE_ACTION_BLOCKED" in pending_text
+            and "Success" not in pending_text
+            and "git status --short" not in pending_text,
+            "Pending handoff should contain compact work items, not raw tool output or full commands.",
+        )
+
+        next_prompt_probe = sample("UserPromptSubmit", turn_id="t2", prompt="Continue.")
+        add_check(
+            "next_prompt_injects_pending_once",
+            next_prompt_probe.get("status") == "pass"
+            and "NEXT_TURN_WORK_ITEMS" in stdout(next_prompt_probe)
+            and not stderr(next_prompt_probe),
+            "The next UserPromptSubmit should inject pending handoff work items once.",
+        )
+
+        delivered = read_pending_json(pending_path)
+        repeat_prompt_probe = sample("UserPromptSubmit", turn_id="t3", prompt="Continue again.")
+        add_check(
+            "pending_handoff_marked_delivered",
+            delivered.get("delivered") is True
+            and "NEXT_TURN_WORK_ITEMS" not in stdout(repeat_prompt_probe)
+            and not stderr(repeat_prompt_probe),
+            "Delivered pending handoff should not be injected repeatedly.",
         )
     finally:
-        if original_state_exists:
-            state_path.parent.mkdir(parents=True, exist_ok=True)
-            state_path.write_bytes(original_state_bytes or b"")
-        else:
+        for path in temp_dir.glob(f"{session_id}*.json"):
             try:
-                state_path.unlink()
+                path.unlink()
             except FileNotFoundError:
                 pass
-
-    restored_state_exists = state_path.exists()
-    restored_state_bytes = state_path.read_bytes() if restored_state_exists else None
-    add_check(
-        "hook_policy_smoke_restores_live_state",
-        restored_state_exists == original_state_exists and restored_state_bytes == original_state_bytes,
-        "Synthetic UserPromptSubmit samples must not leave L4 delegated watcher state behind for the real Stop hook.",
-    )
+        try:
+            (temp_dir / f"cwd-{cwd_hash}.pending.json").unlink()
+        except FileNotFoundError:
+            pass
 
     return write_smoke_report(root, "hook-policy-smoke", checks)
-
-
 def check_terms_file(root: Path, relative_path: str, terms: list[str]) -> tuple[bool, str]:
     path = root / relative_path
     if not path.exists():
@@ -795,6 +515,6 @@ def check_goal_integrity_gate_smoke(root: Path) -> dict[str, Any]:
     add_file_check(
         "agents_policy",
         "AGENTS.md",
-        ["midpoint and pre-ship", "c0-c4", "normalized worker packets", "watcher_not_used"],
+        ["midpoint and pre-ship", "maintenance/GOAL_INTEGRITY_GATE.md", "maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md", "WATCHER_NOT_USED"],
     )
     return write_smoke_report(root, "goal-integrity-gate-smoke", checks)

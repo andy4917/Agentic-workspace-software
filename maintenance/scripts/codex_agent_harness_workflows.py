@@ -126,6 +126,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
             ),
         }
     )
+    checks.append({"name": "benchmark_smoke", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "benchmark", "--eval-id", "config-parse"], root, timeout=180)})
     if command_exists("pwsh"):
         checks.append(
             {
@@ -141,7 +142,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
                         "pwsh",
                         "-NoProfile",
                         "-Command",
-                        "$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile('hooks/lightweight-codex-hook.ps1',[ref]$tokens,[ref]$errors)>$null; if($errors.Count){$errors | ConvertTo-Json; exit 1}else{'OK'}",
+                        "$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile('hooks/compact-codex-hook.ps1',[ref]$tokens,[ref]$errors)>$null; if($errors.Count){$errors | ConvertTo-Json; exit 1}else{'OK'}",
                     ],
                     root,
                 ),
@@ -195,7 +196,7 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
     )
     checks.append({"name": "json_eval_definitions", **run_command([sys.executable, "-c", "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('evals').glob('*.json')]"], root)})
     checks.append({"name": "agent_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('agents').glob('*.toml')]"], root)})
-    checks.append({"name": "hook_policy_json", **run_command([sys.executable, "-m", "json.tool", "hooks/lightweight-codex-policy.json"], root)})
+    checks.append({"name": "hook_policy_json", **run_command([sys.executable, "-m", "json.tool", "hooks/policy.compact.json"], root)})
     checks.append({"name": "calibration_policy_smoke", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "eval", "--eval-id", "calibration-policy-smoke"], root)})
     required_paths = [
         "README.md",
