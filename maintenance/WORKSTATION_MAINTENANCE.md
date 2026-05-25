@@ -155,7 +155,9 @@ exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
   authority and not a replacement for AGENTS, hooks, scorecard, Memento gates,
   tests, runtime output, or PM verification.
 - `verification`:
-  `maintenance\scripts\memento-mcp-runtime.ps1 verify`.
+  `maintenance\scripts\memento-mcp-runtime.ps1 verify` for read-only runtime
+  proof. Use `verify -WriteProbe` only for an intentional memory write/feedback
+  probe.
 - `rollback`: stop with `maintenance\scripts\memento-mcp-runtime.ps1 stop`,
   remove or disable the `memento` MCP registration with Codex CLI only when the
   user explicitly asks, and preserve the ignored state directory unless the user

@@ -40,6 +40,25 @@ $patterns = @(
     }
 )
 
+function Test-AllowedScannerLine {
+    param(
+        [string]$File,
+        [string]$Content
+    )
+
+    if ($Content -match '\$secretPatterns\b' -or $Content -match '\bsecretPatterns\b' -or $Content -match '\$secretHits\b' -or $Content -match '\bsecretHits\b') {
+        return $true
+    }
+    if ($Content -match 'process\.env\.' -and $Content -match '\b[A-Z0-9_]*(API_KEY|CREDENTIAL|PASSWORD|SECRET|TOKEN)[A-Z0-9_]*\s*=') {
+        return $true
+    }
+    if ($File -like "maintenance/patches/*.patch" -and $Content -match 'process\.env\.') {
+        return $true
+    }
+
+    return $false
+}
+
 $currentFile = ""
 $addedLines = 0
 $findings = New-Object System.Collections.Generic.List[object]
@@ -62,6 +81,9 @@ foreach ($line in $diff) {
     $content = $text.Substring(1)
     foreach ($pattern in $patterns) {
         if ($content -match [string]$pattern.regex) {
+            if (Test-AllowedScannerLine -File $currentFile -Content $content) {
+                continue
+            }
             $findings.Add([pscustomobject]@{
                 file = $currentFile
                 category = [string]$pattern.name

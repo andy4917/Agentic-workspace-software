@@ -11,6 +11,7 @@
 *.yml text eol=lf
 *.toml text eol=lf
 *.py text eol=lf
+*.patch text eol=lf whitespace=-blank-at-eol
 
 # OpenAI-bundled plugin cache is kept for plugin compatibility and rollback.
 # It is not owned runtime-migration source; track it as vendored for Linguist.

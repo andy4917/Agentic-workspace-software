@@ -38,8 +38,14 @@ Codex should operate as a PM-led workflow that combines:
 
 Runtime subagent activation rule:
 
-- current Codex runtime policy requires an explicit user request before calling subagents;
-- user phrases such as `multi-agent`, `subagent`, `spawn_agent`, `parallel agent`, `role separation`, `delegate`, `delegation`, or `delegated` count as explicit authorization for the current goal; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
+- current Codex runtime policy requires user authorization before calling subagents;
+- this tracked `AGENTS.md` is the reviewed source for the standing user
+  authorization to make bounded subagent calls on repo, workstation, workflow,
+  toolchain, review, remediation, and verification goals; `config.toml`
+  `developer_instructions` mirrors that authorization into runtime context, so
+  the user does not need to repeat a per-prompt delegation phrase for those
+  goals;
+- user phrases such as `multi-agent`, `subagent`, `spawn_agent`, `parallel agent`, `role separation`, `delegate`, `delegation`, or `delegated` still count as explicit authorization for the current goal; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
 - `PM-led`, `team preset`, `workflow`, or `review` alone do not count as explicit subagent authorization; they may still raise the task level or justify a local review workflow.
 - when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
 - enabled feature flags are capability, not evidence of actual subagent use.

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet("status", "start", "stop", "restart", "repair", "verify")]
-    [string] $Action = "status"
+    [string] $Action = "status",
+    [switch] $WriteProbe
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,8 +33,66 @@ $ServerPidPath = Join-PathStrict $StateRoot "memento-server.pid"
 $ServerOutLog = Join-PathStrict $LogRoot "memento-server.out.log"
 $ServerErrLog = Join-PathStrict $LogRoot "memento-server.err.log"
 $EnvPath = Join-PathStrict $SourceRoot ".env"
-$CodexExe = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin\codex.exe"
-$NodeExe = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin\node.exe"
+
+function Resolve-CodexBundledTool {
+    param([Parameter(Mandatory = $true)][string] $Name)
+
+    $direct = Join-PathStrict $env:LOCALAPPDATA ("OpenAI\Codex\bin\" + $Name + ".exe")
+    if (Test-Path -LiteralPath $direct -PathType Leaf) {
+        return $direct
+    }
+
+    $binRoot = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin"
+    if (Test-Path -LiteralPath $binRoot -PathType Container) {
+        $matches = @(Get-ChildItem -LiteralPath $binRoot -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $candidate = Join-PathStrict $_.FullName ($Name + ".exe")
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                    Get-Item -LiteralPath $candidate
+                }
+            } |
+            Sort-Object LastWriteTime -Descending)
+        if ($matches.Count -gt 0) {
+            return $matches[0].FullName
+        }
+    }
+
+    return $null
+}
+
+$CodexExe = Resolve-CodexBundledTool -Name "codex"
+$NodeExe = Resolve-CodexBundledTool -Name "node"
+
+function Get-MementoMinimalRuntimeGateMissing {
+    $requirements = @(
+        @{ Path = "lib\config.js"; Pattern = "NLI_ENABLED"; Description = "NLI_ENABLED config gate" },
+        @{ Path = "lib\config.js"; Pattern = "RERANKER_ENABLED"; Description = "RERANKER_ENABLED config gate" },
+        @{ Path = "lib\memory\signals\NLIClassifier.js"; Pattern = "NLI_ENABLED"; Description = "NLI disabled mode" },
+        @{ Path = "lib\memory\Reranker.js"; Pattern = "RERANKER_ENABLED"; Description = "Reranker disabled mode" }
+    )
+
+    $missing = @()
+    foreach ($requirement in $requirements) {
+        $path = Join-PathStrict $SourceRoot $requirement.Path
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            $missing += ($requirement.Description + " missing file " + $requirement.Path)
+            continue
+        }
+        if (-not (Select-String -LiteralPath $path -SimpleMatch -Pattern $requirement.Pattern -Quiet)) {
+            $missing += ($requirement.Description + " missing pattern " + $requirement.Pattern)
+        }
+    }
+
+    return @($missing)
+}
+
+function Assert-MementoMinimalRuntimeGateSupport {
+    $missing = @(Get-MementoMinimalRuntimeGateMissing)
+    if ($missing.Count -gt 0) {
+        $patchPath = Join-PathStrict $CodexHome "maintenance\patches\memento-minimal-runtime-gates.patch"
+        throw "Memento source is missing minimal runtime gates: $($missing -join '; '). Apply and review patch: $patchPath"
+    }
+}
 
 function Read-DotEnv {
     param([Parameter(Mandatory = $true)][string] $Path)
@@ -111,10 +170,10 @@ $PgIsReady = Join-PathStrict $PostgresBin "pg_isready.exe"
 $Psql = Join-PathStrict $PostgresBin "psql.exe"
 $PostgresExe = Join-PathStrict $PostgresBin "postgres.exe"
 
-if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) {
+if ([string]::IsNullOrWhiteSpace($NodeExe) -or -not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) {
     $NodeExe = (Get-Command node.exe -ErrorAction Stop).Source
 }
-if (-not (Test-Path -LiteralPath $CodexExe -PathType Leaf)) {
+if ([string]::IsNullOrWhiteSpace($CodexExe) -or -not (Test-Path -LiteralPath $CodexExe -PathType Leaf)) {
     $CodexExe = (Get-Command codex.exe -ErrorAction SilentlyContinue).Source
 }
 
@@ -388,15 +447,16 @@ function Stop-PostgresRuntime {
 }
 
 function Start-MementoRuntime {
+    if (-not (Test-Path -LiteralPath (Join-PathStrict $SourceRoot "server.js") -PathType Leaf)) {
+        throw "Memento source is missing server.js: $SourceRoot"
+    }
+    Assert-MementoMinimalRuntimeGateSupport
+
     Start-PostgresRuntime
 
     if (Test-MementoHealth) {
         Write-Detail "memento=http-already-healthy"
         return
-    }
-
-    if (-not (Test-Path -LiteralPath (Join-PathStrict $SourceRoot "server.js") -PathType Leaf)) {
-        throw "Memento source is missing server.js: $SourceRoot"
     }
 
     New-Item -ItemType Directory -Path $LogRoot -Force | Out-Null
@@ -406,6 +466,8 @@ function Start-MementoRuntime {
         MEMENTO_INPROCESS_ONNX_ENABLED = $InProcessOnnxEnabled
         EMBEDDING_PROVIDER = $ManagedEmbeddingProvider
         MEMENTO_SEARCH_PARAM_ADAPTOR_ENABLED = "false"
+        RERANKER_ENABLED = "false"
+        NLI_ENABLED = "false"
     }
     if ($ManagedEmbeddingProvider -eq "none") {
         $childEnv["EMBEDDING_API_KEY"] = ""
@@ -533,6 +595,8 @@ function Get-ToolTextJson {
 }
 
 function Invoke-MementoVerify {
+    param([bool] $AllowMemoryWrite = $false)
+
     Start-MementoRuntime
 
     $vectorTypes = Invoke-PsqlScalar -Sql "SELECT string_agg(c.relname || ':' || format_type(a.atttypid, a.atttypmod), ', ' ORDER BY c.relname) FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'agent_memory' AND c.relname IN ('fragments','morpheme_dict') AND a.attname = 'embedding' AND NOT a.attisdropped;"
@@ -586,6 +650,9 @@ function Invoke-MementoVerify {
 
     $recall = Get-ToolTextJson (Invoke-MementoTool -Name "recall" -Arguments @{ topic = "memento-pm-runtime"; workspace = "global_pm"; limit = 1; includeContext = $true; excludeSeen = $false } -SessionId $sessionId -RequestId $requestId)
     if ([int]$recall.count -lt 1) {
+        if (-not $AllowMemoryWrite) {
+            throw "recall did not return the runtime support fragment; rerun repair or verify -WriteProbe only when a write probe is intended"
+        }
         $remember = Get-ToolTextJson (Invoke-MementoTool -Name "remember" -Arguments @{
             content = "Memento MCP runtime verification created the initial support-only Codex PM memory fragment."
             topic = "memento-pm-runtime"
@@ -607,22 +674,26 @@ function Invoke-MementoVerify {
     }
     Write-Detail ("recall=pass count=" + [string]$recall.count)
 
-    $fragmentIds = @([string]$recall.fragments[0].id)
-    $searchEventId = [int]$recall._meta.searchEventId
-    $feedback = Get-ToolTextJson (Invoke-MementoTool -Name "tool_feedback" -Arguments @{
-        tool_name = "recall"
-        relevant = $true
-        sufficient = $true
-        suggestion = "Runtime smoke returned the expected support-only fragment."
-        context = "runtime verify"
-        trigger_type = "voluntary"
-        fragment_ids = $fragmentIds
-        search_event_id = $searchEventId
-    } -SessionId $sessionId -RequestId $requestId)
-    if (-not [bool]$feedback.success) {
-        throw "tool_feedback failed"
+    if ($AllowMemoryWrite) {
+        $fragmentIds = @([string]$recall.fragments[0].id)
+        $searchEventId = [int]$recall._meta.searchEventId
+        $feedback = Get-ToolTextJson (Invoke-MementoTool -Name "tool_feedback" -Arguments @{
+            tool_name = "recall"
+            relevant = $true
+            sufficient = $true
+            suggestion = "Runtime smoke returned the expected support-only fragment."
+            context = "runtime verify"
+            trigger_type = "voluntary"
+            fragment_ids = $fragmentIds
+            search_event_id = $searchEventId
+        } -SessionId $sessionId -RequestId $requestId)
+        if (-not [bool]$feedback.success) {
+            throw "tool_feedback failed"
+        }
+        Write-Detail "tool_feedback=pass"
+    } else {
+        Write-Detail "tool_feedback=skipped-readonly"
     }
-    Write-Detail "tool_feedback=pass"
 
     $proc = Get-MementoServerProcess
     if ($null -eq $proc) {
@@ -642,7 +713,7 @@ function Invoke-MementoRepair {
     Write-Detail "repair=begin"
     Stop-MementoRuntime -StopPostgres $true
     Start-MementoRuntime
-    Invoke-MementoVerify
+    Invoke-MementoVerify -AllowMemoryWrite $true
     Write-Detail "repair=complete"
 }
 
@@ -657,6 +728,8 @@ function Invoke-Status {
     Write-Detail ("memento_inprocess_onnx_enabled=" + $InProcessOnnxEnabled)
     Write-Detail ("memento_managed_embedding_provider=" + $ManagedEmbeddingProvider)
     Write-Detail ("memento_max_working_set_mb=" + [string]$MaxWorkingSetMb)
+    $missingGates = @(Get-MementoMinimalRuntimeGateMissing)
+    Write-Detail ("memento_minimal_runtime_gates=" + $(if ($missingGates.Count -eq 0) { "present" } else { "missing:" + ($missingGates -join ";") }))
     $proc = Get-MementoServerProcess
     Write-Detail ("memento_pid=" + $(if ($null -eq $proc) { "none" } else { [string]$proc.Id }))
     if ($null -ne $proc) {
@@ -672,5 +745,5 @@ switch ($Action) {
     "stop" { Stop-MementoRuntime; Invoke-Status; break }
     "restart" { Stop-MementoRuntime -StopPostgres $false; Start-MementoRuntime; Invoke-Status; break }
     "repair" { Invoke-MementoRepair; break }
-    "verify" { Invoke-MementoVerify; break }
+    "verify" { Invoke-MementoVerify -AllowMemoryWrite ([bool]$WriteProbe); break }
 }

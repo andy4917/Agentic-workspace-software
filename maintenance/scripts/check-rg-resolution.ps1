@@ -1,6 +1,7 @@
 param(
     [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path ([Environment]::GetFolderPath("UserProfile")) ".codex" }),
-    [switch]$Json
+    [switch]$Json,
+    [switch]$WriteReport
 )
 
 $ErrorActionPreference = "Stop"
@@ -79,6 +80,33 @@ function ConvertTo-EncodedPowerShellCommand {
     return [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($Command))
 }
 
+function Resolve-CodexBundledTool {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    $binRoot = Join-Path $env:LOCALAPPDATA "OpenAI\Codex\bin"
+    $direct = Join-Path $binRoot ($Name + ".exe")
+    if (Test-Path -LiteralPath $direct -PathType Leaf) {
+        return $direct
+    }
+
+    if (Test-Path -LiteralPath $binRoot -PathType Container) {
+        $match = Get-ChildItem -LiteralPath $binRoot -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $candidate = Join-Path $_.FullName ($Name + ".exe")
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                    Get-Item -LiteralPath $candidate
+                }
+            } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+        if ($null -ne $match) {
+            return $match.FullName
+        }
+    }
+
+    return ""
+}
+
 $bundleRoot = Join-Path $env:LOCALAPPDATA "OpenAI\Codex\bin"
 $shimDir = Join-Path $CodexHome "toolchains\shims"
 $cmdShimPath = Join-Path $shimDir "rg.cmd"
@@ -97,7 +125,7 @@ Add-Check -Checks $checks -Name "persistent-path-excludes-shim-root" -Status $(i
     persistent_hits = @($persistentContainsShim)
 }
 
-$bundleRg = Join-Path $bundleRoot "rg.exe"
+$bundleRg = Resolve-CodexBundledTool -Name "rg"
 Add-Check -Checks $checks -Name "codex-bundled-rg-exists" -Status $(if (Test-Path -LiteralPath $bundleRg) { "pass" } else { "fail" }) -Detail "Codex Desktop bundled rg.exe is the source of truth for rg." -Data @{
     bundle_rg = $bundleRg
 }
@@ -220,12 +248,14 @@ $report = [ordered]@{
     checks = $checks
 }
 
-$reportDir = Join-Path $CodexHome "reports"
-if (-not (Test-Path -LiteralPath $reportDir)) {
-    New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
-}
 $reportJson = $report | ConvertTo-Json -Depth 8
-Set-Content -LiteralPath (Join-Path $reportDir "rg-resolution.latest.json") -Value $reportJson -Encoding UTF8
+if ($WriteReport -or -not $Json) {
+    $reportDir = Join-Path $CodexHome "reports"
+    if (-not (Test-Path -LiteralPath $reportDir)) {
+        New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
+    }
+    Set-Content -LiteralPath (Join-Path $reportDir "rg-resolution.latest.json") -Value $reportJson -Encoding UTF8
+}
 
 if ($Json) {
     $reportJson

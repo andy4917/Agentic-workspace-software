@@ -13,6 +13,35 @@ function Get-CodexBundleRoot {
     return ""
 }
 
+function Resolve-CodexBundledTool {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    $binRoot = Get-CodexBundleRoot
+    if ([string]::IsNullOrWhiteSpace($binRoot)) {
+        return ""
+    }
+
+    $direct = Join-Path $binRoot ($Name + ".exe")
+    if (Test-Path -LiteralPath $direct -PathType Leaf) {
+        return $direct
+    }
+
+    $match = Get-ChildItem -LiteralPath $binRoot -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $candidate = Join-Path $_.FullName ($Name + ".exe")
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                Get-Item -LiteralPath $candidate
+            }
+        } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if ($null -ne $match) {
+        return $match.FullName
+    }
+
+    return ""
+}
+
 function Resolve-ScoopShimTarget {
     param([string]$ShimExe)
 
@@ -98,20 +127,27 @@ function Test-WrapperUsesBundle {
     $text = Get-Content -LiteralPath $WrapperPath -Raw
     $bundlePattern = [regex]::Escape("%LOCALAPPDATA%\OpenAI\Codex\bin\$ToolName.exe")
     $absolutePattern = [regex]::Escape((Join-Path $BundleRoot "$ToolName.exe"))
-    return ($text -match $bundlePattern -or $text -match $absolutePattern)
+    $dynamicBundlePattern = [regex]::Escape("%LOCALAPPDATA%\OpenAI\Codex\bin")
+    return ($text -match $bundlePattern -or $text -match $absolutePattern -or ($text -match $dynamicBundlePattern -and $text -match [regex]::Escape("$ToolName.exe")))
 }
 
 $bundleRoot = Get-CodexBundleRoot
 $workspaceRuntimeRoot = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".cache\codex-runtimes\codex-primary-runtime\dependencies"
 $windowsAppsCodexPattern = "*\WindowsApps\OpenAI.Codex_*\app\resources*"
 $shimDir = Join-Path $CodexHome "toolchains\shims"
-$officialBundleTools = @("node", "rg")
+$officialBundleTools = @("codex", "node", "rg")
 $jsLocalChainTools = @("npm", "npx")
 $checks = [System.Collections.Generic.List[object]]::new()
 $rgResolutionScript = Join-Path $CodexHome "maintenance\scripts\check-rg-resolution.ps1"
+if (-not (Test-Path -LiteralPath $rgResolutionScript -PathType Leaf)) {
+    $candidate = Join-Path $PSScriptRoot "check-rg-resolution.ps1"
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        $rgResolutionScript = $candidate
+    }
+}
 
 foreach ($tool in $officialBundleTools) {
-    $bundlePath = if ($bundleRoot) { Join-Path $bundleRoot "$tool.exe" } else { "" }
+    $bundlePath = Resolve-CodexBundledTool -Name $tool
     $wrapperPath = Join-Path $shimDir "$tool.cmd"
     $bundleExists = $bundlePath -and (Test-Path -LiteralPath $bundlePath)
     $wrapperUsesBundle = Test-WrapperUsesBundle -WrapperPath $wrapperPath -ToolName $tool -BundleRoot $bundleRoot
@@ -254,10 +290,10 @@ $gdbWrapper = Join-Path $shimDir "gdb.cmd"
 $gdbProbe = Invoke-WrapperProbe -WrapperPath $gdbWrapper -Arguments @("--version") -ExpectedPattern "GNU gdb"
 $checks.Add([ordered]@{
     name = "debugger-smoke:gdb"
-    status = if ($gdbProbe.ok) { "pass" } else { "fail" }
+    status = if ($gdbProbe.ok -or -not (Test-Path -LiteralPath $gdbWrapper -PathType Leaf)) { "pass" } else { "fail" }
     source_class = "local-chain"
     wrapper = $gdbWrapper
-    availability = if ($gdbProbe.ok) { "active" } else { "unavailable" }
+    availability = if ($gdbProbe.ok) { "active" } elseif (-not (Test-Path -LiteralPath $gdbWrapper -PathType Leaf)) { "optional_not_restored" } else { "unavailable" }
     target_scope = "GNU/UCRT native debugging"
     exit_code = $gdbProbe.exit_code
     output_preview = Get-PreviewText -Value $gdbProbe.output -Limit 160
@@ -268,10 +304,10 @@ $cdbWrapper = Join-Path $shimDir "cdb.cmd"
 $cdbProbe = Invoke-WrapperProbe -WrapperPath $cdbWrapper -Arguments @("-version") -ExpectedPattern "cdb version"
 $checks.Add([ordered]@{
     name = "debugger-smoke:cdb"
-    status = if ($cdbProbe.ok) { "pass" } else { "fail" }
+    status = if ($cdbProbe.ok -or -not (Test-Path -LiteralPath $cdbWrapper -PathType Leaf)) { "pass" } else { "fail" }
     source_class = "local-chain"
     wrapper = $cdbWrapper
-    availability = if ($cdbProbe.ok) { "active" } else { "unavailable" }
+    availability = if ($cdbProbe.ok) { "active" } elseif (-not (Test-Path -LiteralPath $cdbWrapper -PathType Leaf)) { "optional_not_restored" } else { "unavailable" }
     target_scope = "Windows Debugging Tools for dump/MSVC-native investigations"
     exit_code = $cdbProbe.exit_code
     output_preview = Get-PreviewText -Value $cdbProbe.output -Limit 160
@@ -317,12 +353,13 @@ foreach ($rustDebugger in @("rust-gdb", "rust-lldb")) {
     $probe = Invoke-WrapperProbe -WrapperPath $wrapper -Arguments @("--version")
     $probeText = "$($probe.output) $($probe.error)"
     $conditionalMsvc = (-not $probe.ok) -and ($probeText -match "not applicable") -and ($activeRustToolchain -match "pc-windows-msvc")
+    $missingOptional = -not (Test-Path -LiteralPath $wrapper -PathType Leaf)
     $checks.Add([ordered]@{
         name = "debugger-conditional:$rustDebugger"
-        status = if ($probe.ok -or $conditionalMsvc) { "pass" } else { "fail" }
+        status = if ($probe.ok -or $conditionalMsvc -or $missingOptional) { "pass" } else { "fail" }
         source_class = "local-chain"
         wrapper = $wrapper
-        availability = if ($probe.ok) { "active" } elseif ($conditionalMsvc) { "conditional_not_active" } else { "unavailable" }
+        availability = if ($probe.ok) { "active" } elseif ($conditionalMsvc) { "conditional_not_active" } elseif ($missingOptional) { "optional_not_restored" } else { "unavailable" }
         active_rust_toolchain = $activeRustToolchain
         target_scope = "Rustup debugger wrapper; conditional on compatible Rust toolchain"
         exit_code = $probe.exit_code

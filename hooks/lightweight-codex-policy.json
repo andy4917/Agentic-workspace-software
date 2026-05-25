@@ -15,8 +15,10 @@
   "subagents": {
     "max_parallel": 8,
     "max_depth": 1,
-    "default_spawn_policy": "conditional_after_explicit_user_authorization",
+    "default_spawn_policy": "conditional_after_standing_or_prompt_user_authorization",
     "explicit_user_authorization_required_by_runtime": true,
+    "standing_user_authorization_source": "AGENTS.md mirrored by config.toml developer_instructions",
+    "per_prompt_authorization_phrase_required": false,
     "required_start_skill": "vowline",
     "required_start_skill_path": "%USERPROFILE%\\.agents\\skills\\vowline\\SKILL.md",
     "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",

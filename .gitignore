@@ -19,6 +19,7 @@ models_cache.json
 sessions/
 archived_sessions/
 ambient-suggestions/
+.serena/
 log/
 logs/
 state/

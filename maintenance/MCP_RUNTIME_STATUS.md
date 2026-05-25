@@ -157,6 +157,9 @@ not use WSL, Docker, the old temp clone, old memory DB paths, or legacy
   default `MEMENTO_MAX_WORKING_SET_MB=512`.
 - `verification`: run
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\memento-mcp-runtime.ps1 verify`.
+  `verify` is read-only for memory feedback by default and reports
+  `tool_feedback=skipped-readonly`; use `verify -WriteProbe` only when an
+  intentional memory write/feedback probe is part of the check.
 - `doctor_coverage`: `maintenance\scripts\codex_agent_harness.py doctor --json`
   remains the full backward-compatible local check and includes
   `memento_runtime`. `doctor --tier core --json` intentionally excludes

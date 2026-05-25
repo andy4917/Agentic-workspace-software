@@ -1,12 +1,12 @@
 # Multi-Agent Workflow Status
 
-Updated: 2026-05-14
+Updated: 2026-05-26
 
 ## Direct Finding
 
 The multi-agent workflow was configured as a capability, but the local workflow text and hook reminder did not make the runtime authorization rule explicit.
 
-Current higher-priority runtime behavior requires an explicit user request before `spawn_agent` can be used. That means `multi_agent = true` and `child_agents_md = true` make the tool path available, but they do not by themselves authorize automatic subagent creation for every large task.
+Current higher-priority runtime behavior requires user authorization before `spawn_agent` can be used. The user has now approved a standing workspace authorization for bounded subagent calls on repo, workstation, workflow, toolchain, review, remediation, and verification goals. The reviewed source is `AGENTS.md`; `config.toml` `developer_instructions` mirrors it into runtime context. Feature flags only make the tool path available and do not make subagent reports completion authority.
 
 ## Current Config
 
@@ -37,15 +37,15 @@ Current higher-priority runtime behavior requires an explicit user request befor
 - `config.toml` now defines the `worker` role with `agents/worker.toml`, matching the existing explorer, reviewer, docs-researcher, and observer role pattern.
 - `model_reasoning_effort` is reset to `medium` as the persistent default; individual tasks can still escalate reasoning effort when justified.
 
-## 2026-05-14 Review Finding
+## 2026-05-26 Review Finding
 
-The 2026-05-14 review found one contradictory local edit in `AGENTS.md`: "The user always authorizes all types of sub-agent calls" weakened the runtime rule below it. That sentence has been removed. The active rule remains explicit per-prompt authorization before spawning subagents.
+The previous explicit-per-prompt rule is now stale for this workstation. The active rule is standing user authorization recorded in `AGENTS.md` and mirrored through `config.toml` `developer_instructions`, with prompt phrases still treated as current-goal authorization. This permits autonomous bounded sidecar delegation when useful, but it does not require subagents for tiny tasks and does not let subagents define parent-goal completion.
 
 The active session exposed `mcp__openaiDeveloperDocs__*` tools after tool discovery, so the older note that the OpenAI Docs MCP was not exposed is no longer current for this session. Keep the general MCP load rule: config presence is not proof of active tool availability; verify exposure in each session when the task depends on it.
 
 ## Operating Rule
 
-When the user explicitly asks for multi-agent, subagent, delegation, role separation, or parallel agent work:
+When standing authorization applies or the user explicitly asks for multi-agent, subagent, delegation, role separation, or parallel agent work:
 
 - the main session remains PM;
 - spawn sidecar agents for independent exploration, validation, review, or disjoint file ownership;
@@ -53,7 +53,7 @@ When the user explicitly asks for multi-agent, subagent, delegation, role separa
 - review subagent output before integrating;
 - report direct evidence, checks not run, and remaining risks.
 
-When the prompt does not explicitly authorize subagents:
+When standing authorization does not apply and the prompt does not explicitly authorize subagents:
 
 - keep work local;
 - use skills directly when their trigger matches;
