@@ -1,19 +1,20 @@
 # MCP Runtime Status
 
-Updated for the 2026-05-16 Codex app update clean pass.
+Updated for the 2026-05-26 minimal scaffold pass.
 
 ## Current Finding
 
-MCP tool loading is working in the current Codex Desktop session after tool
-discovery. The earlier failure was not a broken package install. The confirmed
-causes were path/filter fragility and already-running session tool schemas that
-had not refreshed.
+The minimal scaffold MCP set is intentionally limited to `memento`, `context7`,
+`chrome-devtools`, and `serena`. Any other user-configured MCP entry is stale
+for this baseline unless a future user request explicitly widens the set.
 
-The 2026-05-15 refresh excludes `memento` from optimization changes. It keeps
-Memento as support-only memory and updates the active-use posture for the other
-configured MCPs. `codex.cmd` now exists in `%USERPROFILE%\.codex\toolchains\shims`
-so MCP inventory commands can use the same explicit wrapper pattern as the
-other Codex-owned command-line tools.
+`memento` is the only configured MCP that has an expected live local service for
+scaffold validation. The current baseline policy is `registered + read-only live
+verify`: keep the MCP registration, keep the local service/start script
+documented, prove HTTP readiness and tool exposure with read-only verification,
+and exclude PostgreSQL data, Memento state, logs, sessions, caches, and auth
+material from the final clean baseline. Memory write/feedback probes require
+the explicit `verify -WriteProbe` path.
 
 `node_repl` is a separate Codex Desktop bundled execution tool, not a user
 `[mcp_servers.*]` entry in `config.toml`. It is surfaced through tool discovery
@@ -29,51 +30,6 @@ different command, credential source, or policy boundary.
 
 ## Current MCP Intent
 
-- `openaiDeveloperDocs`: global, streamable HTTP. Use for current OpenAI API,
-  model, Codex, plugin, and app-server documentation. Search first, then fetch
-  the exact doc page before quoting or relying on details.
-- `context7`: global, stdio via `npx -y @upstash/context7-mcp`, with
-  `CONTEXT7_API_KEY`. The configured command is the local-chain wrapper
-  `%USERPROFILE%\.codex\toolchains\shims\npx.cmd`, which prepends the official
-  Codex bundled Node runtime before invoking the local npm package command. Use
-  for current third-party library, framework, SDK, CLI, and cloud-service
-  documentation. Resolve the library id before querying.
-- `shadcn`: global, stdio via
-  `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y shadcn@latest mcp`. Use for
-  frontend work that needs shadcn/ui registry browsing, searching, component
-  docs, or install planning. It is enabled in global config for future frontend
-  sessions. Active-session usability still requires tool injection and a safe
-  read-only MCP call after the app/session reloads. If MCP tools are not
-  injected, use the shadcn CLI fallback through the same `npx.cmd` wrapper and
-  report `CLI_FALLBACK`.
-- `sequential_thinking`: global, stdio via
-  `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
-  @modelcontextprotocol/server-sequential-thinking`. Use only for ambiguous
-  multi-step planning/debugging where revision or branching adds value.
-- `windows_powershell`: global, stdio via
-  `maintenance\scripts\start-windows-powershell-mcp.cmd`, which prepends
-  `%USERPROFILE%\.codex\toolchains\shims` and
-  `%LOCALAPPDATA%\OpenAI\Codex\bin` before launching the installed
-  `PowerShell.MCP.Proxy.exe`. Use for persistent PowerShell diagnostics and
-  Windows command execution when its stateful console is useful. It exposes
-  `start_console`, `get_current_location`, `invoke_expression`, and
-  `wait_for_completion`; because `invoke_expression` is broad, keep approval
-  prompting and avoid treating it as a narrow read-only server.
-- `node_repl`: bundled Codex tool, discovered rather than configured. Use when a
-  skill or prompt says `node_repl`, for JavaScript execution, browser-plugin
-  setup code, package import checks, and app-bundled Node runtime diagnostics.
-- `chrome_devtools_observe`: frontend-only stdio MCP, intentionally OFF by
-  default. It remains registered in config with `enabled = false` so Codex app
-  settings show the capability without loading the tool outside frontend
-  observation work. It is toggled with
-  `maintenance\scripts\chrome-devtools-mcp-toggle.ps1`, not by hand-editing
-  `config.toml`. Use only after a task is confirmed to require rendered browser
-  observation. Default command is the local-chain wrapper
-  `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
-  chrome-devtools-mcp@latest --slim --headless --isolated
-  --no-usage-statistics --no-performance-crux`, with usage statistics and update
-  checks disabled by environment variables. Turn it OFF after the frontend task
-  and verify `state=off` with the server still registered as disabled.
 - `memento`: global, streamable HTTP at `http://127.0.0.1:57332/mcp`, bearer
   token sourced from `MEMENTO_ACCESS_KEY`. Use for PM memory support only:
   `context` at session start, `get_skill_guide` when behavior is unclear,
@@ -82,48 +38,33 @@ different command, credential source, or policy boundary.
   `tool_feedback` after recall. It is not completion authority and must not
   override current user instructions, scoped `AGENTS.md`, files, tests, runtime
   output, or direct PM verification. Active source is
-  `%USERPROFILE%\.codex\tools\memento-mcp`; active state is
-  `%USERPROFILE%\.codex\state\memento-mcp`; PostgreSQL listens on local port
-  `55432`; Memento HTTP listens on local port `57332`. Manage and verify with
-  `maintenance\scripts\memento-mcp-runtime.ps1`.
+  `%USERPROFILE%\.codex\tools\memento-mcp`; active state is excluded from the
+  final scaffold baseline. Manage and verify with
+  `maintenance\scripts\memento-mcp-runtime.ps1 verify`.
+- `context7`: global, stdio via `cmd /c npx -y @upstash/context7-mcp`, with
+  `CONTEXT7_API_KEY` sourced from the environment. Use for current third-party
+  library, framework, SDK, CLI, and cloud-service documentation. Resolve the
+  library id before querying.
+- `chrome-devtools`: global, stdio via
+  `cmd /c npx -y chrome-devtools-mcp@latest --slim --headless --isolated
+  --no-usage-statistics --no-performance-crux`. Use for rendered browser
+  observation when the active session exposes the tools. Do not connect it to a
+  user's normal Chrome profile or logged-in sensitive pages unless the user
+  explicitly asks for that risk boundary.
+- `serena`: global, stdio via pinned `uvx` source
+  `git+https://github.com/oraios/serena@981f560fa334ba52e9a2a45c702f23d971c9dcca`.
+  It starts with `--project-from-cwd --context=codex --open-web-dashboard
+  False`. For coding tasks, call `initial_instructions` when exposed, activate
+  the project when needed, and verify the next spawn leaves exactly one Serena
+  server root and no auto-opened dashboard.
+- `node_repl`: bundled Codex tool, discovered rather than configured. Use when a
+  skill or prompt says `node_repl`, for JavaScript execution, browser-plugin
+  setup code, package import checks, and app-bundled Node runtime diagnostics.
 
-## Frontend Browser Observation Toggle
-
-Chrome DevTools MCP is not part of the always-on global MCP set. Its scope is
-Codex-global only while a frontend task needs real rendered observation.
-
-Activation sequence:
-
-1. Confirm the task touches visible frontend UI or browser behavior.
-2. Run:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on
-```
-
-3. Reload or restart the Codex app/session before expecting new
-   `mcp__chrome_devtools_observe__...` tools to appear.
-4. Verify active tool exposure with tool discovery, then perform a small browser
-   observation such as navigation plus screenshot or equivalent safe read.
-5. After the frontend verification pass, run:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 off
-```
-
-6. Confirm:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 status
-```
-
-Expected final state is `state=off`.
-
-Use `-Visible` only when the task specifically requires a visible isolated Chrome
-window. Use `-Full` only when the slim tool surface is insufficient, for example
-when performance, network, accessibility snapshot, or deeper DevTools categories
-are required. Do not connect this MCP to a user's normal Chrome profile or
-logged-in sensitive pages unless the user explicitly asks for that risk boundary.
+Historical MCPs such as `openaiDeveloperDocs`, `shadcn`,
+`sequential_thinking`, `windows_powershell`, and `chrome_devtools_observe` are
+not part of the minimal scaffold baseline. Reintroduce them only through an
+explicit future user request and a new config-fragment reconciliation pass.
 
 ## Memento PM Memory Runtime
 
@@ -220,7 +161,10 @@ Run this check after shim or MCP command changes:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
 ```
 
-## 2026-05-16 Codex App Update Clean Pass
+## Historical 2026-05-16 Codex App Update Clean Pass
+
+This section is retained as historical maintenance evidence only. It is not the
+current minimal MCP baseline.
 
 - `source_class`: Codex Desktop package update plus managed workstation config
   cleanup.
@@ -302,19 +246,21 @@ When a task matches one of the purposes above:
    high-ambiguity planning; choose the matching MCP proactively and report the
    evidence surface used.
 
-## 2026-05-15 Active-Use Verification
+## Historical 2026-05-15 Active-Use Verification
+
+This section records the pre-reset MCP posture and must not be used as the
+current MCP allow-list.
 
 - `codex.cmd` shim added at `%USERPROFILE%\.codex\toolchains\shims\codex.cmd`.
 - `codex mcp list` through the shim succeeded and reported:
   `context7`, `sequential_thinking`, `windows_powershell`,
   `openaiDeveloperDocs`, and `memento` enabled; `chrome_devtools_observe` and
   `shadcn` were disabled before the refresh.
-- `shadcn` was changed to `enabled = true` in global config so future frontend
-  sessions can inject the MCP without a manual config edit. Current already
-  running sessions may still need reload before `mcp__shadcn__...` tools appear.
-- `chrome_devtools_observe` remains disabled by default. This is intentional:
-  it should be toggled on only for rendered frontend/browser observation and
-  turned off after use.
+- `shadcn` was changed to `enabled = true` in that historical config pass, but
+  it is not part of the 2026-05-26 minimal scaffold baseline.
+- `chrome_devtools_observe` was disabled by default in that historical config
+  pass. The 2026-05-26 minimal baseline uses the `chrome-devtools` MCP entry
+  instead.
 - Memento was inspected for support-only PM context but was not optimized or
   reconfigured in this refresh.
 
