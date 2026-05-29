@@ -4,6 +4,7 @@ param(
     [int]$ParentPid = 0,
     [int]$PollSeconds = 3,
     [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }),
+    [switch]$CleanupStaleOnEnsure,
     [switch]$DryRun
 )
 
@@ -253,11 +254,12 @@ function Invoke-Watch {
 }
 
 function Get-PwshPath {
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"),
-        "pwsh.exe",
-        "powershell.exe"
-    )
+    $candidates = @()
+    $candidates += @(Get-Command pwsh.exe -All -ErrorAction SilentlyContinue |
+        Where-Object { $_.Source -and $_.Source -notlike (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\*") } |
+        ForEach-Object { $_.Source })
+    $candidates += "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+    $candidates += "powershell.exe"
 
     foreach ($candidate in $candidates) {
         try {
@@ -274,6 +276,18 @@ function Get-CurrentScriptPath {
     if ($PSCommandPath) { return $PSCommandPath }
     if ($MyInvocation.MyCommand.Path) { return $MyInvocation.MyCommand.Path }
     throw "Unable to resolve current script path."
+}
+
+function Join-CommandLine {
+    param([string[]]$Arguments)
+
+    ($Arguments | ForEach-Object {
+        if ($_ -match '[\s"]') {
+            '"' + ($_ -replace '"', '\"') + '"'
+        } else {
+            $_
+        }
+    }) -join " "
 }
 
 function Test-WatcherRunning {
@@ -295,7 +309,14 @@ function Test-WatcherRunning {
 function Invoke-EnsureWatch {
     param([int]$AppServerPid)
 
-    $cleanupResult = Invoke-CleanupStale -AppServerPid $AppServerPid
+    $cleanupResult = if ($CleanupStaleOnEnsure) {
+        Invoke-CleanupStale -AppServerPid $AppServerPid
+    } else {
+        [pscustomobject]@{
+            skipped = $true
+            reason = "ensure-watch does not stop live runtimes by default"
+        }
+    }
     $status = Get-Status -AppServerPid $AppServerPid
     if ($null -eq $status.app_server_pid) {
         $result = [pscustomobject]@{
@@ -321,21 +342,24 @@ function Invoke-EnsureWatch {
         $outLog = Join-Path $stateDir ("runtime-process-watch-" + $appServerPidValue + ".out.log")
         $errLog = Join-Path $stateDir ("runtime-process-watch-" + $appServerPidValue + ".err.log")
         $pwsh = Get-PwshPath
-        $started = Start-Process -FilePath $pwsh `
-            -ArgumentList @(
-                "-NoProfile",
-                "-ExecutionPolicy", "Bypass",
-                "-File", $scriptPath,
-                "-Mode", "watch",
-                "-ParentPid", ([string]$appServerPidValue),
-                "-PollSeconds", ([string]$PollSeconds),
-                "-CodexHome", $CodexHome
-            ) `
-            -WindowStyle Hidden `
-            -RedirectStandardOutput $outLog `
-            -RedirectStandardError $errLog `
-            -PassThru
-        $watcherPid = [int]$started.Id
+        $commandLine = Join-CommandLine @(
+            $pwsh,
+            "-WindowStyle", "Hidden",
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", $scriptPath,
+            "-Mode", "watch",
+            "-ParentPid", ([string]$appServerPidValue),
+            "-PollSeconds", ([string]$PollSeconds),
+            "-CodexHome", $CodexHome
+        )
+        $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+            CommandLine = $commandLine
+        }
+        if ([int]$created.ReturnValue -ne 0) {
+            throw ("Failed to start watcher via Win32_Process.Create. return=" + $created.ReturnValue)
+        }
+        $watcherPid = [int]$created.ProcessId
     }
 
     $result = [pscustomobject]@{
