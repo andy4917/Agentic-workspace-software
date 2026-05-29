@@ -1,5 +1,10 @@
 @echo off
 setlocal
+set "CODEX_STANDALONE=%USERPROFILE%\.codex\packages\standalone\current\bin\codex.exe"
+if exist "%CODEX_STANDALONE%" (
+  "%CODEX_STANDALONE%" %*
+  exit /b %ERRORLEVEL%
+)
 set "CODEX_BIN=%LOCALAPPDATA%\OpenAI\Codex\bin"
 set "CODEX_TOOL=%CODEX_BIN%\codex.exe"
 if exist "%CODEX_TOOL%" goto run

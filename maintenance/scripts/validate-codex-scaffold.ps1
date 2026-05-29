@@ -12,7 +12,9 @@ $expectedSkills = @(
     "clean-all-slop",
     "code-review-and-quality",
     "debugging-and-error-recovery",
-    "roast-workstation-workflow"
+    "roast-workstation-workflow",
+    "ui-ux-pro-max",
+    "modern-web-guidance"
 )
 $expectedMcp = @("chrome-devtools", "context7", "memento", "serena")
 $expectedShims = @(

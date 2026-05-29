@@ -215,7 +215,8 @@ Common skill routing:
 - code/config change across more than one file: incremental implementation;
 - behavior change or bug fix: test-driven or prove-it workflow;
 - external API, library, framework, or version-sensitive work: source-backed documentation lookup;
-- frontend design, redesign, UI implementation, UX/UI review, visual polish, or frontend quality remediation: use the `impeccable` skill workflow when available;
+- HTML/CSS, clientside JavaScript, browser API, performance, accessibility, forms, layout, or modern web platform work: use the `modern-web-guidance` skill before implementation, then retrieve the most relevant guide rather than relying on memory;
+- frontend design, redesign, UI implementation, UX/UI review, visual polish, or frontend quality remediation: use the `ui-ux-pro-max` skill workflow by default, and use the `impeccable` skill workflow when it is installed and specifically available;
 - unfamiliar, high-stakes, security-sensitive, or irreversible work: doubt/adversarial review;
 - browser/UI behavior: runtime browser verification when practical;
 - completed implementation: code review and quality workflow before shipping;
@@ -276,7 +277,30 @@ component contract before adding or changing primitives. Use the configured
 use it; otherwise use shadcn CLI fallback through
 `%USERPROFILE%\.codex\toolchains\shims\npx.cmd` and report the fallback.
 
-When the `impeccable` skill is installed and the task touches frontend UI, use this recommended workflow:
+When the `modern-web-guidance` skill is installed and the task touches HTML,
+CSS, clientside JavaScript, browser APIs, web performance, accessibility, forms,
+layout, motion, or modern web platform behavior, use it before implementation:
+
+1. Search with an action-oriented query through
+   `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y modern-web-guidance@latest search`
+   and set `DISABLE_TELEMETRY=1` for the command.
+2. Retrieve the most relevant guide IDs with `modern-web-guidance@latest retrieve`.
+3. Apply Baseline-aware guidance and prefer native browser APIs, progressive
+   enhancement, and lightweight fallbacks over legacy libraries or heavy
+   polyfills unless project browser-support policy says otherwise.
+4. Treat Modern Web Guidance as web-platform implementation evidence,
+   subordinate to current user instructions, project docs, existing components,
+   rendered verification, and this frontend directive.
+
+When the `ui-ux-pro-max` skill is installed and the task touches frontend UI, use it proactively before and during frontend work:
+
+1. Generate or inspect a design-system recommendation with `scripts/search.py --design-system` for new pages, major redesigns, dashboards, landing pages, mobile app UI, or unclear visual direction.
+2. Use targeted `--domain` searches for style, color, typography, UX, charts, icons, or landing structure when those decisions are part of the task.
+3. Use `--stack` searches for the actual frontend stack before implementation-sensitive changes.
+4. Treat the skill output as advisory evidence subordinate to current user instructions, project docs, existing design tokens/components, rendered verification, and this frontend directive.
+5. Include the relevant UI/UX checks in final verification: accessibility, responsive layout, text/container fit, interaction states, motion, and visual consistency.
+
+When the `impeccable` skill is installed and the task touches frontend UI, this remains a compatible recommended workflow:
 
 1. Project context: run `$impeccable teach` so the project has `PRODUCT.md` and, when possible, `DESIGN.md`.
 2. Existing project documentation: for an existing codebase, run `$impeccable document` to derive `DESIGN.md` from current design tokens, components, colors, and typography.
@@ -295,14 +319,13 @@ Use targeted Impeccable refinements when the problem is specific:
 Treat Impeccable output as workflow evidence, not completion authority. Final completion still requires direct verification, browser/runtime checks when practical, and a concise report of checks run, checks not run, and remaining risks.
 
 For frontend browser observation, use Chrome DevTools MCP only as a temporary
-role. Keep `chrome_devtools_observe` OFF by default, turn it ON with
-`maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on` only after confirming
-frontend work, reload or restart if the active session does not expose the MCP
-tools, verify with a small rendered observation, then turn it OFF and confirm
-`state=off` with the server still registered as `enabled = false` for app UI
-visibility. Do not hand-edit `config.toml` for this toggle unless the Codex CLI
-toggle is itself broken and the repair is documented. The managed default is
-slim, headless, isolated, telemetry-off, and performance CrUX off.
+role. Prefer the registered `chrome-devtools` MCP when the active session exposes
+it; if only slim tools are exposed, treat that as stale session state and reload
+or restart before network or performance work. The managed default is non-slim,
+headless, isolated, telemetry-off, performance CrUX off, network-header
+redaction on, structured content on, and page-id routing on. Do not hand-edit
+`config.toml`; update `config.d/10-mcp.toml` and compile config unless the
+Codex CLI config path itself is broken and the repair is documented.
 
 ## PM Responsibilities
 
