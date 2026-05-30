@@ -169,6 +169,66 @@ function Format-MarkdownCell {
     return (($text -replace "\|", "\|") -replace "`r?`n", "<br>")
 }
 
+function Test-LedgerEntry {
+    param([AllowNull()][object]$Entry)
+
+    if ($null -eq $Entry) { return $false }
+    foreach ($name in @("generated_utc", "status", "codex_home", "repo_root")) {
+        if ([string]::IsNullOrWhiteSpace([string]$Entry.$name)) { return $false }
+    }
+    return $true
+}
+
+function Repair-JsonlLedger {
+    param(
+        [string]$Path,
+        [switch]$Repair
+    )
+
+    $summary = [ordered]@{
+        exists = [bool](Test-Path -LiteralPath $Path -PathType Leaf)
+        valid_count = 0
+        invalid_count = 0
+        archive_path = $null
+    }
+    if (-not $summary.exists) { return $summary }
+
+    $validLines = New-Object System.Collections.Generic.List[string]
+    $invalidLines = New-Object System.Collections.Generic.List[string]
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $entry = ConvertFrom-JsonOutput -Text $line
+        if (Test-LedgerEntry -Entry $entry) {
+            $validLines.Add($line) | Out-Null
+        } else {
+            $invalidLines.Add($line) | Out-Null
+        }
+    }
+
+    $summary.valid_count = $validLines.Count
+    $summary.invalid_count = $invalidLines.Count
+    if ($Repair -and $invalidLines.Count -gt 0) {
+        $archivePath = "$Path.invalid.$((Get-Date).ToUniversalTime().ToString("yyyyMMddHHmmss")).jsonl"
+        Write-Utf8File -Path $archivePath -Content (($invalidLines -join "`n") + "`n")
+        $summary.archive_path = $archivePath
+        Write-Utf8File -Path $Path -Content $(if ($validLines.Count -gt 0) { ($validLines -join "`n") + "`n" } else { "" })
+    }
+
+    return $summary
+}
+
+function ConvertTo-StableManagedRootSignature {
+    param([AllowNull()][object[]]$Roots)
+
+    @($Roots | ForEach-Object {
+        $root = [pscustomobject]$_
+        [ordered]@{
+            key = [string]$root.key
+            parent_pid = $(if ($null -ne $root.parent_pid) { [int]$root.parent_pid } else { $null })
+        }
+    } | Sort-Object { $_.key })
+}
+
 $repoRootResolved = (Resolve-Path -LiteralPath $RepoRoot).Path
 $codexHomeResolved = (Resolve-Path -LiteralPath $CodexHome).Path
 $manifestDir = Join-Path $codexHomeResolved "maintenance\manifests"
@@ -387,6 +447,7 @@ $liveLoopScriptPath = Join-Path $codexHomeResolved "maintenance\scripts\codex-p0
 $repoLoopScriptHash = Get-Hash -Path $repoLoopScriptPath
 $liveLoopScriptHash = Get-Hash -Path $liveLoopScriptPath
 $currentWatcherPids = @($watchers | ForEach-Object { [int]$_.ProcessId } | Sort-Object)
+$currentWatcherCount = $currentWatcherPids.Count
 $currentManagedRoots = if ($cleanupOk -and $null -ne $cleanupStatus.managed_roots) {
     @($cleanupStatus.managed_roots | Sort-Object Key | ForEach-Object {
         [ordered]@{ key = $_.Key; pid = [int]$_.ProcessId; parent_pid = [int]$_.ParentProcessId }
@@ -394,10 +455,11 @@ $currentManagedRoots = if ($cleanupOk -and $null -ne $cleanupStatus.managed_root
 } else {
     @()
 }
+$currentManagedRootSignature = ConvertTo-StableManagedRootSignature -Roots $currentManagedRoots
 $currentRuntimeSignature = Get-ObjectHash -Value ([ordered]@{
     app_server_pid = $(if ($cleanupOk) { $cleanupStatus.app_server_pid } else { $null })
-    watcher_pids = $currentWatcherPids
-    managed_roots = $currentManagedRoots
+    watcher_count = $currentWatcherCount
+    managed_root_signature = $currentManagedRootSignature
     managed_orphan_count = $managedOrphans.Count
     duplicate_keys = @($duplicateKeys)
 })
@@ -416,9 +478,19 @@ $staleReasons = New-Object System.Collections.Generic.List[string]
 if ($null -eq $existingCleanManifest) {
     $staleReasons.Add("missing_clean_baseline_manifest") | Out-Null
 } else {
+    $existingWatcherCount = if ($null -ne $existingCleanManifest.watcher_count) {
+        [int]$existingCleanManifest.watcher_count
+    } else {
+        @($existingCleanManifest.watcher_pids).Count
+    }
+    $existingManagedRootSignature = if ($null -ne $existingCleanManifest.managed_root_signature) {
+        ConvertTo-StableManagedRootSignature -Roots @($existingCleanManifest.managed_root_signature)
+    } else {
+        ConvertTo-StableManagedRootSignature -Roots @($existingCleanManifest.managed_roots)
+    }
     if ([string]$existingCleanManifest.app_server_pid -ne [string]$(if ($cleanupOk) { $cleanupStatus.app_server_pid } else { $null })) { $staleReasons.Add("app_server_pid_changed") | Out-Null }
-    if ((@($existingCleanManifest.watcher_pids | ForEach-Object { [int]$_ } | Sort-Object) -join ",") -ne ($currentWatcherPids -join ",")) { $staleReasons.Add("watcher_pids_changed") | Out-Null }
-    if ((Get-ObjectHash -Value @($existingCleanManifest.managed_roots)) -ne (Get-ObjectHash -Value $currentManagedRoots)) { $staleReasons.Add("managed_roots_changed") | Out-Null }
+    if ($existingWatcherCount -ne $currentWatcherCount) { $staleReasons.Add("watcher_count_changed") | Out-Null }
+    if ((Get-ObjectHash -Value $existingManagedRootSignature) -ne (Get-ObjectHash -Value $currentManagedRootSignature)) { $staleReasons.Add("managed_root_signature_changed") | Out-Null }
     if ([string]$existingCleanManifest.toolchain_status -ne [string]$toolchain.status -or [string]$existingCleanManifest.toolchain_failures -ne [string]$toolchain.failures -or [string]$existingCleanManifest.toolchain_warnings -ne [string]$toolchain.warnings) { $staleReasons.Add("toolchain_result_changed") | Out-Null }
     if ([string]$existingCleanManifest.codex_doctor_status -ne [string]$doctor.overallStatus -or [string]$existingCleanManifest.codex_version -ne [string]$doctor.codexVersion) { $staleReasons.Add("doctor_result_changed") | Out-Null }
     if ([string]$existingCleanManifest.loop_script_sha256 -ne [string]$repoLoopScriptHash) { $staleReasons.Add("managed_loop_script_hash_changed") | Out-Null }
@@ -442,6 +514,21 @@ Add-Check $checks "manifest_staleness_detected_before_refresh" "pass" @{
     note = "This is informational. The loop refreshes manifests only after all checks pass."
 }
 
+$loopLatestPath = Join-Path $manifestDir "p0-integrity-loop.latest.json"
+$loopLedgerPath = Join-Path $manifestDir "p0-integrity-loop-log.jsonl"
+$validationLatestPath = Join-Path $manifestDir "scaffold-validation.latest.json"
+$validationLogJsonPath = Join-Path $manifestDir "validation-log.json"
+$validationLogTextPath = Join-Path $manifestDir "validation-log.txt"
+$ledgerProbe = Repair-JsonlLedger -Path $loopLedgerPath
+Add-Check $checks "loop_ledger_integrity" ($(if ($ledgerProbe.invalid_count -eq 0 -or -not [bool]$ReportOnly) { "pass" } else { "fail" })) @{
+    command = "Parse $loopLedgerPath and require generated_utc/status/codex_home/repo_root for each JSONL row"
+    cwd = $repoRootResolved
+    timestamp_utc = (Get-Date).ToUniversalTime().ToString("o")
+    exit_code = $(if ($ledgerProbe.invalid_count -eq 0 -or -not [bool]$ReportOnly) { 0 } else { 1 })
+    evidence = "exists=$($ledgerProbe.exists); valid=$($ledgerProbe.valid_count); invalid=$($ledgerProbe.invalid_count); repair_allowed=$(-not [bool]$ReportOnly)"
+    ledger = $ledgerProbe
+}
+
 $failedChecks = @($checks | Where-Object { $_.status -ne "pass" })
 $overallStatus = if ($failedChecks.Count -eq 0) { "pass" } else { "fail" }
 
@@ -457,6 +544,7 @@ $loopResult = [ordered]@{
     toolchain = $toolchain
     runtime_status = $cleanupStatus
     doctor = $doctor
+    ledger_integrity = $ledgerProbe
     computer_use_boundary = [ordered]@{
         status = "passive_check_only"
         note = "Computer Use can inspect Windows app inventory, but its safety rules forbid automating the Codex desktop app UI or Codex CLI."
@@ -467,16 +555,22 @@ $loopResult = [ordered]@{
     }
 }
 
-$loopLatestPath = Join-Path $manifestDir "p0-integrity-loop.latest.json"
-$loopLedgerPath = Join-Path $manifestDir "p0-integrity-loop-log.jsonl"
-$validationLatestPath = Join-Path $manifestDir "scaffold-validation.latest.json"
-$validationLogJsonPath = Join-Path $manifestDir "validation-log.json"
-$validationLogTextPath = Join-Path $manifestDir "validation-log.txt"
-
 if (-not $ReportOnly) {
     New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
     Write-Utf8File -Path $loopLatestPath -Content (($loopResult | ConvertTo-Json -Depth 32) + "`n")
-    ($loopResult | Select-Object generated_utc,status,codex_home,repo_root | ConvertTo-Json -Compress -Depth 6) | Add-Content -LiteralPath $loopLedgerPath -Encoding UTF8
+    $ledgerRepair = Repair-JsonlLedger -Path $loopLedgerPath -Repair
+    $ledgerEntry = [ordered]@{
+        generated_utc = $generatedUtc
+        status = $overallStatus
+        codex_home = $codexHomeResolved
+        repo_root = $repoRootResolved
+        report_only = [bool]$ReportOnly
+        git_dirty_count = $gitDirtyPaths.Count
+        failed_checks = @($failedChecks | ForEach-Object { $_.name })
+        repaired_invalid_entries = $ledgerRepair.invalid_count
+        invalid_archive_path = $ledgerRepair.archive_path
+    }
+    ($ledgerEntry | ConvertTo-Json -Compress -Depth 8) | Add-Content -LiteralPath $loopLedgerPath -Encoding UTF8
 }
 
 if (-not $ReportOnly -and $overallStatus -eq "pass" -and $null -ne $validation) {
@@ -508,9 +602,11 @@ if (-not $ReportOnly -and $overallStatus -eq "pass") {
         codex_version = $doctor.codexVersion
         app_server_pid = $cleanupStatus.app_server_pid
         managed_roots = $currentManagedRoots
+        managed_root_signature = $currentManagedRootSignature
         managed_orphan_count = $managedOrphans.Count
         duplicate_keys = @($duplicateKeys)
         watcher_pids = $currentWatcherPids
+        watcher_count = $currentWatcherCount
         git_branch = $gitBranch.stdout.Trim()
         git_dirty_paths = $gitDirtyPaths
         stale_before_refresh = [bool]$staleBeforeRefresh
