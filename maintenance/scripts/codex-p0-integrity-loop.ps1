@@ -32,6 +32,7 @@ function Invoke-ProcessCapture {
         [hashtable]$Environment = @{}
     )
 
+    $startedUtc = (Get-Date).ToUniversalTime().ToString("o")
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo.FileName = $FilePath
     $process.StartInfo.WorkingDirectory = $WorkingDirectory
@@ -48,9 +49,14 @@ function Invoke-ProcessCapture {
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
+    $endedUtc = (Get-Date).ToUniversalTime().ToString("o")
     [ordered]@{
         file = $FilePath
         arguments = $Arguments
+        command_line = (@($FilePath) + @($Arguments)) -join " "
+        working_directory = $WorkingDirectory
+        started_utc = $startedUtc
+        ended_utc = $endedUtc
         exit_code = $process.ExitCode
         stdout = $stdout
         stderr = $stderr
@@ -144,6 +150,25 @@ function Get-PolicyInput {
     }
 }
 
+function Limit-Text {
+    param(
+        [AllowNull()][object]$Value,
+        [int]$Limit = 240
+    )
+
+    $text = if ($null -eq $Value) { "" } else { [string]$Value }
+    $text = $text.Trim()
+    if ($text.Length -le $Limit) { return $text }
+    return $text.Substring(0, $Limit) + "..."
+}
+
+function Format-MarkdownCell {
+    param([AllowNull()][object]$Value)
+    $text = Limit-Text -Value $Value -Limit 260
+    if ([string]::IsNullOrWhiteSpace($text)) { return "none" }
+    return (($text -replace "\|", "\|") -replace "`r?`n", "<br>")
+}
+
 $repoRootResolved = (Resolve-Path -LiteralPath $RepoRoot).Path
 $codexHomeResolved = (Resolve-Path -LiteralPath $CodexHome).Path
 $manifestDir = Join-Path $codexHomeResolved "maintenance\manifests"
@@ -178,6 +203,11 @@ $policyInputs = @(
 )
 $missingPolicyInputs = @($policyInputs | Where-Object { -not $_.exists })
 Add-Check $checks "policy_inputs_present" ($(if ($missingPolicyInputs.Count -eq 0) { "pass" } else { "fail" })) @{
+    command = "Test-Path/Get-FileHash maintenance\policies\*.md"
+    cwd = $repoRootResolved
+    timestamp_utc = $generatedUtc
+    exit_code = $(if ($missingPolicyInputs.Count -eq 0) { 0 } else { 1 })
+    evidence = "missing=$($missingPolicyInputs.Count); inputs=$($policyInputs.Count)"
     missing = @($missingPolicyInputs | ForEach-Object { $_.path })
     inputs = $policyInputs
 }
@@ -189,6 +219,11 @@ $gitDirtyPaths = @($gitPorcelain.stdout -split "`r?`n" | Where-Object { -not [st
 $gitCommandsOk = $gitBranch.exit_code -eq 0 -and $gitPorcelain.exit_code -eq 0 -and $gitDiffCheck.exit_code -eq 0
 $gitCleanEnough = [bool]$ReportOnly -or $gitDirtyPaths.Count -eq 0
 Add-Check $checks "git_diff_closure" ($(if ($gitCommandsOk -and $gitCleanEnough) { "pass" } else { "fail" })) @{
+    command = "git status --short --branch; git status --porcelain; git diff --check"
+    cwd = $repoRootResolved
+    timestamp_utc = $gitBranch.started_utc
+    exit_code = $(if ($gitCommandsOk -and $gitCleanEnough) { 0 } else { 1 })
+    evidence = "dirty_paths=$($gitDirtyPaths.Count); diff_check_exit_code=$($gitDiffCheck.exit_code)"
     branch = $gitBranch.stdout.Trim()
     dirty_paths = $gitDirtyPaths
     clean_required_for_baseline = -not [bool]$ReportOnly
@@ -203,7 +238,11 @@ $managedOrphans = if ($cleanupOk -and $null -ne $cleanupStatus.managed_orphans) 
 $duplicateKeys = if ($cleanupOk -and $null -ne $cleanupStatus.duplicate_keys) { @($cleanupStatus.duplicate_keys) } else { @() }
 $watchers = if ($cleanupOk -and $null -ne $cleanupStatus.watchers) { @($cleanupStatus.watchers) } else { @() }
 Add-Check $checks "runtime_cleanup_status" ($(if ($cleanupOk -and $managedOrphans.Count -eq 0 -and $duplicateKeys.Count -eq 0 -and (($null -eq $cleanupStatus.app_server_pid) -or $watchers.Count -gt 0)) { "pass" } else { "fail" })) @{
+    command = $cleanupStatusRun.command_line
+    cwd = $cleanupStatusRun.working_directory
+    timestamp_utc = $cleanupStatusRun.started_utc
     exit_code = $cleanupStatusRun.exit_code
+    evidence = "app_server_pid=$($cleanupStatus.app_server_pid); watchers=$($watchers.Count); managed_orphans=$($managedOrphans.Count); duplicate_keys=$($duplicateKeys.Count)"
     app_server_pid = $(if ($cleanupOk) { $cleanupStatus.app_server_pid } else { $null })
     watcher_pids = @($watchers | ForEach-Object { $_.ProcessId })
     managed_orphan_count = $managedOrphans.Count
@@ -216,6 +255,11 @@ if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
     $forbiddenPidLoop = @(Select-String -LiteralPath $cleanupScript -Pattern 'foreach\s*\(\s*\$pid\b' -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Path):$($_.LineNumber)" })
 }
 Add-Check $checks "reserved_pid_loop_regression" ($(if ($forbiddenPidLoop.Count -eq 0) { "pass" } else { "fail" })) @{
+    command = "Select-String -LiteralPath $cleanupScript -Pattern 'foreach\s*\(\s*\`$pid\b'"
+    cwd = $repoRootResolved
+    timestamp_utc = (Get-Date).ToUniversalTime().ToString("o")
+    exit_code = $(if ($forbiddenPidLoop.Count -eq 0) { 0 } else { 1 })
+    evidence = "forbidden_hits=$($forbiddenPidLoop.Count)"
     forbidden_pattern = 'foreach ($pid ...)'
     hits = $forbiddenPidLoop
 }
@@ -225,6 +269,11 @@ $beforeCleanup = $cleanupStatus
 $beforeRootPids = if ($null -ne $beforeCleanup -and $null -ne $beforeCleanup.managed_roots) { @($beforeCleanup.managed_roots | ForEach-Object { [int]$_.ProcessId } | Sort-Object) } else { @() }
 if ($ReportOnly) {
     Add-Check $checks "dead_app_server_cleanup_regression" "pass" @{
+        command = "not run: ReportOnly skips cleanup-all"
+        cwd = $repoRootResolved
+        timestamp_utc = (Get-Date).ToUniversalTime().ToString("o")
+        exit_code = 0
+        evidence = "mutation_skipped=true; before_app_server_pid=$($beforeCleanup.app_server_pid); before_root_pids=$($beforeRootPids -join ',')"
         report_only = $true
         mutation_skipped = $true
         reason = "ReportOnly is operationally read-only and does not call cleanup-all. Run full mode from a clean tree to execute this regression before refreshing clean baseline manifests."
@@ -244,6 +293,11 @@ if ($ReportOnly) {
         (($beforeRootPids -join ",") -eq ($afterRootPids -join ","))
     )
     Add-Check $checks "dead_app_server_cleanup_regression" ($(if ($deadCleanupSafe) { "pass" } else { "fail" })) @{
+        command = "$($deadCleanupRun.command_line); $($afterStatusRun.command_line)"
+        cwd = $deadCleanupRun.working_directory
+        timestamp_utc = $deadCleanupRun.started_utc
+        exit_code = $(if ($deadCleanupSafe) { 0 } else { 1 })
+        evidence = "dead_pid=$deadPid; before_app_server_pid=$($beforeCleanup.app_server_pid); after_app_server_pid=$($afterCleanup.app_server_pid); before_roots=$($beforeRootPids -join ','); after_roots=$($afterRootPids -join ',')"
         report_only = $false
         dead_app_server_pid = $deadPid
         before_app_server_pid = $(if ($null -ne $beforeCleanup) { $beforeCleanup.app_server_pid } else { $null })
@@ -258,7 +312,11 @@ if ($ReportOnly) {
 $validationRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $validateScript, "-CodexHome", $codexHomeResolved, "-Json")
 $validation = ConvertFrom-JsonOutput -Text $validationRun.stdout
 Add-Check $checks "scaffold_validation_current" ($(if ($validationRun.exit_code -eq 0 -and $null -ne $validation -and $validation.overall_status -eq "pass") { "pass" } else { "fail" })) @{
+    command = $validationRun.command_line
+    cwd = $validationRun.working_directory
+    timestamp_utc = $validationRun.started_utc
     exit_code = $validationRun.exit_code
+    evidence = "overall_status=$($validation.overall_status); fail_count=$($validation.fail_count); generated_utc=$($validation.generated_utc)"
     overall_status = $(if ($null -ne $validation) { $validation.overall_status } else { $null })
     fail_count = $(if ($null -ne $validation) { $validation.fail_count } else { $null })
     generated_utc = $(if ($null -ne $validation) { $validation.generated_utc } else { $null })
@@ -268,7 +326,11 @@ Add-Check $checks "scaffold_validation_current" ($(if ($validationRun.exit_code 
 $toolchainRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $toolchainScript, "-Json")
 $toolchain = ConvertFrom-JsonOutput -Text $toolchainRun.stdout
 Add-Check $checks "toolchain_sources_current" ($(if ($toolchainRun.exit_code -eq 0 -and $null -ne $toolchain -and $toolchain.status -eq "pass" -and [int]$toolchain.failures -eq 0 -and [int]$toolchain.warnings -eq 0) { "pass" } else { "fail" })) @{
+    command = $toolchainRun.command_line
+    cwd = $toolchainRun.working_directory
+    timestamp_utc = $toolchainRun.started_utc
     exit_code = $toolchainRun.exit_code
+    evidence = "status=$($toolchain.status); failures=$($toolchain.failures); warnings=$($toolchain.warnings)"
     status = $(if ($null -ne $toolchain) { $toolchain.status } else { $null })
     failures = $(if ($null -ne $toolchain) { $toolchain.failures } else { $null })
     warnings = $(if ($null -ne $toolchain) { $toolchain.warnings } else { $null })
@@ -279,7 +341,11 @@ $doctorEnv = @{ PATH = "$shimRoot;$env:PATH" }
 $doctorRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", (Join-Path $shimRoot "codex.cmd"), "doctor", "--json") -WorkingDirectory $repoRootResolved -Environment $doctorEnv
 $doctor = ConvertFrom-JsonOutput -Text $doctorRun.stdout
 Add-Check $checks "codex_doctor_current" ($(if ($doctorRun.exit_code -eq 0 -and $null -ne $doctor -and $doctor.overallStatus -eq "ok") { "pass" } else { "fail" })) @{
+    command = $doctorRun.command_line
+    cwd = $doctorRun.working_directory
+    timestamp_utc = $doctorRun.started_utc
     exit_code = $doctorRun.exit_code
+    evidence = "overallStatus=$($doctor.overallStatus); codexVersion=$($doctor.codexVersion)"
     overall_status = $(if ($null -ne $doctor) { $doctor.overallStatus } else { $null })
     codex_version = $(if ($null -ne $doctor) { $doctor.codexVersion } else { $null })
     stderr = $doctorRun.stderr.Trim()
@@ -287,6 +353,11 @@ Add-Check $checks "codex_doctor_current" ($(if ($doctorRun.exit_code -eq 0 -and 
 
 if ($SkipScoop) {
     Add-Check $checks "scoop_health_current" "pass" @{
+        command = "not run: SkipScoop"
+        cwd = $repoRootResolved
+        timestamp_utc = (Get-Date).ToUniversalTime().ToString("o")
+        exit_code = 0
+        evidence = "SkipScoop was set."
         skipped = $true
         reason = "SkipScoop was set."
     }
@@ -294,6 +365,11 @@ if ($SkipScoop) {
     $scoopStatusRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", "scoop", "status") -WorkingDirectory $repoRootResolved
     $scoopCheckupRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", "scoop", "checkup") -WorkingDirectory $repoRootResolved
     Add-Check $checks "scoop_health_current" ($(if ($scoopStatusRun.exit_code -eq 0 -and $scoopCheckupRun.exit_code -eq 0) { "pass" } else { "fail" })) @{
+        command = "$($scoopStatusRun.command_line); $($scoopCheckupRun.command_line)"
+        cwd = $repoRootResolved
+        timestamp_utc = $scoopStatusRun.started_utc
+        exit_code = $(if ($scoopStatusRun.exit_code -eq 0 -and $scoopCheckupRun.exit_code -eq 0) { 0 } else { 1 })
+        evidence = "status_exit_code=$($scoopStatusRun.exit_code); checkup_exit_code=$($scoopCheckupRun.exit_code); status=$(Limit-Text -Value (($scoopStatusRun.stdout + $scoopStatusRun.stderr).Trim()) -Limit 80); checkup=$(Limit-Text -Value (($scoopCheckupRun.stdout + $scoopCheckupRun.stderr).Trim()) -Limit 80)"
         status_exit_code = $scoopStatusRun.exit_code
         status_output = ($scoopStatusRun.stdout + $scoopStatusRun.stderr).Trim()
         checkup_exit_code = $scoopCheckupRun.exit_code
@@ -354,6 +430,11 @@ if ($null -eq $existingCleanManifest) {
 }
 $staleBeforeRefresh = $staleReasons.Count -gt 0
 Add-Check $checks "manifest_staleness_detected_before_refresh" "pass" @{
+    command = "Compare clean-baseline-manifest.json against current runtime, script, validation, toolchain, doctor, policy, and git signatures"
+    cwd = $repoRootResolved
+    timestamp_utc = (Get-Date).ToUniversalTime().ToString("o")
+    exit_code = 0
+    evidence = "stale_before_refresh=$staleBeforeRefresh; stale_reasons=$(@($staleReasons) -join ',')"
     stale_before_refresh = [bool]$staleBeforeRefresh
     stale_reasons = @($staleReasons)
     previous_app_server_pid = $(if ($null -ne $existingCleanManifest) { $existingCleanManifest.app_server_pid } else { $null })
@@ -458,6 +539,10 @@ if ([string]::IsNullOrWhiteSpace($ReportPath)) {
 $watcherPidText = if ($currentWatcherPids.Count -gt 0) { $currentWatcherPids -join ", " } else { "none" }
 $duplicateKeyText = if ($duplicateKeys.Count -gt 0) { @($duplicateKeys) -join ", " } else { "none" }
 $staleReasonText = if ($staleReasons.Count -gt 0) { @($staleReasons) -join ", " } else { "none" }
+$checkEvidenceRows = @($checks | ForEach-Object {
+    $detail = $_.details
+    "| $(Format-MarkdownCell $_.name) | $(Format-MarkdownCell $detail["command"]) | $(Format-MarkdownCell $detail["cwd"]) | $(Format-MarkdownCell $detail["timestamp_utc"]) | $(Format-MarkdownCell $detail["exit_code"]) | $(Format-MarkdownCell $_.status) | $(Format-MarkdownCell $detail["evidence"]) |"
+}) -join "`n"
 
 $report = @"
 # Codex P0 Integrity Closed Loop
@@ -487,6 +572,12 @@ $(@($policyInputs | ForEach-Object { "| $($_.label) | $($_.path) | $($_.sha256) 
 | Check | Status |
 |---|---|
 $(@($checks | ForEach-Object { "| $($_.name) | $($_.status) |" }) -join "`n")
+
+## Checks Run Detail
+
+| Check | Command | CWD | Timestamp UTC | Exit code | Result | Evidence |
+|---|---|---|---|---|---|---|
+$checkEvidenceRows
 
 ## Current Runtime
 
