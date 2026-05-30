@@ -44,10 +44,19 @@ function Get-ManagedRootKey {
         [string]$CommandLine
     )
 
-    if ($CommandLine -match "(uvx|uv(\.cmd)?\s+tool\s+run).*\bserena\b.*\bstart-mcp-server\b") { return "serena" }
-    if ($CommandLine -match "npx.*@upstash/context7-mcp") { return "context7" }
-    if ($CommandLine -match "npx.*chrome-devtools-mcp") { return "chrome-devtools" }
-    if ($Name -ieq "node_repl.exe" -or $CommandLine -match "\bnode_repl(\.cmd|\.exe)?\b") { return "node_repl" }
+    $text = [string]$CommandLine
+    if (($Name -ieq "cmd.exe" -or $Name -ieq "powershell.exe" -or $Name -ieq "pwsh.exe") -and
+        $text -match "(?i)\\toolchains\\shims\\uv\.cmd\b.*\bserena\b.*\bstart-mcp-server\b") { return "serena" }
+    if ($Name -ieq "serena.exe" -and $text -match "(?i)\bstart-mcp-server\b") { return "serena" }
+    if (($Name -ieq "cmd.exe" -or $Name -ieq "powershell.exe" -or $Name -ieq "pwsh.exe") -and
+        $text -match "(?i)\\toolchains\\shims\\npx\.cmd\b.*@upstash[\\/]context7-mcp") { return "context7" }
+    if ($Name -ieq "node.exe" -and $text -match "(?i)@upstash[\\/]context7-mcp") { return "context7" }
+    if (($Name -ieq "cmd.exe" -or $Name -ieq "powershell.exe" -or $Name -ieq "pwsh.exe") -and
+        $text -match "(?i)\\toolchains\\shims\\npx\.cmd\b.*chrome-devtools-mcp") { return "chrome-devtools" }
+    if ($Name -ieq "node.exe" -and $text -match "(?i)chrome-devtools-mcp") { return "chrome-devtools" }
+    if ($Name -ieq "node_repl.exe") { return "node_repl" }
+    if (($Name -ieq "cmd.exe" -or $Name -ieq "powershell.exe" -or $Name -ieq "pwsh.exe") -and
+        $text -match "(?i)\\toolchains\\shims\\node_repl\.cmd\b") { return "node_repl" }
     return $null
 }
 
@@ -70,6 +79,53 @@ function Get-ManagedRoots {
             CommandLine = [string]$_.CommandLine
         }
     })
+}
+
+function Get-ManagedOrphans {
+    param(
+        [object[]]$Processes,
+        [int]$RootParentPid
+    )
+
+    $roots = @(Get-ManagedRoots -Processes $Processes -RootParentPid $RootParentPid)
+    $rootIds = @($roots | ForEach-Object { [int]$_.ProcessId })
+    $orphans = New-Object System.Collections.Generic.List[object]
+    foreach ($process in $Processes) {
+        $isOrphan = $true
+        $key = Get-ManagedRootKey -Name ([string]$process.Name) -CommandLine ([string]$process.CommandLine)
+        if ($null -eq $key) { continue }
+        if ([int]$process.ParentProcessId -eq $RootParentPid) { continue }
+        foreach ($rootId in $rootIds) {
+            if (Test-IsProcessDescendant -Processes $Processes -RootPid $rootId -CandidatePid ([int]$process.ProcessId)) {
+                $isOrphan = $false
+                break
+            }
+        }
+        if (-not $isOrphan) { continue }
+        $orphans.Add([pscustomobject]@{
+            Key = $key
+            ProcessId = [int]$process.ProcessId
+            ParentProcessId = [int]$process.ParentProcessId
+            CreationDate = $process.CreationDate
+            Name = [string]$process.Name
+            CommandLine = [string]$process.CommandLine
+        }) | Out-Null
+    }
+    return @($orphans.ToArray())
+}
+
+function Stop-ManagedOrphans {
+    param(
+        [object[]]$Processes,
+        [int]$AppServerPid,
+        [string]$Reason
+    )
+
+    $stopped = New-Object System.Collections.Generic.List[object]
+    foreach ($orphan in @(Get-ManagedOrphans -Processes $Processes -RootParentPid $AppServerPid)) {
+        $stopped.Add((Stop-ProcessTree -Processes $Processes -RootPid ([int]$orphan.ProcessId) -Reason $Reason -ExpectedRootKey ([string]$orphan.Key))) | Out-Null
+    }
+    return @($stopped.ToArray())
 }
 
 function Get-ChromeExtensionHostProcesses {
@@ -314,8 +370,6 @@ function Stop-ProcessTree {
                 }
             } elseif ($id -eq $RootPid -and $AllowAppServerRoot -and -not (Test-AppServerProcess -Process $current)) {
                 $skipReason = "root-app-server-mismatch"
-            } elseif ($id -ne $RootPid -and $null -eq $currentRoot) {
-                $skipReason = "root-exited-before-child-stop"
             }
 
             if ($null -ne $skipReason) {
@@ -363,11 +417,13 @@ function Get-Status {
             watchers = $watchers
             chrome_extension_hosts = @(Get-ChromeExtensionHostProcesses -Processes $processes)
             managed_roots = @()
+            managed_orphans = @()
             duplicate_keys = @()
         })
     }
 
     $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid ([int]$appServer.ProcessId))
+    $orphans = @(Get-ManagedOrphans -Processes $processes -RootParentPid ([int]$appServer.ProcessId))
     $duplicates = @($roots | Group-Object Key | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
     return ,([pscustomobject]@{
         app_server_pid = [int]$appServer.ProcessId
@@ -377,6 +433,7 @@ function Get-Status {
         watchers = $watchers
         chrome_extension_hosts = @(Get-ChromeExtensionHostProcesses -Processes $processes)
         managed_roots = @($roots | Sort-Object Key, CreationDate)
+        managed_orphans = @($orphans | Sort-Object Key, CreationDate)
         duplicate_keys = $duplicates
     })
 }
@@ -396,6 +453,9 @@ function Invoke-CleanupStale {
     $appServerPidValue = [int](@($status.app_server_pid)[0])
     $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid $appServerPidValue)
     $stopped = New-Object System.Collections.Generic.List[object]
+    foreach ($orphanStop in @(Stop-ManagedOrphans -Processes $processes -AppServerPid $appServerPidValue -Reason "orphan-managed-process")) {
+        $stopped.Add($orphanStop) | Out-Null
+    }
     foreach ($group in @($roots | Group-Object Key)) {
         if ($OnlyKeys.Count -gt 0 -and $group.Name -notin $OnlyKeys) {
             continue
@@ -423,8 +483,8 @@ function Invoke-CleanupAll {
     $processes = Get-ProcessTable
     $rootPids = New-Object System.Collections.Generic.HashSet[int]
 
-    foreach ($pid in $KnownRootPids) {
-        $null = $rootPids.Add([int]$pid)
+    foreach ($knownRootPid in $KnownRootPids) {
+        $null = $rootPids.Add([int]$knownRootPid)
     }
 
     if ($AppServerPid -gt 0) {
@@ -434,9 +494,15 @@ function Invoke-CleanupAll {
     }
 
     $stopped = New-Object System.Collections.Generic.List[object]
-    foreach ($pid in @($rootPids)) {
-        if (@($processes | Where-Object { $_.ProcessId -eq $pid }).Count -gt 0) {
-            $stopped.Add((Stop-ProcessTree -Processes $processes -RootPid $pid -Reason "app-server-exit")) | Out-Null
+    $appServerAlive = $AppServerPid -gt 0 -and @($processes | Where-Object { $_.ProcessId -eq $AppServerPid }).Count -gt 0
+    if ($appServerAlive) {
+        foreach ($orphanStop in @(Stop-ManagedOrphans -Processes $processes -AppServerPid $AppServerPid -Reason "app-server-exit-orphan-managed-process")) {
+            $stopped.Add($orphanStop) | Out-Null
+        }
+    }
+    foreach ($rootPid in @($rootPids)) {
+        if (@($processes | Where-Object { $_.ProcessId -eq $rootPid -or $_.ParentProcessId -eq $rootPid }).Count -gt 0) {
+            $stopped.Add((Stop-ProcessTree -Processes $processes -RootPid $rootPid -Reason "app-server-exit")) | Out-Null
         }
     }
 
@@ -479,10 +545,6 @@ function Invoke-Watch {
         $processes = Get-ProcessTable
         $parentAlive = @($processes | Where-Object { $_.ProcessId -eq $AppServerPid }).Count -gt 0
         $ownerAlive = (-not $StopAppServerOnOwnerExit) -or $ownerPid -le 0 -or @($processes | Where-Object { $_.ProcessId -eq $ownerPid }).Count -gt 0
-        $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid $AppServerPid)
-        foreach ($root in $roots) {
-            $null = $known.Add([int]$root.ProcessId)
-        }
 
         if (-not $parentAlive) {
             $result = Invoke-CleanupAll -AppServerPid $AppServerPid -KnownRootPids @($known)
@@ -503,6 +565,20 @@ function Invoke-Watch {
             }
             Write-Ledger -Action "watch_owner_exit_cleanup_complete" -Details $result
             return $result
+        }
+
+        $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid $AppServerPid)
+        $orphanStops = @(Stop-ManagedOrphans -Processes $processes -AppServerPid $AppServerPid -Reason "watch-orphan-managed-process")
+        if ($orphanStops.Count -gt 0) {
+            Write-Ledger -Action "watch_cleanup_orphans" -Details @{
+                app_server_pid = $AppServerPid
+                stopped = $orphanStops
+            }
+            $processes = Get-ProcessTable
+            $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid $AppServerPid)
+        }
+        foreach ($root in $roots) {
+            $null = $known.Add([int]$root.ProcessId)
         }
 
         $groups = @($roots | Group-Object Key | Where-Object { $_.Count -gt 1 })

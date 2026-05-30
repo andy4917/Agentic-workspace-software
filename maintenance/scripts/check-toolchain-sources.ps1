@@ -131,6 +131,40 @@ function Test-WrapperUsesBundle {
     return ($text -match $bundlePattern -or $text -match $absolutePattern -or ($text -match $dynamicBundlePattern -and $text -match [regex]::Escape("$ToolName.exe")))
 }
 
+function Test-OfficialWrapperSourcePolicy {
+    param(
+        [string]$WrapperPath
+    )
+
+    if (-not (Test-Path -LiteralPath $WrapperPath)) {
+        return [ordered]@{
+            ok = $false
+            disallowed_before_bundle = @("missing wrapper")
+        }
+    }
+
+    $text = Get-Content -LiteralPath $WrapperPath -Raw
+    $bundleNeedle = "%LOCALAPPDATA%\OpenAI\Codex\bin"
+    $bundleIndex = $text.IndexOf($bundleNeedle, [System.StringComparison]::OrdinalIgnoreCase)
+    $disallowed = @(
+        @{ name = "standalone_package"; needle = "\.codex\packages\standalone" },
+        @{ name = "scoop_app"; needle = "\scoop\apps\" },
+        @{ name = "scoop_shim"; needle = "\scoop\shims\" }
+    )
+    $hits = @()
+    foreach ($entry in $disallowed) {
+        $index = $text.IndexOf($entry.needle, [System.StringComparison]::OrdinalIgnoreCase)
+        if ($index -ge 0 -and ($bundleIndex -lt 0 -or $index -lt $bundleIndex)) {
+            $hits += $entry.name
+        }
+    }
+
+    return [ordered]@{
+        ok = ($hits.Count -eq 0)
+        disallowed_before_bundle = $hits
+    }
+}
+
 $bundleRoot = Get-CodexBundleRoot
 $workspaceRuntimeRoot = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".cache\codex-runtimes\codex-primary-runtime\dependencies"
 $windowsAppsCodexPattern = "*\WindowsApps\OpenAI.Codex_*\app\resources*"
@@ -151,14 +185,16 @@ foreach ($tool in $officialBundleTools) {
     $wrapperPath = Join-Path $shimDir "$tool.cmd"
     $bundleExists = $bundlePath -and (Test-Path -LiteralPath $bundlePath)
     $wrapperUsesBundle = Test-WrapperUsesBundle -WrapperPath $wrapperPath -ToolName $tool -BundleRoot $bundleRoot
+    $wrapperSourcePolicy = Test-OfficialWrapperSourcePolicy -WrapperPath $wrapperPath
     $checks.Add([ordered]@{
         name = "official-bundle-wrapper:$tool"
-        status = if ($bundleExists -and $wrapperUsesBundle) { "pass" } else { "fail" }
+        status = if ($bundleExists -and $wrapperUsesBundle -and $wrapperSourcePolicy.ok) { "pass" } else { "fail" }
         source_class = "official-bundle"
         wrapper = $wrapperPath
         bundle = $bundlePath
         bundle_exists = [bool]$bundleExists
         wrapper_uses_bundle = [bool]$wrapperUsesBundle
+        wrapper_source_policy = $wrapperSourcePolicy
     })
 }
 
@@ -177,20 +213,57 @@ foreach ($runtimeTool in @(
     })
 }
 
-foreach ($commandName in @("node", "rg")) {
+foreach ($commandName in @("codex", "node", "rg")) {
     $commands = @(Get-Command $commandName -All -ErrorAction SilentlyContinue)
+    $firstCommand = @($commands | Select-Object -First 1)
+    $firstSource = if ($firstCommand.Count -gt 0) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$firstCommand[0].Source)) {
+            [string]$firstCommand[0].Source
+        } elseif (-not [string]::IsNullOrWhiteSpace([string]$firstCommand[0].Path)) {
+            [string]$firstCommand[0].Path
+        } else {
+            [string]$firstCommand[0].Definition
+        }
+    } else {
+        ""
+    }
+    $firstAllowed = (
+        -not [string]::IsNullOrWhiteSpace($firstSource) -and (
+            ((-not [string]::IsNullOrWhiteSpace($shimDir)) -and $firstSource -like "$shimDir\*") -or
+            ((-not [string]::IsNullOrWhiteSpace($bundleRoot)) -and $firstSource -like "$bundleRoot\*") -or
+            $firstSource -like $windowsAppsCodexPattern
+        )
+    )
+    $checks.Add([ordered]@{
+        name = "first-command-source:$commandName"
+        status = if ($firstAllowed) { "pass" } else { "fail" }
+        source_class = "official-bundle"
+        first_source = $firstSource
+        allowed_roots = @($shimDir, $bundleRoot, $windowsAppsCodexPattern)
+    })
     $localDuplicates = @($commands | Where-Object {
         $_.Source -and
-        $_.Source -notlike "$bundleRoot*" -and
-        $_.Source -notlike "$shimDir*" -and
+        $_.Source -notlike "$bundleRoot\*" -and
+        $_.Source -notlike "$shimDir\*" -and
         $_.Source -notlike $windowsAppsCodexPattern
     } | ForEach-Object { $_.Source })
+    $localDuplicateTargets = @($localDuplicates | ForEach-Object {
+        $source = [string]$_
+        $resolved = if ($source -like "*\scoop\shims\*.exe") { Resolve-ScoopShimTarget -ShimExe $source } else { $source }
+        [ordered]@{
+            source = $source
+            resolved = $resolved
+            target_exists = (-not [string]::IsNullOrWhiteSpace($resolved) -and (Test-Path -LiteralPath $resolved))
+        }
+    })
+    $brokenLocalDuplicates = @($localDuplicateTargets | Where-Object { -not $_.target_exists })
     $checks.Add([ordered]@{
         name = "local-duplicate-marked-unused:$commandName"
-        status = "pass"
+        status = if ($brokenLocalDuplicates.Count -eq 0) { "pass" } else { "fail" }
         source_class = "local-chain"
-        reason = if ($localDuplicates.Count -gt 0) { "Local duplicate exists, but Codex wrappers do not use it; bare command use remains discouraged." } else { "No local duplicate before the Codex bundle." }
+        reason = if ($localDuplicates.Count -gt 0) { "Local duplicate exists, but Codex wrappers do not use it; duplicate targets must still be valid for normal PowerShell PATH fallback." } else { "No local duplicate before the Codex bundle." }
         local_duplicates = $localDuplicates
+        local_duplicate_targets = $localDuplicateTargets
     })
 }
 

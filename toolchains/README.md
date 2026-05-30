@@ -35,7 +35,7 @@ Windows `rg` note:
 
 Current shim groups:
 
-- Official Codex bundle wrappers: `node`, `rg`
+- Official Codex bundle wrappers: `codex`, `node`, `rg`
 - JavaScript local-chain: `npm`, `npx`, `pnpm`, `bun`, `deno`, `tsc`, `tsserver`,
   `tsx`, `eslint`, `prettier`, `biome`, `yarn`, `zx`, `next`,
   `create-next-app`, `vite`, `create-vite`, `create-vue`, `ng`,

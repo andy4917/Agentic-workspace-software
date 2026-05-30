@@ -186,6 +186,41 @@ function Test-BundleShimSource {
     }
 }
 
+function Test-FirstCommandSource {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$ShimRoot
+    )
+
+    $bundleRoot = Join-Path $env:LOCALAPPDATA "OpenAI\Codex\bin"
+    $windowsAppsCodexPattern = "*\WindowsApps\OpenAI.Codex_*\app\resources*"
+    $command = @(Get-Command $Name -All -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $source = if ($command.Count -gt 0) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$command[0].Source)) {
+            [string]$command[0].Source
+        } elseif (-not [string]::IsNullOrWhiteSpace([string]$command[0].Path)) {
+            [string]$command[0].Path
+        } else {
+            [string]$command[0].Definition
+        }
+    } else {
+        ""
+    }
+    $ok = (
+        -not [string]::IsNullOrWhiteSpace($source) -and (
+            ((-not [string]::IsNullOrWhiteSpace($ShimRoot)) -and $source -like "$ShimRoot\*") -or
+            ((-not [string]::IsNullOrWhiteSpace($bundleRoot)) -and $source -like "$bundleRoot\*") -or
+            $source -like $windowsAppsCodexPattern
+        )
+    )
+    return [ordered]@{
+        name = $Name
+        first_source = $source
+        allowed_roots = @($ShimRoot, $bundleRoot, $windowsAppsCodexPattern)
+        ok = [bool]$ok
+    }
+}
+
 $checks = New-Object System.Collections.Generic.List[object]
 $configPath = Join-Path $CodexHome "config.toml"
 $hookPath = Join-Path $CodexHome "hooks\compact-codex-hook.ps1"
@@ -308,6 +343,12 @@ if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
         $duplicateRuntimeKeys = @($cleanupStatus.duplicate_keys)
         $appServers = @($cleanupStatus.app_servers)
         $managedRoots = @($cleanupStatus.managed_roots)
+        $reportsManagedOrphans = $null -ne $cleanupStatus.PSObject.Properties["managed_orphans"]
+        $managedOrphans = if ($reportsManagedOrphans -and $null -ne $cleanupStatus.managed_orphans) {
+            @($cleanupStatus.managed_orphans | Where-Object { $null -ne $_ })
+        } else {
+            @()
+        }
         $expectedRuntimeRootKeys = @()
         if ($null -ne $config -and $null -ne $config.mcp_servers) {
             foreach ($name in @("chrome-devtools", "context7", "serena", "node_repl")) {
@@ -321,12 +362,16 @@ if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
         } else {
             @($expectedRuntimeRootKeys | Where-Object { $_ -notin @($managedRoots | ForEach-Object { [string]$_.Key }) })
         }
-        Add-Check $checks "runtime_managed_roots_singleton" ($(if ($duplicateRuntimeKeys.Count -eq 0 -and $appServers.Count -le 1) { "pass" } else { "fail" })) @{
+        Add-Check $checks "runtime_managed_roots_singleton" ($(if ($duplicateRuntimeKeys.Count -eq 0 -and $appServers.Count -le 1 -and $reportsManagedOrphans -and $managedOrphans.Count -eq 0) { "pass" } else { "fail" })) @{
             app_server_pid = $cleanupStatus.app_server_pid
             app_server_count = $appServers.Count
             duplicate_keys = $duplicateRuntimeKeys
+            reports_managed_orphans = $reportsManagedOrphans
             managed_roots = @($managedRoots | ForEach-Object {
                 [ordered]@{ key = $_.Key; pid = $_.ProcessId; parent_pid = $_.ParentProcessId }
+            })
+            managed_orphans = @($managedOrphans | ForEach-Object {
+                [ordered]@{ key = $_.Key; pid = $_.ProcessId; parent_pid = $_.ParentProcessId; name = $_.Name }
             })
         }
 
@@ -401,6 +446,17 @@ $badBundleShimSources = @($bundleShimSources | Where-Object { -not $_.ok })
 Add-Check $checks "bundle_shim_sources_valid" ($(if ($badBundleShimSources.Count -eq 0) { "pass" } else { "fail" })) @{
     checked = $bundleShimSources
     bad = $badBundleShimSources
+}
+
+$firstCommandSources = @(
+    (Test-FirstCommandSource -Name "codex" -ShimRoot $shimRoot),
+    (Test-FirstCommandSource -Name "node" -ShimRoot $shimRoot),
+    (Test-FirstCommandSource -Name "rg" -ShimRoot $shimRoot)
+)
+$badFirstCommandSources = @($firstCommandSources | Where-Object { -not $_.ok })
+Add-Check $checks "official_tool_first_command_source" ($(if ($badFirstCommandSources.Count -eq 0) { "pass" } else { "fail" })) @{
+    checked = $firstCommandSources
+    bad = $badFirstCommandSources
 }
 
 $rgPs1 = Join-Path $shimRoot "rg.ps1"

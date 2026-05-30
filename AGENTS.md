@@ -17,7 +17,11 @@ Adopt `CODEX_WORKFLOW_APPLIED_REVIEW`,'CODEX_WORKFLOW_CONFIGURATION_INTERVIEW'as
 
 ## Scope
 
-- `%USERPROFILE%\.codex` is both CODEX_HOME and the GlobalSSOT root.
+- `%USERPROFILE%\.codex` is the live Codex runtime root and CODEX_HOME.
+- `%USERPROFILE%\Documents\Codex` is the reviewable managed-source repository
+  for workstation policy, scripts, runbooks, and scaffold changes. Live `.codex`
+  files are runtime outputs or narrow synchronized copies, not proof that the
+  managed source has been reconciled.
 - `%USERPROFILE%\code\Dev-Product` is outside this GlobalSSOT maintenance scope unless the user explicitly asks to work there.
 - User instructions in the current conversation are the highest authority inside scope.
 - Do not read secrets or credential material unless the user explicitly asks for that specific file.
