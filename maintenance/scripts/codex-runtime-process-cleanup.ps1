@@ -3,8 +3,11 @@ param(
     [string]$Mode = "status",
     [int]$ParentPid = 0,
     [int]$PollSeconds = 3,
+    [int]$DuplicateGraceSeconds = 15,
+    [int]$DuplicateConfirmations = 3,
     [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }),
     [switch]$CleanupStaleOnEnsure,
+    [switch]$StopAppServerOnOwnerExit,
     [switch]$DryRun
 )
 
@@ -18,15 +21,21 @@ function Get-ProcessTable {
 function Get-CodexAppServer {
     param([object[]]$Processes)
 
-    $candidates = @($Processes | Where-Object {
-        [string]$_.Name -ieq "codex.exe" -and [string]$_.CommandLine -match "\bapp-server\b" -and
-            [string]$_.CommandLine -notmatch "--listen\s+stdio://"
-    } | Sort-Object CreationDate -Descending)
+    $candidates = @(Get-CodexAppServers -Processes $Processes)
 
     if ($candidates.Count -gt 0) {
         return $candidates[0]
     }
     return $null
+}
+
+function Get-CodexAppServers {
+    param([object[]]$Processes)
+
+    @($Processes | Where-Object {
+        [string]$_.Name -ieq "codex.exe" -and [string]$_.CommandLine -match "\bapp-server\b" -and
+            [string]$_.CommandLine -notmatch "--listen\s+stdio://"
+    } | Sort-Object CreationDate -Descending)
 }
 
 function Get-ManagedRootKey {
@@ -35,12 +44,10 @@ function Get-ManagedRootKey {
         [string]$CommandLine
     )
 
-    if ($CommandLine -match "uvx.*\bserena\b.*\bstart-mcp-server\b") { return "serena" }
+    if ($CommandLine -match "(uvx|uv(\.cmd)?\s+tool\s+run).*\bserena\b.*\bstart-mcp-server\b") { return "serena" }
     if ($CommandLine -match "npx.*@upstash/context7-mcp") { return "context7" }
     if ($CommandLine -match "npx.*chrome-devtools-mcp") { return "chrome-devtools" }
-    if ($Name -ieq "node_repl.exe") { return "node_repl" }
-    if ($Name -ieq "pwsh.exe" -and $CommandLine -match "-EncodedCommand") { return "powershell-command-parser" }
-    if ($Name -ieq "conhost.exe") { return "appserver-conhost" }
+    if ($Name -ieq "node_repl.exe" -or $CommandLine -match "\bnode_repl(\.cmd|\.exe)?\b") { return "node_repl" }
     return $null
 }
 
@@ -63,6 +70,157 @@ function Get-ManagedRoots {
             CommandLine = [string]$_.CommandLine
         }
     })
+}
+
+function Get-ChromeExtensionHostProcesses {
+    param([object[]]$Processes)
+
+    $cacheRoot = Join-Path $CodexHome "plugins\cache\openai-bundled\chrome"
+    $escapedCacheRoot = [regex]::Escape($cacheRoot)
+    @($Processes | Where-Object {
+        ([string]$_.Name -ieq "extension-host.exe" -and [string]$_.CommandLine -match $escapedCacheRoot) -or
+            ([string]$_.Name -ieq "cmd.exe" -and [string]$_.CommandLine -match $escapedCacheRoot -and [string]$_.CommandLine -match "extension-host\.exe")
+    } | ForEach-Object {
+        [pscustomobject]@{
+            ProcessId = [int]$_.ProcessId
+            ParentProcessId = [int]$_.ParentProcessId
+            CreationDate = $_.CreationDate
+            Name = [string]$_.Name
+            CommandLine = [string]$_.CommandLine
+        }
+    })
+}
+
+function Stop-ChromeExtensionHosts {
+    param(
+        [object[]]$Processes,
+        [string]$Reason
+    )
+
+    $hosts = @(Get-ChromeExtensionHostProcesses -Processes $Processes)
+    $hostPidSet = New-Object System.Collections.Generic.HashSet[int]
+    foreach ($hostProcess in $hosts) {
+        $null = $hostPidSet.Add([int]$hostProcess.ProcessId)
+    }
+    $roots = @($hosts | Where-Object { -not $hostPidSet.Contains([int]$_.ParentProcessId) })
+    $stopped = New-Object System.Collections.Generic.List[object]
+    foreach ($root in $roots) {
+        $stopped.Add((Stop-ProcessTree -Processes $Processes -RootPid ([int]$root.ProcessId) -Reason $Reason)) | Out-Null
+    }
+    return @($stopped.ToArray())
+}
+
+function Convert-CimCreationDate {
+    param([object]$Value)
+
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [datetime]) { return [datetime]$Value }
+
+    $text = [string]$Value
+    try {
+        return [Management.ManagementDateTimeConverter]::ToDateTime($text)
+    } catch {
+        try {
+            return [datetime]::Parse($text)
+        } catch {
+            return $null
+        }
+    }
+}
+
+function Get-ProcessAgeSeconds {
+    param([object]$Process)
+
+    $created = Convert-CimCreationDate -Value $Process.CreationDate
+    if ($null -eq $created) { return [double]::PositiveInfinity }
+    return [Math]::Max(0, ((Get-Date) - $created).TotalSeconds)
+}
+
+function Convert-ToComparablePath {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return "" }
+    try {
+        return ([IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))).TrimEnd("\").ToLowerInvariant()
+    } catch {
+        return ([Environment]::ExpandEnvironmentVariables($Path)).TrimEnd("\").ToLowerInvariant()
+    }
+}
+
+function Get-CommandLineValue {
+    param(
+        [string]$CommandLine,
+        [string]$Name
+    )
+
+    $pattern = "(?i)(?:^|\s)-" + [regex]::Escape($Name) + "\s+(`"([^`"]+)`"|'([^']+)'|(\S+))"
+    $match = [regex]::Match([string]$CommandLine, $pattern)
+    if (-not $match.Success) { return "" }
+    foreach ($index in @(2, 3, 4)) {
+        if (-not [string]::IsNullOrWhiteSpace($match.Groups[$index].Value)) {
+            return $match.Groups[$index].Value
+        }
+    }
+    return ""
+}
+
+function Test-CommandLineSwitch {
+    param(
+        [string]$CommandLine,
+        [string]$Name
+    )
+
+    return ([string]$CommandLine -match ("(?i)(?:^|\s)-" + [regex]::Escape($Name) + "(?:\s|$)"))
+}
+
+function Convert-ToNullableInt {
+    param([string]$Value)
+
+    $parsed = 0
+    if ([int]::TryParse([string]$Value, [ref]$parsed)) {
+        return $parsed
+    }
+    return $null
+}
+
+function Test-IsProcessDescendant {
+    param(
+        [object[]]$Processes,
+        [int]$RootPid,
+        [int]$CandidatePid
+    )
+
+    if ($CandidatePid -eq $RootPid) { return $true }
+    $seen = New-Object System.Collections.Generic.HashSet[int]
+    $current = $CandidatePid
+    while ($current -gt 0 -and $seen.Add($current)) {
+        $proc = $Processes | Where-Object { [int]$_.ProcessId -eq $current } | Select-Object -First 1
+        if ($null -eq $proc) { return $false }
+        $parent = [int]$proc.ParentProcessId
+        if ($parent -eq $RootPid) { return $true }
+        $current = $parent
+    }
+    return $false
+}
+
+function Test-ProcessMatchesSnapshot {
+    param(
+        [object]$Snapshot,
+        [object]$Current
+    )
+
+    if ($null -eq $Snapshot -or $null -eq $Current) { return $false }
+    if ([int]$Snapshot.ProcessId -ne [int]$Current.ProcessId) { return $false }
+    if ([string]$Snapshot.CreationDate -ne [string]$Current.CreationDate) { return $false }
+    return $true
+}
+
+function Test-AppServerProcess {
+    param([object]$Process)
+
+    return ([string]$Process.Name -ieq "codex.exe" -and
+        [string]$Process.CommandLine -match "\bapp-server\b" -and
+        [string]$Process.CommandLine -notmatch "--listen\s+stdio://")
 }
 
 function Get-DescendantIds {
@@ -110,14 +268,20 @@ function Stop-ProcessTree {
     param(
         [object[]]$Processes,
         [int]$RootPid,
-        [string]$Reason
+        [string]$Reason,
+        [string]$ExpectedRootKey = "",
+        [switch]$AllowAppServerRoot
     )
 
     $ids = @(Get-DescendantIds -Processes $Processes -RootPid $RootPid)
-    $ordered = @($ids | Sort-Object -Descending)
+    $ordered = @($ids | Where-Object { $_ -ne $RootPid } | Sort-Object -Descending)
+    $ordered += $RootPid
+    $rootSnapshot = $Processes | Where-Object { [int]$_.ProcessId -eq $RootPid } | Select-Object -First 1
     $details = [ordered]@{
         root_pid = $RootPid
         reason = $Reason
+        expected_root_key = $ExpectedRootKey
+        allow_app_server_root = [bool]$AllowAppServerRoot
         process_ids = $ordered
         dry_run = [bool]$DryRun
     }
@@ -129,6 +293,40 @@ function Stop-ProcessTree {
 
     foreach ($id in $ordered) {
         try {
+            $currentProcesses = Get-ProcessTable
+            $snapshot = $Processes | Where-Object { [int]$_.ProcessId -eq [int]$id } | Select-Object -First 1
+            $current = $currentProcesses | Where-Object { [int]$_.ProcessId -eq [int]$id } | Select-Object -First 1
+            $currentRoot = $currentProcesses | Where-Object { [int]$_.ProcessId -eq [int]$RootPid } | Select-Object -First 1
+            $skipReason = $null
+
+            if ($null -eq $current) {
+                $skipReason = "already-exited"
+            } elseif (-not (Test-ProcessMatchesSnapshot -Snapshot $snapshot -Current $current)) {
+                $skipReason = "pid-identity-changed"
+            } elseif ($id -eq $RootPid -and $null -ne $rootSnapshot -and -not (Test-ProcessMatchesSnapshot -Snapshot $rootSnapshot -Current $current)) {
+                $skipReason = "root-identity-changed"
+            } elseif ($id -ne $RootPid -and -not (Test-IsProcessDescendant -Processes $currentProcesses -RootPid $RootPid -CandidatePid ([int]$id))) {
+                $skipReason = "no-longer-descendant"
+            } elseif ($id -eq $RootPid -and -not [string]::IsNullOrWhiteSpace($ExpectedRootKey)) {
+                $currentKey = Get-ManagedRootKey -Name ([string]$current.Name) -CommandLine ([string]$current.CommandLine)
+                if ($currentKey -ne $ExpectedRootKey) {
+                    $skipReason = "root-key-mismatch"
+                }
+            } elseif ($id -eq $RootPid -and $AllowAppServerRoot -and -not (Test-AppServerProcess -Process $current)) {
+                $skipReason = "root-app-server-mismatch"
+            } elseif ($id -ne $RootPid -and $null -eq $currentRoot) {
+                $skipReason = "root-exited-before-child-stop"
+            }
+
+            if ($null -ne $skipReason) {
+                Write-Ledger -Action "stop_skip" -Details @{
+                    process_id = [int]$id
+                    root_pid = $RootPid
+                    reason = $Reason
+                    skip_reason = $skipReason
+                }
+                continue
+            }
             Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
         } catch {
             Write-Ledger -Action "stop_error" -Details @{ process_id = $id; error = $_.Exception.Message }
@@ -141,6 +339,16 @@ function Get-Status {
     param([int]$AppServerPid)
 
     $processes = Get-ProcessTable
+    $appServers = @(Get-CodexAppServers -Processes $processes | ForEach-Object {
+        [pscustomobject]@{
+            ProcessId = [int]$_.ProcessId
+            ParentProcessId = [int]$_.ParentProcessId
+            CreationDate = $_.CreationDate
+            Name = [string]$_.Name
+            CommandLine = [string]$_.CommandLine
+        }
+    })
+    $watchers = @(Get-Watchers -Processes $processes)
     $appServer = if ($AppServerPid -gt 0) {
         $processes | Where-Object { $_.ProcessId -eq $AppServerPid } | Select-Object -First 1
     } else {
@@ -150,6 +358,10 @@ function Get-Status {
     if ($null -eq $appServer) {
         return ,([pscustomobject]@{
             app_server_pid = $null
+            app_server_parent_pid = $null
+            app_servers = $appServers
+            watchers = $watchers
+            chrome_extension_hosts = @(Get-ChromeExtensionHostProcesses -Processes $processes)
             managed_roots = @()
             duplicate_keys = @()
         })
@@ -159,14 +371,21 @@ function Get-Status {
     $duplicates = @($roots | Group-Object Key | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
     return ,([pscustomobject]@{
         app_server_pid = [int]$appServer.ProcessId
+        app_server_parent_pid = [int]$appServer.ParentProcessId
         app_server_command = [string]$appServer.CommandLine
+        app_servers = $appServers
+        watchers = $watchers
+        chrome_extension_hosts = @(Get-ChromeExtensionHostProcesses -Processes $processes)
         managed_roots = @($roots | Sort-Object Key, CreationDate)
         duplicate_keys = $duplicates
     })
 }
 
 function Invoke-CleanupStale {
-    param([int]$AppServerPid)
+    param(
+        [int]$AppServerPid,
+        [string[]]$OnlyKeys = @()
+    )
 
     $processes = Get-ProcessTable
     $status = Get-Status -AppServerPid $AppServerPid
@@ -178,15 +397,20 @@ function Invoke-CleanupStale {
     $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid $appServerPidValue)
     $stopped = New-Object System.Collections.Generic.List[object]
     foreach ($group in @($roots | Group-Object Key)) {
+        if ($OnlyKeys.Count -gt 0 -and $group.Name -notin $OnlyKeys) {
+            continue
+        }
         $keep = @($group.Group | Sort-Object CreationDate -Descending | Select-Object -First 1)[0]
         foreach ($stale in @($group.Group | Where-Object { $_.ProcessId -ne $keep.ProcessId })) {
-            $stopped.Add((Stop-ProcessTree -Processes $processes -RootPid ([int]$stale.ProcessId) -Reason ("stale-" + $group.Name))) | Out-Null
+            $stopped.Add((Stop-ProcessTree -Processes $processes -RootPid ([int]$stale.ProcessId) -Reason ("stale-" + $group.Name) -ExpectedRootKey $group.Name)) | Out-Null
         }
     }
 
+    $statusAfter = Get-Status -AppServerPid $appServerPidValue
     return ,([pscustomobject]@{
         app_server_pid = $appServerPidValue
         stopped = @($stopped.ToArray())
+        status_after = $statusAfter
     })
 }
 
@@ -225,28 +449,110 @@ function Invoke-CleanupAll {
 function Invoke-Watch {
     param([int]$AppServerPid)
 
+    $initialProcesses = Get-ProcessTable
     if ($AppServerPid -le 0) {
-        $status = Get-Status -AppServerPid 0
-        if ($null -eq $status.app_server_pid) {
+        $appServer = Get-CodexAppServer -Processes $initialProcesses
+        if ($null -eq $appServer) {
             throw "Codex app-server not found."
         }
-        $AppServerPid = [int]$status.app_server_pid
+        $AppServerPid = [int]$appServer.ProcessId
+    } else {
+        $appServer = $initialProcesses | Where-Object { $_.ProcessId -eq $AppServerPid } | Select-Object -First 1
+        if ($null -eq $appServer) {
+            throw "Codex app-server not found: $AppServerPid"
+        }
     }
 
+    $ownerPid = [int]$appServer.ParentProcessId
     $known = New-Object System.Collections.Generic.HashSet[int]
-    Write-Ledger -Action "watch_start" -Details @{ app_server_pid = $AppServerPid; poll_seconds = $PollSeconds }
+    $duplicateSignatures = @{}
+    Write-Ledger -Action "watch_start" -Details @{
+        app_server_pid = $AppServerPid
+        app_server_parent_pid = $ownerPid
+        poll_seconds = $PollSeconds
+        stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
+        duplicate_grace_seconds = $DuplicateGraceSeconds
+        duplicate_confirmations = $DuplicateConfirmations
+    }
 
     while ($true) {
         $processes = Get-ProcessTable
         $parentAlive = @($processes | Where-Object { $_.ProcessId -eq $AppServerPid }).Count -gt 0
-        foreach ($root in @(Get-ManagedRoots -Processes $processes -RootParentPid $AppServerPid)) {
+        $ownerAlive = (-not $StopAppServerOnOwnerExit) -or $ownerPid -le 0 -or @($processes | Where-Object { $_.ProcessId -eq $ownerPid }).Count -gt 0
+        $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid $AppServerPid)
+        foreach ($root in $roots) {
             $null = $known.Add([int]$root.ProcessId)
         }
 
         if (-not $parentAlive) {
             $result = Invoke-CleanupAll -AppServerPid $AppServerPid -KnownRootPids @($known)
+            $chromeStopped = Stop-ChromeExtensionHosts -Processes $processes -Reason "app-server-exit-chrome-extension-host"
+            $result | Add-Member -NotePropertyName chrome_extension_hosts_stopped -NotePropertyValue @($chromeStopped) -Force
             Write-Ledger -Action "watch_cleanup_complete" -Details $result
             return $result
+        }
+
+        if (-not $ownerAlive) {
+            $stopped = Stop-ProcessTree -Processes $processes -RootPid $AppServerPid -Reason "app-server-owner-exit" -AllowAppServerRoot
+            $chromeStopped = Stop-ChromeExtensionHosts -Processes $processes -Reason "app-server-owner-exit-chrome-extension-host"
+            $result = [pscustomobject]@{
+                app_server_pid = $AppServerPid
+                app_server_parent_pid = $ownerPid
+                stopped = @($stopped)
+                chrome_extension_hosts_stopped = @($chromeStopped)
+            }
+            Write-Ledger -Action "watch_owner_exit_cleanup_complete" -Details $result
+            return $result
+        }
+
+        $groups = @($roots | Group-Object Key | Where-Object { $_.Count -gt 1 })
+        $currentDuplicateKeys = @($groups | ForEach-Object { $_.Name })
+        foreach ($key in @($duplicateSignatures.Keys)) {
+            if ($key -notin $currentDuplicateKeys) {
+                $duplicateSignatures.Remove($key)
+            }
+        }
+
+        $confirmedDuplicateKeys = New-Object System.Collections.Generic.List[string]
+        foreach ($group in $groups) {
+            $staleRoots = @($group.Group | Sort-Object CreationDate -Descending | Select-Object -Skip 1)
+            $stalePids = @($staleRoots | ForEach-Object { [string]$_.ProcessId })
+            $signature = ($stalePids | Sort-Object) -join ","
+            $oldEnough = (@($staleRoots | Where-Object { (Get-ProcessAgeSeconds -Process $_) -lt $DuplicateGraceSeconds }).Count -eq 0)
+            if ($duplicateSignatures.ContainsKey($group.Name) -and
+                [string]$duplicateSignatures[$group.Name].signature -eq $signature) {
+                $duplicateSignatures[$group.Name].count = [int]$duplicateSignatures[$group.Name].count + 1
+            } else {
+                $duplicateSignatures[$group.Name] = [pscustomobject]@{
+                    signature = $signature
+                    count = 1
+                    first_seen_utc = (Get-Date).ToUniversalTime().ToString("o")
+                }
+            }
+
+            if ($oldEnough -and [int]$duplicateSignatures[$group.Name].count -ge $DuplicateConfirmations) {
+                $confirmedDuplicateKeys.Add([string]$group.Name) | Out-Null
+            } else {
+                Write-Ledger -Action "watch_duplicate_candidate" -Details @{
+                    app_server_pid = $AppServerPid
+                    duplicate_key = [string]$group.Name
+                    stale_pids = $stalePids
+                    confirmation_count = [int]$duplicateSignatures[$group.Name].count
+                    old_enough = [bool]$oldEnough
+                    duplicate_grace_seconds = $DuplicateGraceSeconds
+                }
+            }
+        }
+
+        if ($confirmedDuplicateKeys.Count -gt 0) {
+            $result = Invoke-CleanupStale -AppServerPid $AppServerPid -OnlyKeys @($confirmedDuplicateKeys.ToArray())
+            Write-Ledger -Action "watch_cleanup_stale" -Details @{
+                duplicate_keys = @($confirmedDuplicateKeys.ToArray())
+                cleanup = $result
+            }
+            foreach ($key in @($confirmedDuplicateKeys.ToArray())) {
+                $duplicateSignatures.Remove($key)
+            }
         }
 
         Start-Sleep -Seconds $PollSeconds
@@ -256,7 +562,7 @@ function Invoke-Watch {
 function Get-PwshPath {
     $candidates = @()
     $candidates += @(Get-Command pwsh.exe -All -ErrorAction SilentlyContinue |
-        Where-Object { $_.Source -and $_.Source -notlike (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\*") } |
+        Where-Object { $_.Source -and $_.Source -notmatch "(?i)\\WindowsApps\\" } |
         ForEach-Object { $_.Source })
     $candidates += "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
     $candidates += "powershell.exe"
@@ -294,16 +600,65 @@ function Test-WatcherRunning {
     param(
         [object[]]$Processes,
         [string]$ScriptPath,
-        [int]$AppServerPid
+        [int]$AppServerPid,
+        [string]$RequiredCodexHome,
+        [int]$RequiredPollSeconds,
+        [int]$RequiredDuplicateGraceSeconds,
+        [int]$RequiredDuplicateConfirmations,
+        [bool]$RequireStopAppServerOnOwnerExit
     )
 
+    $requiredScript = Convert-ToComparablePath -Path $ScriptPath
+    $requiredHome = Convert-ToComparablePath -Path $RequiredCodexHome
     @($Processes | Where-Object {
+        $watchParentPid = Convert-ToNullableInt -Value (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "ParentPid")
+        $watchPollSeconds = Convert-ToNullableInt -Value (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "PollSeconds")
+        $watchDuplicateGraceSeconds = Convert-ToNullableInt -Value (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "DuplicateGraceSeconds")
+        $watchDuplicateConfirmations = Convert-ToNullableInt -Value (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "DuplicateConfirmations")
         [int]$_.ProcessId -ne [int]$PID -and
             [string]$_.Name -match "^(pwsh|powershell)\.exe$" -and
             [string]$_.CommandLine -match "codex-runtime-process-cleanup\.ps1" -and
             [string]$_.CommandLine -match "\s-Mode\s+watch\b" -and
-            [string]$_.CommandLine -match ("\s-ParentPid\s+" + [regex]::Escape([string]$AppServerPid) + "\b")
+            $watchParentPid -eq [int]$AppServerPid -and
+            (Convert-ToComparablePath -Path (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "File")) -eq $requiredScript -and
+            (Convert-ToComparablePath -Path (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "CodexHome")) -eq $requiredHome -and
+            $watchPollSeconds -eq [int]$RequiredPollSeconds -and
+            $watchDuplicateGraceSeconds -eq [int]$RequiredDuplicateGraceSeconds -and
+            $watchDuplicateConfirmations -eq [int]$RequiredDuplicateConfirmations -and
+            ((-not $RequireStopAppServerOnOwnerExit) -or (Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerExit"))
     }).Count -gt 0
+}
+
+function Get-Watchers {
+    param([object[]]$Processes)
+
+    @($Processes | Where-Object {
+        [string]$_.Name -match "^(pwsh|powershell)\.exe$" -and
+            [string]$_.CommandLine -match "codex-runtime-process-cleanup\.ps1" -and
+            [string]$_.CommandLine -match "\s-Mode\s+watch\b"
+    } | ForEach-Object {
+        $parentPid = $null
+        if ([string]$_.CommandLine -match "\s-ParentPid\s+([0-9]+)\b") {
+            $parentPid = [int]$Matches[1]
+        }
+        $poll = Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "PollSeconds"
+        $duplicateGrace = Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "DuplicateGraceSeconds"
+        $duplicateConfirmations = Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "DuplicateConfirmations"
+        [pscustomobject]@{
+            ProcessId = [int]$_.ProcessId
+            ParentProcessId = [int]$_.ParentProcessId
+            WatchedAppServerPid = $parentPid
+            ScriptPath = Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "File"
+            CodexHome = Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "CodexHome"
+            PollSeconds = $(if ([string]::IsNullOrWhiteSpace($poll)) { $null } else { [int]$poll })
+            DuplicateGraceSeconds = $(if ([string]::IsNullOrWhiteSpace($duplicateGrace)) { $null } else { [int]$duplicateGrace })
+            DuplicateConfirmations = $(if ([string]::IsNullOrWhiteSpace($duplicateConfirmations)) { $null } else { [int]$duplicateConfirmations })
+            StopAppServerOnOwnerExit = Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerExit"
+            CreationDate = $_.CreationDate
+            Name = [string]$_.Name
+            CommandLine = [string]$_.CommandLine
+        }
+    })
 }
 
 function Invoke-EnsureWatch {
@@ -333,7 +688,33 @@ function Invoke-EnsureWatch {
     $appServerPidValue = [int](@($status.app_server_pid)[0])
     $scriptPath = Get-CurrentScriptPath
     $processes = Get-ProcessTable
-    $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue
+    $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit)
+    $watchersForApp = @(Get-Watchers -Processes $processes | Where-Object { $_.WatchedAppServerPid -eq $appServerPidValue })
+    $incompatibleWatchers = @($watchersForApp | Where-Object {
+        -not (Test-WatcherRunning -Processes @($_) -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit))
+    })
+    foreach ($watcher in $incompatibleWatchers) {
+        try {
+            Stop-Process -Id ([int]$watcher.ProcessId) -Force -ErrorAction SilentlyContinue
+            Write-Ledger -Action "stop_incompatible_watcher" -Details @{
+                watcher_pid = [int]$watcher.ProcessId
+                app_server_pid = $appServerPidValue
+                required_script = $scriptPath
+                required_codex_home = $CodexHome
+                required_poll_seconds = $PollSeconds
+                require_stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
+            }
+        } catch {
+            Write-Ledger -Action "stop_incompatible_watcher_error" -Details @{
+                watcher_pid = [int]$watcher.ProcessId
+                error = $_.Exception.Message
+            }
+        }
+    }
+    if ($incompatibleWatchers.Count -gt 0) {
+        $processes = Get-ProcessTable
+        $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit)
+    }
 
     $watcherPid = $null
     if (-not $alreadyRunning -and -not $DryRun) {
@@ -342,22 +723,29 @@ function Invoke-EnsureWatch {
         $outLog = Join-Path $stateDir ("runtime-process-watch-" + $appServerPidValue + ".out.log")
         $errLog = Join-Path $stateDir ("runtime-process-watch-" + $appServerPidValue + ".err.log")
         $pwsh = Get-PwshPath
-        $commandLine = Join-CommandLine @(
-            $pwsh,
-            "-WindowStyle", "Hidden",
+        $arguments = @(
             "-NoProfile",
             "-ExecutionPolicy", "Bypass",
             "-File", $scriptPath,
             "-Mode", "watch",
             "-ParentPid", ([string]$appServerPidValue),
             "-PollSeconds", ([string]$PollSeconds),
+            "-DuplicateGraceSeconds", ([string]$DuplicateGraceSeconds),
+            "-DuplicateConfirmations", ([string]$DuplicateConfirmations),
             "-CodexHome", $CodexHome
         )
-        $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-            CommandLine = $commandLine
+        if ($StopAppServerOnOwnerExit) {
+            $arguments += "-StopAppServerOnOwnerExit"
         }
-        if ([int]$created.ReturnValue -ne 0) {
-            throw ("Failed to start watcher via Win32_Process.Create. return=" + $created.ReturnValue)
+        $created = Start-Process -FilePath $pwsh -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+        Start-Sleep -Milliseconds 500
+        if ($created.HasExited) {
+            $errorText = if (Test-Path -LiteralPath $errLog -PathType Leaf) {
+                ((Get-Content -LiteralPath $errLog -Raw -ErrorAction SilentlyContinue) -replace "\s+", " ").Trim()
+            } else {
+                ""
+            }
+            throw ("Runtime cleanup watcher exited immediately. exit=" + $created.ExitCode + " stderr=" + $errorText)
         }
         $watcherPid = [int]$created.ProcessId
     }
@@ -368,6 +756,10 @@ function Invoke-EnsureWatch {
         watcher_already_running = [bool]$alreadyRunning
         watcher_started = [bool]((-not $alreadyRunning) -and (-not $DryRun))
         watcher_pid = $watcherPid
+        incompatible_watcher_pids_stopped = @($incompatibleWatchers | ForEach-Object { [int]$_.ProcessId })
+        stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
+        duplicate_grace_seconds = $DuplicateGraceSeconds
+        duplicate_confirmations = $DuplicateConfirmations
         dry_run = [bool]$DryRun
     }
     Write-Ledger -Action "ensure_watch" -Details $result

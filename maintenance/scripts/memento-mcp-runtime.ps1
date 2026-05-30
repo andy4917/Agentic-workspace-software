@@ -145,6 +145,8 @@ function Get-EnvValue {
 }
 
 $Port = [int](Get-EnvValue -Name "PORT" -Default "57332")
+$HostAddress = Get-EnvValue -Name "HOST" -Default "127.0.0.1"
+$HttpClientHost = if ($HostAddress -in @("0.0.0.0", "::", "")) { "127.0.0.1" } else { $HostAddress }
 $PgPort = [int](Get-EnvValue -Name "POSTGRES_PORT" -Default "55432")
 $PgHost = Get-EnvValue -Name "POSTGRES_HOST" -Default "127.0.0.1"
 $PgDb = Get-EnvValue -Name "POSTGRES_DB" -Default "memento_pm"
@@ -212,7 +214,7 @@ function Test-PostgresReady {
 
 function Test-MementoHealth {
     try {
-        $health = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 5
+        $health = Invoke-RestMethod -Method Get -Uri "http://$HttpClientHost`:$Port/health" -TimeoutSec 5
         return ([string]$health.status -eq "healthy")
     } catch {
         return $false
@@ -463,6 +465,7 @@ function Start-MementoRuntime {
     Remove-Item -LiteralPath $ServerPidPath -ErrorAction SilentlyContinue
 
     $childEnv = @{
+        HOST = $HostAddress
         MEMENTO_INPROCESS_ONNX_ENABLED = $InProcessOnnxEnabled
         EMBEDDING_PROVIDER = $ManagedEmbeddingProvider
         MEMENTO_SEARCH_PARAM_ADAPTOR_ENABLED = "false"
@@ -567,7 +570,7 @@ function Invoke-MementoRpc {
         params = $Params
     } | ConvertTo-Json -Depth 20
 
-    $response = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/mcp" -Method Post -Headers $headers -Body $body -UseBasicParsing -TimeoutSec $HttpTimeoutSec
+    $response = Invoke-WebRequest -Uri "http://$HttpClientHost`:$Port/mcp" -Method Post -Headers $headers -Body $body -UseBasicParsing -TimeoutSec $HttpTimeoutSec
     if ([string]::IsNullOrWhiteSpace([string]$SessionId.Value) -and $response.Headers -and $response.Headers["mcp-session-id"]) {
         $SessionId.Value = [string]($response.Headers["mcp-session-id"] | Select-Object -First 1)
     }

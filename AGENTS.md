@@ -514,6 +514,9 @@ it as out of scope with direct evidence.
 - Use official Codex bundled tools before local duplicates when the tool exists
   in the Codex Desktop bundle. Current official bundled command-line tools are
   `node`, `node_repl`, `rg`, and `codex`.
+- `node_repl` may be registered as the app-managed Chrome plugin MCP dependency
+  when `chrome@openai-bundled` is enabled; route it through the approved shim,
+  not a pinned Codex bundle path.
 - Use local toolchains or local MCP servers only for capabilities not bundled by
   Codex, and route them through explicit wrappers or absolute command paths.
 - Do not call bare commands when both an official bundle and a local install

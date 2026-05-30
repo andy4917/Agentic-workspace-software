@@ -1,26 +1,15 @@
 param(
     [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }),
-    [switch]$Json
+    [switch]$Json,
+    [switch]$ReportOnly
 )
 
 $ErrorActionPreference = "Stop"
 
-$expectedSkills = @(
-    "andrej-karpathy-skill",
-    "vowline",
-    "keep-codex-fast",
-    "clean-all-slop",
-    "code-review-and-quality",
-    "debugging-and-error-recovery",
-    "roast-workstation-workflow",
-    "ui-ux-pro-max",
-    "modern-web-guidance"
-)
-$expectedMcp = @("chrome-devtools", "context7", "memento", "serena")
-$expectedShims = @(
+$fallbackExpectedShims = @(
     "bun.cmd","cargo-clippy.cmd","cargo.cmd","code.cmd","codex.cmd","eslint.cmd",
     "fd.cmd","gh.cmd","git.cmd","jq.cmd","just.cmd","node.cmd","npm.cmd",
-    "npx.cmd","pip.cmd","pnpm.cmd","prettier.cmd","pwsh.cmd","py.cmd",
+    "node_repl.cmd","npx.cmd","pip.cmd","pnpm.cmd","prettier.cmd","pwsh.cmd","py.cmd",
     "pytest.cmd","python.cmd","rg.cmd","rg.ps1","ruff.cmd","rustc.cmd",
     "rustfmt.cmd","rustup.cmd","tsc.cmd","tsx.cmd","uv.cmd","winget.cmd"
 )
@@ -42,6 +31,73 @@ function Test-TcpPort($hostName, $port, $timeoutMs) {
         return $false
     } finally {
         $client.Close()
+    }
+}
+
+function Get-ConfiguredSkillNames($config) {
+    if ($null -eq $config.skills -or $null -eq $config.skills.config) {
+        return @()
+    }
+    return @(@($config.skills.config) |
+        Where-Object { $null -eq $_.enabled -or [bool]$_.enabled } |
+        ForEach-Object { [string]$_.name } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object)
+}
+
+function Get-ExpectedShimNames {
+    param(
+        [string]$Root,
+        [object]$Config
+    )
+
+    $keepSetPath = Join-Path $Root "maintenance\manifests\keep-set.json"
+    $names = @()
+    if (Test-Path -LiteralPath $keepSetPath -PathType Leaf) {
+        try {
+            $keepSet = Get-Content -LiteralPath $keepSetPath -Raw | ConvertFrom-Json
+            $names = @($keepSet.runtime_keep_set.active_toolchain_shims | ForEach-Object { [string]$_ })
+        } catch {
+            $names = @()
+        }
+    }
+    if ($names.Count -eq 0) {
+        $names = @($fallbackExpectedShims)
+    }
+
+    if ($null -ne $Config.mcp_servers -and
+        $null -ne $Config.mcp_servers.PSObject.Properties["node_repl"] -and
+        "node_repl.cmd" -notin $names) {
+        $names += "node_repl.cmd"
+    }
+
+    return @($names | Sort-Object -Unique)
+}
+
+function Get-MementoEndpoint {
+    param([object]$Config)
+
+    $url = [string]$Config.mcp_servers.memento.url
+    if ([string]::IsNullOrWhiteSpace($url)) {
+        return $null
+    }
+
+    $uri = [Uri]$url
+    $hostName = if ($uri.Host -in @("0.0.0.0", "::", "")) { "127.0.0.1" } else { $uri.Host }
+    return [pscustomobject]@{
+        url = $url
+        health_url = ($uri.Scheme + "://" + $hostName + ":" + $uri.Port + "/health")
+        host = $hostName
+        port = $uri.Port
+    }
+}
+
+function Test-HttpHealth($url) {
+    try {
+        $health = Invoke-RestMethod -Method Get -Uri $url -TimeoutSec 5
+        return ([string]$health.status -eq "healthy")
+    } catch {
+        return $false
     }
 }
 
@@ -117,7 +173,7 @@ function Test-BundleShimSource {
     $toolPath = Resolve-CodexBundledTool -Name $toolName
     $text = if (Test-Path -LiteralPath $shimPath -PathType Leaf) { Get-Content -LiteralPath $shimPath -Raw } else { "" }
     $usesBundleRoot = $text -match [regex]::Escape("%LOCALAPPDATA%\OpenAI\Codex\bin") -or $text -match [regex]::Escape("OpenAI\Codex\bin")
-    $mentionsTool = $text -match [regex]::Escape($toolName + ".exe")
+    $mentionsTool = $text -match [regex]::Escape($toolName + ".exe") -or $text -match ("(?i)(^|[^A-Za-z0-9_])" + [regex]::Escape($toolName) + "([^A-Za-z0-9_]|$)")
     return [ordered]@{
         name = $shimName
         extension = $extension
@@ -150,12 +206,58 @@ $parsed = & python -c "import sys,tomllib,json; p=sys.argv[1]; data=tomllib.load
 if ($LASTEXITCODE -eq 0) {
     $config = $parsed | ConvertFrom-Json
     $mcpNames = @($config.mcp_servers.PSObject.Properties.Name | Sort-Object)
-    $missingMcp = @($expectedMcp | Where-Object { $_ -notin $mcpNames })
-    $extraMcp = @($mcpNames | Where-Object { $_ -notin $expectedMcp })
+    $chromePlugin = $config.plugins.PSObject.Properties["chrome@openai-bundled"].Value
+    $chromePluginEnabled = ($null -ne $chromePlugin -and [bool]$chromePlugin.enabled)
+    $expectedMcpEffective = @("chrome-devtools", "context7", "memento", "serena")
+    if ($chromePluginEnabled) { $expectedMcpEffective += "node_repl" }
+    $expectedMcpEffective = @($expectedMcpEffective | Sort-Object -Unique)
+    $missingMcp = @($expectedMcpEffective | Where-Object { $_ -notin $mcpNames })
+    $extraMcp = @($mcpNames | Where-Object { $_ -notin $expectedMcpEffective })
     Add-Check $checks "mcp_exact_set" ($(if ($missingMcp.Count -eq 0 -and $extraMcp.Count -eq 0) { "pass" } else { "fail" })) @{
         actual = $mcpNames
+        expected = $expectedMcpEffective
+        conditional_dependency = $(if ($chromePluginEnabled) { "chrome@openai-bundled=>node_repl" } else { $null })
         missing = $missingMcp
         extra = $extraMcp
+    }
+    $configJson = $config | ConvertTo-Json -Depth 20
+    $hardcodedBundlePaths = @([regex]::Matches($configJson, '(?i)AppData\\\\Local\\\\OpenAI\\\\Codex\\\\bin\\\\[0-9a-f]{8,}\\\\[^"\\]+\.exe') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    $mcpCommandProblems = New-Object System.Collections.Generic.List[string]
+    foreach ($name in $mcpNames) {
+        $server = $config.mcp_servers.PSObject.Properties[$name].Value
+        $command = [string]$server.command
+        $args = @($server.args | ForEach-Object { [string]$_ })
+        if ($command -in @("npx", "uvx")) {
+            $mcpCommandProblems.Add("$name uses bare $command") | Out-Null
+        }
+        if ($args.Count -ge 2 -and $args[0] -eq "/c" -and $args[1] -in @("npx", "uvx")) {
+            $mcpCommandProblems.Add("$name uses bare cmd /c $($args[1])") | Out-Null
+        }
+    }
+    Add-Check $checks "mcp_command_sources_dynamic" ($(if ($hardcodedBundlePaths.Count -eq 0 -and $mcpCommandProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+        hardcoded_bundle_paths = $hardcodedBundlePaths
+        command_problems = @($mcpCommandProblems.ToArray())
+    }
+    $marketplace = $config.marketplaces.PSObject.Properties["openai-bundled"].Value
+    $marketplaceSource = if ($null -ne $marketplace) { [string]$marketplace.source } else { "" }
+    $volatileMarketplaceSource = ($marketplaceSource -match '(?i)(\\\.tmp\\|\\tmp\\|bundled-marketplaces|plugins\\cache)')
+    $marketplaceScript = Join-Path $CodexHome "maintenance\scripts\ensure-openai-bundled-marketplace.ps1"
+    $marketplaceStatus = $null
+    $marketplaceScriptOk = $false
+    if (Test-Path -LiteralPath $marketplaceScript -PathType Leaf) {
+        try {
+            $marketplaceOutput = & $marketplaceScript -Mode status -CodexHome $CodexHome -Json 2>&1
+            $marketplaceStatus = ($marketplaceOutput | Out-String) | ConvertFrom-Json
+            $marketplaceScriptOk = [bool]$marketplaceStatus.ok
+        } catch {
+            $marketplaceScriptOk = $false
+        }
+    }
+    Add-Check $checks "openai_bundled_marketplace_source_valid" ($(if ((-not $volatileMarketplaceSource) -and $marketplaceScriptOk) { "pass" } else { "fail" })) @{
+        source = $marketplaceSource
+        volatile_source = $volatileMarketplaceSource
+        stable_path = $(if ($null -ne $marketplaceStatus) { $marketplaceStatus.stable_path } else { $null })
+        link_target = $(if ($null -ne $marketplaceStatus) { $marketplaceStatus.link_target } else { $null })
     }
     $serenaArgs = @($config.mcp_servers.serena.args)
     $openFlagIndex = [Array]::IndexOf($serenaArgs, "--open-web-dashboard")
@@ -170,8 +272,14 @@ if ($LASTEXITCODE -eq 0) {
         global_config_has_open_false = $serenaGlobalDisablesOpen
         global_config = $serenaConfigPath
     }
-    Add-Check $checks "memento_http_ready" ($(if (Test-TcpPort "127.0.0.1" 57332 750) { "pass" } else { "fail" })) @{
-        url = "http://127.0.0.1:57332/mcp"
+    $mementoEndpoint = Get-MementoEndpoint -Config $config
+    $mementoTcpReady = ($null -ne $mementoEndpoint -and (Test-TcpPort $mementoEndpoint.host $mementoEndpoint.port 750))
+    $mementoHealthReady = ($null -ne $mementoEndpoint -and (Test-HttpHealth $mementoEndpoint.health_url))
+    Add-Check $checks "memento_http_ready" ($(if ($mementoTcpReady -and $mementoHealthReady) { "pass" } else { "fail" })) @{
+        url = $(if ($null -ne $mementoEndpoint) { $mementoEndpoint.url } else { $null })
+        health_url = $(if ($null -ne $mementoEndpoint) { $mementoEndpoint.health_url } else { $null })
+        tcp_ready = $mementoTcpReady
+        health_ready = $mementoHealthReady
         note = "Registration is not enough; the local HTTP server must be listening for tools to load."
     }
     $hookCommands = @()
@@ -181,7 +289,9 @@ if ($LASTEXITCODE -eq 0) {
             foreach ($hook in @($group.hooks)) { $hookCommands += [string]$hook.command }
         }
     }
-    $badHookCommands = @($hookCommands | Where-Object { $_ -notmatch [regex]::Escape($hookPath) })
+    $badHookCommands = @($hookCommands | Where-Object {
+        [Environment]::ExpandEnvironmentVariables([string]$_) -notmatch [regex]::Escape($hookPath)
+    })
     Add-Check $checks "hooks_one_runner" ($(if ($hookCommands.Count -eq 5 -and $badHookCommands.Count -eq 0) { "pass" } else { "fail" })) @{
         count = $hookCommands.Count
         bad = $badHookCommands
@@ -190,13 +300,79 @@ if ($LASTEXITCODE -eq 0) {
     Add-Check $checks "config_parse" "fail" @{ path = $configPath }
 }
 
+$cleanupScript = Join-Path $CodexHome "maintenance\scripts\codex-runtime-process-cleanup.ps1"
+if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
+    try {
+        $cleanupOutput = & $cleanupScript -Mode status -CodexHome $CodexHome 2>&1
+        $cleanupStatus = ($cleanupOutput | Out-String) | ConvertFrom-Json
+        $duplicateRuntimeKeys = @($cleanupStatus.duplicate_keys)
+        $appServers = @($cleanupStatus.app_servers)
+        $managedRoots = @($cleanupStatus.managed_roots)
+        $expectedRuntimeRootKeys = @()
+        if ($null -ne $config -and $null -ne $config.mcp_servers) {
+            foreach ($name in @("chrome-devtools", "context7", "serena", "node_repl")) {
+                if ($null -ne $config.mcp_servers.PSObject.Properties[$name]) {
+                    $expectedRuntimeRootKeys += $name
+                }
+            }
+        }
+        $missingRuntimeRootKeys = if ($null -eq $cleanupStatus.app_server_pid) {
+            @()
+        } else {
+            @($expectedRuntimeRootKeys | Where-Object { $_ -notin @($managedRoots | ForEach-Object { [string]$_.Key }) })
+        }
+        Add-Check $checks "runtime_managed_roots_singleton" ($(if ($duplicateRuntimeKeys.Count -eq 0 -and $appServers.Count -le 1) { "pass" } else { "fail" })) @{
+            app_server_pid = $cleanupStatus.app_server_pid
+            app_server_count = $appServers.Count
+            duplicate_keys = $duplicateRuntimeKeys
+            managed_roots = @($managedRoots | ForEach-Object {
+                [ordered]@{ key = $_.Key; pid = $_.ProcessId; parent_pid = $_.ParentProcessId }
+            })
+        }
+
+        Add-Check $checks "runtime_expected_roots_present" ($(if ($missingRuntimeRootKeys.Count -eq 0) { "pass" } else { "fail" })) @{
+            app_server_pid = $cleanupStatus.app_server_pid
+            expected_process_backed_roots = $expectedRuntimeRootKeys
+            missing = $missingRuntimeRootKeys
+            observed = @($managedRoots | ForEach-Object { [string]$_.Key } | Sort-Object -Unique)
+            note = "When an app-server is live and process-backed MCP servers are configured, missing roots indicate a stale or disrupted active runtime."
+        }
+
+        $watchers = @($cleanupStatus.watchers)
+        $appServerPid = $cleanupStatus.app_server_pid
+        $watcherMatches = @(
+            if ($null -ne $appServerPid) {
+                $watchers | Where-Object { $_.WatchedAppServerPid -eq $appServerPid -and [bool]$_.StopAppServerOnOwnerExit }
+            }
+        )
+        $hasCleanupWatcher = ($null -eq $appServerPid) -or (@($watcherMatches).Count -gt 0)
+        Add-Check $checks "runtime_cleanup_watcher_active" ($(if ($hasCleanupWatcher) { "pass" } else { "fail" })) @{
+            app_server_pid = $appServerPid
+            watcher_pids = @($watcherMatches | ForEach-Object { $_.ProcessId })
+            all_watchers = @($watchers | ForEach-Object {
+                [ordered]@{ pid = $_.ProcessId; watched_app_server_pid = $_.WatchedAppServerPid; stop_app_server_on_owner_exit = $_.StopAppServerOnOwnerExit; codex_home = $_.CodexHome; poll_seconds = $_.PollSeconds }
+            })
+            note = "When an app-server is live, a runtime cleanup watcher should enforce singleton MCP roots and clean up after owner exit."
+        }
+    } catch {
+        Add-Check $checks "runtime_cleanup_status" "fail" @{
+            script = $cleanupScript
+            error = $_.Exception.Message
+        }
+    }
+} else {
+    Add-Check $checks "runtime_cleanup_status" "fail" @{ script = $cleanupScript; error = "missing" }
+}
+
 $skillRoot = Join-Path $CodexHome "skills"
 $actualSkills = @(Get-ChildItem -Directory -LiteralPath $skillRoot -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Sort-Object)
 $userSkills = @($actualSkills | Where-Object { $_ -ne ".system" })
+$expectedSkills = if ($null -ne $config) { @(Get-ConfiguredSkillNames $config) } else { @() }
 $missingSkills = @($expectedSkills | Where-Object { $_ -notin $userSkills })
 $extraSkills = @($userSkills | Where-Object { $_ -notin $expectedSkills })
 Add-Check $checks "skills_exact_user_set" ($(if ($missingSkills.Count -eq 0 -and $extraSkills.Count -eq 0) { "pass" } else { "fail" })) @{
     actual_user_skills = $userSkills
+    expected_from_config = $expectedSkills
     platform_exception = @($actualSkills | Where-Object { $_ -eq ".system" })
     missing = $missingSkills
     extra = $extraSkills
@@ -204,10 +380,12 @@ Add-Check $checks "skills_exact_user_set" ($(if ($missingSkills.Count -eq 0 -and
 
 $shimRoot = Join-Path $CodexHome "toolchains\shims"
 $actualShims = @(Get-ChildItem -File -LiteralPath $shimRoot -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Sort-Object)
+$expectedShims = @(Get-ExpectedShimNames -Root $CodexHome -Config $config)
 $missingShims = @($expectedShims | Where-Object { $_ -notin $actualShims })
 $extraShims = @($actualShims | Where-Object { $_ -notin $expectedShims })
 Add-Check $checks "shims_exact_set" ($(if ($missingShims.Count -eq 0 -and $extraShims.Count -eq 0) { "pass" } else { "fail" })) @{
     actual = $actualShims
+    expected = $expectedShims
     missing = $missingShims
     extra = $extraShims
 }
@@ -215,6 +393,7 @@ Add-Check $checks "shims_exact_set" ($(if ($missingShims.Count -eq 0 -and $extra
 $bundleShimSources = @(
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "codex"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "node"),
+    (Test-BundleShimSource -ShimRoot $shimRoot -Name "node_repl"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "rg"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "rg-ps1")
 )
@@ -279,9 +458,52 @@ Add-Check $checks "secret_scan" ($(if ($secretHits.Count -eq 0) { "pass" } else 
 $allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state","workflow")
 $top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)
 $topExtra = @($top | Where-Object { $_ -notin $allowedTop })
-Add-Check $checks "hot_runtime_top_level_minimal" ($(if ($topExtra.Count -eq 0) { "pass" } else { "fail" })) @{
+$liveAppServerPid = $null
+try {
+    if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
+        $liveStatus = (& $cleanupScript -Mode status -CodexHome $CodexHome 2>&1 | Out-String) | ConvertFrom-Json
+        $liveAppServerPid = $liveStatus.app_server_pid
+    }
+} catch {
+    $liveAppServerPid = $null
+}
+Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid -or $topExtra.Count -eq 0) { "pass" } else { "fail" })) @{
+    live_app_server_pid = $liveAppServerPid
     extra = $topExtra
-    note = "Run only after Codex is fully closed if live app-created state must be removed."
+    note = "Offline baseline cleanup is enforced only after Codex is fully closed; live app-created runtime state is categorized separately."
+}
+$liveRuntimeNames = @("artifacts","browser","cache","node_repl","plugins","sessions","sqlite",".sandbox",".tmp")
+$credentialNames = @("auth.json","installation_id")
+$sourceNames = @("tools")
+Add-Check $checks "live_runtime_hygiene" "pass" @{
+    live_app_server_pid = $liveAppServerPid
+    runtime_state = @($topExtra | Where-Object { $_ -in $liveRuntimeNames })
+    credential_state = @($topExtra | Where-Object { $_ -in $credentialNames })
+    durable_source_state = @($topExtra | Where-Object { $_ -in $sourceNames })
+    uncategorized_extra = @($topExtra | Where-Object { $_ -notin ($liveRuntimeNames + $credentialNames + $sourceNames) })
+    note = "This check classifies live state instead of treating every live top-level path as scaffold failure."
+}
+
+$chromeRepairScript = Join-Path $CodexHome "maintenance\scripts\repair-chrome-plugin-runtime.ps1"
+if (Test-Path -LiteralPath $chromeRepairScript -PathType Leaf) {
+    try {
+        $chromeOutput = & $chromeRepairScript -Mode status -CodexHome $CodexHome -Json 2>&1
+        $chromeStatus = ($chromeOutput | Out-String) | ConvertFrom-Json
+        Add-Check $checks "chrome_plugin_runtime_valid" ($(if ([bool]$chromeStatus.status.ok) { "pass" } else { "fail" })) @{
+            latest_target = $chromeStatus.status.latest_target
+            expected_host = $chromeStatus.status.expected_host
+            native_manifest_path = $chromeStatus.status.native_manifest_path
+            native_host_path = $chromeStatus.status.native_host_path
+            problems = @($chromeStatus.status.problems)
+        }
+    } catch {
+        Add-Check $checks "chrome_plugin_runtime_valid" "fail" @{
+            script = $chromeRepairScript
+            error = $_.Exception.Message
+        }
+    }
+} else {
+    Add-Check $checks "chrome_plugin_runtime_valid" "fail" @{ script = $chromeRepairScript; error = "missing" }
 }
 
 $serenaServerProcesses = @()
@@ -298,16 +520,24 @@ Add-Check $checks "serena_single_server_process" ($(if ($serenaServerProcesses.C
     note = "Counts Serena server roots, not wrapper cmd/uv/python helper processes."
 }
 
+$failedChecks = @($checks | Where-Object { $_.status -ne "pass" })
 $result = [ordered]@{
     generated_utc = (Get-Date).ToUniversalTime().ToString("o")
     codex_home = $CodexHome
+    overall_status = $(if ($failedChecks.Count -eq 0) { "pass" } else { "fail" })
+    fail_count = $failedChecks.Count
     checks = $checks
 }
 
 if ($Json) {
     $result | ConvertTo-Json -Depth 16
 } else {
+    "overall_status: {0}" -f $result.overall_status
     foreach ($check in $checks) {
         "{0}: {1}" -f $check.name, $check.status
     }
+}
+
+if ($failedChecks.Count -gt 0 -and -not $ReportOnly) {
+    exit 1
 }
