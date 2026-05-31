@@ -250,7 +250,7 @@ $rootCauseGate = [ordered]@{
     fix_goal = "Run one bounded command that gathers current diff, runtime, toolchain, doctor, Scoop, and original regression evidence, then writes fresh reviewable manifests and a report."
     minimal_change_scope = "Add an orchestrating script and generated evidence artifacts; do not alter passing cleanup or validator logic."
     original_failure_mode_to_verify = "stale manifests, missing watcher, orphan or duplicate managed roots, reserved PID loop regression, stale command route, false pass, and dead app-server cleanup safety."
-    uncertainty = "Computer Use may passively inspect Windows app inventory, but Codex Desktop UI input automation is forbidden by the Computer Use safety rules."
+    uncertainty = "Computer Use may inspect Windows screens and non-Codex apps for evidence when available. Codex Desktop app or Codex CLI input automation remains out of bounds under the Computer Use safety rules."
     stop_condition = "Any failed check leaves overall_status=fail and avoids writing a clean baseline manifest."
 }
 
@@ -546,8 +546,8 @@ $loopResult = [ordered]@{
     doctor = $doctor
     ledger_integrity = $ledgerProbe
     computer_use_boundary = [ordered]@{
-        status = "passive_check_only"
-        note = "Computer Use can inspect Windows app inventory, but its safety rules forbid automating the Codex desktop app UI or Codex CLI."
+        status = "environment_evidence_allowed"
+        note = "Computer Use may inspect Windows screens and non-Codex apps for evidence when available. It must not automate Codex Desktop app or Codex CLI input."
     }
     sandcastle_boundary = [ordered]@{
         status = "not_used"
@@ -689,7 +689,7 @@ $checkEvidenceRows
 - Stale reasons before refresh: $staleReasonText
 - Report-only mode: $([bool]$ReportOnly)
 - Clean tree required for baseline: $(-not [bool]$ReportOnly)
-- Computer Use boundary: passive app inventory only; Codex Desktop UI automation is forbidden by the Computer Use safety rules.
+- Computer Use boundary: Windows screen and non-Codex app evidence is allowed when the tool is available; Codex Desktop app or Codex CLI input automation is not.
 - Sandcastle boundary: not used for this active-runtime slice.
 
 ## Artifacts
@@ -701,7 +701,7 @@ $checkEvidenceRows
 
 ## Not Run
 
-- Physical Codex Desktop close-button click was not automated because the Computer Use policy forbids automating the Codex desktop app UI or Codex CLI.
+- Physical Codex Desktop close-button click was not automated because the Computer Use policy does not allow automating Codex Desktop app or Codex CLI input. Close lifecycle evidence must use user-performed close actions plus post-close process evidence, or non-Codex Windows tools such as Task Manager when Computer Use is available.
 - ReportOnly cleanup-all regression skip: $([bool]$ReportOnly)
 "@
 

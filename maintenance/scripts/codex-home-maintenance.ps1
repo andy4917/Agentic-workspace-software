@@ -143,6 +143,59 @@ function Compress-DirectoryIfNeeded {
     return $zip
 }
 
+function Stop-GitFsmonitorUnderRoot {
+    param([string]$Source)
+
+    if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
+        return @()
+    }
+
+    $repoRoots = New-Object System.Collections.Generic.List[string]
+    if (Test-Path -LiteralPath (Join-Path $Source '.git')) {
+        $repoRoots.Add($Source) | Out-Null
+    }
+
+    foreach ($gitDir in @(Get-ChildItem -LiteralPath $Source -Recurse -Force -Directory -Filter '.git' -ErrorAction SilentlyContinue)) {
+        $repoRoot = Split-Path -Parent $gitDir.FullName
+        if (-not [string]::IsNullOrWhiteSpace($repoRoot) -and $repoRoot -notin $repoRoots) {
+            $repoRoots.Add($repoRoot) | Out-Null
+        }
+    }
+
+    $results = New-Object System.Collections.Generic.List[object]
+    foreach ($repoRoot in @($repoRoots.ToArray())) {
+        $statusOutput = $null
+        $stopOutput = $null
+        $statusExitCode = $null
+        $stopExitCode = $null
+        try {
+            $statusOutput = & git -C $repoRoot fsmonitor--daemon status 2>&1
+            $statusExitCode = $LASTEXITCODE
+        } catch {
+            $statusOutput = $_.Exception.Message
+            $statusExitCode = 1
+        }
+        if (($statusOutput | Out-String) -match 'is watching') {
+            try {
+                $stopOutput = & git -C $repoRoot fsmonitor--daemon stop 2>&1
+                $stopExitCode = $LASTEXITCODE
+            } catch {
+                $stopOutput = $_.Exception.Message
+                $stopExitCode = 1
+            }
+        }
+        $results.Add([ordered]@{
+            repo_root = $repoRoot
+            status_exit_code = $statusExitCode
+            status = (($statusOutput | Out-String) -replace '\s+', ' ').Trim()
+            stop_exit_code = $stopExitCode
+            stop = (($stopOutput | Out-String) -replace '\s+', ' ').Trim()
+        }) | Out-Null
+    }
+
+    return @($results.ToArray())
+}
+
 function Remove-TransientRoot {
     param(
         [string]$Source,
@@ -159,6 +212,8 @@ function Remove-TransientRoot {
     }
 
     if ($PSCmdlet.ShouldProcess($Source, 'Send transient root to Recycle Bin')) {
+        $fsmonitorStops = @(Stop-GitFsmonitorUnderRoot -Source $Source)
+        $zip = $null
         try {
             $zip = Compress-DirectoryIfNeeded -Path $Source -ArchiveRoot $ArchiveRoot
             Send-ToRecycleBin -Path $Source
@@ -167,6 +222,7 @@ function Remove-TransientRoot {
                 action = if ($zip) { 'compressed_then_recycled' } else { 'recycled' }
                 archive = $zip
                 destination = 'Recycle Bin'
+                git_fsmonitor = $fsmonitorStops
                 error = $null
             }
         }
@@ -174,8 +230,9 @@ function Remove-TransientRoot {
             return [ordered]@{
                 source = $Source
                 action = 'recycle_failed'
-                archive = $null
+                archive = $zip
                 destination = 'Recycle Bin'
+                git_fsmonitor = $fsmonitorStops
                 error = $_.Exception.Message
             }
         }
@@ -186,6 +243,7 @@ function Remove-TransientRoot {
         action = 'would_recycle'
         archive = $null
         destination = 'Recycle Bin'
+        git_fsmonitor = @()
         error = $null
     }
 }

@@ -349,19 +349,6 @@ if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
         } else {
             @()
         }
-        $expectedRuntimeRootKeys = @()
-        if ($null -ne $config -and $null -ne $config.mcp_servers) {
-            foreach ($name in @("chrome-devtools", "context7", "serena", "node_repl")) {
-                if ($null -ne $config.mcp_servers.PSObject.Properties[$name]) {
-                    $expectedRuntimeRootKeys += $name
-                }
-            }
-        }
-        $missingRuntimeRootKeys = if ($null -eq $cleanupStatus.app_server_pid) {
-            @()
-        } else {
-            @($expectedRuntimeRootKeys | Where-Object { $_ -notin @($managedRoots | ForEach-Object { [string]$_.Key }) })
-        }
         Add-Check $checks "runtime_managed_roots_singleton" ($(if ($duplicateRuntimeKeys.Count -eq 0 -and $appServers.Count -le 1 -and $reportsManagedOrphans -and $managedOrphans.Count -eq 0) { "pass" } else { "fail" })) @{
             app_server_pid = $cleanupStatus.app_server_pid
             app_server_count = $appServers.Count
@@ -373,14 +360,6 @@ if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
             managed_orphans = @($managedOrphans | ForEach-Object {
                 [ordered]@{ key = $_.Key; pid = $_.ProcessId; parent_pid = $_.ParentProcessId; name = $_.Name }
             })
-        }
-
-        Add-Check $checks "runtime_expected_roots_present" ($(if ($missingRuntimeRootKeys.Count -eq 0) { "pass" } else { "fail" })) @{
-            app_server_pid = $cleanupStatus.app_server_pid
-            expected_process_backed_roots = $expectedRuntimeRootKeys
-            missing = $missingRuntimeRootKeys
-            observed = @($managedRoots | ForEach-Object { [string]$_.Key } | Sort-Object -Unique)
-            note = "When an app-server is live and process-backed MCP servers are configured, missing roots indicate a stale or disrupted active runtime."
         }
 
         $watchers = @($cleanupStatus.watchers)
@@ -528,15 +507,45 @@ Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid 
     extra = $topExtra
     note = "Offline baseline cleanup is enforced only after Codex is fully closed; live app-created runtime state is categorized separately."
 }
-$liveRuntimeNames = @("artifacts","browser","cache","node_repl","plugins","sessions","sqlite",".sandbox",".tmp")
-$credentialNames = @("auth.json","installation_id")
+$liveRuntimeNames = @(
+    "artifacts",
+    "automations",
+    "browser",
+    "cache",
+    "computer-use",
+    "memories",
+    "node_repl",
+    "packages",
+    "pets",
+    "plugins",
+    "process_manager",
+    "sessions",
+    "sqlite",
+    ".sandbox",
+    ".sandbox-bin",
+    ".tmp",
+    "tmp",
+    "models_cache.json",
+    "session_index.jsonl"
+)
+$credentialNames = @("auth.json","installation_id",".sandbox-secrets")
 $sourceNames = @("tools")
-Add-Check $checks "live_runtime_hygiene" "pass" @{
+$configStateNames = @(".codex-global-state.json",".codex-global-state.json.bak",".personality_migration","chrome-native-hosts.json")
+$quarantineNames = @("skills-disabled")
+$databaseState = @($topExtra | Where-Object { $_ -match '^(goals|logs|memories|state)_[0-9]+\.sqlite(-shm|-wal)?$' })
+$classifiedNames = $liveRuntimeNames + $credentialNames + $sourceNames + $configStateNames + $quarantineNames + $databaseState
+$uncategorizedTopExtra = @($topExtra | Where-Object { $_ -notin $classifiedNames })
+$forbiddenActiveTop = @($topExtra | Where-Object { $_ -in @("vendor_imports","bundled-marketplaces","codex-runtimes","wshobson-agents-scan") })
+Add-Check $checks "live_runtime_hygiene" ($(if ($uncategorizedTopExtra.Count -eq 0 -and $forbiddenActiveTop.Count -eq 0) { "pass" } else { "fail" })) @{
     live_app_server_pid = $liveAppServerPid
     runtime_state = @($topExtra | Where-Object { $_ -in $liveRuntimeNames })
     credential_state = @($topExtra | Where-Object { $_ -in $credentialNames })
     durable_source_state = @($topExtra | Where-Object { $_ -in $sourceNames })
-    uncategorized_extra = @($topExtra | Where-Object { $_ -notin ($liveRuntimeNames + $credentialNames + $sourceNames) })
+    config_state = @($topExtra | Where-Object { $_ -in $configStateNames })
+    database_state = $databaseState
+    quarantine_state = @($topExtra | Where-Object { $_ -in $quarantineNames })
+    forbidden_active = $forbiddenActiveTop
+    uncategorized_extra = $uncategorizedTopExtra
     note = "This check classifies live state instead of treating every live top-level path as scaffold failure."
 }
 

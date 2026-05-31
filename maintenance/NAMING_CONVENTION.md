@@ -50,6 +50,29 @@ When a user requests a future installation or configuration, add the resulting
 surface to these source classes instead of leaving it as an unnamed local tool.
 If it is only a support dependency, name the parent dependency chain that owns it.
 
+## Behavioral Naming Rule
+
+Names borrowed from public software folklore or naming catalogs are allowed only
+when the name maps to observable behavior in this workstation. The name must help
+an auditor predict ownership, lifecycle, risk, or boundary behavior without
+reading unrelated history.
+
+Use these metaphor names narrowly:
+
+- `root`, `tree`, `leaf`: real hierarchy or process ownership only.
+- `adapter`, `facade`, `wrapper`, `shim`: boundary translation only.
+- `heartbeat`, `canary`: active liveness or regression signal only.
+- `breadcrumb`: intentional trace evidence left for later audit only.
+- `sandbox`: isolated work that cannot mutate the active runtime by accident.
+- `quarantine`: reversible isolation for suspicious or deprecated surfaces.
+- `cache`: generated data that must not become the configured source of truth.
+
+Avoid clever names for operational surfaces. Terms such as `magic`, `god`,
+`spaghetti`, `slop`, or joke names may appear in review prose or external skill
+names, but active files and directories should use the concrete failure class:
+`stale-state`, `unsupported-success`, `hidden-fallback`, `duplicate-root`,
+`orphan-process`, `runtime-cache`, or `quarantine-archive`.
+
 ## Encoding Rule
 
 Operational files that can be parsed or executed by hooks, shells, MCP loaders,

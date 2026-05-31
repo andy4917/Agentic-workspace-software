@@ -1,6 +1,6 @@
 # Codex P0 Integrity Closed Loop
 
-Generated UTC: 2026-05-31T10:47:07.7316285Z
+Generated UTC: 2026-05-31T11:35:09.4295444Z
 
 ## Root-Cause Gate
 
@@ -11,7 +11,7 @@ Generated UTC: 2026-05-31T10:47:07.7316285Z
 - Fix goal: Run one bounded command that gathers current diff, runtime, toolchain, doctor, Scoop, and original regression evidence, then writes fresh reviewable manifests and a report.
 - Minimal change scope: Add an orchestrating script and generated evidence artifacts; do not alter passing cleanup or validator logic.
 - Original failure mode to verify: stale manifests, missing watcher, orphan or duplicate managed roots, reserved PID loop regression, stale command route, false pass, and dead app-server cleanup safety.
-- Uncertainty: Computer Use may passively inspect Windows app inventory, but Codex Desktop UI input automation is forbidden by the Computer Use safety rules.
+- Uncertainty: Computer Use may inspect Windows screens and non-Codex apps for evidence when available. Codex Desktop app or Codex CLI input automation remains out of bounds under the Computer Use safety rules.
 - Stop condition: Any failed check leaves overall_status=fail and avoids writing a clean baseline manifest.
 
 ## Policy Inputs
@@ -43,17 +43,17 @@ Generated UTC: 2026-05-31T10:47:07.7316285Z
 
 | Check | Command | CWD | Timestamp UTC | Exit code | Result | Evidence |
 |---|---|---|---|---|---|---|
-| policy_inputs_present | Test-Path/Get-FileHash maintenance\policies\*.md | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:07.7316285Z | 0 | pass | missing=0; inputs=4 |
-| git_diff_closure | git status --short --branch; git status --porcelain; git diff --check | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:07.8806325Z | 0 | pass | dirty_paths=0; diff_check_exit_code=0 |
-| runtime_cleanup_status | C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode status -CodexHome C:\Users\anise\.codex | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:08.0852074Z | 0 | pass | app_server_pid=14456; watchers=1; managed_orphans=0; duplicate_keys=0 |
-| reserved_pid_loop_regression | Select-String -LiteralPath C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Pattern 'foreach\s*\(\s*\$pid\b' | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:09.5320137Z | 0 | pass | forbidden_hits=0 |
-| dead_app_server_cleanup_regression | C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode cleanup-all -ParentPid 65000 -CodexHome C:\Users\anise\.codex; C:\Users\anise\.codex\tool... | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:09.7124092Z | 0 | pass | dead_pid=65000; before_app_server_pid=14456; after_app_server_pid=14456; before_roots=3572,3856,25644,35028; after_roots=3572,3856,25644,35028 |
-| scaffold_validation_current | C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:11.4894292Z | 0 | pass | overall_status=pass; fail_count=0; generated_utc=05/31/2026 10:47:15 |
-| toolchain_sources_current | C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\check-toolchain-sources.ps1 -Json | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:15.4356704Z | 0 | pass | status=pass; failures=0; warnings=0 |
-| codex_doctor_current | cmd.exe /c C:\Users\anise\.codex\toolchains\shims\codex.cmd doctor --json | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:18.4179618Z | 0 | pass | overallStatus=ok; codexVersion=0.135.0-alpha.1 |
-| scoop_health_current | cmd.exe /c scoop status; cmd.exe /c scoop checkup | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:23.1070874Z | 0 | pass | status_exit_code=0; checkup_exit_code=0; status=WARN  Scoop bucket(s) out of date. Run 'scoop update' to get the latest changes.; checkup=No problems identified! |
-| manifest_staleness_detected_before_refresh | Compare clean-baseline-manifest.json against current runtime, script, validation, toolchain, doctor, policy, and git signatures | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:28.7873345Z | 0 | pass | stale_before_refresh=True; stale_reasons=app_server_pid_changed,managed_root_signature_changed,runtime_signature_changed |
-| loop_ledger_integrity | Parse C:\Users\anise\.codex\maintenance\manifests\p0-integrity-loop-log.jsonl and require generated_utc/status/codex_home/repo_root for each JSONL row | C:\Users\anise\Documents\Codex | 2026-05-31T10:47:28.8147206Z | 0 | pass | exists=True; valid=5; invalid=0; repair_allowed=True |
+| policy_inputs_present | Test-Path/Get-FileHash maintenance\policies\*.md | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:09.4295444Z | 0 | pass | missing=0; inputs=4 |
+| git_diff_closure | git status --short --branch; git status --porcelain; git diff --check | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:09.4717209Z | 0 | pass | dirty_paths=0; diff_check_exit_code=0 |
+| runtime_cleanup_status | C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode status -CodexHome C:\Users\anise\.codex | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:09.6059552Z | 0 | pass | app_server_pid=14456; watchers=1; managed_orphans=0; duplicate_keys=0 |
+| reserved_pid_loop_regression | Select-String -LiteralPath C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Pattern 'foreach\s*\(\s*\$pid\b' | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:10.4639508Z | 0 | pass | forbidden_hits=0 |
+| dead_app_server_cleanup_regression | C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode cleanup-all -ParentPid 65000 -CodexHome C:\Users\anise\.codex; C:\Users\anise\.codex\tool... | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:10.6313515Z | 0 | pass | dead_pid=65000; before_app_server_pid=14456; after_app_server_pid=14456; before_roots=; after_roots= |
+| scaffold_validation_current | C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:12.1792988Z | 0 | pass | overall_status=pass; fail_count=0; generated_utc=05/31/2026 11:35:14 |
+| toolchain_sources_current | C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\check-toolchain-sources.ps1 -Json | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:14.1397167Z | 0 | pass | status=pass; failures=0; warnings=0 |
+| codex_doctor_current | cmd.exe /c C:\Users\anise\.codex\toolchains\shims\codex.cmd doctor --json | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:16.4388605Z | 0 | pass | overallStatus=ok; codexVersion=0.135.0-alpha.1 |
+| scoop_health_current | cmd.exe /c scoop status; cmd.exe /c scoop checkup | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:17.7317290Z | 0 | pass | status_exit_code=0; checkup_exit_code=0; status=Scoop is up to date.<br>Everything is ok!; checkup=No problems identified! |
+| manifest_staleness_detected_before_refresh | Compare clean-baseline-manifest.json against current runtime, script, validation, toolchain, doctor, policy, and git signatures | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:22.8312933Z | 0 | pass | stale_before_refresh=True; stale_reasons=managed_root_signature_changed,managed_loop_script_hash_changed,live_loop_script_hash_changed,runtime_signature_changed,validation_summary_changed |
+| loop_ledger_integrity | Parse C:\Users\anise\.codex\maintenance\manifests\p0-integrity-loop-log.jsonl and require generated_utc/status/codex_home/repo_root for each JSONL row | C:\Users\anise\Documents\Codex | 2026-05-31T11:35:22.8530948Z | 0 | pass | exists=True; valid=6; invalid=0; repair_allowed=True |
 
 ## Current Runtime
 
@@ -66,10 +66,10 @@ Generated UTC: 2026-05-31T10:47:07.7316285Z
 
 - Overall status: pass
 - Manifest stale before refresh: True
-- Stale reasons before refresh: app_server_pid_changed, managed_root_signature_changed, runtime_signature_changed
+- Stale reasons before refresh: managed_root_signature_changed, managed_loop_script_hash_changed, live_loop_script_hash_changed, runtime_signature_changed, validation_summary_changed
 - Report-only mode: False
 - Clean tree required for baseline: True
-- Computer Use boundary: passive app inventory only; Codex Desktop UI automation is forbidden by the Computer Use safety rules.
+- Computer Use boundary: Windows screen and non-Codex app evidence is allowed when the tool is available; Codex Desktop app or Codex CLI input automation is not.
 - Sandcastle boundary: not used for this active-runtime slice.
 
 ## Artifacts
@@ -81,5 +81,5 @@ Generated UTC: 2026-05-31T10:47:07.7316285Z
 
 ## Not Run
 
-- Physical Codex Desktop close-button click was not automated because the Computer Use policy forbids automating the Codex desktop app UI or Codex CLI.
+- Physical Codex Desktop close-button click was not automated because the Computer Use policy does not allow automating Codex Desktop app or Codex CLI input. Close lifecycle evidence must use user-performed close actions plus post-close process evidence, or non-Codex Windows tools such as Task Manager when Computer Use is available.
 - ReportOnly cleanup-all regression skip: False

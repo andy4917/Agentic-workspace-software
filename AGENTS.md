@@ -22,6 +22,11 @@ Adopt `CODEX_WORKFLOW_APPLIED_REVIEW`,'CODEX_WORKFLOW_CONFIGURATION_INTERVIEW'as
   for workstation policy, scripts, runbooks, and scaffold changes. Live `.codex`
   files are runtime outputs or narrow synchronized copies, not proof that the
   managed source has been reconciled.
+- File age in the managed-source repository is not live runtime truth by
+  itself. Before removing or trusting old-looking surfaces, classify them as
+  active managed source, historical evidence, source template, runtime output,
+  quarantine candidate, or contamination candidate, then verify live linkage
+  from current config, scripts, manifests, process state, or tests.
 - `%USERPROFILE%\code\Dev-Product` is outside this GlobalSSOT maintenance scope unless the user explicitly asks to work there.
 - User instructions in the current conversation are the highest authority inside scope.
 - Do not read secrets or credential material unless the user explicitly asks for that specific file.

@@ -7,6 +7,7 @@ param(
     [int]$DuplicateConfirmations = 3,
     [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }),
     [switch]$CleanupStaleOnEnsure,
+    [switch]$CleanupDuplicateRootsOnWatch,
     [switch]$StopAppServerOnOwnerExit,
     [switch]$StopAppServerOnOwnerNoVisibleWindow,
     [int]$OwnerNoVisibleWindowGraceSeconds = 5,
@@ -621,6 +622,7 @@ function Invoke-Watch {
         stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
         stop_app_server_on_owner_no_visible_window = [bool]$StopAppServerOnOwnerNoVisibleWindow
         owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
+        cleanup_duplicate_roots_on_watch = [bool]$CleanupDuplicateRootsOnWatch
         duplicate_grace_seconds = $DuplicateGraceSeconds
         duplicate_confirmations = $DuplicateConfirmations
     }
@@ -749,11 +751,20 @@ function Invoke-Watch {
             }
         }
 
-        if ($confirmedDuplicateKeys.Count -gt 0) {
+        if ($confirmedDuplicateKeys.Count -gt 0 -and $CleanupDuplicateRootsOnWatch) {
             $result = Invoke-CleanupStale -AppServerPid $AppServerPid -OnlyKeys @($confirmedDuplicateKeys.ToArray())
             Write-Ledger -Action "watch_cleanup_stale" -Details @{
                 duplicate_keys = @($confirmedDuplicateKeys.ToArray())
                 cleanup = $result
+            }
+            foreach ($key in @($confirmedDuplicateKeys.ToArray())) {
+                $duplicateSignatures.Remove($key)
+            }
+        } elseif ($confirmedDuplicateKeys.Count -gt 0) {
+            Write-Ledger -Action "watch_duplicate_roots_report_only" -Details @{
+                app_server_pid = $AppServerPid
+                duplicate_keys = @($confirmedDuplicateKeys.ToArray())
+                reason = "Automatic duplicate-root cleanup is disabled because short-lived replacement roots can make a stable root look stale."
             }
             foreach ($key in @($confirmedDuplicateKeys.ToArray())) {
                 $duplicateSignatures.Remove($key)
@@ -869,6 +880,7 @@ function Get-Watchers {
             StopAppServerOnOwnerExit = Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerExit"
             StopAppServerOnOwnerNoVisibleWindow = Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerNoVisibleWindow"
             OwnerNoVisibleWindowGraceSeconds = $(if ([string]::IsNullOrWhiteSpace($ownerNoVisibleWindowGrace)) { $null } else { [int]$ownerNoVisibleWindowGrace })
+            CleanupDuplicateRootsOnWatch = Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "CleanupDuplicateRootsOnWatch"
             CreationDate = $_.CreationDate
             Name = [string]$_.Name
             CommandLine = [string]$_.CommandLine
@@ -971,6 +983,9 @@ function Invoke-EnsureWatch {
         if ($StopAppServerOnOwnerNoVisibleWindow) {
             $arguments += "-StopAppServerOnOwnerNoVisibleWindow"
         }
+        if ($CleanupDuplicateRootsOnWatch) {
+            $arguments += "-CleanupDuplicateRootsOnWatch"
+        }
         $created = Start-Process -FilePath $pwsh -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
         Start-Sleep -Milliseconds 500
         if ($created.HasExited) {
@@ -984,16 +999,31 @@ function Invoke-EnsureWatch {
         $watcherPid = [int]$created.ProcessId
     }
 
+    $effectiveProcesses = Get-ProcessTable
+    $effectiveWatchers = @(Get-Watchers -Processes $effectiveProcesses | Where-Object { $_.WatchedAppServerPid -eq $appServerPidValue })
+    $effectiveWatcher = $effectiveWatchers | Sort-Object CreationDate -Descending | Select-Object -First 1
+    $effectiveStopOnOwnerExit = if ($null -ne $effectiveWatcher) { [bool]$effectiveWatcher.StopAppServerOnOwnerExit } else { [bool]$StopAppServerOnOwnerExit }
+    $effectiveStopOnOwnerNoVisibleWindow = if ($null -ne $effectiveWatcher) { [bool]$effectiveWatcher.StopAppServerOnOwnerNoVisibleWindow } else { [bool]$StopAppServerOnOwnerNoVisibleWindow }
+    $effectiveOwnerNoVisibleWindowGraceSeconds = if ($null -ne $effectiveWatcher -and $null -ne $effectiveWatcher.OwnerNoVisibleWindowGraceSeconds) { [int]$effectiveWatcher.OwnerNoVisibleWindowGraceSeconds } else { $OwnerNoVisibleWindowGraceSeconds }
+    $effectiveCleanupDuplicateRootsOnWatch = if ($null -ne $effectiveWatcher) { [bool]$effectiveWatcher.CleanupDuplicateRootsOnWatch } else { [bool]$CleanupDuplicateRootsOnWatch }
+
     $result = [pscustomobject]@{
         app_server_pid = $appServerPidValue
         cleanup_stale = $cleanupResult
         watcher_already_running = [bool]$alreadyRunning
         watcher_started = [bool]((-not $alreadyRunning) -and (-not $DryRun))
         watcher_pid = $watcherPid
+        effective_watcher_pid = $(if ($null -ne $effectiveWatcher) { [int]$effectiveWatcher.ProcessId } else { $null })
+        effective_watcher_pids = @($effectiveWatchers | ForEach-Object { [int]$_.ProcessId })
         incompatible_watcher_pids_stopped = @($incompatibleWatchers | ForEach-Object { [int]$_.ProcessId })
-        stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
-        stop_app_server_on_owner_no_visible_window = [bool]$StopAppServerOnOwnerNoVisibleWindow
-        owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
+        stop_app_server_on_owner_exit = $effectiveStopOnOwnerExit
+        stop_app_server_on_owner_no_visible_window = $effectiveStopOnOwnerNoVisibleWindow
+        owner_no_visible_window_grace_seconds = $effectiveOwnerNoVisibleWindowGraceSeconds
+        cleanup_duplicate_roots_on_watch = $effectiveCleanupDuplicateRootsOnWatch
+        requested_stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
+        requested_stop_app_server_on_owner_no_visible_window = [bool]$StopAppServerOnOwnerNoVisibleWindow
+        requested_owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
+        requested_cleanup_duplicate_roots_on_watch = [bool]$CleanupDuplicateRootsOnWatch
         duplicate_grace_seconds = $DuplicateGraceSeconds
         duplicate_confirmations = $DuplicateConfirmations
         dry_run = [bool]$DryRun
