@@ -179,7 +179,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                     "vowline",
                     "agents.md",
                     "agent_tool_requirements.md",
-                    "support-only memory",
+                    "memento and serena are retired",
                 ]
             ),
             "SessionStart should inject the current workspace Vowline fixture for subagent sessions.",

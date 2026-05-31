@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency Upgrade"
+  short_description: "Upgrade dependencies with source-backed compatibility checks."
+  default_prompt: "Plan and perform a dependency upgrade using lockfiles, official/current docs, changelogs, tests, and rollback evidence."

@@ -6,7 +6,7 @@
   "success_criteria": [
     "CALIBRATION.md exists and defines answer statuses, claim-level evidence, falsifier-first checks, and completion authority",
     "AGENTS.md points to CALIBRATION.md without duplicating it as a second source of truth",
-    "local/runtime config.toml registers CALIBRATION.md as a project doc fallback",
+    "calibration source is wired through AGENTS.md, hook policy, and prompt reminders; private runtime config fallback is optional",
     "calibration-verifier agent TOML parses",
     "calibration scoring manifest exists",
     "lightweight policy and prompt reminder point to calibration without making hooks completion authority"

@@ -215,7 +215,7 @@ def hook_subagent_vowline_status(root: Path) -> dict[str, Any]:
         "agents.md",
         "agent_tool_requirements.md",
         "define -> plan -> build -> verify -> review -> ship",
-        "support-only memory",
+        "memento and serena are retired",
         "subagent_delegation_charter.md",
     ]:
         if term not in hook_text:

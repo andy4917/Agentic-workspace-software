@@ -1,0 +1,61 @@
+# Hook fragment. All enabled events call one deterministic runner.
+
+[[hooks.SessionStart]]
+matcher = "startup|resume"
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+timeout = 30
+statusMessage = "compact scaffold hook"
+
+[[hooks.UserPromptSubmit]]
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+timeout = 30
+statusMessage = "compact scaffold hook"
+
+[[hooks.PreToolUse]]
+matcher = "Bash|apply_patch|mcp__.*"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+timeout = 30
+statusMessage = "compact scaffold hook"
+
+[[hooks.PostToolUse]]
+matcher = "Bash|apply_patch|mcp__.*"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+timeout = 30
+statusMessage = "compact scaffold hook"
+
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+timeout = 10
+statusMessage = "compact scaffold hook"
+
+[hooks.state]
+
+[hooks.state.'C:\Users\anise\.codex\config.toml:pre_tool_use:0:0']
+trusted_hash = "sha256:c370e05a5bcb1b3b9c4b56595f797e2e79aaf386173f076238c6f62d90d47878"
+
+[hooks.state.'C:\Users\anise\.codex\config.toml:post_tool_use:0:0']
+trusted_hash = "sha256:e98254ca5f3e3e5194db5170563eea84b85e21d8733af98a5e7b5097cb06fd99"
+
+[hooks.state.'C:\Users\anise\.codex\config.toml:session_start:0:0']
+trusted_hash = "sha256:39cd206f4d923333476695dc569846e459268084a9f644ed7d8aecf685e96faf"
+
+[hooks.state.'C:\Users\anise\.codex\config.toml:user_prompt_submit:0:0']
+trusted_hash = "sha256:93a8769e69fdae4f342948277234b08bcb655008c996b1e176eaa84196999e0b"
+
+[hooks.state.'C:\Users\anise\.codex\config.toml:stop:0:0']
+trusted_hash = "sha256:0662703b46f793a0e546a40e4520b399d94439dbd01c0fcda13b38dddac53357"

@@ -14,7 +14,7 @@ is left enabled during non-frontend work.
 
 ## Managed Capability
 
-- `name`: `chrome_devtools_observe`
+- `name`: `chrome-devtools`
 - `source_class`: `local-chain`
 - `owner`: Codex user-global MCP config; enabled only for confirmed frontend
   work and otherwise kept disabled for app UI visibility
@@ -64,7 +64,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
 1. Confirm the task is frontend UI, browser behavior, layout, or visual
    verification work.
 2. Run the ON command.
-3. Reload or restart Codex if `mcp__chrome_devtools_observe__...` tools do not
+3. Reload or restart Codex if `mcp__chrome_devtools__...` tools do not
    appear in the active session.
 4. Verify tool exposure with tool discovery.
 5. Use the MCP for a small safe rendered observation before relying on it.
@@ -102,7 +102,7 @@ sensitive pages unless the user explicitly asks for that risk boundary.
 ## UI Visibility Fix
 
 On 2026-05-13, the OFF behavior was changed from removing
-`chrome_devtools_observe` to preserving the MCP entry with `enabled = false`.
+`chrome-devtools` to preserving the MCP entry with `enabled = false`.
 This keeps the frontend observer visible in Codex app MCP settings while
 preventing it from loading as an active tool outside frontend work.
 
@@ -111,13 +111,13 @@ Verification:
 - `chrome-devtools-mcp-toggle.ps1 off` registered the server disabled.
 - `chrome-devtools-mcp-toggle.ps1 status` reported `state=off` and returned
   `enabled=false`.
-- `codex mcp list` showed `chrome_devtools_observe` with `Status disabled`.
+- `codex mcp list` showed `chrome-devtools` with `Status disabled`.
 - `chrome-devtools-mcp-toggle.ps1 on; status; off; status` successfully toggled
   `enabled=true` and then restored `enabled=false`.
 
 Rollback:
 
 - To remove the settings entry completely, run
-  `codex mcp remove chrome_devtools_observe`.
+  `codex mcp remove chrome-devtools`.
 - Pre-change config backups are under
   `%USERPROFILE%\.codex\state\mcp-toggle-backups`.

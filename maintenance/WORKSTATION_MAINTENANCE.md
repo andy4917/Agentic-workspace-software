@@ -95,7 +95,7 @@ and maintenance projects.
 MCP servers that are expensive, noisy, or only useful for a narrow workflow must
 not be left always-on just because they are useful sometimes.
 
-`chrome_devtools_observe` is the managed frontend browser-observation example:
+`chrome-devtools` is the managed frontend browser-observation example:
 
 - `source_class`: `local-chain`.
 - `owner`: user-global Codex MCP config; registered for app UI visibility and
@@ -113,64 +113,26 @@ not be left always-on just because they are useful sometimes.
   `verify-package`, app tool discovery after reload, and one safe browser
   observation when the tools are exposed.
 - `rollback`: run `off` to restore `enabled = false`; use `codex mcp remove
-  chrome_devtools_observe` only when the settings entry should disappear
+  chrome-devtools` only when the settings entry should disappear
   completely. A pre-change config backup is stored under ignored local state at
   `%USERPROFILE%\.codex\state\mcp-toggle-backups`.
 
-`shadcn` is the managed frontend registry MCP:
-
-- `source_class`: `local-chain`.
-- `owner`: user-global Codex MCP config.
-- `exact_path`: `%USERPROFILE%\.codex\toolchains\shims\npx.cmd`.
-- `dependency_chain`: Codex official bundled Node through the `npx.cmd` local
-  wrapper -> npm package `shadcn@latest` -> shadcn/ui registry and project
-  `components.json`.
-- `scope`: Codex-global frontend work; project-specific registry behavior still
-  depends on the confirmed frontend root and its `components.json`.
-- `default_args`: `-y shadcn@latest mcp`.
-- `verification`: `codex mcp list`, `codex mcp get shadcn --json`, active-session
-  MCP tool injection after app/session reload, and one safe read-only registry
-  call. If MCP is not injected, use CLI fallback such as `shadcn docs button` or
-  `shadcn view button` through the `.codex` `npx.cmd` wrapper.
-- `rollback`: `codex mcp remove shadcn` if the global settings entry is no
-  longer wanted.
+Other frontend registry tools, including shadcn, are CLI or project-local
+fallbacks under the current minimal MCP baseline. Do not add them as global MCPs
+without a future current user instruction.
 
 Do not directly edit `config.toml` for this toggle unless the Codex CLI command
 itself is confirmed broken. If manual repair becomes necessary, document the
 exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
 
-`memento` is the managed Codex PM memory MCP:
+`memento` is retired from the active Codex PM memory baseline:
 
-- `source_class`: `local-chain`.
-- `owner`: user-global Codex MCP config plus a clean local source checkout.
-- `exact_path`: `%USERPROFILE%\.codex\tools\memento-mcp`.
-- `dependency_chain`: Codex official bundled Node -> local `memento-mcp`
-  checkout -> dedicated PostgreSQL 18 cluster under
-  `%USERPROFILE%\.codex\state\memento-mcp\pgdata` -> pgvector extension.
-- `privilege_model`: normal operation uses the current non-elevated user token.
-  PostgreSQL must not be launched from an elevated administrator token; the
-  runtime should not require administrator privileges after installation.
-- `user_permission`: `allowed` for the current non-elevated user token.
-- `scope`: Codex-global PM memory support only; not project completion
-  authority and not a replacement for AGENTS, hooks, scorecard, Memento gates,
-  tests, runtime output, or PM verification.
-- `verification`:
-  `maintenance\scripts\memento-mcp-runtime.ps1 verify` for read-only runtime
-  proof. Use `verify -WriteProbe` only for an intentional memory write/feedback
-  probe.
-- `rollback`: stop with `maintenance\scripts\memento-mcp-runtime.ps1 stop`,
-  remove or disable the `memento` MCP registration with Codex CLI only when the
-  user explicitly asks, and preserve the ignored state directory unless the user
-  explicitly requests destructive cleanup.
-- `legacy_boundary`: the retired `toolchains\shims\memsearch.*` shims,
-  `maintenance\scripts\check-memory-rag-status.ps1`, duplicate
-  `hooks\lib\state`, raw `memories`, and `computer-use-turn-ended` runtime
-  residue were recycled on 2026-05-16 under
-  `maintenance\reports\2026-05-16-clean-all-slop-runtime-cleanup.json`. Do not
-  recreate them as active fallback; use `memento-mcp-runtime.ps1 verify` and
-  `codex_agent_harness.py doctor|verify` instead. Local `config.toml` also has
-  `[features].memories=false` and `[memories].generate_memories/use_memories=false`
-  to prevent raw memory residue from reappearing after cleanup.
+- remove or disable the MCP registration in live config;
+- stop any local Memento/PostgreSQL support process before deleting runtime
+  source/state;
+- keep historical reports as evidence, not active health checks;
+- do not recreate legacy `memsearch`, raw `memories`, or Memory/RAG fallback
+  surfaces.
 
 ## Handoff Requirement
 
@@ -198,17 +160,16 @@ runtime substrates block unrelated managed-source checks.
 
 - `repo`: `python maintenance/scripts/codex_agent_harness.py repo-verify`
   checks tracked source quality and is suitable for CI or clean checkouts.
-- `core`: `python maintenance/scripts/codex_agent_harness.py doctor --tier core
-  --json` checks local managed-source health without Memento/PostgreSQL.
-- `extended`: `doctor --tier extended --json` adds workflow ergonomics and
-  active app runtime writability.
-- `stress`: `doctor --tier stress --json` runs runtime-heavy checks such as
-  Memento/PostgreSQL health and recent log risk patterns.
-- `full`: existing `doctor --json` and `verify` behavior remains
-  backward-compatible and runtime-heavy.
+- `scaffold`: `validate-codex-scaffold.ps1 -Json` checks live `.codex`
+  scaffold health without reviving retired MCP runtimes.
+- `p0`: `codex-p0-integrity-loop.ps1 -Json` runs the full control-plane closure
+  loop from a clean tree.
+- `compat`: `codex_agent_harness.py verify` runs the current compatibility
+  wrapper across repo verification, tier smoke, live scaffold validation, P0
+  report-only, MCP list, and `codex doctor`.
 
 Choose the smallest layer that proves the task. Escalate to `full` whenever
-hooks, MCP, Memento, toolchains, browser/native host state, Goal governance,
+hooks, MCP baseline, toolchains, browser/native host state, Goal governance,
 Worker-Watcher, or release handoff is touched.
 
 For workflow-governance or multi-agent control-plane changes, also update the
@@ -227,23 +188,31 @@ Run the smallest relevant set:
 %USERPROFILE%\.codex\toolchains\shims\python.cmd %USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py repo-verify
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-toolchain-sources.ps1
 %USERPROFILE%\.codex\toolchains\shims\python.cmd %USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py doctor --json
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\memento-mcp-runtime.ps1 verify
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-staged-sensitive-diff.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-worktree-sensitive-diff.ps1
 git -C %USERPROFILE%\.codex status --short
 ```
 
-When hooks, harness, or Codex global policy changed, also run:
+Use report-only P0 runs only for read-only audits or while intentionally keeping
+the worktree dirty. Before publishing a control-plane change, run the full P0
+loop from a clean managed-source tree so dead app-server cleanup and Scoop health
+are current evidence, not skipped residual risk. `-SkipScoop` is not a closure
+mode; it records a failed evidence gap.
+
+When hooks, harness, or Codex global policy changed, also run the compatibility
+verify wrapper after the direct validator/P0 checks:
 
 ```powershell
 %USERPROFILE%\.codex\toolchains\shims\python.cmd %USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py verify
 ```
 
-The harness defaults to its installed CODEX_HOME root when invoked by absolute
-script path, so this command does not require the shell current directory to be
-`%USERPROFILE%\.codex`. Use `--root` only when intentionally verifying another
-harness root.
+The compatibility wrapper must run the current control-plane stack
+(`repo-verify`, tier smoke, live scaffold validation, P0 report-only, MCP list,
+and `codex doctor`). Use the full P0 loop separately from a clean tree before
+publishing.
 
 ## Completion Rule
 

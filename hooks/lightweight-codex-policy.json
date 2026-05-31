@@ -114,12 +114,11 @@
     "hook_boundary": "thin_reminder_only_not_full_verification_or_completion_authority"
   },
   "memory": {
-    "provider": "memento",
-    "authority": "support_only_never_completion_authority",
+    "provider": "retired_by_default",
+    "authority": "historical_evidence_only_never_completion_authority",
     "workspace": "global_pm",
     "session_start": [
-      "context",
-      "get_skill_guide_when_tool_behavior_is_unclear"
+      "no_default_memory_mcp_call"
     ],
     "prompt_meta_frame": [
       "english_normalized_goal",
@@ -127,21 +126,16 @@
       "authority_boundary",
       "toolchain_purpose",
       "evidence_target",
-      "memory_action"
+      "evidence_target"
     ],
-    "recall_before": [
-      "hook_or_mcp_or_toolchain_change",
-      "workflow_policy_change",
-      "repeated_error_or_failed_verification",
-      "prior_state_or_previous_decision_reference"
-    ],
+    "recall_before": [],
     "write_gate": [
       "durable_operational_value_only",
       "atomic_fragment",
       "verified_or_observed_assertion_status",
       "no_secrets_raw_logs_full_prompts_or_speculation"
     ],
-    "feedback_after_recall": true,
+    "feedback_after_recall": false,
     "legacy_memory_rag_policy": "contamination_not_active_fallback"
   },
   "work_size": {

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Audit"
+  short_description: "Audit a repository structure, evidence, and cleanup risk."
+  default_prompt: "Audit this repository for structural problems, stale artifacts, verification gaps, and cleanup risks. Lead with findings and evidence."

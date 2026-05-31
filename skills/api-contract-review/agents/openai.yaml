@@ -1,0 +1,4 @@
+interface:
+  display_name: "API Contract Review"
+  short_description: "Review API schema, caller/callee, and compatibility contracts."
+  default_prompt: "Review this API contract across server, client, schemas, tests, and docs. Lead with compatibility risks and missing proof."

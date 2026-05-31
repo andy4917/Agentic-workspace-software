@@ -41,7 +41,7 @@ CALIBRATION_EVAL_TEMPLATE: dict[str, Any] = {
     "success_criteria": [
         "CALIBRATION.md exists and defines answer statuses, claim-level evidence, falsifier-first checks, and completion authority",
         "AGENTS.md points to CALIBRATION.md without duplicating it as a second source of truth",
-        "local/runtime config.toml registers CALIBRATION.md as a project doc fallback",
+        "calibration source is wired through AGENTS.md, hook policy, and prompt reminders; private runtime config fallback is optional",
         "calibration-verifier agent TOML parses",
         "calibration scoring manifest exists",
         "lightweight policy and prompt reminder point to calibration without making hooks completion authority",
@@ -88,7 +88,9 @@ def check_calibration_policy(root: Path, require_config: bool = True) -> dict[st
     add_check("completion authority documented", "Completion Authority" in calibration_text)
     add_check("AGENTS references canonical calibration", "CALIBRATION.md" in agents_text and "Live Turn Calibration" in agents_text)
     if require_config:
-        add_check("config registers calibration fallback", "project_doc_fallback_filenames" in config_text and "CALIBRATION.md" in config_text and "project_doc_max_bytes = 65536" in config_text)
+        config_fallback = "project_doc_fallback_filenames" in config_text and "CALIBRATION.md" in config_text and "project_doc_max_bytes = 65536" in config_text
+        hook_policy_wiring = '"calibration"' in policy_text and '"source_path": "CALIBRATION.md"' in policy_text and "selected answers, diagnoses, plans, and patch rationales stay candidate" in workflow_text
+        add_check("calibration runtime wiring present", config_fallback or hook_policy_wiring)
     else:
         add_skip("config registers calibration fallback", "repo-safe mode excludes ignored private runtime config.toml")
     add_check("policy references calibration source", '"calibration"' in policy_text and '"source_path": "CALIBRATION.md"' in policy_text)

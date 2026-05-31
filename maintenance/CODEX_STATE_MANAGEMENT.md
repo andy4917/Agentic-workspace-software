@@ -64,20 +64,23 @@ Handling rules:
 
 Current memory classes:
 
-- `memento`: the managed PM memory MCP when exposed and healthy.
+- Retired Memento state, if present, is historical runtime state and not an
+  active PM memory substrate.
 - SQLite memory state such as `memories_*.sqlite`.
 - Runtime memory folders such as `.codex\memories`, when created by the app.
 - Legacy raw Memory/RAG files are not an active fallback.
 
 Handling rules:
 
-- Memory is support-only. User instructions, scoped `AGENTS.md`, current files,
-  tests, runtime output, and PM verification outrank recalled memory.
-- Write memory only for durable, verified, atomic operational facts.
+- Memory artifacts are support-only historical evidence unless a current user
+  instruction explicitly reopens a memory system. User instructions, scoped
+  `AGENTS.md`, current files, tests, runtime output, and PM verification outrank
+  recalled memory.
+- Do not write memory as part of the default workstation workflow.
 - Never write secrets, raw credentials, raw logs, full prompts, or speculative
   guesses as verified memory.
-- Do not restore old raw memory folders as active state. Use Memento verification
-  and direct files/tests instead.
+- Do not restore old raw memory folders as active state. Use direct files/tests
+  instead.
 
 ## Folder And File Management
 
@@ -114,6 +117,8 @@ The sync direction is intentional:
 
 Currently byte-synced live-copy files:
 
+- `config.d\00-policy.toml`
+- `hooks\compact-codex-hook.ps1`
 - `maintenance\scripts\codex-runtime-process-cleanup.ps1`
 - `maintenance\scripts\validate-codex-scaffold.ps1`
 - `maintenance\scripts\codex-p0-integrity-loop.ps1`
@@ -157,5 +162,10 @@ failures, and not-run checks as evidence gaps rather than success.
 C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json
 C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode status -CodexHome C:\Users\anise\.codex
 C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -CodexHome C:\Users\anise\.codex
-C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -CodexHome C:\Users\anise\.codex -RepoRoot C:\Users\anise\Documents\Codex -ReportOnly -Json
+C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
 ```
+
+Use `-ReportOnly` only for read-only inspection or intentionally dirty review
+passes. Do not pair P0 closure with `-SkipScoop`; the loop treats skipped Scoop
+health as a failed evidence gap because Scoop health is part of current
+control-plane closure.

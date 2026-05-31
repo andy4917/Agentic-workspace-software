@@ -78,14 +78,14 @@ Use one primary type and optional secondary tags.
 ### Harness Verify Uses Caller CWD As CODEX_HOME
 
 - Type: `environment_path_issue`, `validation_gap`
-- Fingerprint: invoking `%USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py verify` from another directory writes reports under the caller CWD and fails to find `maintenance/scripts/codex_agent_harness.py` or `hooks/lightweight-codex-hook.ps1`.
-- Risk: agents may report harness failure even though the `.codex` harness is healthy, or may require users to manually `cd` into `.codex`.
-- Likely cause: `--root` default resolves to `.` instead of the harness install root.
+- Historical fingerprint: invoking `%USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py verify` from another directory wrote reports under the caller CWD and failed to find `maintenance/scripts/codex_agent_harness.py` or `hooks/lightweight-codex-hook.ps1`.
+- Risk: agents may report harness failure even though the managed-source stack is healthy, or may require users to manually `cd` into `.codex`.
+- Likely cause: old `verify` behavior used the wrong root or stale full-doctor/install-state checks instead of the current validator/P0 stack.
 - Fix playbook:
-  1. Default the harness root to the script install root when `--root` is omitted.
+  1. Keep the default root as the script install root when `--root` is omitted.
   2. Preserve explicit `--root` for intentional alternate roots.
-  3. Re-run verification from a non-`.codex` cwd and confirm reports are written to `%USERPROFILE%\.codex\reports`.
-- Verification: absolute script invocation succeeds from another cwd; `.codex\reports\verification.latest.md` shows all checks pass.
+  3. Ensure `verify` runs the current control-plane stack: `repo-verify`, tier smoke, live scaffold validation, P0 report-only, MCP list, and `codex doctor`.
+- Verification: absolute script invocation succeeds from another cwd; the selected root's `reports\verification.latest.md` shows all checks pass.
 - Do not claim: the harness is broken solely because a relative-root run failed from a non-root cwd.
 
 ### Missing App Terminal Session
@@ -136,45 +136,45 @@ Use one primary type and optional secondary tags.
 - Verification: `codex mcp get/list` shows the intended absolute paths and filters; direct server startup or `tools/list` succeeds; current session remains not fixed unless the namespace appears in the active tool list.
 - Do not claim: that the current session can call the MCP just because config was fixed.
 
-### Memento In-Process ONNX Memory Spike
+### Historical: Memento In-Process ONNX Memory Spike
 
-- Type: `tool_runtime_error`, `environment_path_issue`
+- Type: `historical_record`, `retired_tool_runtime_error`
+- Current status: Memento is retired from the active workstation MCP baseline. Do not restart or repair it during normal incident response; use this entry only to identify and remove stale historical runtime processes.
 - Fingerprint: Windows Task Manager shows a long-lived `node.exe server.js` process from the Codex bundled Node runtime using around 1GB RAM after Codex app restart or after semantic memory use.
 - Risk: agents may misclassify the process as an orphaned Codex app leak, kill the wrong Node process, or leave a managed MCP runtime outside the memory budget.
 - Likely causes: Memento loads Reranker, NLIClassifier, and local transformers embedding models in-process; the server is a global HTTP MCP runtime and does not automatically exit with the Codex app.
 - Fix playbook:
-  1. Identify the process by PID, command line, listening port `57332`, and `memento-mcp-runtime.ps1 status`.
-  2. Prefer `memento-mcp-runtime.ps1 restart` for the HTTP server; do not stop PostgreSQL unless the user asked to take down the whole runtime.
-  3. For Codex PM memory use, start the managed runtime with `MEMENTO_INPROCESS_ONNX_ENABLED=false` and `MEMENTO_MANAGED_EMBEDDING_PROVIDER=none`; keep semantic/local embedding use explicit.
-  4. Verify with `memento-mcp-runtime.ps1 verify` and check `memento_working_set_mb` against the managed limit.
-- Verification: verifier reports required tools present, `context`/`recall`/`tool_feedback` pass, and `memento_working_set_mb` stays below `MEMENTO_MAX_WORKING_SET_MB`.
+  1. Identify stale historical processes by PID, command line, and retired runtime path.
+  2. Stop only the identified retired Memento process tree; do not stop unrelated Node or PostgreSQL processes.
+  3. Verify the active scaffold with `validate-codex-scaffold.ps1 -Json`.
+- Verification: `retired_mcp_runtime_processes_absent` passes and `codex mcp list --json` has no enabled `memento` server.
 - Do not claim: that all Node processes are safe to kill, or that configured MCP memory is healthy without PID/port/tool verification.
 
-### Memento PostgreSQL Shared-Memory Stuck Runtime
+### Historical: Memento PostgreSQL Shared-Memory Stuck Runtime
 
-- Type: `tool_runtime_error`, `environment_path_issue`
+- Type: `historical_record`, `retired_tool_runtime_error`
+- Current status: Memento is retired from the active workstation MCP baseline. Do not repair or re-enable the PostgreSQL-backed runtime during normal incident response.
 - Fingerprint: Memento `context` or `recall` returns `Connection terminated due to connection timeout`; `/health` returns 503; `pg_isready` reports `no response` even though port `55432` is listening; PostgreSQL log includes `autovacuum worker ... exception 0xC0000142` followed by `could not reserve shared memory region ... error code 487`.
 - Risk: agents may misdiagnose the timeout as a thread-local Codex session issue, while the shared Memento PostgreSQL runtime is stuck for every session.
 - Likely causes: Windows PostgreSQL postmaster remains alive after a worker crash, but child backend processes can no longer attach the shared memory region; `pg_ctl start/stop -w` can also hang around this state.
 - Fix playbook:
-  1. Confirm the runtime with `memento-mcp-runtime.ps1 status`, `/health`, `pg_isready`, and the PostgreSQL log fingerprint.
-  2. Use `memento-mcp-runtime.ps1 repair` after the runtime script has bounded non-waiting PostgreSQL stop/start logic.
-  3. Scope any forced process stop to the Memento `pgdata` PID/process tree, not all PostgreSQL processes.
-  4. Keep PM-only Memento runtime with `MEMENTO_SEARCH_PARAM_ADAPTOR_ENABLED=false` unless adaptive search-threshold learning is explicitly needed.
-- Verification: `memento-mcp-runtime.ps1 verify` reports `context=pass`, `recall=pass`, `tool_feedback=pass`, `/health` returns healthy, and a live MCP `context(workspace="global_pm")` returns immediately.
+  1. Confirm that any PostgreSQL process actually belongs to the retired Memento state path before acting.
+  2. Stop only the Memento-owned retired PostgreSQL/process tree.
+  3. Verify the active scaffold with `validate-codex-scaffold.ps1 -Json`.
+- Verification: `retired_mcp_runtime_processes_absent` passes and no process command line references the retired Memento runtime path.
 - Do not claim: that restarting the Codex thread fixes this; the failure is in the shared local Memento backend until PostgreSQL and the Memento HTTP server are repaired.
 
-### Memento PostgreSQL Administrator Token Refusal
+### Historical: Memento PostgreSQL Administrator Token Refusal
 
-- Type: `tool_runtime_error`, `security_boundary`
-- Fingerprint: PostgreSQL stderr says the server cannot run as a system administrator ID; `memento-mcp-runtime.ps1 status` reports `postgres_ready=False` and Memento MCP calls fail with `ECONNREFUSED 127.0.0.1:55432`.
+- Type: `historical_record`, `security_boundary`
+- Current status: Memento is retired from the active workstation MCP baseline. Do not use this entry as a reason to start a retired runtime.
+- Fingerprint: PostgreSQL stderr says the server cannot run as a system administrator ID, and historical Memento MCP calls failed with `ECONNREFUSED 127.0.0.1:55432`.
 - Risk: agents may ask for elevation even though PostgreSQL explicitly requires the opposite launch condition.
 - Likely cause: Memento PostgreSQL was started from an elevated administrator token instead of the current non-elevated user token.
 - Required permission state: `user_permission=allowed` with `current_process_administrator=False`.
 - Fix playbook:
-  1. Run Codex or PowerShell normally, not elevated.
-  2. Run `memento-mcp-runtime.ps1 start` or `repair`; the script must guard against administrator-token launch before starting PostgreSQL.
-  3. Verify with `memento-mcp-runtime.ps1 verify`, `doctor --tier stress --json`, and live `context(workspace="global_pm")`.
+  1. Treat this as historical evidence only.
+  2. If a stale retired process remains, stop only that process tree and verify retirement checks.
 - Do not claim: that administrator permission is required for normal Memento runtime operation after installation.
 
 ### MCP Capability Works But Is Invisible In App Settings

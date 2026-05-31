@@ -1,0 +1,21 @@
+version = 1
+id = "codex-self-management-review"
+kind = "managed-source-draft"
+name = "Codex Self-Management Review"
+status = "DRAFT_MANAGED_SOURCE"
+permission_posture = "full-access-default"
+execution_environment = "local"
+cwds = ["C:\\Users\\anise\\Documents\\Codex"]
+prompt = "Review the Codex managed-source and live runtime control plane. Use maintenance/CODEX_SELF_MANAGEMENT_LOOP.md, maintenance/CODEX_STATE_MANAGEMENT.md, maintenance/SPECOPS_OPERATING_MODEL.md, current AGENTS.md, live C:\\Users\\anise\\.codex\\config.toml, hook ledgers, and validation output. Do not treat this managed-source draft as an active app automation. Produce a report with changed surfaces, direct checks, stale or risky self-management loops, permission posture drift, automation candidates, not-run checks, rollback notes, and at most three proposed patches."
+success = [
+  "report created or returned",
+  "permission posture checked",
+  "managed/live sync checked",
+  "automation candidates classified as draft, report-only, or explicit app automation"
+]
+must_not = [
+  "claim activation in the Codex app without automation tooling evidence",
+  "store secrets or raw prompts",
+  "push, publish, deploy, or send external messages without explicit user intent"
+]
+

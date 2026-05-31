@@ -48,6 +48,10 @@ For workstation management, follow
 toolchains, logs, trust settings, hooks, or external publishing surfaces.
 For cache, log, memory, folder, file, and managed-source/live-runtime sync
 behavior, use `maintenance/CODEX_STATE_MANAGEMENT.md`.
+For Codex self-management, full-access default permission posture, and managed
+automation review, use `maintenance/CODEX_SELF_MANAGEMENT_LOOP.md`.
+For product-repository spec/architecture governance adapted from the Vibe
+SpecOps pack, use `maintenance/SPECOPS_OPERATING_MODEL.md`.
 
 Use `maintenance/WORKSTATION_LAYERING.md` to choose the smallest verification
 layer. In particular, `repo-verify` is the public-safe CI path for tracked

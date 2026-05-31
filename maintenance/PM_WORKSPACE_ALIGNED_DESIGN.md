@@ -128,17 +128,14 @@ Do not write secrets, raw credential material, raw sensitive logs, broad
 unreviewed summaries, temporary guesses, or benchmark results outside explicit
 benchmark mode.
 
-If Memento or another memory index is used, treat it as a derived support layer
-over approved source paths. The human-readable Markdown, tracked policy, direct
-runtime evidence, and current user instructions remain the source surfaces.
+If a future memory index is explicitly reopened, treat it as a derived support
+layer over approved source paths. The human-readable Markdown, tracked policy,
+direct runtime evidence, and current user instructions remain the source
+surfaces.
 
-Normal workstation verification must prove the local PM memory support path
-directly instead of leaving it as a residual risk. Use
-`maintenance/scripts/memento-mcp-runtime.ps1 verify`, which checks the
-Windows-native Memento MCP registration, HTTP health, PostgreSQL/pgvector
-schema, Memento tool list, `get_skill_guide`, `context`, `recall`, and
-`tool_feedback` without printing credential material. Legacy `memsearch` and
-raw Markdown memories are retired historical surfaces, not active fallback.
+Normal workstation verification must not depend on retired Memento runtime
+health. Legacy `memsearch`, raw Markdown memories, and retired Memento state are
+historical surfaces, not active fallback.
 
 ### PM Reward And Score Alignment
 

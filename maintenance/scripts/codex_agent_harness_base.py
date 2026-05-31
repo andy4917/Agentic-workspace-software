@@ -31,7 +31,7 @@ COMMAND_ARTIFACT_THRESHOLD_CHARS = 12000
 TRAJECTORY_VERSION = "codex-trajectory-v1"
 DOCTOR_TIERS = {
     "core": [
-        "config", "harness_engine_modules", "generated_outputs_untracked",
+        "config", "harness_engine_modules",
         "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter",
         "harness_file_size", "stale_active_references", "sentinel_blockers",
     ],
@@ -45,7 +45,7 @@ DOCTOR_TIERS = {
     ],
     "stress": [
         "config", "harness_engine_modules", "generated_outputs_untracked",
-        "calibration_policy", "managed_files", "harness_file_size", "memento_runtime",
+        "calibration_policy", "managed_files", "harness_file_size",
         "stale_active_references", "sentinel_blockers",
     ],
 }
@@ -306,16 +306,16 @@ EVAL_TEMPLATES = {
     },
     "evals/doctor-tier-smoke.json": {
         "eval_id": "doctor-tier-smoke",
-        "task": "Verify doctor tiering separates core managed-source checks from optional runtime checks.",
+        "task": "Verify doctor tiering keeps core managed-source checks separate from heavier stress/full checks.",
         "setup": "Run from CODEX_HOME after doctor tier or runtime-health changes.",
         "success_criteria": [
-            "core doctor excludes memento_runtime",
-            "stress doctor includes memento_runtime",
-            "full doctor remains backward-compatible and includes both core and runtime checks"
+            "core doctor excludes generated_outputs_untracked",
+            "stress doctor includes generated_outputs_untracked",
+            "full doctor remains backward-compatible and includes both core and stress checks"
         ],
         "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id doctor-tier-smoke",
         "timeout_seconds": 60,
-        "risk_notes": "Structural tiering smoke; stress/full may exit nonzero when runtime-heavy checks are unhealthy, but the smoke still verifies that those tiers include memento_runtime. Runtime health is verified by full doctor/verify when applicable.",
+        "risk_notes": "Structural tiering smoke; it does not depend on retired Memento runtime state.",
     },
     "evals/repo-verify.json": {
         "eval_id": "repo-verify",

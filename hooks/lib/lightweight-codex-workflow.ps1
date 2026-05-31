@@ -147,7 +147,7 @@ function Get-PurposeToolchainHint {
         @([int]0xC138, [int]0xC774, [int]0xBE0C)
     )
     if ($p -match "memento|memory|memrag|rag|recall|remember") {
-        return "memory/Memento: use MCP tools when exposed; support-only evidence; no legacy Memory/RAG fallback"
+        return "memory boundary: Memento is retired by default; use file/test/runtime evidence and do not restore legacy Memory/RAG fallback"
     }
     if ($p -match "mcp|toolchain|cli|install|uninstall|upgrade|npm|npx|node|postgres|database|runtime") {
         return "workstation toolchain/MCP: inspect source/config first, prefer managed shims or official bundle, record rollback"
@@ -170,15 +170,9 @@ function Get-MementoMemoryRoute {
     $p = $Prompt.ToLowerInvariant()
     $routes = @()
 
-    $routes += "context at session start when memento tools are exposed"
-    if ($p -match "previous|before|again|regression|error|fail|failure|hook|mcp|toolchain|memory|memento|configuration|config|runtime|install|upgrade" -or (Test-RootCauseOrIncidentSignal -Prompt $Prompt) -or (Test-WorkflowGovernanceSignal -Prompt $Prompt)) {
-        $routes += "recall before acting with topic/workspace/case filters"
-    }
-    if ($p -match "decide|decision|verified|fixed|resolved|procedure|preference|rollback|handoff|final|complete") {
-        $routes += "remember only durable verified facts through the PM write gate"
-    }
+    $routes += "Memento retired by default; use direct files/tests/runtime evidence"
     if ($p -match "final|complete|handoff|summary|ship|done") {
-        $routes += "reflect durable decisions/procedures/open risks at final handoff"
+        $routes += "record durable decisions/procedures/open risks in reviewed files or final handoff"
     }
 
     return ($routes | Select-Object -Unique) -join "; "
@@ -232,7 +226,7 @@ Subagent startup requirement:
 - Workspace scope: $codexHome. Follow $agentsPath before lower-priority agent.md or recalled memory.
 - Workflow fixture: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP, scaled to the delegated subgoal.
 - Toolchain fixture: use explicit wrappers and source policy from $toolRequirementsPath; do not read secrets unless the user requested that exact file.
-- Memento fixture: support-only memory. When memento tools are exposed, use context(workspace='global_pm') and recall for hook/MCP/toolchain prior-state work, never as completion authority.
+- Memory fixture: Memento is retired by default. Use direct files, tests, commands, and reviewed PM/subagent evidence; do not restore legacy Memory/RAG fallback.
 - State the bounded subgoal and authority boundary before work: evidence only, no PM parent-goal completion authority.
 - Treat Vowline as a required operating skill alongside task-specific skills; if the full skill cannot be loaded, apply its operating contract to decomposition, evidence, validation, safety, and reporting.
 - The delegated task must include Goal, Purpose, PM Context, Owned Surface, Expected Evidence, Anti-Reward-Hacking Rules, Mid-Report, Exit Criteria, and Not Checked.

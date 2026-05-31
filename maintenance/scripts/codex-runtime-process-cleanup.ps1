@@ -8,6 +8,7 @@ param(
     [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }),
     [switch]$CleanupStaleOnEnsure,
     [switch]$CleanupDuplicateRootsOnWatch,
+    [switch]$CleanupRetiredRootsOnWatch,
     [switch]$StopAppServerOnOwnerExit,
     [switch]$StopAppServerOnOwnerNoVisibleWindow,
     [int]$OwnerNoVisibleWindowGraceSeconds = 5,
@@ -15,6 +16,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$RetiredRootKeys = @("memento", "serena")
 
 function Get-ProcessTable {
     @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
@@ -51,6 +53,7 @@ function Get-ManagedRootKey {
     if (($Name -ieq "cmd.exe" -or $Name -ieq "powershell.exe" -or $Name -ieq "pwsh.exe") -and
         $text -match "(?i)\\toolchains\\shims\\uv\.cmd\b.*\bserena\b.*\bstart-mcp-server\b") { return "serena" }
     if ($Name -ieq "serena.exe" -and $text -match "(?i)\bstart-mcp-server\b") { return "serena" }
+    if ($text -match "(?i)(memento-mcp-runtime\.ps1|[\\/]memento-mcp([\\/]|\\b)|state[\\/]memento-mcp|tools[\\/]memento-mcp)") { return "memento" }
     if (($Name -ieq "cmd.exe" -or $Name -ieq "powershell.exe" -or $Name -ieq "pwsh.exe") -and
         $text -match "(?i)\\toolchains\\shims\\npx\.cmd\b.*@upstash[\\/]context7-mcp") { return "context7" }
     if ($Name -ieq "node.exe" -and $text -match "(?i)@upstash[\\/]context7-mcp") { return "context7" }
@@ -623,6 +626,7 @@ function Invoke-Watch {
         stop_app_server_on_owner_no_visible_window = [bool]$StopAppServerOnOwnerNoVisibleWindow
         owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
         cleanup_duplicate_roots_on_watch = [bool]$CleanupDuplicateRootsOnWatch
+        cleanup_retired_roots_on_watch = [bool]$CleanupRetiredRootsOnWatch
         duplicate_grace_seconds = $DuplicateGraceSeconds
         duplicate_confirmations = $DuplicateConfirmations
     }
@@ -710,6 +714,27 @@ function Invoke-Watch {
         }
         foreach ($root in $roots) {
             $null = $known.Add([int]$root.ProcessId)
+        }
+
+        $retiredRoots = @($roots | Where-Object { $_.Key -in $RetiredRootKeys })
+        if ($retiredRoots.Count -gt 0 -and $CleanupRetiredRootsOnWatch) {
+            $retiredStops = New-Object System.Collections.Generic.List[object]
+            foreach ($retiredRoot in $retiredRoots) {
+                $retiredStops.Add((Stop-ProcessTree -Processes $processes -RootPid ([int]$retiredRoot.ProcessId) -Reason ("retired-" + [string]$retiredRoot.Key) -ExpectedRootKey ([string]$retiredRoot.Key))) | Out-Null
+            }
+            Write-Ledger -Action "watch_cleanup_retired_roots" -Details @{
+                app_server_pid = $AppServerPid
+                retired_keys = @($retiredRoots | ForEach-Object { [string]$_.Key } | Sort-Object -Unique)
+                stopped = @($retiredStops.ToArray())
+            }
+            $processes = Get-ProcessTable
+            $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid $AppServerPid)
+        } elseif ($retiredRoots.Count -gt 0) {
+            Write-Ledger -Action "watch_retired_roots_report_only" -Details @{
+                app_server_pid = $AppServerPid
+                retired_roots = @($retiredRoots | ForEach-Object { [ordered]@{ key = $_.Key; pid = $_.ProcessId; name = $_.Name } })
+                reason = "Automatic retired-root cleanup is disabled for this watcher."
+            }
         }
 
         $groups = @($roots | Group-Object Key | Where-Object { $_.Count -gt 1 })
@@ -823,7 +848,8 @@ function Test-WatcherRunning {
         [int]$RequiredDuplicateConfirmations,
         [bool]$RequireStopAppServerOnOwnerExit,
         [bool]$RequireStopAppServerOnOwnerNoVisibleWindow,
-        [int]$RequiredOwnerNoVisibleWindowGraceSeconds
+        [int]$RequiredOwnerNoVisibleWindowGraceSeconds,
+        [bool]$RequireCleanupRetiredRootsOnWatch
     )
 
     $requiredScript = Convert-ToComparablePath -Path $ScriptPath
@@ -848,7 +874,8 @@ function Test-WatcherRunning {
             ((-not $RequireStopAppServerOnOwnerNoVisibleWindow) -or (
                 (Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerNoVisibleWindow") -and
                 $watchOwnerNoVisibleWindowGraceSeconds -eq [int]$RequiredOwnerNoVisibleWindowGraceSeconds
-            ))
+            )) -and
+            ((-not $RequireCleanupRetiredRootsOnWatch) -or (Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "CleanupRetiredRootsOnWatch"))
     }).Count -gt 0
 }
 
@@ -881,6 +908,7 @@ function Get-Watchers {
             StopAppServerOnOwnerNoVisibleWindow = Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerNoVisibleWindow"
             OwnerNoVisibleWindowGraceSeconds = $(if ([string]::IsNullOrWhiteSpace($ownerNoVisibleWindowGrace)) { $null } else { [int]$ownerNoVisibleWindowGrace })
             CleanupDuplicateRootsOnWatch = Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "CleanupDuplicateRootsOnWatch"
+            CleanupRetiredRootsOnWatch = Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "CleanupRetiredRootsOnWatch"
             CreationDate = $_.CreationDate
             Name = [string]$_.Name
             CommandLine = [string]$_.CommandLine
@@ -915,10 +943,10 @@ function Invoke-EnsureWatch {
     $appServerPidValue = [int](@($status.app_server_pid)[0])
     $scriptPath = Get-CurrentScriptPath
     $processes = Get-ProcessTable
-    $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit) -RequireStopAppServerOnOwnerNoVisibleWindow ([bool]$StopAppServerOnOwnerNoVisibleWindow) -RequiredOwnerNoVisibleWindowGraceSeconds $OwnerNoVisibleWindowGraceSeconds
+    $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit) -RequireStopAppServerOnOwnerNoVisibleWindow ([bool]$StopAppServerOnOwnerNoVisibleWindow) -RequiredOwnerNoVisibleWindowGraceSeconds $OwnerNoVisibleWindowGraceSeconds -RequireCleanupRetiredRootsOnWatch ([bool]$CleanupRetiredRootsOnWatch)
     $watchersForApp = @(Get-Watchers -Processes $processes | Where-Object { $_.WatchedAppServerPid -eq $appServerPidValue })
     $incompatibleWatchers = @($watchersForApp | Where-Object {
-        -not (Test-WatcherRunning -Processes @($_) -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit) -RequireStopAppServerOnOwnerNoVisibleWindow ([bool]$StopAppServerOnOwnerNoVisibleWindow) -RequiredOwnerNoVisibleWindowGraceSeconds $OwnerNoVisibleWindowGraceSeconds)
+        -not (Test-WatcherRunning -Processes @($_) -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit) -RequireStopAppServerOnOwnerNoVisibleWindow ([bool]$StopAppServerOnOwnerNoVisibleWindow) -RequiredOwnerNoVisibleWindowGraceSeconds $OwnerNoVisibleWindowGraceSeconds -RequireCleanupRetiredRootsOnWatch ([bool]$CleanupRetiredRootsOnWatch))
     })
     foreach ($watcher in $incompatibleWatchers) {
         if ($DryRun) {
@@ -955,7 +983,7 @@ function Invoke-EnsureWatch {
     }
     if ($incompatibleWatchers.Count -gt 0) {
         $processes = Get-ProcessTable
-        $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit) -RequireStopAppServerOnOwnerNoVisibleWindow ([bool]$StopAppServerOnOwnerNoVisibleWindow) -RequiredOwnerNoVisibleWindowGraceSeconds $OwnerNoVisibleWindowGraceSeconds
+        $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit) -RequireStopAppServerOnOwnerNoVisibleWindow ([bool]$StopAppServerOnOwnerNoVisibleWindow) -RequiredOwnerNoVisibleWindowGraceSeconds $OwnerNoVisibleWindowGraceSeconds -RequireCleanupRetiredRootsOnWatch ([bool]$CleanupRetiredRootsOnWatch)
     }
 
     $watcherPid = $null
@@ -986,6 +1014,9 @@ function Invoke-EnsureWatch {
         if ($CleanupDuplicateRootsOnWatch) {
             $arguments += "-CleanupDuplicateRootsOnWatch"
         }
+        if ($CleanupRetiredRootsOnWatch) {
+            $arguments += "-CleanupRetiredRootsOnWatch"
+        }
         $created = Start-Process -FilePath $pwsh -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
         Start-Sleep -Milliseconds 500
         if ($created.HasExited) {
@@ -1006,6 +1037,7 @@ function Invoke-EnsureWatch {
     $effectiveStopOnOwnerNoVisibleWindow = if ($null -ne $effectiveWatcher) { [bool]$effectiveWatcher.StopAppServerOnOwnerNoVisibleWindow } else { [bool]$StopAppServerOnOwnerNoVisibleWindow }
     $effectiveOwnerNoVisibleWindowGraceSeconds = if ($null -ne $effectiveWatcher -and $null -ne $effectiveWatcher.OwnerNoVisibleWindowGraceSeconds) { [int]$effectiveWatcher.OwnerNoVisibleWindowGraceSeconds } else { $OwnerNoVisibleWindowGraceSeconds }
     $effectiveCleanupDuplicateRootsOnWatch = if ($null -ne $effectiveWatcher) { [bool]$effectiveWatcher.CleanupDuplicateRootsOnWatch } else { [bool]$CleanupDuplicateRootsOnWatch }
+    $effectiveCleanupRetiredRootsOnWatch = if ($null -ne $effectiveWatcher) { [bool]$effectiveWatcher.CleanupRetiredRootsOnWatch } else { [bool]$CleanupRetiredRootsOnWatch }
 
     $result = [pscustomobject]@{
         app_server_pid = $appServerPidValue
@@ -1020,10 +1052,12 @@ function Invoke-EnsureWatch {
         stop_app_server_on_owner_no_visible_window = $effectiveStopOnOwnerNoVisibleWindow
         owner_no_visible_window_grace_seconds = $effectiveOwnerNoVisibleWindowGraceSeconds
         cleanup_duplicate_roots_on_watch = $effectiveCleanupDuplicateRootsOnWatch
+        cleanup_retired_roots_on_watch = $effectiveCleanupRetiredRootsOnWatch
         requested_stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
         requested_stop_app_server_on_owner_no_visible_window = [bool]$StopAppServerOnOwnerNoVisibleWindow
         requested_owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
         requested_cleanup_duplicate_roots_on_watch = [bool]$CleanupDuplicateRootsOnWatch
+        requested_cleanup_retired_roots_on_watch = [bool]$CleanupRetiredRootsOnWatch
         duplicate_grace_seconds = $DuplicateGraceSeconds
         duplicate_confirmations = $DuplicateConfirmations
         dry_run = [bool]$DryRun

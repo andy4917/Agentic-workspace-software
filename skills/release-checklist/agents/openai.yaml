@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Checklist"
+  short_description: "Run final release readiness and merge/deploy checks."
+  default_prompt: "Run a release readiness checklist for this change. Confirm diff scope, tests, config, docs, rollback, and unverified risks."

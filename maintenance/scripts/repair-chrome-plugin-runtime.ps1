@@ -15,6 +15,20 @@ function Join-PathStrict {
     return [IO.Path]::Combine($Base, $Child)
 }
 
+function ConvertTo-ComparablePath {
+    param([AllowNull()][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+
+    try {
+        return ([IO.Path]::GetFullPath($Path)).TrimEnd("\", "/").Replace("/", "\")
+    } catch {
+        return ([string]$Path).TrimEnd("\", "/").Replace("/", "\")
+    }
+}
+
 function Resolve-CodexBundledTool {
     param([Parameter(Mandatory = $true)][string]$Name)
 
@@ -183,13 +197,13 @@ function Test-ChromePluginRuntime {
     $problems = New-Object System.Collections.Generic.List[string]
     if ($null -eq $SelectedVersion) { $problems.Add("no complete chrome plugin cache version found") | Out-Null }
     if ($null -eq $latestTarget) { $problems.Add("chrome latest link is missing") | Out-Null }
-    elseif ($null -ne $SelectedVersion -and $latestTarget.TrimEnd("\") -ine ([IO.Path]::GetFullPath($SelectedVersion.root)).TrimEnd("\")) {
+    elseif ($null -ne $SelectedVersion -and (ConvertTo-ComparablePath -Path $latestTarget) -ine (ConvertTo-ComparablePath -Path ([string]$SelectedVersion.root))) {
         $problems.Add("chrome latest link does not target selected installed version") | Out-Null
     }
     if (-not (Test-Path -LiteralPath $expectedHost -PathType Leaf)) { $problems.Add("native host executable missing at latest path") | Out-Null }
     if (-not (Test-Path -LiteralPath $nativeManifestPath -PathType Leaf)) { $problems.Add("native host manifest file missing") | Out-Null }
     if ($nativeManifestProblem) { $problems.Add("native host manifest unreadable: $nativeManifestProblem") | Out-Null }
-    if ([string]$nativeHostPath -ne $expectedHost) { $problems.Add("native host manifest path does not match latest host path") | Out-Null }
+    if ((ConvertTo-ComparablePath -Path $nativeHostPath) -ine (ConvertTo-ComparablePath -Path $expectedHost)) { $problems.Add("native host manifest path does not match latest host path") | Out-Null }
     if (-not (Test-Path -LiteralPath $expectedConfig -PathType Leaf)) { $problems.Add("extension-host-config.json missing") | Out-Null }
     if ($configProblem) { $problems.Add("extension-host-config.json unreadable: $configProblem") | Out-Null }
     foreach ($entry in $configPaths) {

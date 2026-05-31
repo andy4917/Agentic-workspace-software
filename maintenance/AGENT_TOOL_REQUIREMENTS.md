@@ -87,10 +87,12 @@ Use `maintenance/WORKSTATION_LAYERING.md` before escalating ordinary
 managed-source work to full workstation runtime verification.
 
 - Use `repo-verify` for CI-capable tracked-source checks.
-- Use `doctor --tier core` for local managed-source health without optional
-  Memento/PostgreSQL coupling.
-- Use full `verify` for hooks, MCP, Memento, toolchain, browser/native host,
-  Goal governance, Worker-Watcher, or release handoff changes.
+- Use `validate-codex-scaffold.ps1` and the P0 integrity loop for live
+  scaffold, MCP, hook, toolchain, browser/native host, Goal governance,
+  Worker-Watcher, or release handoff changes.
+- Use `codex_agent_harness.py verify` as a compatibility wrapper for the
+  current control-plane stack, not as proof of retired Memento/PostgreSQL
+  health.
 
 Do not report a lower layer as proof of a higher layer. State the layer used and
 which runtime surfaces were not checked.
@@ -170,44 +172,31 @@ repository-specific command, credential source, or policy boundary.
 - Actively choose an MCP when the task matches its evidence surface; do not wait
   for the user to name it. If a namespace is not already exposed, use
   `tool_search` first, then call the MCP directly when exposed.
-- Use OpenAI Developer Docs MCP for current OpenAI API, model, Codex, plugin,
-  app-server, and ChatGPT Apps documentation. Prefer it over web search for
-  OpenAI product facts.
-- Use Context7 when `CONTEXT7_API_KEY` is available and current third-party
-  library, framework, SDK, CLI, or cloud-service documentation is needed.
-  Prefer it over web search for library documentation; resolve the library id
-  before fetching focused docs.
-- Use shadcn MCP for frontend work that depends on shadcn/ui registry,
-  component, block, or `components.json` knowledge. The global config exposes
-  `shadcn` through `%USERPROFILE%\.codex\toolchains\shims\npx.cmd -y
-  shadcn@latest mcp` and should stay enabled for future frontend sessions. Do
-  not treat config as capability: after app/session reload, make a safe
-  read-only MCP call before claiming `MCP_CONFIRMED`. If tools are not injected,
-  use shadcn CLI fallback through the same wrapper, including `docs`, `view`,
-  `search --help`, and dry-run add commands as appropriate for the project.
-- Use Sequential Thinking for high-ambiguity debugging or planning, not for
-  routine edits.
-- Use Windows PowerShell MCP when a persistent PowerShell console is useful for
-  Windows diagnostics or command execution. Its `invoke_expression` tool is
-  broad, so keep approval prompting and do not describe this server as read-only.
-- Use `node_repl` as a Codex Desktop bundled tool, not as a user-configured
-  `[mcp_servers.*]` entry. Discover it with `tool_search` when needed, then call
-  `mcp__node_repl__js` for JavaScript execution or browser-plugin setup code.
-- Use Chrome DevTools MCP only as a frontend browser-observation role. Keep it
-  registered but OFF by default, and toggle it with
-  `maintenance\scripts\chrome-devtools-mcp-toggle.ps1`; do not hand-edit
-  `config.toml` to enable or disable it. After turning it ON, reload/restart the
-  app if the tool namespace is not visible, verify exposure with tool discovery,
-  use it for the rendered observation, then turn it OFF and confirm `state=off`.
-  Default mode is slim, headless, isolated, telemetry-off, performance CrUX off,
-  and npm-backed through `.codex\toolchains\shims\npx.cmd`. OFF must leave the
-  server visible in app settings as `enabled = false`.
+- Keep `openaiDeveloperDocs` enabled for current OpenAI API, model, Codex,
+  plugin, app-server, and ChatGPT Apps documentation. Prefer it over web search
+  for OpenAI product facts.
+- Keep `context7` enabled for current third-party library, framework, SDK, CLI,
+  or cloud-service documentation. Prefer it over web search for library
+  documentation; resolve the library id before fetching focused docs.
+- Keep `chrome-devtools` optional and OFF by default. Enable it only for a
+  bounded browser-observation task, reload/restart the app if the namespace is
+  not visible, verify exposure with tool discovery, use it for the rendered
+  observation, then turn it OFF and confirm `enabled = false`.
+- Use `node_repl` as a Codex Desktop bundled execution primitive, not as a
+  user-configured `[mcp_servers.*]` entry. Discover it with `tool_search` when
+  needed for JavaScript execution or browser-plugin setup code.
+- Treat `memento`, `serena`, `shadcn`, `sequential_thinking`, and
+  `windows_powershell` as not part of the current default MCP baseline. Use CLI,
+  skills, official docs, Context7, browser tooling, or a future explicit user
+  request instead of silently reintroducing those MCP registrations.
 
 ## Reasoning Effort Policy
 
-Do not hard-code `xhigh` as the default. Keep the persistent config at a
-placeholder default (`medium`) and escalate per task/session only when complexity,
-ambiguity, or validation risk justifies it.
+The current workstation default is `model_reasoning_effort = "xhigh"` as part of
+the user's full-autonomy operating posture. This is a local workstation choice,
+not a general recommendation for every project. Lower reasoning effort only for
+latency- or cost-sensitive tasks where the user asks for a lighter run or where
+the task is clearly low risk.
 
 ## Runtime Contamination Guard
 

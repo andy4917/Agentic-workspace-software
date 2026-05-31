@@ -14,15 +14,14 @@ Use the smallest layer that proves the current task.
 | Layer | Purpose | Command |
 | --- | --- | --- |
 | `repo` | CI-capable tracked managed-source checks that do not require ignored private runtime state such as `config.toml`. | `python maintenance/scripts/codex_agent_harness.py repo-verify` |
-| `core` | Local managed-source health: config parse, harness files, generated-output tracking, hook routing, managed files, file size, stale references, and sentinels. | `python maintenance/scripts/codex_agent_harness.py doctor --tier core --json` |
-| `extended` | Core plus agent/workflow ergonomics and active app runtime writability. | `python maintenance/scripts/codex_agent_harness.py doctor --tier extended --json` |
-| `stress` | Runtime-heavy checks such as Memento/PostgreSQL health, memory ceiling, and recent log risk patterns. | `python maintenance/scripts/codex_agent_harness.py doctor --tier stress --json` |
-| `full` | Backward-compatible complete local verification tier. | `python maintenance/scripts/codex_agent_harness.py doctor --json` |
+| `scaffold` | Live `.codex` scaffold checks: config reconciliation, MCP baseline, hooks, skills, shims, managed/live sync, and retired runtime absence. | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -Json` |
+| `p0` | Control-plane closure: current diff, runtime cleanup state, validator output, toolchain, doctor, Scoop health, and stale-manifest detection. | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120` |
+| `compat` | Compatibility wrapper for the current control-plane stack. It runs repo verification plus live scaffold/P0/CLI checks and writes `reports/verification.latest.md`. | `python maintenance/scripts/codex_agent_harness.py verify` |
 
 ## Simple Mode
 
-For tiny or ordinary project work, prefer the `repo` or `core` layer unless the
-task touches MCP, Memento, hooks, toolchains, browser/native host state, Goal
+For tiny or ordinary project work, prefer the `repo` layer unless the task
+touches MCP baseline, hooks, toolchains, browser/native host state, Goal
 governance, Worker-Watcher, or release handoff.
 
 Simple mode is not a bypass. It still requires direct checks, not-run reasons,
@@ -31,23 +30,23 @@ optional runtime substrates as blockers for unrelated managed-source work.
 
 ## Compatibility Contract
 
-- Existing `doctor --json` and `verify` behavior remains `full` and continues
-  to check Memento runtime health.
 - `repo-verify` is allowed to run in CI or clean checkouts where ignored files
   such as `config.toml`, SQLite state, logs, browser state, Memento state, and
   credentials are absent.
-- `doctor --tier core` must not call Memento or PostgreSQL.
-- `doctor --tier stress` must include Memento runtime checks when Memento is
-  declared locally.
-- Passing `repo` or `core` checks is evidence only; it does not prove live MCP
-  tool injection, browser state, local secrets, or long-running runtime health.
+- `verify` is a compatibility command for the active stack, not the old
+  install-state/full-doctor audit path.
+- Memento and Serena are retired from the active MCP baseline. No layer should
+  require Memento/PostgreSQL or Serena runtime health as normal success
+  evidence.
+- Passing `repo` checks is evidence only; it does not prove live MCP tool
+  injection, browser state, local secrets, or long-running runtime health.
 
 ## External-Evaluation Mapping
 
 - Hook and workflow density: simple mode gives PMs a lower-cost path for work
   that does not touch control-plane surfaces.
-- Memento coupling: doctor tiers prevent Memento/PostgreSQL health from being a
-  core managed-source blocker.
+- Retired-runtime coupling: scaffold/P0 checks prove Memento and Serena are
+  absent or disabled instead of treating their runtime health as a blocker.
 - Reproducibility: `repo-verify` and the GitHub Actions workflow provide a
   public-safe CI path for tracked source quality.
 - Policy drift: this document is the layer source of truth; references in

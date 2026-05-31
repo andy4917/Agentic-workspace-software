@@ -11,7 +11,7 @@ param(
     [ValidateSet("status", "on", "off", "verify-package", "help")]
     [string] $Action = "status",
 
-    [string] $ServerName = "chrome_devtools_observe",
+    [string] $ServerName = "chrome-devtools",
 
     [switch] $Visible,
 
@@ -110,6 +110,16 @@ function Save-ConfigBackup {
     $destination = Join-PathStrict $BackupRoot "config.$Reason.$stamp.toml"
     Copy-Item -LiteralPath $ConfigPath -Destination $destination -Force
     Write-Host "backup=$destination"
+}
+
+function Write-Utf8NoBomLines {
+    param(
+        [Parameter(Mandatory = $true)][string] $Path,
+        [Parameter(Mandatory = $true)][System.Collections.Generic.List[string]] $Lines
+    )
+
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllLines($Path, [string[]]$Lines.ToArray(), $encoding)
 }
 
 function Invoke-WithWritableConfig {
@@ -217,13 +227,13 @@ function Set-McpServerEnabledInConfig {
 
         if ($lines[$i] -match "^\s*enabled\s*=") {
             $lines[$i] = $enabledLine
-            Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding utf8NoBOM
+            Write-Utf8NoBomLines -Path $ConfigPath -Lines $lines
             return
         }
     }
 
     $lines.Insert($insertIndex, $enabledLine)
-    Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding utf8NoBOM
+    Write-Utf8NoBomLines -Path $ConfigPath -Lines $lines
 }
 
 function Show-HelpText {

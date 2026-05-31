@@ -329,10 +329,9 @@ Treat Impeccable output as workflow evidence, not completion authority. Final co
 
 For frontend browser observation, use Chrome DevTools MCP only as a temporary
 role. Prefer the registered `chrome-devtools` MCP when the active session exposes
-it; if only slim tools are exposed, treat that as stale session state and reload
-or restart before network or performance work. The managed default is non-slim,
-headless, isolated, telemetry-off, performance CrUX off, network-header
-redaction on, structured content on, and page-id routing on. Do not hand-edit
+it. The managed default is OFF, slim, headless, isolated, telemetry-off, and
+performance CrUX off. Enable it only for the bounded browser-observation task,
+then turn it OFF again. Do not hand-edit
 `config.toml`; update `config.d/10-mcp.toml` and compile config unless the
 Codex CLI config path itself is broken and the repair is documented.
 
@@ -358,48 +357,18 @@ The PM is responsible for:
 The user is the final reviewer, not the operator for ordinary implementation, inspection, testing, formatting, cleanup, or tool selection.
 The user is constantly monitoring all the work.
 
-## Memento PM Memory Loop
+## Retired Memory MCP Boundary
 
-Memento MCP is the active Codex PM memory substrate when the `memento` MCP
-server is enabled and its tools are exposed in the current session. Memory is
-support-only: current user instructions, scoped `AGENTS.md`, repository files,
-runtime output, direct tests, and PM verification always outrank recalled memory.
+Memento and Serena are retired as active MCPs for this workstation baseline.
+Do not add, start, verify, or rely on them for ordinary PM memory, symbolic
+editing, or coding workflow. Treat leftover references as historical evidence or
+contamination candidates unless a current user instruction explicitly reopens
+that boundary.
 
-At session start or after a session reload exposes Memento tools:
-
-1. Call `context(workspace="global_pm")` to load stable preference, procedure,
-   and error fragments.
-2. If the tool behavior is unclear, call `get_skill_guide(section="lifecycle")`
-   or `get_skill_guide(section="tools")` before writing memory.
-3. Compile the current internal intent in English before acting: goal, task
-   type, authority boundary, likely toolchain, evidence target, and memory
-   action. This is an internal working frame, not a user-facing requirement.
-
-Use `recall` before changing hooks, MCP config, workstation tools, memory
-policy, repeated error surfaces, or any task where the user says a prior state
-or prior decision matters. Prefer topic/workspace/case filters over broad text
-search. Send `tool_feedback` after a useful or insufficient recall result so the
-memory graph learns from actual PM use.
-
-Use `remember` only when the write has durable operational value and has a clear
-source of truth:
-
-- accepted decisions, procedures, verified runtime facts, resolved error
-  causes, rejected assumptions, user-stable preferences, rollback notes, or
-  repeated false-pass patterns;
-- one atomic fact per fragment, normally 1-2 short sentences;
-- include `topic`, `type`, `keywords`, `workspace`, `caseId`, `phase`, and
-  `assertionStatus` when practical;
-- never write secrets, raw credentials, raw logs, full prompts, broad
-  unreviewed summaries, or speculative guesses as verified memory.
-
-Use `reflect` at final handoff only to capture the session's durable decisions,
-procedures, resolved errors, and open risks. Do not use memory writes to create
-completion authority, bypass evidence gates, or replace the current PM workflow.
-
-Legacy `memsearch`, raw Markdown memories, or Memory/RAG reports are not an
-active fallback for Memento. Treat leftover references as contamination unless
-they are explicitly marked as historical record or superseded status.
+Current evidence should come from files, tests, command output, runtime state,
+source-backed documentation tools, skills, and subagent reports that the PM
+independently reviews. Do not use memory writes to create completion authority,
+bypass evidence gates, or replace the current PM workflow.
 
 ## Capability Pack Model
 
@@ -523,9 +492,9 @@ it as out of scope with direct evidence.
 - Use official Codex bundled tools before local duplicates when the tool exists
   in the Codex Desktop bundle. Current official bundled command-line tools are
   `node`, `node_repl`, `rg`, and `codex`.
-- `node_repl` may be registered as the app-managed Chrome plugin MCP dependency
-  when `chrome@openai-bundled` is enabled; route it through the approved shim,
-  not a pinned Codex bundle path.
+- `node_repl` is a bundled execution primitive, not a user-authored
+  `[mcp_servers.*]` entry. Discover and use the exposed bundled tool when a task
+  needs JavaScript execution or browser-plugin setup code.
 - Use local toolchains or local MCP servers only for capabilities not bundled by
   Codex, and route them through explicit wrappers or absolute command paths.
 - Do not call bare commands when both an official bundle and a local install

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Scaffold Validation"
+  short_description: "Validate the Codex workstation scaffold and runtime sync."
+  default_prompt: "Validate the Codex scaffold, config fragments, MCP baseline, hooks, skills, shims, and live/runtime sync. Report direct evidence and blockers."

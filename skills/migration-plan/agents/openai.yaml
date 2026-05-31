@@ -1,0 +1,4 @@
+interface:
+  display_name: "Migration Plan"
+  short_description: "Plan and execute staged migrations with rollback evidence."
+  default_prompt: "Build a staged migration plan with old/new state, compatibility checks, rollout gates, rollback, and verification evidence."

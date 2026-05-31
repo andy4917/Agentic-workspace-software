@@ -1,10 +1,18 @@
 param(
     [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }),
-    [string]$RepoRoot = $(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")),
+    [string]$RepoRoot = $(
+        $defaultRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
+        if ($defaultRoot -ieq (Join-Path $env:USERPROFILE ".codex")) {
+            Join-Path $env:USERPROFILE "Documents\Codex"
+        } else {
+            $defaultRoot
+        }
+    ),
     [string]$ReportPath = "",
     [switch]$Json,
     [switch]$ReportOnly,
-    [switch]$SkipScoop
+    [switch]$SkipScoop,
+    [int]$ProcessTimeoutSeconds = 120
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,31 +32,123 @@ function Add-Check {
     }) | Out-Null
 }
 
+function Stop-CapturedProcessTree {
+    param([int]$ProcessId)
+
+    try {
+        $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$ProcessId" -ErrorAction SilentlyContinue)
+        foreach ($childProcess in $children) {
+            Stop-CapturedProcessTree -ProcessId ([int]$childProcess.ProcessId)
+        }
+    } catch {
+    }
+
+    try {
+        Stop-Process -Id $ProcessId -Force -ErrorAction Stop
+    } catch {
+    }
+}
+
+function ConvertTo-ProcessArgumentString {
+    param([string[]]$Arguments = @())
+
+    $quoted = New-Object System.Collections.Generic.List[string]
+    foreach ($argument in $Arguments) {
+        $value = [string]$argument
+        if ($value.Length -eq 0) {
+            $quoted.Add('""') | Out-Null
+            continue
+        }
+        if ($value -notmatch '[\s"]') {
+            $quoted.Add($value) | Out-Null
+            continue
+        }
+
+        $builder = New-Object System.Text.StringBuilder
+        [void]$builder.Append('"')
+        $backslashes = 0
+        foreach ($character in $value.ToCharArray()) {
+            if ($character -eq '\') {
+                $backslashes += 1
+                continue
+            }
+            if ($character -eq '"') {
+                [void]$builder.Append('\' * (($backslashes * 2) + 1))
+                [void]$builder.Append('"')
+                $backslashes = 0
+                continue
+            }
+            if ($backslashes -gt 0) {
+                [void]$builder.Append('\' * $backslashes)
+                $backslashes = 0
+            }
+            [void]$builder.Append($character)
+        }
+        if ($backslashes -gt 0) {
+            [void]$builder.Append('\' * ($backslashes * 2))
+        }
+        [void]$builder.Append('"')
+        $quoted.Add($builder.ToString()) | Out-Null
+    }
+
+    return ($quoted.ToArray() -join " ")
+}
+
 function Invoke-ProcessCapture {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
         [string[]]$Arguments = @(),
         [string]$WorkingDirectory = $RepoRoot,
-        [hashtable]$Environment = @{}
+        [hashtable]$Environment = @{},
+        [int]$TimeoutSeconds = $ProcessTimeoutSeconds
     )
 
     $startedUtc = (Get-Date).ToUniversalTime().ToString("o")
+    $timedOut = $false
+    $timeoutMs = [Math]::Max(1, $TimeoutSeconds) * 1000
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo.FileName = $FilePath
     $process.StartInfo.WorkingDirectory = $WorkingDirectory
     $process.StartInfo.UseShellExecute = $false
     $process.StartInfo.RedirectStandardOutput = $true
     $process.StartInfo.RedirectStandardError = $true
-    foreach ($argument in $Arguments) {
-        $process.StartInfo.ArgumentList.Add($argument)
+    $process.StartInfo.CreateNoWindow = $true
+    if ($null -ne $process.StartInfo.ArgumentList) {
+        foreach ($argument in $Arguments) {
+            $process.StartInfo.ArgumentList.Add($argument)
+        }
+    } else {
+        $process.StartInfo.Arguments = ConvertTo-ProcessArgumentString -Arguments $Arguments
     }
     foreach ($key in $Environment.Keys) {
         $process.StartInfo.Environment[$key] = [string]$Environment[$key]
     }
     $null = $process.Start()
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
-    $process.WaitForExit()
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    if (-not $process.WaitForExit($timeoutMs)) {
+        $timedOut = $true
+        Stop-CapturedProcessTree -ProcessId $process.Id
+        try {
+            $null = $process.WaitForExit(5000)
+        } catch {
+        }
+    } else {
+        $process.WaitForExit()
+    }
+    try {
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+    } catch {
+        $stdout = ""
+    }
+    try {
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+    } catch {
+        $stderr = ""
+    }
+    if ($timedOut) {
+        $stderr = (($stderr, "Timed out after $TimeoutSeconds seconds.") | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join "`n"
+    }
     $endedUtc = (Get-Date).ToUniversalTime().ToString("o")
     [ordered]@{
         file = $FilePath
@@ -57,7 +157,9 @@ function Invoke-ProcessCapture {
         working_directory = $WorkingDirectory
         started_utc = $startedUtc
         ended_utc = $endedUtc
-        exit_code = $process.ExitCode
+        exit_code = $(if ($timedOut) { -1 } else { $process.ExitCode })
+        timed_out = $timedOut
+        timeout_seconds = $TimeoutSeconds
         stdout = $stdout
         stderr = $stderr
     }
@@ -294,9 +396,9 @@ Add-Check $checks "git_diff_closure" ($(if ($gitCommandsOk -and $gitCleanEnough)
 $cleanupStatusRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $cleanupScript, "-Mode", "status", "-CodexHome", $codexHomeResolved)
 $cleanupStatus = ConvertFrom-JsonOutput -Text $cleanupStatusRun.stdout
 $cleanupOk = $cleanupStatusRun.exit_code -eq 0 -and $null -ne $cleanupStatus
-$managedOrphans = if ($cleanupOk -and $null -ne $cleanupStatus.managed_orphans) { @($cleanupStatus.managed_orphans) } else { @() }
-$duplicateKeys = if ($cleanupOk -and $null -ne $cleanupStatus.duplicate_keys) { @($cleanupStatus.duplicate_keys) } else { @() }
-$watchers = if ($cleanupOk -and $null -ne $cleanupStatus.watchers) { @($cleanupStatus.watchers) } else { @() }
+$managedOrphans = @(if ($cleanupOk -and $null -ne $cleanupStatus.managed_orphans) { @($cleanupStatus.managed_orphans) } else { @() })
+$duplicateKeys = @(if ($cleanupOk -and $null -ne $cleanupStatus.duplicate_keys) { @($cleanupStatus.duplicate_keys) } else { @() })
+$watchers = @(if ($cleanupOk -and $null -ne $cleanupStatus.watchers) { @($cleanupStatus.watchers) } else { @() })
 Add-Check $checks "runtime_cleanup_status" ($(if ($cleanupOk -and $managedOrphans.Count -eq 0 -and $duplicateKeys.Count -eq 0 -and (($null -eq $cleanupStatus.app_server_pid) -or $watchers.Count -gt 0)) { "pass" } else { "fail" })) @{
     command = $cleanupStatusRun.command_line
     cwd = $cleanupStatusRun.working_directory
@@ -412,28 +514,36 @@ Add-Check $checks "codex_doctor_current" ($(if ($doctorRun.exit_code -eq 0 -and 
 }
 
 if ($SkipScoop) {
-    Add-Check $checks "scoop_health_current" "pass" @{
+    Add-Check $checks "scoop_health_current" "fail" @{
         command = "not run: SkipScoop"
         cwd = $repoRootResolved
         timestamp_utc = (Get-Date).ToUniversalTime().ToString("o")
-        exit_code = 0
-        evidence = "SkipScoop was set."
+        exit_code = 1
+        evidence = "SkipScoop was set; skipped health checks are not success evidence."
         skipped = $true
-        reason = "SkipScoop was set."
+        reason = "SkipScoop was set. Run without -SkipScoop to close P0 integrity."
     }
 } else {
     $scoopStatusRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", "scoop", "status") -WorkingDirectory $repoRootResolved
     $scoopCheckupRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", "scoop", "checkup") -WorkingDirectory $repoRootResolved
-    Add-Check $checks "scoop_health_current" ($(if ($scoopStatusRun.exit_code -eq 0 -and $scoopCheckupRun.exit_code -eq 0) { "pass" } else { "fail" })) @{
+    $scoopStatusOutput = ($scoopStatusRun.stdout + $scoopStatusRun.stderr).Trim()
+    $scoopCheckupOutput = ($scoopCheckupRun.stdout + $scoopCheckupRun.stderr).Trim()
+    $scoopWarningPattern = "(?im)(^\s*WARN\b|bucket\(s\) out of date|run 'scoop update'|no shim found)"
+    $scoopWarnings = @()
+    if ($scoopStatusOutput -match $scoopWarningPattern) { $scoopWarnings += "status_warning" }
+    if ($scoopCheckupOutput -match $scoopWarningPattern) { $scoopWarnings += "checkup_warning" }
+    $scoopHealthy = $scoopStatusRun.exit_code -eq 0 -and $scoopCheckupRun.exit_code -eq 0 -and $scoopWarnings.Count -eq 0
+    Add-Check $checks "scoop_health_current" ($(if ($scoopHealthy) { "pass" } else { "fail" })) @{
         command = "$($scoopStatusRun.command_line); $($scoopCheckupRun.command_line)"
         cwd = $repoRootResolved
         timestamp_utc = $scoopStatusRun.started_utc
-        exit_code = $(if ($scoopStatusRun.exit_code -eq 0 -and $scoopCheckupRun.exit_code -eq 0) { 0 } else { 1 })
-        evidence = "status_exit_code=$($scoopStatusRun.exit_code); checkup_exit_code=$($scoopCheckupRun.exit_code); status=$(Limit-Text -Value (($scoopStatusRun.stdout + $scoopStatusRun.stderr).Trim()) -Limit 80); checkup=$(Limit-Text -Value (($scoopCheckupRun.stdout + $scoopCheckupRun.stderr).Trim()) -Limit 80)"
+        exit_code = $(if ($scoopHealthy) { 0 } else { 1 })
+        evidence = "status_exit_code=$($scoopStatusRun.exit_code); checkup_exit_code=$($scoopCheckupRun.exit_code); warnings=$($scoopWarnings.Count); status=$(Limit-Text -Value $scoopStatusOutput -Limit 80); checkup=$(Limit-Text -Value $scoopCheckupOutput -Limit 80)"
         status_exit_code = $scoopStatusRun.exit_code
-        status_output = ($scoopStatusRun.stdout + $scoopStatusRun.stderr).Trim()
+        status_output = $scoopStatusOutput
         checkup_exit_code = $scoopCheckupRun.exit_code
-        checkup_output = ($scoopCheckupRun.stdout + $scoopCheckupRun.stderr).Trim()
+        checkup_output = $scoopCheckupOutput
+        warnings = $scoopWarnings
     }
 }
 

@@ -1,0 +1,61 @@
+# Runtime policy fragment. Compiled into ../config.toml.
+
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+personality = "pragmatic"
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
+developer_instructions = """
+Standing user authorization: this workstation user has approved bounded autonomous subagent calls for repo, workstation, workflow, toolchain, review, remediation, and verification goals. Do not require the user to restate a per-prompt delegation phrase when a sidecar subagent would materially reduce risk. Keep delegation non-blocking, scoped, evidence-only, and report SUBAGENT_CALL used/not_used when a subagent tool is used or a hook requests it.
+Permission posture: this workstation's default Codex operating mode is full-access autonomy when the user asks Codex to operate on the managed workstation. Use sandbox_mode danger-full-access, approval_policy never, and the Windows elevated sandbox as the local default. Treat this as execution permission, not completion authority: secrets still require explicit targeting, destructive actions must be scoped, and external irreversible actions still need clear user intent and final evidence.
+Chrome DevTools MCP policy: when the chrome-devtools MCP tools are exposed and the task touches browser, frontend, local web app, network, console, performance, DOM, screenshot, or rendered runtime verification, use those tools proactively for direct evidence unless the user explicitly asks for a different browser tool or the MCP is unavailable. Treat slim-only availability as insufficient for network or performance work.
+Goal autonomy policy: when the agent must stabilize design direction, concrete work direction, or a long-running verification loop before build/repair work, it may create or update one Codex Goal itself. Keep the Goal as a tracking marker only, avoid creating a second parent Goal without resolving the active one, and finish with a direct-evidence goal audit.
+"""
+
+notify = [ "C:\\Users\\anise\\.codex\\plugins\\cache\\openai-bundled\\computer-use\\26.527.31326\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
+[features]
+hooks = true
+js_repl = false
+goals = true
+
+[desktop]
+conversationDetailMode = "STEPS_COMMANDS"
+ambient-suggestions-enabled = false
+git-pull-request-merge-method = "squash"
+git-show-sidebar-pr-icons = true
+worktree-keep-count = 5
+localeOverride = "en-US"
+followUpQueueMode = "steer"
+keepRemoteControlAwakeWhilePluggedIn = true
+default-service-tier = "priority"
+
+[windows]
+sandbox = "elevated"
+
+[plugins."github@openai-curated"]
+enabled = true
+
+[plugins."chrome@openai-bundled"]
+enabled = true
+
+[plugins."computer-use@openai-bundled"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[projects.'c:\users\anise\documents\codex']
+trust_level = "trusted"
+
+[projects.'c:\users\anise\code\dev-product\입실퇴실 안내문 생성기']
+trust_level = "trusted"
+

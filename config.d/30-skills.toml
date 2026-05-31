@@ -1,0 +1,89 @@
+# Approved user skill fragment. Platform-managed .system skills are separate.
+
+[skills]
+include_instructions = true
+
+[skills.bundled]
+enabled = true
+
+[[skills.config]]
+name = "andrej-karpathy-skill"
+enabled = true
+
+[[skills.config]]
+name = "vowline"
+enabled = true
+
+[[skills.config]]
+name = "keep-codex-fast"
+enabled = true
+
+[[skills.config]]
+name = "clean-all-slop"
+enabled = true
+
+[[skills.config]]
+name = "code-review-and-quality"
+enabled = true
+
+[[skills.config]]
+name = "debugging-and-error-recovery"
+enabled = true
+
+[[skills.config]]
+name = "roast-workstation-workflow"
+enabled = true
+
+[[skills.config]]
+name = "ui-ux-pro-max"
+enabled = true
+
+[[skills.config]]
+name = "modern-web-guidance"
+enabled = true
+
+[[skills.config]]
+name = "pdf"
+enabled = true
+
+[[skills.config]]
+name = "repo-audit"
+enabled = true
+
+[[skills.config]]
+name = "codex-scaffold-validation"
+enabled = true
+
+[[skills.config]]
+name = "frontend-visual-debug"
+enabled = true
+
+[[skills.config]]
+name = "api-contract-review"
+enabled = true
+
+[[skills.config]]
+name = "migration-plan"
+enabled = true
+
+[[skills.config]]
+name = "release-checklist"
+enabled = true
+
+[[skills.config]]
+name = "dependency-upgrade"
+enabled = true
+
+[[skills.config]]
+name = "p0-integrity-cleanup"
+enabled = true
+
+[marketplaces.openai-bundled]
+last_updated = "2026-05-30T10:22:36Z"
+source_type = "local"
+source = '\\?\C:\Users\anise\.codex\plugins\marketplaces\openai-bundled'
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-05-30T07:48:51Z"
+source_type = "local"
+source = '\\?\C:\Users\anise\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'

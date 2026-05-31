@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Visual Debug"
+  short_description: "Debug rendered frontend UI with browser evidence."
+  default_prompt: "Inspect and fix frontend visual behavior with rendered evidence across desktop and mobile viewports. Report screenshots, console issues, and residual risk."

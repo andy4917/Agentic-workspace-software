@@ -76,91 +76,38 @@ def cmd_context(args: argparse.Namespace) -> int:
 
 def cmd_verify(args: argparse.Namespace) -> int:
     root = root_path(args)
+    codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser().resolve()
+    powershell = str(codex_home / "toolchains" / "shims" / "pwsh.cmd")
+    if not Path(powershell).exists():
+        powershell = "powershell.exe"
+    codex_shim = codex_home / "toolchains" / "shims" / "codex.cmd"
+    validate_script = codex_home / "maintenance" / "scripts" / "validate-codex-scaffold.ps1"
+    p0_script = codex_home / "maintenance" / "scripts" / "codex-p0-integrity-loop.ps1"
     checks = []
-    checks.append({"name": "doctor", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--json"], root)})
-    checks.append({"name": "global_scan", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "global-scan"], root, timeout=240)})
-    checks.append({"name": "context_inspection", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "context"], root)})
-    checks.append({"name": "memento_mcp_status", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/memento-mcp-runtime.ps1", "verify"], root, timeout=180)})
-    checks.append({"name": "retrieval_report", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "retrieve", "--query", "codex harness verification workflow", "--limit", "5"], root)})
-    checks.append({"name": "staged_sensitive_diff_scan", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-staged-sensitive-diff.ps1"], root)})
-    checks.append({"name": "worktree_sensitive_diff_scan", **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-worktree-sensitive-diff.ps1"], root)})
-    checks.append(
-        {
-            "name": "python_compile",
-            **run_command(
-                [
-                    sys.executable,
-                    "-m",
-                    "py_compile",
-                    "maintenance/scripts/codex_agent_harness.py",
-                    "maintenance/scripts/codex_agent_harness_base.py",
-                    "maintenance/scripts/codex_agent_harness_lifecycle.py",
-                    "maintenance/scripts/codex_agent_harness_merge.py",
-                    "maintenance/scripts/codex_agent_harness_smoke.py",
-                    "maintenance/scripts/codex_agent_harness_status.py",
-                    "maintenance/scripts/codex_agent_harness_workflows.py",
-                    "maintenance/scripts/worker_watcher_templates.py",
-                ],
-                root,
-            ),
-        }
-    )
-    checks.append({"name": "self_test", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "self-test"], root)})
-    checks.append({"name": "repair_dry_run", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repair"], root)})
-    checks.append({"name": "uninstall_dry_run", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "uninstall"], root)})
-    checks.append(
-        {
-            "name": "rg_resolution_smoke",
-            **run_command(
-                [
-                    "powershell.exe",
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    "maintenance/scripts/check-rg-resolution.ps1",
-                ],
-                root,
-            ),
-        }
-    )
-    if command_exists("pwsh"):
-        checks.append(
-            {
-                "name": "pwsh_wrapper_doctor",
-                **run_command(["pwsh", "-NoProfile", "-File", "maintenance/scripts/codex-harness-doctor.ps1", "--json"], root),
-            }
-        )
-        checks.append(
-            {
-                "name": "hook_ast_parse",
-                **run_command(
-                    [
-                        "pwsh",
-                        "-NoProfile",
-                        "-Command",
-                        "$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile('hooks/lightweight-codex-hook.ps1',[ref]$tokens,[ref]$errors)>$null; if($errors.Count){$errors | ConvertTo-Json; exit 1}else{'OK'}",
-                    ],
-                    root,
-                ),
-            }
-        )
-    if command_exists("powershell.exe"):
-        checks.append(
-            {
-                "name": "windows_powershell_wrapper_doctor",
-                **run_command(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/codex-harness-doctor.ps1", "--json"], root),
-            }
-        )
-    pre_audit_status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
-    write_verification_report(root, {"generated_at": utc_now(), "status": pre_audit_status, "checks": checks})
-    append_trajectory(root, "codex-harness verify pre-audit", pre_audit_status, checks)
-    checks.append({"name": "audit", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "audit", "--json"], root)})
+
+    checks.append({"name": "repo_verify", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repo-verify"], root, timeout=180)})
+    checks.append({"name": "doctor_tier_smoke", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "eval", "--eval-id", "doctor-tier-smoke"], root, timeout=180)})
+    checks.append({"name": "worktree_sensitive_diff_scan", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-worktree-sensitive-diff.ps1"], root, timeout=120)})
+    if validate_script.exists():
+        checks.append({"name": "scaffold_validation", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(validate_script), "-CodexHome", str(codex_home), "-Json"], root, timeout=180)})
+    else:
+        checks.append({"name": "scaffold_validation", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {validate_script}", "duration_seconds": 0})
+    if p0_script.exists():
+        checks.append({"name": "p0_integrity_report_only", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(p0_script), "-ReportOnly", "-Json", "-ProcessTimeoutSeconds", "180"], root, timeout=300)})
+    else:
+        checks.append({"name": "p0_integrity_report_only", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {p0_script}", "duration_seconds": 0})
+    if codex_shim.exists():
+        checks.append({"name": "codex_mcp_list", **run_command(["cmd.exe", "/c", str(codex_shim), "mcp", "list", "--json"], root, timeout=120)})
+        checks.append({"name": "codex_doctor", **run_command(["cmd.exe", "/c", str(codex_shim), "doctor", "--json"], root, timeout=180)})
+    else:
+        checks.append({"name": "codex_mcp_list", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {codex_shim}", "duration_seconds": 0})
+        checks.append({"name": "codex_doctor", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {codex_shim}", "duration_seconds": 0})
+
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
     write_verification_report(root, report)
     artifacts = [artifact for check in checks for artifact in check.get("artifacts", [])]
-    append_trajectory(root, "codex-harness verify", status, checks, artifacts)
+    append_trajectory(root, "codex-harness verify current control-plane stack", status, checks, artifacts)
     print(root / "reports" / "verification.latest.md")
     return 0 if status == "pass" else 1
 
@@ -327,9 +274,9 @@ def cmd_eval(args: argparse.Namespace) -> int:
                 bool(core_checks)
                 and bool(stress_checks)
                 and bool(full_checks)
-                and "memento_runtime" not in core_checks
-                and "memento_runtime" in stress_checks
-                and "memento_runtime" in full_checks
+                and "generated_outputs_untracked" not in core_checks
+                and "generated_outputs_untracked" in stress_checks
+                and "generated_outputs_untracked" in full_checks
             )
         elif eval_id == "repo-verify":
             passed = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repo-verify"], root, timeout=180).get("status") == "pass"

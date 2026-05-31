@@ -1,0 +1,4 @@
+interface:
+  display_name: "P0 Integrity Cleanup"
+  short_description: "Handle P0 integrity cleanup without false-pass claims."
+  default_prompt: "Investigate and clean up a P0 integrity issue. Preserve evidence, prove root cause, patch the smallest surface, and rerun the original proof."
