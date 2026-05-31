@@ -1,0 +1,161 @@
+# Codex State Management
+
+This document defines how this workstation treats Codex caches, logs, memory,
+folders, files, and managed-source to live-runtime synchronization. It is
+managed-source policy, not a secret store and not completion authority.
+
+## Roots
+
+- `C:\Users\anise\.codex` is the live runtime root and `CODEX_HOME`.
+- `C:\Users\anise\Documents\Codex` is the reviewable managed-source repository.
+- Live runtime state is proven from current config, manifests, process state,
+  and validation output. Old managed-source file dates are evidence to classify,
+  not proof of active runtime behavior.
+- Runtime state is not copied wholesale into managed source. Only public-safe
+  scripts, docs, reports, and sanitized evidence belong in this repository.
+
+## Cache Management
+
+Current cache classes:
+
+- `runtime-cache`: generated state used by Codex Desktop or plugins, including
+  `.codex\cache`, `.codex\plugins\cache`, `.codex\.tmp`, `.codex\tmp`,
+  `.codex\node_repl`, browser/plugin runtime folders, and app-created package
+  state.
+- `external-package-cache`: package-manager caches outside `CODEX_HOME`, such as
+  npm, uv, pip, pnpm, Scoop, Cargo, Rustup, and VS Code CLI caches.
+- `quarantine-archive`: reversible compressed archives and Recycle Bin staging
+  for deprecated or suspicious surfaces.
+
+Handling rules:
+
+- Do not treat runtime cache as a configured source of truth.
+- Do not sentinel-block `.tmp`, `tmp`, or `plugins\cache`; Codex and plugins may
+  create these while running.
+- Audit runtime caches by size, active reference, process linkage, and
+  category. Remove only when a live process is not using the path.
+- Clean package-manager caches through their owning package manager or an
+  explicit maintenance script, not by ad hoc recursive deletion.
+- Move risky or uncertain surfaces to Recycle Bin first. Permanent deletion
+  requires a separate explicit instruction.
+
+## Log Management
+
+Current log classes:
+
+- SQLite operational state: `logs_*.sqlite`, `state_*.sqlite`, `goals_*.sqlite`,
+  `memories_*.sqlite`, plus their WAL/SHM files.
+- Hook or maintenance ledgers under `.codex\state` and
+  `.codex\maintenance\manifests`.
+- Human-readable reports under `maintenance\reports`.
+- Raw app logs, when present, remain local runtime state.
+
+Handling rules:
+
+- Logs are evidence candidates, not completion authority.
+- Keep hook and workflow logs small, local, structured, and non-authoritative.
+- Do not store raw secrets, full prompts, or full tool payloads by default.
+- Never delete SQLite WAL/SHM files directly. Use app shutdown, checkpoint, or
+  owning maintenance commands.
+- Before removing old raw logs, create a manifest, verify the archive, then move
+  originals to Recycle Bin.
+
+## Memory Management
+
+Current memory classes:
+
+- `memento`: the managed PM memory MCP when exposed and healthy.
+- SQLite memory state such as `memories_*.sqlite`.
+- Runtime memory folders such as `.codex\memories`, when created by the app.
+- Legacy raw Memory/RAG files are not an active fallback.
+
+Handling rules:
+
+- Memory is support-only. User instructions, scoped `AGENTS.md`, current files,
+  tests, runtime output, and PM verification outrank recalled memory.
+- Write memory only for durable, verified, atomic operational facts.
+- Never write secrets, raw credentials, raw logs, full prompts, or speculative
+  guesses as verified memory.
+- Do not restore old raw memory folders as active state. Use Memento verification
+  and direct files/tests instead.
+
+## Folder And File Management
+
+Active file classes:
+
+- `config.toml`: live runtime configuration truth.
+- `config.d`: managed source material that must be reconciled into
+  `config.toml`; it is not active by itself.
+- `maintenance\scripts`: public-safe maintenance scripts.
+- `maintenance\manifests`: generated live evidence under `CODEX_HOME`.
+- `maintenance\reports`: reviewable evidence packets under managed source.
+- `skills`, `toolchains\shims`, `hooks`: active control-plane surfaces governed
+  by config and validation.
+- `skills-disabled` and compressed archives: quarantine state.
+
+Handling rules:
+
+- Classify every old-looking or unexpected root before trusting or removing it.
+- Active files must be visible to audit unless they are secrets, sessions, logs,
+  SQLite state, browser state, or live app cache.
+- Do not hot-restore old sessions, logs, SQLite state, WAL/SHM files, browser
+  profiles, stale hook output, generated shims, or volatile caches.
+
+## Sync Model
+
+The sync direction is intentional:
+
+1. Edit and review public-safe policy/scripts in
+   `C:\Users\anise\Documents\Codex`.
+2. Copy only live-called public-safe files into `C:\Users\anise\.codex`.
+3. Validate that live copies and managed-source copies match by SHA-256.
+4. Run live runtime checks from `CODEX_HOME`.
+5. Commit only managed-source files and sanitized reports.
+
+Currently byte-synced live-copy files:
+
+- `maintenance\scripts\codex-runtime-process-cleanup.ps1`
+- `maintenance\scripts\validate-codex-scaffold.ps1`
+- `maintenance\scripts\codex-p0-integrity-loop.ps1`
+- `maintenance\scripts\codex-home-maintenance.ps1`
+- `maintenance\NAMING_CONVENTION.md`
+
+`C:\Users\anise\.codex\AGENTS.md` is a compact live bootstrap. It is not byte
+identical to the managed-source `AGENTS.md` by design.
+
+## Codex Self-Inspection Loop
+
+Codex checks its own environment through these layers:
+
+1. `validate-codex-scaffold.ps1`
+   - verifies config fragments, MCP set, command sources, Memento health,
+     hooks, skills, shims, PATH hygiene, secret scan, runtime process state,
+     live-runtime state classification, and managed-source/live-copy sync.
+2. `codex-runtime-process-cleanup.ps1`
+   - reports app-server, watcher, managed roots, orphan processes, duplicate
+     roots, and close-lifecycle cleanup readiness.
+3. `codex-home-maintenance.ps1`
+   - inventories active references, native hosts, sentinel blockers,
+     toolchain/cache roots, transient roots, and Recycle Bin cleanup outcomes.
+4. `check-toolchain-sources.ps1`
+   - verifies official-bundle and local-chain command resolution.
+5. `codex doctor --json`
+   - checks Codex app/runtime, auth mode metadata, config, network, state DBs,
+     thread inventory, and installation consistency.
+6. `codex-p0-integrity-loop.ps1`
+   - combines current diff, runtime cleanup status, validator output,
+     toolchain checks, doctor output, Scoop health, manifest staleness, and
+     ledger integrity into a repeatable closure loop.
+
+The self-inspection loop must report missing evidence, stale manifests,
+uncategorized runtime roots, forbidden active roots, sync mismatches, tool
+failures, and not-run checks as evidence gaps rather than success.
+
+## Standard Commands
+
+```powershell
+C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json
+C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode status -CodexHome C:\Users\anise\.codex
+C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -CodexHome C:\Users\anise\.codex
+C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -CodexHome C:\Users\anise\.codex -RepoRoot C:\Users\anise\Documents\Codex -ReportOnly -Json
+```

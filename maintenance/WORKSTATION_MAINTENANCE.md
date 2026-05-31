@@ -186,6 +186,11 @@ handoff surface:
 The handoff must include accepted evidence, not-run checks, residual risks, and
 the next verification command.
 
+For cache, log, memory, folder, file, or live-copy synchronization work, also use
+`maintenance/CODEX_STATE_MANAGEMENT.md` as the management map. That document
+defines the active cache/log/memory classes, the repo-to-runtime sync direction,
+and the Codex self-inspection loop that verifies the current environment.
+
 ## Verification Layers
 
 Use `maintenance/WORKSTATION_LAYERING.md` to avoid making optional local

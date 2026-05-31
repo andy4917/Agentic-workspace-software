@@ -101,6 +101,15 @@ function Test-HttpHealth($url) {
     }
 }
 
+function Get-Sha256OrNull {
+    param([string]$Path)
+
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    }
+    return $null
+}
+
 function Resolve-CodexBundledTool {
     param([Parameter(Mandatory = $true)][string]$Name)
 
@@ -489,6 +498,47 @@ foreach ($root in $scanRoots) {
     }
 }
 Add-Check $checks "secret_scan" ($(if ($secretHits.Count -eq 0) { "pass" } else { "fail" })) @{ hits = $secretHits }
+
+$managedRepoRoot = Join-Path $env:USERPROFILE "Documents\Codex"
+$stateManagementDoc = Join-Path $managedRepoRoot "maintenance\CODEX_STATE_MANAGEMENT.md"
+Add-Check $checks "codex_state_management_documented" ($(if (Test-Path -LiteralPath $stateManagementDoc -PathType Leaf) { "pass" } else { "fail" })) @{
+    managed_repo_root = $managedRepoRoot
+    document = $stateManagementDoc
+    required_scope = @("cache", "logs", "memory", "folders", "files", "sync", "self-inspection")
+    note = "Codex runtime state management must be documented in managed source, not inferred from old reports."
+}
+
+$syncPairs = @(
+    "maintenance\scripts\codex-runtime-process-cleanup.ps1",
+    "maintenance\scripts\validate-codex-scaffold.ps1",
+    "maintenance\scripts\codex-p0-integrity-loop.ps1",
+    "maintenance\scripts\codex-home-maintenance.ps1",
+    "maintenance\NAMING_CONVENTION.md"
+)
+$syncStatus = @()
+if (Test-Path -LiteralPath $managedRepoRoot -PathType Container) {
+    foreach ($relativePath in $syncPairs) {
+        $managedPath = Join-Path $managedRepoRoot $relativePath
+        $livePath = Join-Path $CodexHome $relativePath
+        $managedHash = Get-Sha256OrNull -Path $managedPath
+        $liveHash = Get-Sha256OrNull -Path $livePath
+        $syncStatus += [ordered]@{
+            relative_path = $relativePath
+            managed_path = $managedPath
+            live_path = $livePath
+            managed_sha256 = $managedHash
+            live_sha256 = $liveHash
+            in_sync = ($null -ne $managedHash -and $managedHash -eq $liveHash)
+        }
+    }
+}
+$syncProblems = @($syncStatus | Where-Object { -not $_.in_sync })
+Add-Check $checks "managed_source_live_sync" ($(if ((Test-Path -LiteralPath $managedRepoRoot -PathType Container) -and $syncProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+    managed_repo_root = $managedRepoRoot
+    checked = $syncStatus
+    problems = $syncProblems
+    note = "Public-safe scripts and docs that live instructions call directly must stay byte-synced from managed source into CODEX_HOME."
+}
 
 $allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state","workflow")
 $top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)

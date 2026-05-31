@@ -46,6 +46,8 @@ For workstation management, follow
 `maintenance/WORKSTATION_CONTROL_RUNBOOK.md` and
 `maintenance/WORKSTATION_MAINTENANCE.md` before changing active runtime,
 toolchains, logs, trust settings, hooks, or external publishing surfaces.
+For cache, log, memory, folder, file, and managed-source/live-runtime sync
+behavior, use `maintenance/CODEX_STATE_MANAGEMENT.md`.
 
 Use `maintenance/WORKSTATION_LAYERING.md` to choose the smallest verification
 layer. In particular, `repo-verify` is the public-safe CI path for tracked
