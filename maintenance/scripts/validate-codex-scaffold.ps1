@@ -387,7 +387,7 @@ if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
         $appServerPid = $cleanupStatus.app_server_pid
         $watcherMatches = @(
             if ($null -ne $appServerPid) {
-                $watchers | Where-Object { $_.WatchedAppServerPid -eq $appServerPid -and [bool]$_.StopAppServerOnOwnerExit }
+                $watchers | Where-Object { $_.WatchedAppServerPid -eq $appServerPid -and [bool]$_.StopAppServerOnOwnerExit -and [bool]$_.StopAppServerOnOwnerNoVisibleWindow }
             }
         )
         $hasCleanupWatcher = ($null -eq $appServerPid) -or (@($watcherMatches).Count -gt 0)
@@ -395,9 +395,9 @@ if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
             app_server_pid = $appServerPid
             watcher_pids = @($watcherMatches | ForEach-Object { $_.ProcessId })
             all_watchers = @($watchers | ForEach-Object {
-                [ordered]@{ pid = $_.ProcessId; watched_app_server_pid = $_.WatchedAppServerPid; stop_app_server_on_owner_exit = $_.StopAppServerOnOwnerExit; codex_home = $_.CodexHome; poll_seconds = $_.PollSeconds }
+                [ordered]@{ pid = $_.ProcessId; watched_app_server_pid = $_.WatchedAppServerPid; stop_app_server_on_owner_exit = $_.StopAppServerOnOwnerExit; stop_app_server_on_owner_no_visible_window = $_.StopAppServerOnOwnerNoVisibleWindow; codex_home = $_.CodexHome; poll_seconds = $_.PollSeconds }
             })
-            note = "When an app-server is live, a runtime cleanup watcher should enforce singleton MCP roots and clean up after owner exit."
+            note = "When an app-server is live, a runtime cleanup watcher should enforce singleton MCP roots and clean up after owner exit or after the Codex owner has no visible window."
         }
     } catch {
         Add-Check $checks "runtime_cleanup_status" "fail" @{

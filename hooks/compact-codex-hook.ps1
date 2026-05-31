@@ -32,7 +32,7 @@ function Ensure-RuntimeCleanupWatch {
         }
     }
 
-    $output = & $cleanupScript -Mode ensure-watch -CodexHome $CodexHome -StopAppServerOnOwnerExit 2>&1
+    $output = & $cleanupScript -Mode ensure-watch -CodexHome $CodexHome -StopAppServerOnOwnerExit -StopAppServerOnOwnerNoVisibleWindow 2>&1
     $text = (($output | Out-String) -replace "\s+", " ").Trim()
     return [ordered]@{
         attempted = $true

@@ -8,6 +8,8 @@ param(
     [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }),
     [switch]$CleanupStaleOnEnsure,
     [switch]$StopAppServerOnOwnerExit,
+    [switch]$StopAppServerOnOwnerNoVisibleWindow,
+    [int]$OwnerNoVisibleWindowGraceSeconds = 5,
     [switch]$DryRun
 )
 
@@ -279,6 +281,15 @@ function Test-AppServerProcess {
         [string]$Process.CommandLine -notmatch "--listen\s+stdio://")
 }
 
+function Test-CodexAppOwnerProcess {
+    param([object]$Process)
+
+    return ($null -ne $Process -and
+        [string]$Process.Name -ieq "Codex.exe" -and
+        [string]$Process.CommandLine -match "(?i)OpenAI\.Codex" -and
+        [string]$Process.CommandLine -notmatch "\s--type=")
+}
+
 function Get-DescendantIds {
     param(
         [object[]]$Processes,
@@ -300,6 +311,76 @@ function Get-DescendantIds {
     }
 
     return @($ids)
+}
+
+function Initialize-WindowApi {
+    if ("CodexRuntimeWindowApi" -as [type]) { return }
+
+    Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class CodexRuntimeWindowApi {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+}
+"@
+}
+
+function Get-VisibleTopLevelWindows {
+    Initialize-WindowApi
+
+    $windows = New-Object System.Collections.Generic.List[object]
+    $callback = [CodexRuntimeWindowApi+EnumWindowsProc]{
+        param($hWnd, $lParam)
+
+        if ([CodexRuntimeWindowApi]::IsWindowVisible($hWnd)) {
+            $length = [CodexRuntimeWindowApi]::GetWindowTextLength($hWnd)
+            $titleBuilder = New-Object System.Text.StringBuilder ([Math]::Max(256, $length + 1))
+            [void][CodexRuntimeWindowApi]::GetWindowText($hWnd, $titleBuilder, $titleBuilder.Capacity)
+            $windowProcessId = [uint32]0
+            [void][CodexRuntimeWindowApi]::GetWindowThreadProcessId($hWnd, [ref]$windowProcessId)
+            if ($windowProcessId -gt 0) {
+                $windows.Add([pscustomobject]@{
+                    ProcessId = [int]$windowProcessId
+                    Title = $titleBuilder.ToString()
+                    Hwnd = $hWnd.ToInt64()
+                }) | Out-Null
+            }
+        }
+        return $true
+    }
+
+    [void][CodexRuntimeWindowApi]::EnumWindows($callback, [IntPtr]::Zero)
+    return @($windows.ToArray())
+}
+
+function Test-CodexOwnerHasVisibleWindow {
+    param(
+        [object[]]$Processes,
+        [int]$OwnerPid
+    )
+
+    if ($OwnerPid -le 0) { return $true }
+    $ownedIds = New-Object System.Collections.Generic.HashSet[int]
+    foreach ($ownedId in @(Get-DescendantIds -Processes $Processes -RootPid $OwnerPid)) {
+        $null = $ownedIds.Add([int]$ownedId)
+    }
+
+    foreach ($window in @(Get-VisibleTopLevelWindows)) {
+        if (-not $ownedIds.Contains([int]$window.ProcessId)) { continue }
+        $process = $Processes | Where-Object { [int]$_.ProcessId -eq [int]$window.ProcessId } | Select-Object -First 1
+        $title = [string]$window.Title
+        if ([string]$process.Name -ieq "codex-computer-use.exe") { continue }
+        if ($title -match "^Codex is using your computer") { continue }
+        if (-not [string]::IsNullOrWhiteSpace($title)) { return $true }
+    }
+    return $false
 }
 
 function Write-Ledger {
@@ -532,11 +613,14 @@ function Invoke-Watch {
     $ownerPid = [int]$appServer.ParentProcessId
     $known = New-Object System.Collections.Generic.HashSet[int]
     $duplicateSignatures = @{}
+    $ownerNoVisibleWindowSince = $null
     Write-Ledger -Action "watch_start" -Details @{
         app_server_pid = $AppServerPid
         app_server_parent_pid = $ownerPid
         poll_seconds = $PollSeconds
         stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
+        stop_app_server_on_owner_no_visible_window = [bool]$StopAppServerOnOwnerNoVisibleWindow
+        owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
         duplicate_grace_seconds = $DuplicateGraceSeconds
         duplicate_confirmations = $DuplicateConfirmations
     }
@@ -545,6 +629,20 @@ function Invoke-Watch {
         $processes = Get-ProcessTable
         $parentAlive = @($processes | Where-Object { $_.ProcessId -eq $AppServerPid }).Count -gt 0
         $ownerAlive = (-not $StopAppServerOnOwnerExit) -or $ownerPid -le 0 -or @($processes | Where-Object { $_.ProcessId -eq $ownerPid }).Count -gt 0
+        $ownerHasVisibleWindow = $true
+        if ($StopAppServerOnOwnerNoVisibleWindow -and $ownerPid -gt 0 -and $ownerAlive) {
+            $ownerHasVisibleWindow = Test-CodexOwnerHasVisibleWindow -Processes $processes -OwnerPid $ownerPid
+            if ($ownerHasVisibleWindow) {
+                $ownerNoVisibleWindowSince = $null
+            } elseif ($null -eq $ownerNoVisibleWindowSince) {
+                $ownerNoVisibleWindowSince = Get-Date
+                Write-Ledger -Action "watch_owner_no_visible_window_candidate" -Details @{
+                    app_server_pid = $AppServerPid
+                    app_server_parent_pid = $ownerPid
+                    grace_seconds = $OwnerNoVisibleWindowGraceSeconds
+                }
+            }
+        }
 
         if (-not $parentAlive) {
             $result = Invoke-CleanupAll -AppServerPid $AppServerPid -KnownRootPids @($known)
@@ -564,6 +662,37 @@ function Invoke-Watch {
                 chrome_extension_hosts_stopped = @($chromeStopped)
             }
             Write-Ledger -Action "watch_owner_exit_cleanup_complete" -Details $result
+            return $result
+        }
+
+        if ($StopAppServerOnOwnerNoVisibleWindow -and $ownerPid -gt 0 -and $ownerAlive -and -not $ownerHasVisibleWindow -and
+            $null -ne $ownerNoVisibleWindowSince -and ((Get-Date) - $ownerNoVisibleWindowSince).TotalSeconds -ge $OwnerNoVisibleWindowGraceSeconds) {
+            $ownerProcess = $processes | Where-Object { [int]$_.ProcessId -eq $ownerPid } | Select-Object -First 1
+            if (Test-CodexAppOwnerProcess -Process $ownerProcess) {
+                $stopped = Stop-ProcessTree -Processes $processes -RootPid $ownerPid -Reason "codex-owner-no-visible-window"
+                $chromeStopped = Stop-ChromeExtensionHosts -Processes $processes -Reason "codex-owner-no-visible-window-chrome-extension-host"
+                $result = [pscustomobject]@{
+                    app_server_pid = $AppServerPid
+                    app_server_parent_pid = $ownerPid
+                    stopped = @($stopped)
+                    chrome_extension_hosts_stopped = @($chromeStopped)
+                    owner_no_visible_window_since_utc = $ownerNoVisibleWindowSince.ToUniversalTime().ToString("o")
+                    owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
+                }
+                Write-Ledger -Action "watch_owner_no_visible_window_cleanup_complete" -Details $result
+                return $result
+            }
+
+            $stopped = Stop-ProcessTree -Processes $processes -RootPid $AppServerPid -Reason "codex-owner-no-visible-window-app-server-only" -AllowAppServerRoot
+            $result = [pscustomobject]@{
+                app_server_pid = $AppServerPid
+                app_server_parent_pid = $ownerPid
+                stopped = @($stopped)
+                owner_process_match = $false
+                owner_no_visible_window_since_utc = $ownerNoVisibleWindowSince.ToUniversalTime().ToString("o")
+                owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
+            }
+            Write-Ledger -Action "watch_owner_no_visible_window_app_server_only_cleanup_complete" -Details $result
             return $result
         }
 
@@ -681,7 +810,9 @@ function Test-WatcherRunning {
         [int]$RequiredPollSeconds,
         [int]$RequiredDuplicateGraceSeconds,
         [int]$RequiredDuplicateConfirmations,
-        [bool]$RequireStopAppServerOnOwnerExit
+        [bool]$RequireStopAppServerOnOwnerExit,
+        [bool]$RequireStopAppServerOnOwnerNoVisibleWindow,
+        [int]$RequiredOwnerNoVisibleWindowGraceSeconds
     )
 
     $requiredScript = Convert-ToComparablePath -Path $ScriptPath
@@ -691,6 +822,7 @@ function Test-WatcherRunning {
         $watchPollSeconds = Convert-ToNullableInt -Value (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "PollSeconds")
         $watchDuplicateGraceSeconds = Convert-ToNullableInt -Value (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "DuplicateGraceSeconds")
         $watchDuplicateConfirmations = Convert-ToNullableInt -Value (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "DuplicateConfirmations")
+        $watchOwnerNoVisibleWindowGraceSeconds = Convert-ToNullableInt -Value (Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "OwnerNoVisibleWindowGraceSeconds")
         [int]$_.ProcessId -ne [int]$PID -and
             [string]$_.Name -match "^(pwsh|powershell)\.exe$" -and
             [string]$_.CommandLine -match "codex-runtime-process-cleanup\.ps1" -and
@@ -701,7 +833,11 @@ function Test-WatcherRunning {
             $watchPollSeconds -eq [int]$RequiredPollSeconds -and
             $watchDuplicateGraceSeconds -eq [int]$RequiredDuplicateGraceSeconds -and
             $watchDuplicateConfirmations -eq [int]$RequiredDuplicateConfirmations -and
-            ((-not $RequireStopAppServerOnOwnerExit) -or (Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerExit"))
+            ((-not $RequireStopAppServerOnOwnerExit) -or (Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerExit")) -and
+            ((-not $RequireStopAppServerOnOwnerNoVisibleWindow) -or (
+                (Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerNoVisibleWindow") -and
+                $watchOwnerNoVisibleWindowGraceSeconds -eq [int]$RequiredOwnerNoVisibleWindowGraceSeconds
+            ))
     }).Count -gt 0
 }
 
@@ -720,6 +856,7 @@ function Get-Watchers {
         $poll = Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "PollSeconds"
         $duplicateGrace = Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "DuplicateGraceSeconds"
         $duplicateConfirmations = Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "DuplicateConfirmations"
+        $ownerNoVisibleWindowGrace = Get-CommandLineValue -CommandLine ([string]$_.CommandLine) -Name "OwnerNoVisibleWindowGraceSeconds"
         [pscustomobject]@{
             ProcessId = [int]$_.ProcessId
             ParentProcessId = [int]$_.ParentProcessId
@@ -730,6 +867,8 @@ function Get-Watchers {
             DuplicateGraceSeconds = $(if ([string]::IsNullOrWhiteSpace($duplicateGrace)) { $null } else { [int]$duplicateGrace })
             DuplicateConfirmations = $(if ([string]::IsNullOrWhiteSpace($duplicateConfirmations)) { $null } else { [int]$duplicateConfirmations })
             StopAppServerOnOwnerExit = Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerExit"
+            StopAppServerOnOwnerNoVisibleWindow = Test-CommandLineSwitch -CommandLine ([string]$_.CommandLine) -Name "StopAppServerOnOwnerNoVisibleWindow"
+            OwnerNoVisibleWindowGraceSeconds = $(if ([string]::IsNullOrWhiteSpace($ownerNoVisibleWindowGrace)) { $null } else { [int]$ownerNoVisibleWindowGrace })
             CreationDate = $_.CreationDate
             Name = [string]$_.Name
             CommandLine = [string]$_.CommandLine
@@ -764,12 +903,25 @@ function Invoke-EnsureWatch {
     $appServerPidValue = [int](@($status.app_server_pid)[0])
     $scriptPath = Get-CurrentScriptPath
     $processes = Get-ProcessTable
-    $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit)
+    $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit) -RequireStopAppServerOnOwnerNoVisibleWindow ([bool]$StopAppServerOnOwnerNoVisibleWindow) -RequiredOwnerNoVisibleWindowGraceSeconds $OwnerNoVisibleWindowGraceSeconds
     $watchersForApp = @(Get-Watchers -Processes $processes | Where-Object { $_.WatchedAppServerPid -eq $appServerPidValue })
     $incompatibleWatchers = @($watchersForApp | Where-Object {
-        -not (Test-WatcherRunning -Processes @($_) -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit))
+        -not (Test-WatcherRunning -Processes @($_) -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit) -RequireStopAppServerOnOwnerNoVisibleWindow ([bool]$StopAppServerOnOwnerNoVisibleWindow) -RequiredOwnerNoVisibleWindowGraceSeconds $OwnerNoVisibleWindowGraceSeconds)
     })
     foreach ($watcher in $incompatibleWatchers) {
+        if ($DryRun) {
+            Write-Ledger -Action "dry_run_incompatible_watcher" -Details @{
+                watcher_pid = [int]$watcher.ProcessId
+                app_server_pid = $appServerPidValue
+                required_script = $scriptPath
+                required_codex_home = $CodexHome
+                required_poll_seconds = $PollSeconds
+                require_stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
+                require_stop_app_server_on_owner_no_visible_window = [bool]$StopAppServerOnOwnerNoVisibleWindow
+                required_owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
+            }
+            continue
+        }
         try {
             Stop-Process -Id ([int]$watcher.ProcessId) -Force -ErrorAction SilentlyContinue
             Write-Ledger -Action "stop_incompatible_watcher" -Details @{
@@ -779,6 +931,8 @@ function Invoke-EnsureWatch {
                 required_codex_home = $CodexHome
                 required_poll_seconds = $PollSeconds
                 require_stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
+                require_stop_app_server_on_owner_no_visible_window = [bool]$StopAppServerOnOwnerNoVisibleWindow
+                required_owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
             }
         } catch {
             Write-Ledger -Action "stop_incompatible_watcher_error" -Details @{
@@ -789,7 +943,7 @@ function Invoke-EnsureWatch {
     }
     if ($incompatibleWatchers.Count -gt 0) {
         $processes = Get-ProcessTable
-        $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit)
+        $alreadyRunning = Test-WatcherRunning -Processes $processes -ScriptPath $scriptPath -AppServerPid $appServerPidValue -RequiredCodexHome $CodexHome -RequiredPollSeconds $PollSeconds -RequiredDuplicateGraceSeconds $DuplicateGraceSeconds -RequiredDuplicateConfirmations $DuplicateConfirmations -RequireStopAppServerOnOwnerExit ([bool]$StopAppServerOnOwnerExit) -RequireStopAppServerOnOwnerNoVisibleWindow ([bool]$StopAppServerOnOwnerNoVisibleWindow) -RequiredOwnerNoVisibleWindowGraceSeconds $OwnerNoVisibleWindowGraceSeconds
     }
 
     $watcherPid = $null
@@ -808,10 +962,14 @@ function Invoke-EnsureWatch {
             "-PollSeconds", ([string]$PollSeconds),
             "-DuplicateGraceSeconds", ([string]$DuplicateGraceSeconds),
             "-DuplicateConfirmations", ([string]$DuplicateConfirmations),
+            "-OwnerNoVisibleWindowGraceSeconds", ([string]$OwnerNoVisibleWindowGraceSeconds),
             "-CodexHome", $CodexHome
         )
         if ($StopAppServerOnOwnerExit) {
             $arguments += "-StopAppServerOnOwnerExit"
+        }
+        if ($StopAppServerOnOwnerNoVisibleWindow) {
+            $arguments += "-StopAppServerOnOwnerNoVisibleWindow"
         }
         $created = Start-Process -FilePath $pwsh -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
         Start-Sleep -Milliseconds 500
@@ -834,6 +992,8 @@ function Invoke-EnsureWatch {
         watcher_pid = $watcherPid
         incompatible_watcher_pids_stopped = @($incompatibleWatchers | ForEach-Object { [int]$_.ProcessId })
         stop_app_server_on_owner_exit = [bool]$StopAppServerOnOwnerExit
+        stop_app_server_on_owner_no_visible_window = [bool]$StopAppServerOnOwnerNoVisibleWindow
+        owner_no_visible_window_grace_seconds = $OwnerNoVisibleWindowGraceSeconds
         duplicate_grace_seconds = $DuplicateGraceSeconds
         duplicate_confirmations = $DuplicateConfirmations
         dry_run = [bool]$DryRun
