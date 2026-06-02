@@ -137,15 +137,15 @@ The following patterns are considered deployment blockers unless the user explic
 
 ---
 
-## 5. Mandatory Frontend-Specialized Workflow: Impeccable
+## 5. Mandatory Frontend-Specialized Workflow: Product Design
 
-Impeccable must be treated as the dedicated frontend design workflow for Codex.
+Use the official `product-design` plugin as the primary frontend design workflow when it is installed and exposed in the active Codex session.
 
-This is not an optional enhancement. For UI work, Impeccable is the quality-control layer that prevents Codex from defaulting into generic frontend output.
+This is not an optional enhancement. For UI work, Product Design is the quality-control layer that prevents Codex from defaulting into generic frontend output.
 
 ### 5.1 Trigger Conditions
 
-Use the Impeccable workflow for any task involving:
+Use the Product Design workflow for any task involving:
 
 - frontend implementation
 - UI layout
@@ -168,45 +168,37 @@ Use the Impeccable workflow for any task involving:
 - UX writing
 - frontend refactors that affect visible output
 
-If a task touches visible UI, assume Impeccable is required.
+If a task touches visible UI, assume Product Design is required when the plugin is available.
 
-### 5.2 Required Impeccable Commands
+### 5.2 Required Product Design Flow
 
-Use the following commands as the default frontend control sequence:
-
-```text
-$impeccable teach
-$impeccable document
-$impeccable shape [target]
-$impeccable craft [target]
-$impeccable critique [target]
-$impeccable audit [target]
-$impeccable polish [target]
-```
-
-Use targeted commands when appropriate:
+Use the most specific exposed Product Design capability for the task, such as product context, design context, ideation, prototype generation, URL-to-code, image-to-code, design QA, or handoff review.
 
 ```text
-$impeccable layout [target]
-$impeccable typeset [target]
-$impeccable colorize [target]
-$impeccable distill [target]
-$impeccable harden [target]
-$impeccable adapt [target]
-$impeccable clarify [target]
-$impeccable animate [target]
-$impeccable bolder [target]
-$impeccable quieter [target]
+product_design_context
+product_design_shape_or_prototype
+product_design_implementation_guidance
+product_design_audit_or_review
 ```
 
-### 5.3 If Impeccable Is Missing
+Keep this sequence evidence-based:
 
-If Impeccable is not installed or not available in the active Codex session, Codex must not silently continue as if nothing is wrong.
+- Read product and design context first.
+- Inspect existing components and routes before changing UI.
+- Shape the interaction and visual direction before implementation.
+- Apply `modern-web-guidance` for web-platform details.
+- Verify rendered behavior through Browser, Chrome, Chrome DevTools, screenshots, or an equivalent direct check.
+
+Use Impeccable only as an optional compatibility workflow when an installed `impeccable` skill is actually present and exposed. Impeccable output is evidence, not completion authority.
+
+### 5.3 If Product Design Is Missing
+
+If Product Design is installed in configuration but not exposed in the active Codex session, Codex must not silently continue as if nothing is wrong.
 
 Codex must state:
 
 ```text
-IMPECCABLE_UNAVAILABLE: The dedicated frontend workflow is not available in this session. I will apply the Impeccable-equivalent manual checklist, but this is a degraded workflow.
+PRODUCT_DESIGN_UNAVAILABLE: The primary frontend workflow is not available in this session. I will apply the Product-Design-equivalent manual checklist, but this is a degraded workflow.
 ```
 
 Then Codex must manually apply the same gates:
@@ -237,7 +229,8 @@ shadcn_access=MCP_CONFIRMED|MCP_CONFIG_ONLY|MCP_REGISTERED_NOT_INJECTED|CLI_FALL
 current_route_or_surface=identified
 states_required=listed
 responsive_targets=defined
-impeccable=available|unavailable
+product_design=available|unavailable|not_exposed
+impeccable_compat=available|unavailable|not_applicable
 mutation_permission=open|blocked
 ```
 
@@ -455,7 +448,7 @@ Default mode is slim, headless, isolated, telemetry-off, performance CrUX off,
 and backed by the `.codex\toolchains\shims\npx.cmd` wrapper. Use `-Visible`
 only when a visible isolated Chrome window is required. Use `-Full` only when
 slim browser observation cannot answer the frontend verification question.
-The OFF state must keep `chrome_devtools_observe` registered with
+The OFF state must keep the Chrome DevTools observer entry registered with
 `enabled = false` so Codex app settings remain clear that the frontend observer
 exists but is inactive.
 
@@ -477,7 +470,7 @@ Before claiming completion, Codex must produce this gate result:
 FRONTEND_DEPLOYMENT_GATE:
 product_context_checked=yes|no
 design_context_checked=yes|no
-impeccable_workflow_used=yes|no|manual_fallback
+product_design_workflow_used=yes|no|manual_fallback
 slop_audit_passed=yes|no
 responsive_checked=yes|no
 accessibility_checked=yes|no
@@ -515,7 +508,7 @@ Summary:
 - What changed:
 - Why it changed:
 - Files changed:
-- Impeccable workflow used:
+- Product Design workflow used:
 - Design context checked:
 - Slop patterns avoided:
 - Responsive status:
@@ -533,7 +526,7 @@ Do not bury uncertainty. If something was not verified, say so.
 Store and follow this memory:
 
 ```text
-For this user, frontend quality is a high-stress failure area and must be handled with strict discipline. Do not treat UI tasks as simple code generation. For every frontend, layout, styling, component, dashboard, landing page, form, app shell, or visual polish task, use the Impeccable workflow as the dedicated frontend design process when available. Always read PRODUCT.md and DESIGN.md before editing UI. Shape the interface before coding. Avoid AI-slop patterns such as generic gradients, Inter-by-default, nested cards, bento grids, weak gray UI, decorative icon tiles, prompt-like copy, and unverified responsive layouts. Do not claim production readiness without a frontend deployment gate, visual review, slop audit, copy leakage check, and honest remaining-risk report.
+For this user, frontend quality is a high-stress failure area and must be handled with strict discipline. Do not treat UI tasks as simple code generation. For every frontend, layout, styling, component, dashboard, landing page, form, app shell, or visual polish task, use Product Design as the dedicated frontend design process when available. Always read PRODUCT.md and DESIGN.md before editing UI. Shape the interface before coding. Avoid AI-slop patterns such as generic gradients, Inter-by-default, nested cards, bento grids, weak gray UI, decorative icon tiles, prompt-like copy, and unverified responsive layouts. Do not claim production readiness without a frontend deployment gate, visual review, slop audit, copy leakage check, and honest remaining-risk report.
 ```
 
 ---

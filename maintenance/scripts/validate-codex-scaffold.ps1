@@ -156,6 +156,54 @@ function Resolve-CodexBundledTool {
     return ""
 }
 
+function Convert-ToComparablePath {
+    param([AllowNull()][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+    try {
+        return ([IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))).TrimEnd("\").ToLowerInvariant()
+    } catch {
+        return $Path.TrimEnd("\").ToLowerInvariant()
+    }
+}
+
+function Get-PluginRoot {
+    param(
+        [string]$CacheRoot,
+        [string[]]$RequiredRelativePaths = @()
+    )
+
+    $latest = Join-Path $CacheRoot "latest"
+    if (Test-Path -LiteralPath $latest -PathType Container) {
+        $missingFromLatest = @($RequiredRelativePaths | Where-Object {
+            -not (Test-Path -LiteralPath (Join-Path $latest $_))
+        })
+        if ($missingFromLatest.Count -eq 0) {
+            return (Get-Item -LiteralPath $latest).FullName
+        }
+    }
+
+    $versions = @()
+    if (Test-Path -LiteralPath $CacheRoot -PathType Container) {
+        $versions = @(Get-ChildItem -LiteralPath $CacheRoot -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne "latest" } |
+            Where-Object {
+                $root = $_.FullName
+                @($RequiredRelativePaths | Where-Object {
+                    -not (Test-Path -LiteralPath (Join-Path $root $_))
+                }).Count -eq 0
+            } |
+            Sort-Object LastWriteTimeUtc -Descending)
+    }
+
+    if ($versions.Count -gt 0) {
+        return $versions[0].FullName
+    }
+    return $null
+}
+
 function Test-FragmentReconcile {
     param([Parameter(Mandatory = $true)][string]$Root)
 
@@ -433,6 +481,28 @@ if ($LASTEXITCODE -eq 0) {
         script = $productDesignScript
         status = $productDesignStatus
         note = "Product Design is the retired ui-ux-pro-max replacement. It must be visible through a configured marketplace, cache manifest, config registration, and codex plugin list."
+    }
+    $computerRoot = Get-PluginRoot -CacheRoot (Join-Path $CodexHome "plugins\cache\openai-bundled\computer-use") -RequiredRelativePaths @(
+        ".codex-plugin\plugin.json",
+        "scripts\computer-use-client.mjs",
+        "skills\computer-use\SKILL.md",
+        "node_modules\@oai\sky\bin\windows\codex-computer-use.exe"
+    )
+    $selectedComputerHelper = if ($computerRoot) { Join-Path $computerRoot "node_modules\@oai\sky\bin\windows\codex-computer-use.exe" } else { "" }
+    $notifyItems = @()
+    if ($null -ne $config.notify) {
+        $notifyItems = @($config.notify | ForEach-Object { [string]$_ })
+    }
+    $configuredNotifyExecutable = if ($notifyItems.Count -gt 0) { [string]$notifyItems[0] } else { "" }
+    $configuredNotifyExists = (-not [string]::IsNullOrWhiteSpace($configuredNotifyExecutable)) -and (Test-Path -LiteralPath $configuredNotifyExecutable -PathType Leaf)
+    $notifyMatchesSelectedHelper = (Convert-ToComparablePath $configuredNotifyExecutable) -eq (Convert-ToComparablePath $selectedComputerHelper)
+    Add-Check $checks "computer_use_notify_matches_selected_helper" ($(if ($computerRoot -and (Test-Path -LiteralPath $selectedComputerHelper -PathType Leaf) -and $configuredNotifyExists -and $notifyMatchesSelectedHelper) { "pass" } else { "fail" })) @{
+        computer_root = $computerRoot
+        selected_helper = $selectedComputerHelper
+        configured_notify = $configuredNotifyExecutable
+        configured_notify_exists = $configuredNotifyExists
+        notify_matches_selected_helper = $notifyMatchesSelectedHelper
+        note = "The active notify executable must match the selected Computer Use helper so cache-version updates cannot leave a stale turn-ended hook hidden behind passing plugin-root checks."
     }
     $validatorSourcePath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
     $validatorText = [IO.File]::ReadAllText($validatorSourcePath, [Text.Encoding]::UTF8)
@@ -726,6 +796,8 @@ Add-Check $checks "specops_operating_model_documented" ($(if ((Test-Path -Litera
 $activeGuidanceFiles = @(
     "AGENTS.md",
     "README.md",
+    "docs\codex_frontend_quality_directive.md",
+    "maintenance\PROJECT_WORKFLOW_CHAIN.md",
     "maintenance\WORKSTATION_MAINTENANCE.md",
     "maintenance\CODEX_STATE_MANAGEMENT.md",
     "maintenance\CODEX_SELF_MANAGEMENT_LOOP.md",
@@ -764,6 +836,43 @@ Add-Check $checks "active_guidance_retired_runtime_commands_absent" ($(if ($acti
     scanned = @($activeGuidanceFiles)
     forbidden_hits = $activeGuidanceForbiddenHits
     note = "Active guidance must not reintroduce retired Memento/Serena checks or make ReportOnly+SkipScoop the final P0 command. Historical reports are intentionally not scanned here."
+}
+
+$frontendDirectivePath = Join-Path $managedRepoRoot "docs\codex_frontend_quality_directive.md"
+$frontendDirectiveProblems = New-Object System.Collections.Generic.List[string]
+$frontendDirectiveForbiddenTerms = @(
+    "Mandatory Frontend-Specialized Workflow: Impeccable",
+    "Required Impeccable Commands",
+    "If a task touches visible UI, assume Impeccable is required",
+    "IMPECCABLE_UNAVAILABLE",
+    "impeccable_workflow_used",
+    "use the Impeccable workflow as the dedicated frontend design process"
+)
+$frontendDirectiveText = ""
+if (-not (Test-Path -LiteralPath $frontendDirectivePath -PathType Leaf)) {
+    $frontendDirectiveProblems.Add("frontend directive missing") | Out-Null
+} else {
+    $frontendDirectiveText = Get-Content -LiteralPath $frontendDirectivePath -Raw
+    if (-not ($frontendDirectiveText.Contains("Product Design") -and $frontendDirectiveText.Contains("product-design"))) {
+        $frontendDirectiveProblems.Add("frontend directive does not name Product Design and product-design plugin") | Out-Null
+    }
+    if (-not $frontendDirectiveText.Contains("product_design_workflow_used")) {
+        $frontendDirectiveProblems.Add("frontend deployment gate does not report product_design_workflow_used") | Out-Null
+    }
+    if (-not $frontendDirectiveText.Contains("impeccable_compat")) {
+        $frontendDirectiveProblems.Add("frontend preflight does not classify Impeccable as compatibility-only") | Out-Null
+    }
+    foreach ($term in $frontendDirectiveForbiddenTerms) {
+        if ($frontendDirectiveText.Contains($term)) {
+            $frontendDirectiveProblems.Add("forbidden mandatory Impeccable term remains: $term") | Out-Null
+        }
+    }
+}
+Add-Check $checks "frontend_directive_product_design_aligned" ($(if ($frontendDirectiveProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+    directive = $frontendDirectivePath
+    problems = @($frontendDirectiveProblems.ToArray())
+    forbidden_terms = $frontendDirectiveForbiddenTerms
+    note = "Frontend policy must use Product Design as the primary workflow and keep Impeccable only as optional compatibility when installed."
 }
 
 $syncPairs = @(

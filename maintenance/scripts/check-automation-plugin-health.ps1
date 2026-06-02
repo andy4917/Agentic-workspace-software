@@ -71,6 +71,33 @@ function Limit-Text {
     return $Text.Substring(0, $MaxLength) + "...<truncated>"
 }
 
+function Convert-ToComparablePath {
+    param([AllowNull()][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+    try {
+        return ([IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))).TrimEnd("\").ToLowerInvariant()
+    } catch {
+        return $Path.TrimEnd("\").ToLowerInvariant()
+    }
+}
+
+function Get-ConfiguredNotifyExecutable {
+    param([string]$Root)
+
+    $configPath = Join-PathStrict $Root "config.toml"
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        return $null
+    }
+    $text = Get-Content -LiteralPath $configPath -Raw
+    if ($text -match '(?m)^notify\s*=\s*\[\s*"([^"]+)"') {
+        return ([string]$Matches[1]).Replace("\\", "\")
+    }
+    return $null
+}
+
 function Get-PluginRoot {
     param(
         [string]$CacheRoot,
@@ -457,13 +484,19 @@ $computerRoot = Get-PluginRoot -CacheRoot (Join-PathStrict $pluginCache "compute
 $computerClient = if ($computerRoot) { Join-PathStrict $computerRoot "scripts\computer-use-client.mjs" } else { "" }
 $computerHelper = if ($computerRoot) { Join-PathStrict $computerRoot "node_modules\@oai\sky\bin\windows\codex-computer-use.exe" } else { "" }
 $computerSyntax = Invoke-NodeSyntaxCheck -Node $node -Path $computerClient
-Add-Check $checks "computer_use_plugin_static_health" ($(if ($computerRoot -and $computerSyntax.ok -and (Test-Path -LiteralPath $computerHelper -PathType Leaf)) { "pass" } else { "fail" })) @{
+$configuredNotify = Get-ConfiguredNotifyExecutable -Root $CodexHome
+$configuredNotifyExists = (-not [string]::IsNullOrWhiteSpace($configuredNotify)) -and (Test-Path -LiteralPath $configuredNotify -PathType Leaf)
+$notifyMatchesHelper = (Convert-ToComparablePath $configuredNotify) -eq (Convert-ToComparablePath $computerHelper)
+Add-Check $checks "computer_use_plugin_static_health" ($(if ($computerRoot -and $computerSyntax.ok -and (Test-Path -LiteralPath $computerHelper -PathType Leaf) -and $configuredNotifyExists -and $notifyMatchesHelper) { "pass" } else { "fail" })) @{
     root = $computerRoot
     computer_use_client = $computerClient
     helper = $computerHelper
     helper_exists = (Test-Path -LiteralPath $computerHelper -PathType Leaf)
+    configured_notify_executable = $configuredNotify
+    configured_notify_exists = $configuredNotifyExists
+    notify_matches_selected_helper = $notifyMatchesHelper
     client_syntax = $computerSyntax
-    note = "Static health avoids launching or controlling Windows apps; live app listing requires the active node_repl MCP transport."
+    note = "Static health avoids launching or controlling Windows apps; live app listing requires the active node_repl MCP transport. This check also proves the active notify executable matches the selected Computer Use helper so cache-version drift cannot pass silently."
 }
 
 $failures = @($checks | Where-Object { $_.status -eq "fail" })

@@ -60,9 +60,10 @@ repo scripts:
 Add only the domain pieces relevant to the requested work:
 
 - Frontend/UI: follow `docs/codex_frontend_quality_directive.md`, including
-  Impeccable workflow, `PRODUCT.md`, `DESIGN.md`, component contract,
-  shadcn/components checks when applicable, Storybook or equivalent rendered
-  state coverage, and browser/runtime observation when practical.
+  the official Product Design workflow when exposed, optional Impeccable
+  compatibility only when installed, `PRODUCT.md`, `DESIGN.md`, component
+  contract, shadcn/components checks when applicable, Storybook or equivalent
+  rendered state coverage, and browser/runtime observation when practical.
 - Backend/API: identify API contracts, request/response schemas, validation
   layer, auth/permission boundary, persistence boundary, migration workflow,
   integration tests, and service runbook.
