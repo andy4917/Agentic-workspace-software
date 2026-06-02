@@ -35,10 +35,6 @@ name = "roast-workstation-workflow"
 enabled = true
 
 [[skills.config]]
-name = "ui-ux-pro-max"
-enabled = true
-
-[[skills.config]]
 name = "modern-web-guidance"
 enabled = true
 
@@ -78,6 +74,10 @@ enabled = true
 name = "p0-integrity-cleanup"
 enabled = true
 
+[[skills.config]]
+name = "playwright"
+enabled = true
+
 [marketplaces.openai-bundled]
 last_updated = "2026-05-30T10:22:36Z"
 source_type = "local"
@@ -87,3 +87,8 @@ source = '\\?\C:\Users\anise\.codex\plugins\marketplaces\openai-bundled'
 last_updated = "2026-05-30T07:48:51Z"
 source_type = "local"
 source = '\\?\C:\Users\anise\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'
+
+[marketplaces.openai-curated-remote]
+last_updated = "2026-06-02T19:40:00Z"
+source_type = "local"
+source = '\\?\C:\Users\anise\.codex\plugins\marketplaces\openai-curated-remote'

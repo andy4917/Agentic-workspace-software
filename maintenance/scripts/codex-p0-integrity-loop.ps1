@@ -430,12 +430,12 @@ $deadPid = Get-MissingPid
 $beforeCleanup = $cleanupStatus
 $beforeRootPids = if ($null -ne $beforeCleanup -and $null -ne $beforeCleanup.managed_roots) { @($beforeCleanup.managed_roots | ForEach-Object { [int]$_.ProcessId } | Sort-Object) } else { @() }
 if ($ReportOnly) {
-    Add-Check $checks "dead_app_server_cleanup_regression" "pass" @{
+    Add-Check $checks "dead_app_server_cleanup_regression" "not_run" @{
         command = "not run: ReportOnly skips cleanup-all"
         cwd = $repoRootResolved
         timestamp_utc = (Get-Date).ToUniversalTime().ToString("o")
-        exit_code = 0
-        evidence = "mutation_skipped=true; before_app_server_pid=$($beforeCleanup.app_server_pid); before_root_pids=$($beforeRootPids -join ',')"
+        exit_code = $null
+        evidence = "not_run=true; mutation_skipped=true; before_app_server_pid=$($beforeCleanup.app_server_pid); before_root_pids=$($beforeRootPids -join ',')"
         report_only = $true
         mutation_skipped = $true
         reason = "ReportOnly is operationally read-only and does not call cleanup-all. Run full mode from a clean tree to execute this regression before refreshing clean baseline manifests."
@@ -611,17 +611,19 @@ if ($null -eq $existingCleanManifest) {
     if ($gitDirtyPaths.Count -gt 0) { $staleReasons.Add("git_dirty_paths_present") | Out-Null }
 }
 $staleBeforeRefresh = $staleReasons.Count -gt 0
-Add-Check $checks "manifest_staleness_detected_before_refresh" "pass" @{
+$manifestStalenessStatus = if ($ReportOnly -and $staleBeforeRefresh) { "not_run" } else { "pass" }
+Add-Check $checks "manifest_staleness_detected_before_refresh" $manifestStalenessStatus @{
     command = "Compare clean-baseline-manifest.json against current runtime, script, validation, toolchain, doctor, policy, and git signatures"
     cwd = $repoRootResolved
     timestamp_utc = (Get-Date).ToUniversalTime().ToString("o")
-    exit_code = 0
-    evidence = "stale_before_refresh=$staleBeforeRefresh; stale_reasons=$(@($staleReasons) -join ',')"
+    exit_code = $(if ($manifestStalenessStatus -eq "pass") { 0 } else { $null })
+    evidence = "stale_before_refresh=$staleBeforeRefresh; stale_reasons=$(@($staleReasons) -join ','); refresh_not_run=$([bool]$ReportOnly)"
     stale_before_refresh = [bool]$staleBeforeRefresh
     stale_reasons = @($staleReasons)
+    refresh_not_run = [bool]$ReportOnly
     previous_app_server_pid = $(if ($null -ne $existingCleanManifest) { $existingCleanManifest.app_server_pid } else { $null })
     current_app_server_pid = $(if ($cleanupOk) { $cleanupStatus.app_server_pid } else { $null })
-    note = "This is informational. The loop refreshes manifests only after all checks pass."
+    note = $(if ($manifestStalenessStatus -eq "pass") { "The loop refreshes manifests only after all checks pass." } else { "ReportOnly observed stale baseline evidence but did not refresh manifests; this is an evidence gap, not closure." })
 }
 
 $loopLatestPath = Join-Path $manifestDir "p0-integrity-loop.latest.json"
@@ -639,15 +641,30 @@ Add-Check $checks "loop_ledger_integrity" ($(if ($ledgerProbe.invalid_count -eq 
     ledger = $ledgerProbe
 }
 
-$failedChecks = @($checks | Where-Object { $_.status -ne "pass" })
-$overallStatus = if ($failedChecks.Count -eq 0) { "pass" } else { "fail" }
+$failedChecks = @($checks | Where-Object { $_.status -eq "fail" })
+$notRunChecks = @($checks | Where-Object { $_.status -in @("not_run", "skipped") })
+$overallStatus = if ($failedChecks.Count -gt 0) {
+    "fail"
+} elseif ($ReportOnly -and $notRunChecks.Count -gt 0) {
+    "report_only_with_evidence_gaps"
+} else {
+    "pass"
+}
 
 $loopResult = [ordered]@{
     generated_utc = $generatedUtc
     status = $overallStatus
+    fail_count = $failedChecks.Count
     codex_home = $codexHomeResolved
     repo_root = $repoRootResolved
     root_cause_gate = $rootCauseGate
+    summary = [ordered]@{
+        check_count = $checks.Count
+        fail_count = $failedChecks.Count
+        not_run_count = $notRunChecks.Count
+        not_run_checks = @($notRunChecks | ForEach-Object { $_.name })
+        evidence_gap_count = $(if ($overallStatus -eq "report_only_with_evidence_gaps") { $notRunChecks.Count } else { 0 })
+    }
     policy_inputs = $policyInputs
     checks = $checks
     validation = $validation
@@ -823,7 +840,12 @@ if ($Json) {
     $loopResult | ConvertTo-Json -Depth 32
 } else {
     "overall_status: $overallStatus"
-    "report: $ReportPath"
+    if ($ReportOnly) {
+        "report_not_written: ReportOnly"
+        "planned_report_path: $ReportPath"
+    } else {
+        "report: $ReportPath"
+    }
     foreach ($check in $checks) {
         "{0}: {1}" -f $check.name, $check.status
     }

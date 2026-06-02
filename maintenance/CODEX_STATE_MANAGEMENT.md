@@ -72,6 +72,12 @@ Current memory classes:
 
 Handling rules:
 
+- Use `maintenance\MEMORY_BOUNDARY_POLICY.md` as the canonical classification
+  rule when memory-like information appears in a task.
+- Classify memory-like information as `global-settings` or `project-scope`
+  before relying on it. Do not store, interpret, or report one item as both.
+- If scope is unclear, keep the information as temporary turn context only and
+  do not persist it as memory.
 - Memory artifacts are support-only historical evidence unless a current user
   instruction explicitly reopens a memory system. User instructions, scoped
   `AGENTS.md`, current files, tests, runtime output, and PM verification outrank
@@ -133,7 +139,7 @@ identical to the managed-source `AGENTS.md` by design.
 Codex checks its own environment through these layers:
 
 1. `validate-codex-scaffold.ps1`
-   - verifies config fragments, MCP set, command sources, Memento health,
+   - verifies config fragments, MCP set, command sources, retired MCP runtime absence,
      hooks, skills, shims, PATH hygiene, secret scan, runtime process state,
      live-runtime state classification, and managed-source/live-copy sync.
 2. `codex-runtime-process-cleanup.ps1`

@@ -225,7 +225,7 @@ Common skill routing:
 - behavior change or bug fix: test-driven or prove-it workflow;
 - external API, library, framework, or version-sensitive work: source-backed documentation lookup;
 - HTML/CSS, clientside JavaScript, browser API, performance, accessibility, forms, layout, or modern web platform work: use the `modern-web-guidance` skill before implementation, then retrieve the most relevant guide rather than relying on memory;
-- frontend design, redesign, UI implementation, UX/UI review, visual polish, or frontend quality remediation: use the `ui-ux-pro-max` skill workflow by default, and use the `impeccable` skill workflow when it is installed and specifically available;
+- frontend design, redesign, UI implementation, UX/UI review, visual polish, or frontend quality remediation: use the official `product-design` plugin workflow when it is installed and exposed; use `frontend-visual-debug` for rendered debugging and `modern-web-guidance` for web-platform implementation evidence;
 - unfamiliar, high-stakes, security-sensitive, or irreversible work: doubt/adversarial review;
 - browser/UI behavior: runtime browser verification when practical;
 - completed implementation: code review and quality workflow before shipping;
@@ -301,13 +301,23 @@ layout, motion, or modern web platform behavior, use it before implementation:
    subordinate to current user instructions, project docs, existing components,
    rendered verification, and this frontend directive.
 
-When the `ui-ux-pro-max` skill is installed and the task touches frontend UI, use it proactively before and during frontend work:
+When the official `product-design` plugin is installed and exposed, use it as
+the primary frontend product-design workflow for design, redesign, prototype,
+visual ideation, product-flow audit, screenshot-to-code, URL-to-code, and
+design QA requests. Start with its router/index skill, then load only the
+focused Product Design skill that matches the task, such as `get-context`,
+`ideate`, `prototype`, `url-to-code`, `image-to-code`, `audit`, `design-qa`,
+or `share`.
 
-1. Generate or inspect a design-system recommendation with `scripts/search.py --design-system` for new pages, major redesigns, dashboards, landing pages, mobile app UI, or unclear visual direction.
-2. Use targeted `--domain` searches for style, color, typography, UX, charts, icons, or landing structure when those decisions are part of the task.
-3. Use `--stack` searches for the actual frontend stack before implementation-sensitive changes.
-4. Treat the skill output as advisory evidence subordinate to current user instructions, project docs, existing design tokens/components, rendered verification, and this frontend directive.
-5. Include the relevant UI/UX checks in final verification: accessibility, responsive layout, text/container fit, interaction states, motion, and visual consistency.
+Product Design output is workflow evidence, not completion authority. It stays
+subordinate to current user instructions, project docs, existing design
+tokens/components, rendered verification, and this frontend directive. Include
+the relevant frontend checks in final verification: accessibility, responsive
+layout, text/container fit, interaction states, motion, and visual consistency.
+
+`ui-ux-pro-max` is retired for this workstation baseline. Treat leftover
+references as historical evidence or contamination candidates unless a current
+user instruction explicitly reopens that boundary.
 
 When the `impeccable` skill is installed and the task touches frontend UI, this remains a compatible recommended workflow:
 
@@ -369,6 +379,27 @@ Current evidence should come from files, tests, command output, runtime state,
 source-backed documentation tools, skills, and subagent reports that the PM
 independently reviews. Do not use memory writes to create completion authority,
 bypass evidence gates, or replace the current PM workflow.
+
+Use `maintenance/MEMORY_BOUNDARY_POLICY.md` when a task touches memory,
+remembering, recall, skill routing by remembered preference, or project/global
+preference separation. Classify any memory-like information as
+`global-settings` or `project-scope` before relying on it. If the boundary is
+unclear, keep the information as temporary turn context only and do not persist
+or generalize it.
+
+## Automation Target Boundary
+
+Use `maintenance/AUTOMATION_TARGET_BOUNDARY.md` before using Computer Use,
+Chrome Use, Browser Use, Chrome DevTools MCP, or any comparable browser/desktop
+automation to click, type, navigate, inspect, or operate a target. These tools
+share one automation-risk class when they can operate an app or browser session.
+
+Do not use these tools to directly automate Codex Desktop, Codex CLI, terminal
+apps, Codex extensions, plugin settings, security prompts, account/payment
+screens, or other control-plane surfaces when a structured route exists. Prefer
+files, commands, Codex CLI/app-server routes, MCP tools, plugin APIs, project
+scripts, and tests before GUI automation. If a target is unclear, gather
+metadata first and do not click or type until the target is classified.
 
 ## Capability Pack Model
 

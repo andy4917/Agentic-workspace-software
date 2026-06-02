@@ -14,8 +14,51 @@ $fallbackExpectedShims = @(
     "rustfmt.cmd","rustup.cmd","tsc.cmd","tsx.cmd","uv.cmd","winget.cmd"
 )
 
+$script:KeepSetManifest = $null
+$script:KeepSetManifestStatus = [ordered]@{
+    path = $null
+    exists = $false
+    parse_ok = $false
+    fallback_used = $true
+    error = $null
+}
+
 function Add-Check($items, $name, $status, $details) {
     $items.Add([ordered]@{ name = $name; status = $status; details = $details }) | Out-Null
+}
+
+function Get-KeepSetManifest {
+    param([string]$Root)
+
+    $keepSetPath = Join-Path $Root "maintenance\manifests\keep-set.json"
+    if ($script:KeepSetManifestStatus.path -eq $keepSetPath -and $null -ne $script:KeepSetManifestStatus.path) {
+        return $script:KeepSetManifest
+    }
+
+    $script:KeepSetManifest = $null
+    $script:KeepSetManifestStatus = [ordered]@{
+        path = $keepSetPath
+        exists = $false
+        parse_ok = $false
+        fallback_used = $true
+        error = $null
+    }
+
+    if (-not (Test-Path -LiteralPath $keepSetPath -PathType Leaf)) {
+        $script:KeepSetManifestStatus.error = "missing"
+        return $null
+    }
+
+    $script:KeepSetManifestStatus.exists = $true
+    try {
+        $script:KeepSetManifest = Get-Content -LiteralPath $keepSetPath -Raw | ConvertFrom-Json
+        $script:KeepSetManifestStatus.parse_ok = $true
+        $script:KeepSetManifestStatus.fallback_used = $false
+    } catch {
+        $script:KeepSetManifestStatus.error = $_.Exception.Message
+    }
+
+    return $script:KeepSetManifest
 }
 
 function Get-ConfiguredSkillNames($config) {
@@ -35,17 +78,13 @@ function Get-ExpectedShimNames {
         [object]$Config
     )
 
-    $keepSetPath = Join-Path $Root "maintenance\manifests\keep-set.json"
     $names = @()
-    if (Test-Path -LiteralPath $keepSetPath -PathType Leaf) {
-        try {
-            $keepSet = Get-Content -LiteralPath $keepSetPath -Raw | ConvertFrom-Json
-            $names = @($keepSet.runtime_keep_set.active_toolchain_shims | ForEach-Object { [string]$_ })
-        } catch {
-            $names = @()
-        }
+    $keepSet = Get-KeepSetManifest -Root $Root
+    if ($null -ne $keepSet) {
+        $names = @($keepSet.runtime_keep_set.active_toolchain_shims | ForEach-Object { [string]$_ })
     }
     if ($names.Count -eq 0) {
+        $script:KeepSetManifestStatus.fallback_used = $true
         $names = @($fallbackExpectedShims)
     }
 
@@ -298,6 +337,47 @@ if ($LASTEXITCODE -eq 0) {
         problems = @($mcpProblems.ToArray())
         note = "PLAN baseline: openaiDeveloperDocs/context7 enabled, memento/serena absent or disabled, chrome-devtools absent or disabled by default, and node_repl not registered as a user MCP server."
     }
+    $keepSet = Get-KeepSetManifest -Root $CodexHome
+    $keepSetMcpProblems = New-Object System.Collections.Generic.List[string]
+    $keepSetActiveMcp = @()
+    $keepSetOptionalMcp = @()
+    $keepSetRetiredMcp = @()
+    if (-not [bool]$script:KeepSetManifestStatus.exists) {
+        $keepSetMcpProblems.Add("keep-set manifest missing") | Out-Null
+    } elseif (-not [bool]$script:KeepSetManifestStatus.parse_ok) {
+        $keepSetMcpProblems.Add("keep-set manifest parse failed") | Out-Null
+    } else {
+        $keepSetActiveMcp = @($keepSet.runtime_keep_set.mcp_servers | ForEach-Object { [string]$_ } | Sort-Object -Unique)
+        $keepSetOptionalMcp = @($keepSet.runtime_keep_set.optional_mcp_servers_disabled_by_default | ForEach-Object { [string]$_ } | Sort-Object -Unique)
+        $keepSetRetiredMcp = @($keepSet.runtime_keep_set.retired_mcp_servers | ForEach-Object { [string]$_ } | Sort-Object -Unique)
+        $activeDiff = @(Compare-Object -ReferenceObject @($requiredMcp | Sort-Object) -DifferenceObject $keepSetActiveMcp)
+        if ($activeDiff.Count -gt 0) {
+            $keepSetMcpProblems.Add("active MCP keep-set does not match required baseline") | Out-Null
+        }
+        $optionalDiff = @(Compare-Object -ReferenceObject @("chrome-devtools") -DifferenceObject $keepSetOptionalMcp)
+        if ($optionalDiff.Count -gt 0) {
+            $keepSetMcpProblems.Add("optional MCP keep-set does not match disabled-by-default baseline") | Out-Null
+        }
+        $retiredDiff = @(Compare-Object -ReferenceObject @($retiredMcp | Sort-Object) -DifferenceObject $keepSetRetiredMcp)
+        if ($retiredDiff.Count -gt 0) {
+            $keepSetMcpProblems.Add("retired MCP keep-set does not match retired baseline") | Out-Null
+        }
+        foreach ($name in @("chrome-devtools") + $retiredMcp) {
+            if ($name -in $keepSetActiveMcp) {
+                $keepSetMcpProblems.Add("$name must not be listed as an active keep-set MCP") | Out-Null
+            }
+        }
+    }
+    Add-Check $checks "keep_set_mcp_baseline" ($(if ($keepSetMcpProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+        manifest = $script:KeepSetManifestStatus
+        active = $keepSetActiveMcp
+        expected_active = $requiredMcp
+        optional_disabled_by_default = $keepSetOptionalMcp
+        expected_optional_disabled_by_default = @("chrome-devtools")
+        retired = $keepSetRetiredMcp
+        expected_retired = $retiredMcp
+        problems = @($keepSetMcpProblems.ToArray())
+    }
     $configJson = $config | ConvertTo-Json -Depth 20
     $hardcodedBundlePaths = @([regex]::Matches($configJson, '(?i)AppData\\\\Local\\\\OpenAI\\\\Codex\\\\bin\\\\[0-9a-f]{8,}\\\\[^"\\]+\.exe') | ForEach-Object { $_.Value } | Sort-Object -Unique)
     $mcpCommandProblems = New-Object System.Collections.Generic.List[string]
@@ -336,6 +416,23 @@ if ($LASTEXITCODE -eq 0) {
         volatile_source = $volatileMarketplaceSource
         stable_path = $(if ($null -ne $marketplaceStatus) { $marketplaceStatus.stable_path } else { $null })
         link_target = $(if ($null -ne $marketplaceStatus) { $marketplaceStatus.link_target } else { $null })
+    }
+    $productDesignScript = Join-Path $CodexHome "maintenance\scripts\ensure-product-design-marketplace.ps1"
+    $productDesignStatus = $null
+    $productDesignOk = $false
+    if (Test-Path -LiteralPath $productDesignScript -PathType Leaf) {
+        try {
+            $productDesignOutput = & $productDesignScript -Mode status -CodexHome $CodexHome -Json 2>&1
+            $productDesignStatus = ($productDesignOutput | Out-String) | ConvertFrom-Json
+            $productDesignOk = [bool]$productDesignStatus.ok
+        } catch {
+            $productDesignStatus = [pscustomobject]@{ ok = $false; problems = @($_.Exception.Message) }
+        }
+    }
+    Add-Check $checks "product_design_marketplace_registered" ($(if ($productDesignOk) { "pass" } else { "fail" })) @{
+        script = $productDesignScript
+        status = $productDesignStatus
+        note = "Product Design is the retired ui-ux-pro-max replacement. It must be visible through a configured marketplace, cache manifest, config registration, and codex plugin list."
     }
     $validatorSourcePath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
     $validatorText = [IO.File]::ReadAllText($validatorSourcePath, [Text.Encoding]::UTF8)
@@ -383,15 +480,25 @@ if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
         } else {
             @()
         }
-        Add-Check $checks "runtime_managed_roots_singleton" ($(if ($duplicateRuntimeKeys.Count -eq 0 -and $appServers.Count -le 1 -and $reportsManagedOrphans -and $managedOrphans.Count -eq 0) { "pass" } else { "fail" })) @{
+        $reportsOptionalDisabledRoots = $null -ne $cleanupStatus.PSObject.Properties["optional_disabled_roots"]
+        $optionalDisabledRoots = if ($reportsOptionalDisabledRoots -and $null -ne $cleanupStatus.optional_disabled_roots) {
+            @($cleanupStatus.optional_disabled_roots | Where-Object { $null -ne $_ })
+        } else {
+            @()
+        }
+        Add-Check $checks "runtime_managed_roots_singleton" ($(if ($duplicateRuntimeKeys.Count -eq 0 -and $appServers.Count -le 1 -and $reportsManagedOrphans -and $managedOrphans.Count -eq 0 -and $reportsOptionalDisabledRoots -and $optionalDisabledRoots.Count -eq 0) { "pass" } else { "fail" })) @{
             app_server_pid = $cleanupStatus.app_server_pid
             app_server_count = $appServers.Count
             duplicate_keys = $duplicateRuntimeKeys
             reports_managed_orphans = $reportsManagedOrphans
+            reports_optional_disabled_roots = $reportsOptionalDisabledRoots
             managed_roots = @($managedRoots | ForEach-Object {
                 [ordered]@{ key = $_.Key; pid = $_.ProcessId; parent_pid = $_.ParentProcessId }
             })
             managed_orphans = @($managedOrphans | ForEach-Object {
+                [ordered]@{ key = $_.Key; pid = $_.ProcessId; parent_pid = $_.ParentProcessId; name = $_.Name }
+            })
+            optional_disabled_roots = @($optionalDisabledRoots | ForEach-Object {
                 [ordered]@{ key = $_.Key; pid = $_.ProcessId; parent_pid = $_.ParentProcessId; name = $_.Name }
             })
         }
@@ -436,9 +543,68 @@ Add-Check $checks "skills_exact_user_set" ($(if ($missingSkills.Count -eq 0 -and
     extra = $extraSkills
 }
 
+$activeSkillRetiredUiHits = @()
+foreach ($skillName in $expectedSkills) {
+    $skillPath = Join-Path $skillRoot (Join-Path $skillName "SKILL.md")
+    if (Test-Path -LiteralPath $skillPath -PathType Leaf) {
+        $skillText = Get-Content -LiteralPath $skillPath -Raw
+        if ($skillText.Contains("ui-ux-pro-max")) {
+            $activeSkillRetiredUiHits += $skillPath
+        }
+    }
+}
+Add-Check $checks "active_skills_retired_ui_ux_absent" ($(if ($activeSkillRetiredUiHits.Count -eq 0) { "pass" } else { "fail" })) @{
+    scanned_skills = $expectedSkills
+    retired_reference_hits = $activeSkillRetiredUiHits
+    note = "ui-ux-pro-max is retired for this workstation baseline. Active configured skills must not route work back to it."
+}
+
+$keepSetSkillProblems = New-Object System.Collections.Generic.List[string]
+$keepSetSkills = @()
+$keepSetForSkills = Get-KeepSetManifest -Root $CodexHome
+if (-not [bool]$script:KeepSetManifestStatus.exists) {
+    $keepSetSkillProblems.Add("keep-set manifest missing") | Out-Null
+} elseif (-not [bool]$script:KeepSetManifestStatus.parse_ok) {
+    $keepSetSkillProblems.Add("keep-set manifest parse failed") | Out-Null
+} else {
+    $keepSetSkills = @($keepSetForSkills.runtime_keep_set.skills | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+    $skillDiff = @(Compare-Object -ReferenceObject @($expectedSkills | Sort-Object) -DifferenceObject @($keepSetSkills | Sort-Object))
+    if ($skillDiff.Count -gt 0) {
+        $keepSetSkillProblems.Add("keep-set skill list does not match active configured skills") | Out-Null
+    }
+    if ("ui-ux-pro-max" -in $keepSetSkills) {
+        $keepSetSkillProblems.Add("retired ui-ux-pro-max is still in keep-set skills") | Out-Null
+    }
+}
+Add-Check $checks "keep_set_skills_match_config" ($(if ($keepSetSkillProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+    manifest = $script:KeepSetManifestStatus
+    expected_from_config = $expectedSkills
+    keep_set_skills = $keepSetSkills
+    problems = @($keepSetSkillProblems.ToArray())
+}
+
 $shimRoot = Join-Path $CodexHome "toolchains\shims"
 $actualShims = @(Get-ChildItem -File -LiteralPath $shimRoot -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Sort-Object)
 $expectedShims = @(Get-ExpectedShimNames -Root $CodexHome -Config $config)
+$keepSetShimProblems = New-Object System.Collections.Generic.List[string]
+if (-not [bool]$script:KeepSetManifestStatus.exists) {
+    $keepSetShimProblems.Add("keep-set manifest missing") | Out-Null
+}
+if (-not [bool]$script:KeepSetManifestStatus.parse_ok) {
+    $keepSetShimProblems.Add("keep-set manifest parse failed") | Out-Null
+}
+if ([bool]$script:KeepSetManifestStatus.fallback_used) {
+    $keepSetShimProblems.Add("fallback shim list used") | Out-Null
+}
+if ($expectedShims.Count -eq 0) {
+    $keepSetShimProblems.Add("active_toolchain_shims is empty") | Out-Null
+}
+Add-Check $checks "keep_set_manifest_active_toolchain_shims" ($(if ($keepSetShimProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+    manifest = $script:KeepSetManifestStatus
+    expected_count = $expectedShims.Count
+    fallback_count = $fallbackExpectedShims.Count
+    problems = @($keepSetShimProblems.ToArray())
+}
 $missingShims = @($expectedShims | Where-Object { $_ -notin $actualShims })
 $extraShims = @($actualShims | Where-Object { $_ -notin $expectedShims })
 Add-Check $checks "shims_exact_set" ($(if ($missingShims.Count -eq 0 -and $extraShims.Count -eq 0) { "pass" } else { "fail" })) @{
@@ -566,7 +732,12 @@ $activeGuidanceFiles = @(
     "maintenance\MCP_RUNTIME_STATUS.md",
     "maintenance\CHROME_DEVTOOLS_MCP_OBSERVER.md",
     "maintenance\AGENT_TOOL_REQUIREMENTS.md",
+    "maintenance\MEMORY_BOUNDARY_POLICY.md",
+    "maintenance\AUTOMATION_TARGET_BOUNDARY.md",
     "maintenance\scripts\chrome-devtools-mcp-toggle.ps1",
+    "maintenance\scripts\check-automation-plugin-health.ps1",
+    "maintenance\scripts\ensure-product-design-marketplace.ps1",
+    "skills\frontend-visual-debug\SKILL.md",
     "skills\codex-scaffold-validation\SKILL.md"
 )
 $activeGuidanceForbiddenTerms = @(
@@ -602,14 +773,21 @@ $syncPairs = @(
     "config.d\30-skills.toml",
     "hooks\compact-codex-hook.ps1",
     "maintenance\CHROME_DEVTOOLS_MCP_OBSERVER.md",
+    "maintenance\CODEX_STATE_MANAGEMENT.md",
+    "maintenance\MEMORY_BOUNDARY_POLICY.md",
+    "maintenance\AUTOMATION_TARGET_BOUNDARY.md",
+    "maintenance\manifests\keep-set.json",
     "maintenance\scripts\compile-config.ps1",
     "maintenance\scripts\chrome-devtools-mcp-toggle.ps1",
     "maintenance\scripts\repair-chrome-plugin-runtime.ps1",
+    "maintenance\scripts\ensure-product-design-marketplace.ps1",
+    "maintenance\scripts\check-automation-plugin-health.ps1",
     "maintenance\scripts\codex-runtime-process-cleanup.ps1",
     "maintenance\scripts\validate-codex-scaffold.ps1",
     "maintenance\scripts\codex-p0-integrity-loop.ps1",
     "maintenance\scripts\codex-home-maintenance.ps1",
-    "maintenance\NAMING_CONVENTION.md"
+    "maintenance\NAMING_CONVENTION.md",
+    "skills\frontend-visual-debug\SKILL.md"
 )
 $syncStatus = @()
 if (Test-Path -LiteralPath $managedRepoRoot -PathType Container) {
@@ -671,21 +849,23 @@ $liveRuntimeNames = @(
     ".sandbox-bin",
     ".tmp",
     "tmp",
+    "generated_images",
+    "memories_extensions",
     "models_cache.json",
     "session_index.jsonl"
 )
-$credentialNames = @("auth.json","installation_id",".sandbox-secrets")
+$protectedStateNames = @("auth.json","installation_id",".sandbox-secrets","cap_sid")
 $sourceNames = @("tools")
-$configStateNames = @(".codex-global-state.json",".codex-global-state.json.bak",".personality_migration","chrome-native-hosts.json")
-$quarantineNames = @("skills-disabled")
+$configStateNames = @(".codex-global-state.json",".codex-global-state.json.bak",".personality_migration","chrome-native-hosts.json","chrome-native-hosts-v2.json")
+$quarantineNames = @("skills-disabled","archive")
 $databaseState = @($topExtra | Where-Object { $_ -match '^(goals|logs|memories|state)_[0-9]+\.sqlite(-shm|-wal)?$' })
-$classifiedNames = $liveRuntimeNames + $credentialNames + $sourceNames + $configStateNames + $quarantineNames + $databaseState
+$classifiedNames = $liveRuntimeNames + $protectedStateNames + $sourceNames + $configStateNames + $quarantineNames + $databaseState
 $uncategorizedTopExtra = @($topExtra | Where-Object { $_ -notin $classifiedNames })
 $forbiddenActiveTop = @($topExtra | Where-Object { $_ -in @("vendor_imports","bundled-marketplaces","codex-runtimes","wshobson-agents-scan") })
 Add-Check $checks "live_runtime_hygiene" ($(if ($uncategorizedTopExtra.Count -eq 0 -and $forbiddenActiveTop.Count -eq 0) { "pass" } else { "fail" })) @{
     live_app_server_pid = $liveAppServerPid
     runtime_state = @($topExtra | Where-Object { $_ -in $liveRuntimeNames })
-    credential_state = @($topExtra | Where-Object { $_ -in $credentialNames })
+    protected_state = @($topExtra | Where-Object { $_ -in $protectedStateNames })
     durable_source_state = @($topExtra | Where-Object { $_ -in $sourceNames })
     config_state = @($topExtra | Where-Object { $_ -in $configStateNames })
     database_state = $databaseState
@@ -717,6 +897,31 @@ if (Test-Path -LiteralPath $chromeRepairScript -PathType Leaf) {
     Add-Check $checks "chrome_plugin_runtime_valid" "fail" @{ script = $chromeRepairScript; error = "missing" }
 }
 
+$automationHealthScript = Join-Path $CodexHome "maintenance\scripts\check-automation-plugin-health.ps1"
+if (Test-Path -LiteralPath $automationHealthScript -PathType Leaf) {
+    try {
+        $automationHealthOutput = & $automationHealthScript -CodexHome $CodexHome -Json -ReportOnly 2>&1
+        $automationHealth = ($automationHealthOutput | Out-String) | ConvertFrom-Json
+        $automationHealthFailures = @($automationHealth.checks | Where-Object { $_.status -ne "pass" })
+        $automationHealthCheckStatus = @($automationHealth.checks | ForEach-Object {
+            [ordered]@{ name = $_.name; status = $_.status }
+        })
+        Add-Check $checks "automation_plugins_health" ($(if ([string]$automationHealth.overall_status -eq "pass") { "pass" } else { "fail" })) @{
+            summary = $automationHealth.summary
+            check_status = $automationHealthCheckStatus
+            failures = $automationHealthFailures
+            note = "Non-GUI automation plugin coverage: Browser static/syntax readiness, Chrome static/runtime/native-host diagnostics, Computer Use static/syntax/helper readiness, and node_repl stdio execution."
+        }
+    } catch {
+        Add-Check $checks "automation_plugins_health" "fail" @{
+            script = $automationHealthScript
+            error = $_.Exception.Message
+        }
+    }
+} else {
+    Add-Check $checks "automation_plugins_health" "fail" @{ script = $automationHealthScript; error = "missing" }
+}
+
 $retiredMcpRuntimeProcesses = @()
 try {
     $retiredMcpRuntimeProcesses = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
@@ -742,6 +947,10 @@ $result = [ordered]@{
     codex_home = $CodexHome
     overall_status = $(if ($failedChecks.Count -eq 0) { "pass" } else { "fail" })
     fail_count = $failedChecks.Count
+    summary = [ordered]@{
+        check_count = $checks.Count
+        fail_count = $failedChecks.Count
+    }
     checks = $checks
 }
 

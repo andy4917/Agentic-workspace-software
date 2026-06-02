@@ -10,9 +10,11 @@ Standing user authorization: this workstation user has approved bounded autonomo
 Permission posture: this workstation's default Codex operating mode is full-access autonomy when the user asks Codex to operate on the managed workstation. Use sandbox_mode danger-full-access, approval_policy never, and the Windows elevated sandbox as the local default. Treat this as execution permission, not completion authority: secrets still require explicit targeting, destructive actions must be scoped, and external irreversible actions still need clear user intent and final evidence.
 Chrome DevTools MCP policy: when the chrome-devtools MCP tools are exposed and the task touches browser, frontend, local web app, network, console, performance, DOM, screenshot, or rendered runtime verification, use those tools proactively for direct evidence unless the user explicitly asks for a different browser tool or the MCP is unavailable. Treat slim-only availability as insufficient for network or performance work.
 Goal autonomy policy: when the agent must stabilize design direction, concrete work direction, or a long-running verification loop before build/repair work, it may create or update one Codex Goal itself. Keep the Goal as a tracking marker only, avoid creating a second parent Goal without resolving the active one, and finish with a direct-evidence goal audit.
+Memory boundary policy: use maintenance/MEMORY_BOUNDARY_POLICY.md when memory, recall, remembered preference, skill routing by memory, or global/project preference separation affects a task. Classify memory-like information as global-settings or project-scope before relying on it. If unclear, keep it as temporary turn context only and do not persist or generalize it.
+Automation target boundary policy: use maintenance/AUTOMATION_TARGET_BOUNDARY.md before Computer Use, Chrome Use, Browser Use, Chrome DevTools MCP, or comparable browser/desktop automation. Treat these as one automation-risk family for target selection. Do not use them to directly operate Codex Desktop, Codex CLI, terminal apps, Codex extensions, plugin settings, security prompts, or account/payment surfaces when files, commands, Codex CLI/app-server routes, MCP tools, plugin APIs, project scripts, or tests can satisfy the goal.
 """
 
-notify = [ "C:\\Users\\anise\\.codex\\plugins\\cache\\openai-bundled\\computer-use\\26.527.31326\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
+notify = [ "C:\\Users\\anise\\.codex\\plugins\\cache\\openai-bundled\\computer-use\\26.601.20914\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
 [features]
 hooks = true
 js_repl = false
@@ -53,9 +55,11 @@ enabled = true
 [plugins."browser@openai-bundled"]
 enabled = true
 
+[plugins."product-design@openai-curated-remote"]
+enabled = true
+
 [projects.'c:\users\anise\documents\codex']
 trust_level = "trusted"
 
 [projects.'c:\users\anise\code\dev-product\입실퇴실 안내문 생성기']
 trust_level = "trusted"
-

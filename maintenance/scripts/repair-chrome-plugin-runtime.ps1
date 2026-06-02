@@ -149,6 +149,93 @@ function Get-NativeManifestPath {
     return Join-PathStrict $env:LOCALAPPDATA "OpenAI\extension\com.openai.codexextension.json"
 }
 
+function Get-ChromePluginMetadata {
+    param([string]$PluginRoot)
+
+    $metadata = [ordered]@{
+        channel = "prod"
+        extensionId = "hehggadaopoacecdllhhajmbjkdcmajg"
+        extensionHostName = "com.openai.codexextension"
+    }
+    $metadataPath = Join-PathStrict $PluginRoot "scripts\extension-id.json"
+    if (Test-Path -LiteralPath $metadataPath -PathType Leaf) {
+        try {
+            $parsed = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
+            if (-not [string]::IsNullOrWhiteSpace([string]$parsed.extensionId)) {
+                $metadata.extensionId = [string]$parsed.extensionId
+            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$parsed.extensionHostName)) {
+                $metadata.extensionHostName = [string]$parsed.extensionHostName
+            }
+        } catch {
+            throw "Chrome extension metadata unreadable: $($_.Exception.Message)"
+        }
+    }
+    return [pscustomobject]$metadata
+}
+
+function New-ExtensionHostConfig {
+    param(
+        [string]$PluginRoot,
+        [object]$Metadata
+    )
+
+    $browserClient = Join-PathStrict $PluginRoot "scripts\browser-client.mjs"
+    $codex = Resolve-CodexBundledTool -Name "codex"
+    $node = Resolve-CodexBundledTool -Name "node"
+    $nodeRepl = Resolve-CodexBundledTool -Name "node_repl"
+
+    foreach ($entry in @(
+            @{ Name = "browserClientPath"; Path = $browserClient },
+            @{ Name = "codexCliPath"; Path = $codex },
+            @{ Name = "nodePath"; Path = $node },
+            @{ Name = "nodeReplPath"; Path = $nodeRepl }
+        )) {
+        if ([string]::IsNullOrWhiteSpace([string]$entry.Path) -or -not (Test-Path -LiteralPath ([string]$entry.Path) -PathType Leaf)) {
+            throw ("Chrome extension host config dependency missing: " + $entry.Name)
+        }
+    }
+
+    return [ordered]@{
+        schemaVersion = 1
+        channel = [string]$Metadata.channel
+        browserClientPath = $browserClient
+        codexCliPath = $codex
+        extensionId = [string]$Metadata.extensionId
+        nodePath = $node
+        nodeReplPath = $nodeRepl
+        proxyHost = "127.0.0.1"
+        proxyPort = 0
+    }
+}
+
+function Write-ExtensionHostConfig {
+    param(
+        [string]$PluginRoot,
+        [string]$ExpectedConfig,
+        [object]$Metadata
+    )
+
+    $config = New-ExtensionHostConfig -PluginRoot $PluginRoot -Metadata $Metadata
+    New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($ExpectedConfig)) | Out-Null
+    [IO.File]::WriteAllText(
+        $ExpectedConfig,
+        (($config | ConvertTo-Json -Depth 8) + "`n"),
+        [Text.UTF8Encoding]::new($false)
+    )
+    return "extension-host-config-regenerated=$ExpectedConfig"
+}
+
+function Get-NonConfigRuntimeProblems {
+    param([object[]]$Problems)
+
+    return @($Problems | Where-Object {
+            $_ -notmatch '^extension-host-config\.json missing$' -and
+            $_ -notmatch '^extension-host-config\.json unreadable:' -and
+            $_ -notmatch '^extension host config path missing:'
+        })
+}
+
 function Test-ChromePluginRuntime {
     param(
         [string]$CacheRoot,
@@ -159,6 +246,7 @@ function Test-ChromePluginRuntime {
     $latestTarget = Get-LatestTarget -LatestPath $latestPath
     $expectedHost = Join-PathStrict $latestPath "extension-host\windows\x64\extension-host.exe"
     $expectedConfig = Join-PathStrict $latestPath "extension-host\windows\x64\extension-host-config.json"
+    $pluginMetadata = if ($null -ne $SelectedVersion) { Get-ChromePluginMetadata -PluginRoot ([string]$SelectedVersion.root) } else { $null }
     $nativeManifestPath = Get-NativeManifestPath
     $nativeManifest = $null
     $nativeManifestProblem = $null
@@ -220,10 +308,12 @@ function Test-ChromePluginRuntime {
         latest_target = $latestTarget
         expected_host = $expectedHost
         expected_config = $expectedConfig
+        plugin_metadata = $pluginMetadata
         native_manifest_path = $nativeManifestPath
         native_host_path = $nativeHostPath
         config_paths = $configPaths
         extension_host_processes = @(Get-ExtensionHostProcesses -CacheRoot $CacheRoot)
+        config_only_problems = @(Get-NonConfigRuntimeProblems -Problems @($problems.ToArray())).Count -eq 0
         problems = @($problems.ToArray())
     }
 }
@@ -274,13 +364,20 @@ if ($Mode -eq "repair") {
     }
 
     $preStatus = Test-ChromePluginRuntime -CacheRoot $cacheRoot -SelectedVersion $selected
-    if (-not $preStatus.ok -and @($preStatus.extension_host_processes).Count -gt 0) {
+    $nonConfigProblems = @(Get-NonConfigRuntimeProblems -Problems @($preStatus.problems))
+    if (-not $preStatus.ok -and @($preStatus.extension_host_processes).Count -gt 0 -and $nonConfigProblems.Count -gt 0) {
         throw "Chrome extension host is running from the plugin cache; close Chrome or disconnect the extension before repairing mutable native-host paths."
     }
 
     $latestPath = Join-PathStrict $cacheRoot "latest"
-    $actions.Add((Set-LatestJunction -LatestPath $latestPath -TargetPath $selected.root)) | Out-Null
-    $actions.Add("install-manifest=" + (Invoke-InstallManifest -SelectedVersion $selected)) | Out-Null
+    if (-not $preStatus.ok -and $nonConfigProblems.Count -eq 0) {
+        $metadata = Get-ChromePluginMetadata -PluginRoot ([string]$selected.root)
+        $expectedConfig = Join-PathStrict $latestPath "extension-host\windows\x64\extension-host-config.json"
+        $actions.Add((Write-ExtensionHostConfig -PluginRoot $latestPath -ExpectedConfig $expectedConfig -Metadata $metadata)) | Out-Null
+    } else {
+        $actions.Add((Set-LatestJunction -LatestPath $latestPath -TargetPath $selected.root)) | Out-Null
+        $actions.Add("install-manifest=" + (Invoke-InstallManifest -SelectedVersion $selected)) | Out-Null
+    }
 }
 
 $status = Test-ChromePluginRuntime -CacheRoot $cacheRoot -SelectedVersion $selected

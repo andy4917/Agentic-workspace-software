@@ -17,6 +17,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RetiredRootKeys = @("memento", "serena")
+$OptionalMcpRootKeys = @("chrome-devtools")
 
 function Get-ProcessTable {
     @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
@@ -285,6 +286,50 @@ function Test-AppServerProcess {
         [string]$Process.CommandLine -notmatch "--listen\s+stdio://")
 }
 
+function Test-McpRootEnabledInConfig {
+    param([string]$Name)
+
+    $configPath = Join-Path $CodexHome "config.toml"
+    $defaultEnabled = -not ($Name -in $OptionalMcpRootKeys)
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        return $defaultEnabled
+    }
+
+    $sectionHeader = "[mcp_servers.$Name]"
+    $inSection = $false
+    $sectionFound = $false
+    foreach ($line in (Get-Content -LiteralPath $configPath)) {
+        $trimmed = $line.Trim()
+        if ($trimmed.StartsWith("[") -and $trimmed.EndsWith("]")) {
+            if ($inSection) {
+                break
+            }
+            $inSection = ($trimmed -eq $sectionHeader)
+            if ($inSection) {
+                $sectionFound = $true
+            }
+            continue
+        }
+        if ($inSection -and $trimmed -match "^enabled\s*=\s*(true|false)\s*$") {
+            return ([string]$Matches[1] -eq "true")
+        }
+    }
+
+    if ($sectionFound) {
+        return $true
+    }
+    return $defaultEnabled
+}
+
+function Get-OptionalDisabledRoots {
+    param([object[]]$Roots)
+
+    @($Roots | Where-Object {
+        $key = [string]$_.Key
+        $key -in $OptionalMcpRootKeys -and -not (Test-McpRootEnabledInConfig -Name $key)
+    })
+}
+
 function Test-CodexAppOwnerProcess {
     param([object]$Process)
 
@@ -502,12 +547,14 @@ function Get-Status {
             watchers = $watchers
             chrome_extension_hosts = @(Get-ChromeExtensionHostProcesses -Processes $processes)
             managed_roots = @()
+            optional_disabled_roots = @()
             managed_orphans = @()
             duplicate_keys = @()
         })
     }
 
     $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid ([int]$appServer.ProcessId))
+    $optionalDisabledRoots = @(Get-OptionalDisabledRoots -Roots $roots)
     $orphans = @(Get-ManagedOrphans -Processes $processes -RootParentPid ([int]$appServer.ProcessId))
     $duplicates = @($roots | Group-Object Key | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
     return ,([pscustomobject]@{
@@ -518,6 +565,7 @@ function Get-Status {
         watchers = $watchers
         chrome_extension_hosts = @(Get-ChromeExtensionHostProcesses -Processes $processes)
         managed_roots = @($roots | Sort-Object Key, CreationDate)
+        optional_disabled_roots = @($optionalDisabledRoots | Sort-Object Key, CreationDate)
         managed_orphans = @($orphans | Sort-Object Key, CreationDate)
         duplicate_keys = $duplicates
     })
@@ -540,6 +588,13 @@ function Invoke-CleanupStale {
     $stopped = New-Object System.Collections.Generic.List[object]
     foreach ($orphanStop in @(Stop-ManagedOrphans -Processes $processes -AppServerPid $appServerPidValue -Reason "orphan-managed-process")) {
         $stopped.Add($orphanStop) | Out-Null
+    }
+    if ($OnlyKeys.Count -eq 0) {
+        foreach ($disabledRoot in @(Get-OptionalDisabledRoots -Roots $roots)) {
+            $stopped.Add((Stop-ProcessTree -Processes $processes -RootPid ([int]$disabledRoot.ProcessId) -Reason ("optional-disabled-" + [string]$disabledRoot.Key) -ExpectedRootKey ([string]$disabledRoot.Key))) | Out-Null
+        }
+        $processes = Get-ProcessTable
+        $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid $appServerPidValue)
     }
     foreach ($group in @($roots | Group-Object Key)) {
         if ($OnlyKeys.Count -gt 0 -and $group.Name -notin $OnlyKeys) {
@@ -734,6 +789,27 @@ function Invoke-Watch {
                 app_server_pid = $AppServerPid
                 retired_roots = @($retiredRoots | ForEach-Object { [ordered]@{ key = $_.Key; pid = $_.ProcessId; name = $_.Name } })
                 reason = "Automatic retired-root cleanup is disabled for this watcher."
+            }
+        }
+
+        $optionalDisabledRoots = @(Get-OptionalDisabledRoots -Roots $roots)
+        if ($optionalDisabledRoots.Count -gt 0 -and $CleanupRetiredRootsOnWatch) {
+            $optionalDisabledStops = New-Object System.Collections.Generic.List[object]
+            foreach ($optionalDisabledRoot in $optionalDisabledRoots) {
+                $optionalDisabledStops.Add((Stop-ProcessTree -Processes $processes -RootPid ([int]$optionalDisabledRoot.ProcessId) -Reason ("optional-disabled-" + [string]$optionalDisabledRoot.Key) -ExpectedRootKey ([string]$optionalDisabledRoot.Key))) | Out-Null
+            }
+            Write-Ledger -Action "watch_cleanup_optional_disabled_roots" -Details @{
+                app_server_pid = $AppServerPid
+                optional_disabled_keys = @($optionalDisabledRoots | ForEach-Object { [string]$_.Key } | Sort-Object -Unique)
+                stopped = @($optionalDisabledStops.ToArray())
+            }
+            $processes = Get-ProcessTable
+            $roots = @(Get-ManagedRoots -Processes $processes -RootParentPid $AppServerPid)
+        } elseif ($optionalDisabledRoots.Count -gt 0) {
+            Write-Ledger -Action "watch_optional_disabled_roots_report_only" -Details @{
+                app_server_pid = $AppServerPid
+                optional_disabled_roots = @($optionalDisabledRoots | ForEach-Object { [ordered]@{ key = $_.Key; pid = $_.ProcessId; name = $_.Name } })
+                reason = "Automatic optional-disabled-root cleanup is tied to the managed cleanup flag for this watcher."
             }
         }
 

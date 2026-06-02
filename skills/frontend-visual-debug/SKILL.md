@@ -7,7 +7,7 @@ description: Use when debugging or reviewing rendered frontend UI, screenshots, 
 
 ## Workflow
 
-1. Read project UI instructions and use `modern-web-guidance` and `ui-ux-pro-max` when their trigger matches.
+1. Read project UI instructions and use `modern-web-guidance` for web-platform evidence and the official `product-design` plugin workflow for product-design, ideation, prototype, audit, URL-to-code, image-to-code, or design-QA work when its trigger matches.
 2. Start the existing dev server or static preview command. Do not invent a new runtime path when the project provides one.
 3. Inspect the rendered app with Browser or Chrome DevTools, using the browser tool that matches the user's target environment.
 4. Capture desktop and mobile evidence. Check layout framing, text fit, responsive behavior, hover/focus/disabled states, contrast, console errors, and failed network requests.

@@ -115,11 +115,14 @@ function Save-ConfigBackup {
 function Write-Utf8NoBomLines {
     param(
         [Parameter(Mandatory = $true)][string] $Path,
-        [Parameter(Mandatory = $true)][System.Collections.Generic.List[string]] $Lines
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [AllowEmptyString()]
+        [string[]] $Lines
     )
 
     $encoding = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllLines($Path, [string[]]$Lines.ToArray(), $encoding)
+    [System.IO.File]::WriteAllLines($Path, $Lines, $encoding)
 }
 
 function Invoke-WithWritableConfig {

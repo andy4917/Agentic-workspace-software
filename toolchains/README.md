@@ -39,7 +39,7 @@ Current shim groups:
 - JavaScript local-chain: `npm`, `npx`, `pnpm`, `bun`, `deno`, `tsc`, `tsserver`,
   `tsx`, `eslint`, `prettier`, `biome`, `yarn`, `zx`, `next`,
   `create-next-app`, `vite`, `create-vite`, `create-vue`, `ng`,
-  `sv`, `astro`, `create-astro`, `nuxt`, `nuxi`, `remix`, `express`,
+  `sv`, `svelte-kit`, `webpack`, `webpack-cli`, `astro`, `create-astro`, `nuxt`, `nuxi`, `remix`, `express`,
   `nest`, `electron`, `electron-forge`
 - Python: `python`, `py`, `pip`, `pipx`, `uv`, `ruff`, `pytest`, `mypy`,
   `black`, `poetry`, `pdm`, `pre-commit`, `tox`, `nox`, `semgrep`,

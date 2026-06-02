@@ -1,0 +1,131 @@
+{
+  "generated_utc": "2026-06-02T19:42:38.326226+00:00",
+  "principle": "Keep one canonical runtime config and reduce active maintenance surfaces. Archive or regenerate everything else.",
+  "runtime_keep_set": {
+    "policy": [
+      "%USERPROFILE%/.codex/AGENTS.md"
+    ],
+    "canonical_config": [
+      "%USERPROFILE%/.codex/config.toml"
+    ],
+    "config_fragments_source_only": [
+      "%USERPROFILE%/.codex/config.d/00-policy.toml",
+      "%USERPROFILE%/.codex/config.d/10-mcp.toml",
+      "%USERPROFILE%/.codex/config.d/20-hooks.toml",
+      "%USERPROFILE%/.codex/config.d/30-skills.toml"
+    ],
+    "hooks": [
+      "%USERPROFILE%/.codex/hooks/compact-codex-hook.ps1"
+    ],
+    "skills": [
+      "andrej-karpathy-skill",
+      "api-contract-review",
+      "clean-all-slop",
+      "code-review-and-quality",
+      "codex-scaffold-validation",
+      "debugging-and-error-recovery",
+      "dependency-upgrade",
+      "frontend-visual-debug",
+      "keep-codex-fast",
+      "migration-plan",
+      "modern-web-guidance",
+      "p0-integrity-cleanup",
+      "pdf",
+      "playwright",
+      "release-checklist",
+      "repo-audit",
+      "roast-workstation-workflow",
+      "vowline"
+    ],
+    "mcp_servers": [
+      "openaiDeveloperDocs",
+      "context7"
+    ],
+    "optional_mcp_servers_disabled_by_default": [
+      "chrome-devtools"
+    ],
+    "retired_mcp_servers": [
+      "memento",
+      "serena"
+    ],
+    "active_toolchain_shims": [
+      "astro.cmd",
+      "biome.cmd",
+      "bun.cmd",
+      "cargo-clippy.cmd",
+      "cargo.cmd",
+      "code.cmd",
+      "codex.cmd",
+      "create-astro.cmd",
+      "create-next-app.cmd",
+      "create-vite.cmd",
+      "create-vue.cmd",
+      "dotenv.cmd",
+      "electron-forge.cmd",
+      "electron.cmd",
+      "eslint.cmd",
+      "express.cmd",
+      "fd.cmd",
+      "gh.cmd",
+      "git.cmd",
+      "jq.cmd",
+      "just.cmd",
+      "nest.cmd",
+      "next.cmd",
+      "ng.cmd",
+      "node.cmd",
+      "node_repl.cmd",
+      "npkill.cmd",
+      "npm.cmd",
+      "npx.cmd",
+      "nuxi.cmd",
+      "nuxt.cmd",
+      "pip.cmd",
+      "pn.cmd",
+      "pnpm.cmd",
+      "pnpx.cmd",
+      "pnx.cmd",
+      "prettier.cmd",
+      "pwsh.cmd",
+      "py.cmd",
+      "pyright-langserver.cmd",
+      "pyright.cmd",
+      "pytest.cmd",
+      "python.cmd",
+      "remix.cmd",
+      "rg.cmd",
+      "rg.ps1",
+      "ruff.cmd",
+      "rustc.cmd",
+      "rustfmt.cmd",
+      "rustup.cmd",
+      "sv.cmd",
+      "svelte-kit.cmd",
+      "tsc.cmd",
+      "tsserver.cmd",
+      "tsx.cmd",
+      "uv.cmd",
+      "vite.cmd",
+      "webpack-cli.cmd",
+      "webpack.cmd",
+      "winget.cmd",
+      "yarn.cmd",
+      "yarnpkg.cmd",
+      "zx.cmd"
+    ],
+    "archive_only": [
+      "old sessions",
+      "logs",
+      "SQLite snapshots",
+      "legacy hook snapshots",
+      "unused shim archive",
+      "project-excluded tree snapshot"
+    ],
+    "never_restore_hot": [
+      "old session history into fresh runtime",
+      "volatile caches",
+      "persistent PATH pointing at .codex/toolchains/shims",
+      "unverified MCP OAuth/cache state"
+    ]
+  }
+}

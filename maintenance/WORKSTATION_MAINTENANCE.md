@@ -153,6 +153,17 @@ For cache, log, memory, folder, file, or live-copy synchronization work, also us
 defines the active cache/log/memory classes, the repo-to-runtime sync direction,
 and the Codex self-inspection loop that verifies the current environment.
 
+For Computer Use, Chrome Use, Browser Use, Chrome DevTools MCP, plugin native
+host, or browser/desktop automation target issues, also use
+`maintenance/AUTOMATION_TARGET_BOUNDARY.md`. Treat those tools as one
+automation-risk family for target classification, and prefer structured routes
+over GUI control-plane automation.
+
+For memory, recall, remembered preferences, or global/project boundary issues,
+also use `maintenance/MEMORY_BOUNDARY_POLICY.md`. Do not persist or generalize
+memory-like information until it is classified as `global-settings` or
+`project-scope`.
+
 ## Verification Layers
 
 Use `maintenance/WORKSTATION_LAYERING.md` to avoid making optional local

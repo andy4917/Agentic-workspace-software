@@ -165,6 +165,28 @@ app has restarted or otherwise reloaded tool definitions. If a server is enabled
 but no `mcp__...` tools appear in the active tool list, record that as a runtime
 load issue, not as proof the tool is unnecessary.
 
+## Automation Target Boundary
+
+Use `maintenance/AUTOMATION_TARGET_BOUNDARY.md` before invoking Computer Use,
+Chrome Use, Browser Use, Chrome DevTools MCP, or comparable browser/desktop
+automation. These tools share one automation-risk family when they can click,
+type, navigate, inspect, or otherwise operate an app or browser session.
+
+Classify the target before automation:
+
+- `protected-codex-control-plane`: Codex Desktop, Codex CLI, terminal shells,
+  Codex extensions, plugin settings, native hosts, MCP registration, auth,
+  safety prompts, or update dialogs.
+- `ordinary-user-surface`: normal app or web UI requested by the user.
+- `browser-observation`: rendered page verification, screenshots, console,
+  network, accessibility, DOM state, or responsive layout.
+- `unclear-target`: target app/window/title/process is not yet known.
+
+For protected Codex/control-plane targets, stop GUI automation and use files,
+commands, Codex CLI/app-server routes, MCP tools, plugin APIs, project scripts,
+or tests. For unclear targets, gather metadata first. Do not patch plugin cache,
+helper binaries, or broad safety text to make a protected target automatable.
+
 Global MCP server definitions belong in `%USERPROFILE%\.codex\config.toml` when
 the user intent is cross-workspace use. Use project-local MCP config only for a
 repository-specific command, credential source, or policy boundary.

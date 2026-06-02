@@ -403,7 +403,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         )
 
         run_prompt_hook_sample(root, "Tiny local note.")
-        pre_level_probe = run_hook_sample(root, "python skills/ui-ux-pro-max/scripts/design_system.py --help")
+        pre_level_probe = run_hook_sample(root, "node plugins/cache/openai-curated-remote/product-design/scripts/bootstrap-prototype.mjs --help")
         try:
             pre_level_state = json.loads(read_text(state_path))
         except (OSError, json.JSONDecodeError):
