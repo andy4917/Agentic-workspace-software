@@ -27,6 +27,87 @@ function Add-Check($items, $name, $status, $details) {
     $items.Add([ordered]@{ name = $name; status = $status; details = $details }) | Out-Null
 }
 
+function Get-NonNullArray {
+    param([AllowNull()][object]$Value)
+
+    $items = if ($null -eq $Value) {
+        @()
+    } else {
+        @($Value | Where-Object { $null -ne $_ })
+    }
+    return ,$items
+}
+
+function Get-NonNullCount {
+    param([AllowNull()][object]$Value)
+
+    return (Get-NonNullArray -Value $Value).Count
+}
+
+function Get-RuntimeStatusView {
+    param(
+        [string]$CleanupScript,
+        [string]$Root,
+        [string]$Phase
+    )
+
+    $view = [ordered]@{
+        phase = $Phase
+        ok = $false
+        status = $null
+        error = $null
+        app_servers = @()
+        managed_roots = @()
+        managed_orphans = @()
+        optional_disabled_roots = @()
+        duplicate_keys = @()
+        watchers = @()
+        reports_managed_orphans = $false
+        reports_optional_disabled_roots = $false
+    }
+
+    try {
+        $cleanupOutput = & $CleanupScript -Mode status -CodexHome $Root 2>&1
+        $cleanupStatus = ($cleanupOutput | Out-String) | ConvertFrom-Json
+        $view.ok = $true
+        $view.status = $cleanupStatus
+        $view.app_servers = Get-NonNullArray -Value $cleanupStatus.app_servers
+        $view.managed_roots = Get-NonNullArray -Value $cleanupStatus.managed_roots
+        $view.duplicate_keys = Get-NonNullArray -Value $cleanupStatus.duplicate_keys
+        $view.watchers = Get-NonNullArray -Value $cleanupStatus.watchers
+        $view.reports_managed_orphans = $null -ne $cleanupStatus.PSObject.Properties["managed_orphans"]
+        $view.managed_orphans = if ($view.reports_managed_orphans) {
+            Get-NonNullArray -Value $cleanupStatus.managed_orphans
+        } else {
+            @()
+        }
+        $view.reports_optional_disabled_roots = $null -ne $cleanupStatus.PSObject.Properties["optional_disabled_roots"]
+        $view.optional_disabled_roots = if ($view.reports_optional_disabled_roots) {
+            Get-NonNullArray -Value $cleanupStatus.optional_disabled_roots
+        } else {
+            @()
+        }
+    } catch {
+        $view.error = $_.Exception.Message
+    }
+
+    return [pscustomobject]$view
+}
+
+function Test-RuntimeStatusViewClean {
+    param([object]$View)
+
+    return (
+        $View.ok -and
+        (Get-NonNullCount -Value $View.duplicate_keys) -eq 0 -and
+        (Get-NonNullCount -Value $View.app_servers) -le 1 -and
+        [bool]$View.reports_managed_orphans -and
+        (Get-NonNullCount -Value $View.managed_orphans) -eq 0 -and
+        [bool]$View.reports_optional_disabled_roots -and
+        (Get-NonNullCount -Value $View.optional_disabled_roots) -eq 0
+    )
+}
+
 function Get-KeepSetManifest {
     param([string]$Root)
 
@@ -539,29 +620,60 @@ if ($LASTEXITCODE -eq 0) {
 $cleanupScript = Join-Path $CodexHome "maintenance\scripts\codex-runtime-process-cleanup.ps1"
 if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
     try {
-        $cleanupOutput = & $cleanupScript -Mode status -CodexHome $CodexHome 2>&1
-        $cleanupStatus = ($cleanupOutput | Out-String) | ConvertFrom-Json
-        $duplicateRuntimeKeys = @($cleanupStatus.duplicate_keys)
-        $appServers = @($cleanupStatus.app_servers)
-        $managedRoots = @($cleanupStatus.managed_roots)
-        $reportsManagedOrphans = $null -ne $cleanupStatus.PSObject.Properties["managed_orphans"]
-        $managedOrphans = if ($reportsManagedOrphans -and $null -ne $cleanupStatus.managed_orphans) {
-            @($cleanupStatus.managed_orphans | Where-Object { $null -ne $_ })
+        $initialRuntimeView = Get-RuntimeStatusView -CleanupScript $cleanupScript -Root $CodexHome -Phase "initial"
+        $runtimeRecoveryActions = New-Object System.Collections.Generic.List[object]
+        $cleanupStatus = $initialRuntimeView.status
+
+        if (-not (Test-RuntimeStatusViewClean -View $initialRuntimeView)) {
+            $hasRecoverableRoots = (Get-NonNullCount -Value $initialRuntimeView.managed_orphans) -gt 0 -or (Get-NonNullCount -Value $initialRuntimeView.optional_disabled_roots) -gt 0
+            if ($initialRuntimeView.ok -and $hasRecoverableRoots) {
+                $cleanupStaleOutput = & $cleanupScript -Mode cleanup-stale -CodexHome $CodexHome 2>&1
+                $cleanupStaleText = ($cleanupStaleOutput | Out-String).Trim()
+                $runtimeRecoveryActions.Add([ordered]@{
+                    action = "cleanup-stale"
+                    reason = "managed_orphans_or_optional_disabled_roots"
+                    output_preview = ($cleanupStaleText -replace "`r?`n", " ").Substring(0, [Math]::Min(500, $cleanupStaleText.Length))
+                }) | Out-Null
+                Start-Sleep -Seconds 1
+            } elseif ($initialRuntimeView.ok) {
+                $runtimeRecoveryActions.Add([ordered]@{
+                    action = "wait-and-resample"
+                    reason = "duplicate_or_app_server_transition"
+                    seconds = 4
+                }) | Out-Null
+                Start-Sleep -Seconds 4
+            }
+
+            $finalRuntimeView = Get-RuntimeStatusView -CleanupScript $cleanupScript -Root $CodexHome -Phase "after-recovery"
         } else {
-            @()
+            $finalRuntimeView = $initialRuntimeView
         }
-        $reportsOptionalDisabledRoots = $null -ne $cleanupStatus.PSObject.Properties["optional_disabled_roots"]
-        $optionalDisabledRoots = if ($reportsOptionalDisabledRoots -and $null -ne $cleanupStatus.optional_disabled_roots) {
-            @($cleanupStatus.optional_disabled_roots | Where-Object { $null -ne $_ })
-        } else {
-            @()
-        }
-        Add-Check $checks "runtime_managed_roots_singleton" ($(if ($duplicateRuntimeKeys.Count -eq 0 -and $appServers.Count -le 1 -and $reportsManagedOrphans -and $managedOrphans.Count -eq 0 -and $reportsOptionalDisabledRoots -and $optionalDisabledRoots.Count -eq 0) { "pass" } else { "fail" })) @{
+
+        $cleanupStatus = $finalRuntimeView.status
+        $duplicateRuntimeKeys = Get-NonNullArray -Value $finalRuntimeView.duplicate_keys
+        $appServers = Get-NonNullArray -Value $finalRuntimeView.app_servers
+        $managedRoots = Get-NonNullArray -Value $finalRuntimeView.managed_roots
+        $reportsManagedOrphans = [bool]$finalRuntimeView.reports_managed_orphans
+        $managedOrphans = Get-NonNullArray -Value $finalRuntimeView.managed_orphans
+        $reportsOptionalDisabledRoots = [bool]$finalRuntimeView.reports_optional_disabled_roots
+        $optionalDisabledRoots = Get-NonNullArray -Value $finalRuntimeView.optional_disabled_roots
+        $runtimeRootsClean = Test-RuntimeStatusViewClean -View $finalRuntimeView
+        Add-Check $checks "runtime_managed_roots_singleton" ($(if ($runtimeRootsClean) { "pass" } else { "fail" })) @{
             app_server_pid = $cleanupStatus.app_server_pid
             app_server_count = $appServers.Count
             duplicate_keys = $duplicateRuntimeKeys
             reports_managed_orphans = $reportsManagedOrphans
             reports_optional_disabled_roots = $reportsOptionalDisabledRoots
+            initial_phase_clean = (Test-RuntimeStatusViewClean -View $initialRuntimeView)
+            initial_error = $initialRuntimeView.error
+            initial_counts = [ordered]@{
+                app_server_count = Get-NonNullCount -Value $initialRuntimeView.app_servers
+                duplicate_key_count = Get-NonNullCount -Value $initialRuntimeView.duplicate_keys
+                managed_orphan_count = Get-NonNullCount -Value $initialRuntimeView.managed_orphans
+                optional_disabled_root_count = Get-NonNullCount -Value $initialRuntimeView.optional_disabled_roots
+            }
+            recovery_actions = @($runtimeRecoveryActions.ToArray())
+            final_phase = $finalRuntimeView.phase
             managed_roots = @($managedRoots | ForEach-Object {
                 [ordered]@{ key = $_.Key; pid = $_.ProcessId; parent_pid = $_.ParentProcessId }
             })
