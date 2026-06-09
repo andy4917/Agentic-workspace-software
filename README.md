@@ -58,6 +58,11 @@ layer. In particular, `repo-verify` is the public-safe CI path for tracked
 managed source, while full local `verify` remains the runtime-heavy workstation
 proof path.
 
+For repository handoff that needs non-self-certified validation, use the adopted
+`no-mistakes` outer gate through
+`%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` after the relevant
+local layer has established basic correctness.
+
 ## Review Use
 
 External review should focus on:

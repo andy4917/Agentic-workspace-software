@@ -178,6 +178,11 @@ runtime substrates block unrelated managed-source checks.
 - `compat`: `codex_agent_harness.py verify` runs the current compatibility
   wrapper across repo verification, tier smoke, live scaffold validation, P0
   report-only, MCP list, and `codex doctor`.
+- `no-mistakes`: repository handoff outer gate for non-self-certified
+  validation, safe push, PR, CI, release, merge handoff, and test/TDD handoff.
+  Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` after the
+  relevant local checks are coherent, but do not invoke it recursively from
+  inside a no-mistakes-spawned gate worktree or agent step.
 
 Choose the smallest layer that proves the task. Escalate to `full` whenever
 hooks, MCP baseline, toolchains, browser/native host state, Goal governance,

@@ -162,6 +162,12 @@ Treat missing CLI, daemon, repository initialization, remote, credentials, or
 gate findings as blockers to report or repair, not as reasons to silently rely
 only on local tests.
 
+When already running inside a no-mistakes-spawned gate worktree or agent step,
+do not invoke `no-mistakes`, including `--version`, `doctor`, `axi`, `daemon`,
+or the managed wrapper. Recursive calls can interfere with the active pipeline;
+use project-native checks, scaffold validator output, and fake-binary wrapper
+probes instead.
+
 Do not run broad skip flags, unattended approval, or direct `origin` push to
 bypass `no-mistakes` for test-related handoff unless the user gives an explicit
 run-specific waiver and the waiver is recorded in the Test Integrity Record.

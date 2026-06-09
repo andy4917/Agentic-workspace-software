@@ -24,7 +24,11 @@ Use the latest user plan and current files as authority. For the PLAN FOR WORK b
    - `maintenance/scripts/validate-codex-scaffold.ps1 -Json`
    - `maintenance/scripts/codex-p0-integrity-loop.ps1 -Json`
 4. Check managed/live sync for public-safe scripts and fragments named by the validator.
-5. Treat stale reports, old session state, and historical docs as evidence candidates only.
+5. Check `no_mistakes_gate_ready` in the scaffold validator output. When the
+   validator is running inside a no-mistakes gate worktree, the real CLI/daemon
+   probe is intentionally skipped to avoid recursive no-mistakes calls; use the
+   wrapper/config/fake-binary probe fields as local evidence.
+6. Treat stale reports, old session state, and historical docs as evidence candidates only.
 
 Use P0 `-ReportOnly` only for read-only audits or dirty worktree midpoint
 checks. Final publication evidence should run the full loop so dead app-server
@@ -32,4 +36,6 @@ cleanup and Scoop health are directly checked.
 
 ## Exit Evidence
 
-Report the active MCP set, scaffold validation status, P0 loop status, managed/live sync status, files changed, checks not run, and rollback path.
+Report the active MCP set, scaffold validation status, `no_mistakes_gate_ready`
+status, P0 loop status, managed/live sync status, files changed, checks not run,
+and rollback path.
