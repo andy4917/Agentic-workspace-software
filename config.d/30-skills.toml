@@ -59,6 +59,10 @@ name = "frontend-visual-debug"
 enabled = true
 
 [[skills.config]]
+name = "git-easy-korean"
+enabled = true
+
+[[skills.config]]
 name = "api-contract-review"
 enabled = true
 

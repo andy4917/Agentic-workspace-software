@@ -1034,6 +1034,7 @@ $syncPairs = @(
     "maintenance\scripts\codex-home-maintenance.ps1",
     "maintenance\NAMING_CONVENTION.md",
     "skills\frontend-visual-debug\SKILL.md",
+    "skills\git-easy-korean\SKILL.md",
     "skills\test-integrity-gate\SKILL.md"
 )
 $syncStatus = @()

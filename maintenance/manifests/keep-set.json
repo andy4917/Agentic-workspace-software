@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-09T18:45:42.4400629Z",
+  "generated_utc": "2026-06-09T18:59:58.7936137Z",
   "principle": "Keep one canonical runtime config and reduce active maintenance surfaces. Archive or regenerate everything else.",
   "runtime_keep_set": {
     "policy": [
@@ -26,6 +26,7 @@
       "debugging-and-error-recovery",
       "dependency-upgrade",
       "frontend-visual-debug",
+      "git-easy-korean",
       "goal-decision",
       "keep-codex-fast",
       "migration-plan",

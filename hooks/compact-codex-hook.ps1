@@ -94,6 +94,11 @@ if ($event -eq "PreToolUse") {
         hookEventName = "SessionStart"
         additionalContext = "Minimal scaffold active: use current evidence, keep runtime cleanup watcher active, avoid stale runtime state, and verify before completion."
     }
+} elseif ($event -eq "UserPromptSubmit") {
+    $out["hookSpecificOutput"] = [ordered]@{
+        hookEventName = "UserPromptSubmit"
+        additionalContext = "Compact hook active: keep workflow compact, use matching skills, verify from current files and commands, and report not-run checks."
+    }
 }
 
 if ($out.Count -gt 0) {
