@@ -194,6 +194,54 @@ Default complexity pressure for new or touched code is `max-depth: 3`,
 limit. Treat these as review and lint targets when the project has no configured
 enforcement yet.
 
+## TDD Test Integrity Gate
+
+Codex-generated or Codex-modified tests are untrusted until proven valid.
+Passing tests are compatibility evidence only; they do not prove that a new or
+changed test is a correct behavioral control.
+
+Use the `test-integrity-gate` skill for any task that creates, edits, fixes,
+weakens, skips, reviews, or relies on tests, fixtures, mocks, snapshots, test
+utilities, e2e specs, CI test commands, or TDD evidence.
+
+For new or materially changed behavior tests, Codex must establish and preserve:
+
+1. Intent lock: the user goal, requirement, bug reproduction, invariant, public
+   contract, or documented behavior in user terms, not only a diff summary.
+2. Test oracle: the observable behavior being checked, why it is correct, what
+   would make the test invalid, and which boundaries are intentionally not
+   mocked.
+3. Red proof: the new or changed test fails before the implementation for the
+   intended behavior gap, not for syntax, import, fixture, or setup mistakes.
+4. Green proof: the targeted test and relevant broader checks pass after the
+   smallest implementation change, without weakening the oracle.
+5. Pollution scan: explicitly challenge whether the test could still pass with
+   wrong behavior, implementation echo, over-mocking, snapshot laundering,
+   fixture drift, assertion weakening, skipped tests, or test-only production
+   backdoors.
+
+Hard rules for test-related work:
+
+- Do not call a Codex-generated or Codex-modified test valid merely because it
+  passes.
+- Do not weaken assertions, delete edge cases, narrow coverage, mark tests
+  skipped/flaky, update snapshots, or change fixtures to make a suite pass unless
+  the user explicitly approves that decision and it is recorded.
+- Do not modify production behavior before valid red proof when the task is
+  feature TDD or bug regression coverage. If split commits are impractical,
+  record the pre-implementation command and failure excerpt.
+- Do not derive the test oracle from the current implementation unless the task
+  is explicitly characterization or refactor-safety testing.
+- Treat mocks, snapshots, fixtures, and test utilities as control-system changes
+  that require review, not as harmless support files.
+- If the repository provides `no-mistakes`, a test-integrity skill, PR template,
+  CI marker, or `.test-integrity` convention, use it. If that outer gate is not
+  installed or not configured, report it as not run with a reason and run the
+  closest project-native checks instead.
+- Unresolved ambiguous intent, invalid red proof, snapshot-defined behavior, or
+  a test that passes before implementation is a blocker or an ask-user item, not
+  a success.
+
 <!-- BEGIN CODEX WORKSPACE QUALITY GUARDRAILS -->
 
 ## Codex Workspace Quality Guardrails

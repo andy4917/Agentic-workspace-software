@@ -82,6 +82,10 @@ enabled = true
 name = "playwright"
 enabled = true
 
+[[skills.config]]
+name = "test-integrity-gate"
+enabled = true
+
 [marketplaces.openai-bundled]
 last_updated = "2026-06-07T10:03:26Z"
 source_type = "local"

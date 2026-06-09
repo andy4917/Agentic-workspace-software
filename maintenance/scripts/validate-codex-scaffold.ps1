@@ -1033,7 +1033,8 @@ $syncPairs = @(
     "maintenance\scripts\codex-p0-integrity-loop.ps1",
     "maintenance\scripts\codex-home-maintenance.ps1",
     "maintenance\NAMING_CONVENTION.md",
-    "skills\frontend-visual-debug\SKILL.md"
+    "skills\frontend-visual-debug\SKILL.md",
+    "skills\test-integrity-gate\SKILL.md"
 )
 $syncStatus = @()
 if (Test-Path -LiteralPath $managedRepoRoot -PathType Container) {
