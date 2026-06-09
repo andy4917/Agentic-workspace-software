@@ -1,0 +1,4 @@
+# Historical plugin snapshot false positives.
+# These minified files export createMemoKey identifiers, not secret values.
+plugins/patched/openai-bundled/plugins/browser-use/scripts/browser-client.mjs:generic-api-key:36
+plugins/patched/openai-bundled/plugins/chrome/scripts/browser-client.mjs:generic-api-key:36

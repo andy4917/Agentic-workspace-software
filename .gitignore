@@ -69,6 +69,7 @@ maintenance/**/node_modules/
 maintenance/**/.cache/
 maintenance/**/coverage/
 maintenance/backups/
+codex-backups/
 maintenance/diagnostics/
 
 # Large local/reference material

@@ -185,10 +185,36 @@ def assert_apply_mode(module) -> None:
         assert (backup / "moved-worktrees.jsonl").exists()
 
 
+def assert_reparse_points_skipped_in_backup(module) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        source = root / "source"
+        dest = root / "dest"
+        source.mkdir()
+        (source / "normal.txt").write_text("keep", encoding="utf-8")
+        reparse_dir = source / "fake-junction"
+        reparse_dir.mkdir()
+        (reparse_dir / "external.txt").write_text("skip", encoding="utf-8")
+
+        original_isjunction = getattr(module.os.path, "isjunction", None)
+        module.os.path.isjunction = lambda path: Path(path).name == "fake-junction"
+        try:
+            module.copy_if_exists(source, dest)
+        finally:
+            if original_isjunction is None:
+                delattr(module.os.path, "isjunction")
+            else:
+                module.os.path.isjunction = original_isjunction
+
+        assert (dest / "normal.txt").exists()
+        assert not (dest / "fake-junction").exists()
+
+
 def main() -> int:
     module = load_module()
     assert_report_mode(module)
     assert_apply_mode(module)
+    assert_reparse_points_skipped_in_backup(module)
     print("smoke tests passed")
     return 0
 

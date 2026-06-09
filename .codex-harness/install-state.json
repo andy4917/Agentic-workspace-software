@@ -25,6 +25,14 @@
       "remove_on_uninstall": true
     },
     {
+      "action": "exists_unmanaged_preserved",
+      "digest": "7b7d1ebaef200566aebc8a14ad218b7ea47cf4ba3c240ee6c364159a723e0a2c",
+      "managed": false,
+      "owner": "codex-agent-harness",
+      "path": "agents/calibration-verifier.toml",
+      "remove_on_uninstall": false
+    },
+    {
       "action": "unchanged",
       "digest": "6bc9de998d598d4bea01252f7ec08f23cc5b33287d38cd821bf5b713772252c2",
       "managed": true,
@@ -65,8 +73,9 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "208c8a938a84144a9b0a7ef78cf6afda10b7730ae68685cbb58f5ba94086e2d5",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\artifacts\\tool-results\\README.md",
+      "digest": "51f9aead57adcc22719a32bcf7cb241fb5f2a738cef2d6543469fa60a9018205",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "artifacts/tool-results/README.md",
@@ -79,6 +88,14 @@
       "owner": "codex-agent-harness",
       "path": "evals/audit-threshold.json",
       "remove_on_uninstall": true
+    },
+    {
+      "action": "unchanged",
+      "digest": "f052f677862d830d191e77166f9a32d86ece3460f45524d5a5bde2a8b499740d",
+      "managed": false,
+      "owner": "codex-agent-harness",
+      "path": "evals/calibration-policy-smoke.json",
+      "remove_on_uninstall": false
     },
     {
       "action": "unchanged",
@@ -95,6 +112,14 @@
       "owner": "codex-agent-harness",
       "path": "evals/context-inspection.json",
       "remove_on_uninstall": true
+    },
+    {
+      "action": "exists_unmanaged_preserved",
+      "digest": "d15326323ce0d7be2c1c0add5a3848d9b2e4e1a54c53e27687afadcaee080e51",
+      "managed": false,
+      "owner": "codex-agent-harness",
+      "path": "evals/doctor-tier-smoke.json",
+      "remove_on_uninstall": false
     },
     {
       "action": "unchanged",
@@ -126,6 +151,22 @@
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "evals/orchestration-governance-smoke.json",
+      "remove_on_uninstall": false
+    },
+    {
+      "action": "unchanged",
+      "digest": "9d4539eebf71c9a0979ed8479bf06f32adb0604c08e390902635da16202bb97c",
+      "managed": false,
+      "owner": "codex-agent-harness",
+      "path": "evals/repo-verify.json",
+      "remove_on_uninstall": false
+    },
+    {
+      "action": "unchanged",
+      "digest": "434cc10aa2eb7a19a6675982a2c065d1c7073244fbce3ba32f03b6f72956778f",
+      "managed": false,
+      "owner": "codex-agent-harness",
+      "path": "evals/rg-resolution-smoke.json",
       "remove_on_uninstall": false
     },
     {
@@ -177,120 +218,143 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "6e55330889709b430e0af010bc5af39660fb22b6ff7b04fdbe9a86d61628297a",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-benchmark.ps1",
+      "digest": "533d8104e119aabcd58d1689f925788d76bd1507b8b1b4e0c7cd9f74bd9012ac",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-benchmark.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "c7650f210d9f8b22409d6b336f3b0a8d52ff39e90c08e77c0f204abb4df15947",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-compact-summary.ps1",
+      "digest": "ad88b275fc631e523bd1081b13d3888abe3763da6c7b08e2eba81cbe1d280bad",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-compact-summary.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "0379822be97d2a3f40e4043a03cf723383a2023c8e09456d62c7de48192d67bb",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-context.ps1",
+      "digest": "3054c91e9c547573f063722d1115c06fe34b6d74961d361c14cdaa82726fc001",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-context.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "dbc6b4f0c9c27c9f767dc99e6c1740e36e02173fd33fc362147a79dabc7f48a5",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-eval.ps1",
+      "digest": "8054cbda0556ffb9d7fa84f6b6da783f661ebaa6feb1278f62a5370d165c367c",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-eval.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "706259a07f2f6348f956d56cd79bb5931e63c9cf81a0031e8596cd4566805d5a",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-global-scan.ps1",
+      "digest": "206c8103dd4db408ff60bbc6af5a14e18101e3b97e28e7d4e1832a3921bd9e65",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-global-scan.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "5dc7ea880429b19c4df95b76c0ad7252471dfa073126253dd4229690dfd2d4bc",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-harness-apply.ps1",
+      "digest": "f13342891eb6e18670334afacb965ae08085d19eaf3486b93bc66d60887d5a3a",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-harness-apply.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "29e42af32348cb4ab971eda22862f12d673cf385fb4e5814b3e98d43a82e6378",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-harness-audit.ps1",
+      "digest": "b12e92a440319da645b376ab55b8e40a9bd1c8da243b6b6258ab925b044ea91c",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-harness-audit.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "6abfad690f814baae91e3daa20d0924495c2165c7fde9ada812759f53419a643",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-harness-doctor.ps1",
+      "digest": "55344b10787db0c97f54c20d8501974aa3d072bd1ac89818631bf1f45a18668d",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-harness-doctor.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "f894fc53302524c0bec6bbc50ce819a831537f8d94428c3f6aa0f7e85e26b0d9",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-harness-plan.ps1",
+      "digest": "afec838e7ddd563a20a972bd820e7e31d0a3625bccf3c71a1f357bb6607fece3",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-harness-plan.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "1cbcff858c84b9e276330875abb237fffbbadab70de541c35162ef22057b6f73",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-harness-repair.ps1",
+      "digest": "3ad64ae5cff6e68c777fd488ebaf5c9492e56dbd6accb2959c3854ed002ee06b",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-harness-repair.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "45b46b5fe2c3250555a266e56f6ba43d192900ca0c61ab4f8c43e700fa930d1e",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-harness-uninstall.ps1",
+      "digest": "93bed043b329fb8fe54701b20fdff6e0c4c39f791c1333d2c69390f72023258c",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-harness-uninstall.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "0875aa3dc9a336f43069469c1dea03fa8b31c77f3fa87bd86c2db9b708742849",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-merge-config.ps1",
+      "digest": "4c3673e418d5adbb3e219c270b2ae4d23c1c2975bf5333b937a3356f2df4ab87",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-merge-config.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "5f75733c4d49a80dbd2e770a5c9271075a8b3e93e4d71b6f43947a41cd609fd1",
+      "action": "exists_unmanaged_preserved",
+      "digest": "1ec00097764e8c36b0a383e98064c9ed307142c7613ee39bc4b0266a3ec96bbe",
+      "managed": false,
+      "owner": "codex-agent-harness",
+      "path": "maintenance/scripts/codex-repo-verify.ps1",
+      "remove_on_uninstall": false
+    },
+    {
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-retrieve.ps1",
+      "digest": "9cf35ab2f89a92e169b7b99bd98173ba8af2a648f66fa7e08612a708ca42ef43",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-retrieve.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "2de4611683604fcc334fbfcf6a0c564cc1e38926f73beffcd42686472e341697",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-trajectory.ps1",
+      "digest": "3381773a71883d1f3d83da702367006fac474baa5a52265810f1c1e70f955cc5",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-trajectory.ps1",
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "bb56addf877918282f932813cc8b5c0a71e3132ea2672aedadc5481380676976",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\maintenance\\scripts\\codex-verify.ps1",
+      "digest": "14b82e7002ad461ecee2433cb81dad8352b4b6b8ec629e7c64b005a743496dd6",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "maintenance/scripts/codex-verify.ps1",
@@ -377,8 +441,9 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "unchanged",
-      "digest": "501536114483f6f00cd4ab5a5d6b45fe1beb742561bf70fca1e83b0d6aff47ab",
+      "action": "updated",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\reports\\README.md",
+      "digest": "ba69c2b367f03e9373be5b60a95d2e058c9856ecf2a96720d717d0b3669819d5",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "reports/README.md",
@@ -402,7 +467,7 @@
     },
     {
       "action": "updated",
-      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260513-150002\\skills\\SKILL_INDEX.md",
+      "backup": "C:\\Users\\anise\\Documents\\Codex\\maintenance\\backups\\codex-harness-20260610-031327\\skills\\SKILL_INDEX.md",
       "digest": "143f96a975b588170845c3b864a26c8d052f0993e1fdcd0b62b57a80ef57a1b0",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -442,8 +507,7 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "updated",
-      "backup": "C:\\Users\\anise\\.codex\\maintenance\\backups\\codex-harness-20260513-150002\\skills\\result-normalizer\\SKILL.md",
+      "action": "unchanged",
       "digest": "e21496ba2ccfe4eadb00e0d4d68780642a3322cf95eb70690ff88131ff59c793",
       "managed": true,
       "owner": "codex-agent-harness",
@@ -467,7 +531,7 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-05-13T06:00:02+00:00",
+  "installed_at": "2026-06-09T18:13:27+00:00",
   "requested_modules": [],
   "requested_profile": "developer",
   "schema_version": "1",
@@ -484,10 +548,11 @@
   "source": {
     "implementation": "local-distillation",
     "plan": "C:\\Users\\anise\\Downloads\\codex-agent-harness-distillation-plan.md",
-    "plan_sha256": "7727932449f37cb0aadb8b5205707215a3d5792dff891dfbf671a0747cba9f5e"
+    "plan_sha256": null,
+    "warning": "source plan path was not present during apply"
   },
   "target": {
     "id": "codex-home-global-ssot",
-    "root": "C:\\Users\\anise\\.codex"
+    "root": "C:\\Users\\anise\\Documents\\Codex"
   }
 }

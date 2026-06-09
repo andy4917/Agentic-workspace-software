@@ -25,6 +25,14 @@ function Get-CodexHomePath {
     return (Join-Path (Get-UserProfilePath) ".codex")
 }
 
+function Get-ManagedSourceRootPath {
+    $managedRoot = Join-Path (Get-UserProfilePath) "Documents\Codex"
+    if (Test-Path -LiteralPath $managedRoot -PathType Container) {
+        return $managedRoot
+    }
+    return (Get-CodexHomePath)
+}
+
 function Get-AgentsHomePath {
     if (-not [string]::IsNullOrWhiteSpace($env:AGENTS_HOME)) {
         return $env:AGENTS_HOME
@@ -348,7 +356,7 @@ function Get-WorkflowVariableCatalog {
         "workflow:workflow preset",
         "taskClass:L1-L4 rigor level",
         "classificationReason:why task class changed",
-        "delegationAuthorized:explicit subagent authorization flag",
+        "delegationAuthorized:standing subagent authorization flag",
         "goalRequired:persisted goal requirement",
         "watcherExpected:watcher coverage requirement",
         "anomalyPauseExpected:pause/trace requirement",
@@ -469,6 +477,12 @@ function Stop-HookProcessTree {
     }
 }
 
+function ConvertTo-PowerShellLiteral {
+    param([string]$Value)
+
+    return "'" + ($Value -replace "'", "''") + "'"
+}
+
 function Invoke-AutonomousHarnessCheck {
     param(
         [ValidateSet("doctor", "verify")]
@@ -477,20 +491,27 @@ function Invoke-AutonomousHarnessCheck {
     )
 
     $codexHome = Get-CodexHomePath
-    $python = Join-Path $codexHome "toolchains\shims\python.cmd"
-    $harness = Join-Path $codexHome "maintenance\scripts\codex_agent_harness.py"
-    if (-not (Test-Path -LiteralPath $python)) {
-        return "autonomous_${Mode}:blocked; reason=missing_python_shim; path=$python"
-    }
-    if (-not (Test-Path -LiteralPath $harness)) {
-        return "autonomous_${Mode}:blocked; reason=missing_harness; path=$harness"
+    $managedRoot = Get-ManagedSourceRootPath
+    $executable = Join-Path $codexHome "toolchains\shims\codex.cmd"
+    $arguments = @("doctor", "--json")
+    $commandLabel = "codex doctor --json"
+    if ($Mode -eq "verify") {
+        $executable = "powershell.exe"
+        $verifyScript = Join-Path $managedRoot "maintenance\scripts\codex-repo-verify.ps1"
+        $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $verifyScript)
+        $commandLabel = "codex-repo-verify.ps1"
+        if (-not (Test-Path -LiteralPath $verifyScript -PathType Leaf)) {
+            return "autonomous_${Mode}:blocked; reason=missing_repo_verify; path=$verifyScript"
+        }
+    } elseif (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+        return "autonomous_${Mode}:blocked; reason=missing_codex_shim; path=$executable"
     }
 
     if ($env:CODEX_HOOK_SMOKE -eq "1") {
-        return "autonomous_${Mode}:smoke_probe; command=codex_agent_harness.py $Mode"
+        return "autonomous_${Mode}:smoke_probe; command=$commandLabel"
     }
 
-    $logDir = Join-Path $codexHome "logs\hook-autonomous"
+    $logDir = Join-Path $codexHome "state\hook-autonomous"
     if (-not (Test-Path -LiteralPath $logDir)) {
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     }
@@ -498,18 +519,23 @@ function Invoke-AutonomousHarnessCheck {
     $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmss-fff")
     $outPath = Join-Path $logDir "$stamp-$Mode.out.log"
     $errPath = Join-Path $logDir "$stamp-$Mode.err.log"
-    $arguments = @($harness, $Mode)
-    if ($Mode -eq "doctor") {
-        $arguments += "--json"
-    }
 
     try {
-        $process = Start-Process -FilePath $python -ArgumentList $arguments -WorkingDirectory $codexHome -WindowStyle Hidden -RedirectStandardOutput $outPath -RedirectStandardError $errPath -PassThru
+        $quotedArgs = ($arguments | ForEach-Object { ConvertTo-PowerShellLiteral -Value ([string]$_) }) -join " "
+        $command = "& $(ConvertTo-PowerShellLiteral -Value $executable) $quotedArgs > $(ConvertTo-PowerShellLiteral -Value $outPath) 2> $(ConvertTo-PowerShellLiteral -Value $errPath); exit `$LASTEXITCODE"
+        $encodedCommand = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
+        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $startInfo.FileName = "powershell.exe"
+        $startInfo.Arguments = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCommand"
+        $startInfo.WorkingDirectory = $managedRoot
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        $process = [System.Diagnostics.Process]::Start($startInfo)
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
             Stop-HookProcessTree -ProcessId ([int]$process.Id)
             return "autonomous_${Mode}:timeout; seconds=$TimeoutSeconds; out=$outPath; err=$errPath"
         }
-        $process.Refresh()
+        $exitCode = $process.ExitCode
         $stdout = ""
         if (Test-Path -LiteralPath $outPath) {
             $stdout = Get-Content -LiteralPath $outPath -Raw -ErrorAction SilentlyContinue
@@ -518,7 +544,7 @@ function Invoke-AutonomousHarnessCheck {
         if (-not [string]::IsNullOrWhiteSpace($stdout)) {
             $digest = Get-StateDigest -Text $stdout
         }
-        return "autonomous_${Mode}:exit=$($process.ExitCode); out=$outPath; err=$errPath; sha256:$digest"
+        return "autonomous_${Mode}:exit=$exitCode; out=$outPath; err=$errPath; sha256:$digest"
     } catch {
         return "autonomous_${Mode}:error; reason=$($_.Exception.Message)"
     }

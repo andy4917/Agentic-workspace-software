@@ -74,19 +74,35 @@ def copy_if_exists(src: Path, dst: Path) -> None:
         return
     dst.parent.mkdir(parents=True, exist_ok=True)
     if src.is_dir():
+        default_ignore = shutil.ignore_patterns(
+            "node_modules",
+            ".git",
+            ".next",
+            "dist",
+            "build",
+            ".venv",
+            "__pycache__",
+            ".pytest_cache",
+        )
+
+        def backup_ignore(dirpath: str, names: list[str]) -> set[str]:
+            ignored = set(default_ignore(dirpath, names))
+            for name in names:
+                candidate = Path(dirpath) / name
+                try:
+                    is_junction = bool(getattr(os.path, "isjunction", lambda _path: False)(candidate))
+                    if candidate.is_symlink() or is_junction:
+                        ignored.add(name)
+                        report(f"backup_skipped_reparse_point {candidate}")
+                except OSError as exc:
+                    ignored.add(name)
+                    report(f"backup_skipped_inaccessible {candidate} {exc}")
+            return ignored
+
         shutil.copytree(
             src,
             dst,
-            ignore=shutil.ignore_patterns(
-                "node_modules",
-                ".git",
-                ".next",
-                "dist",
-                "build",
-                ".venv",
-                "__pycache__",
-                ".pytest_cache",
-            ),
+            ignore=backup_ignore,
             dirs_exist_ok=True,
         )
     else:

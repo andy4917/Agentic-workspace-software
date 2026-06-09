@@ -1003,7 +1003,32 @@ $syncPairs = @(
     "maintenance\scripts\repair-chrome-plugin-runtime.ps1",
     "maintenance\scripts\ensure-product-design-marketplace.ps1",
     "maintenance\scripts\check-automation-plugin-health.ps1",
+    "maintenance\scripts\codex-benchmark.ps1",
+    "maintenance\scripts\codex-compact-summary.ps1",
+    "maintenance\scripts\codex-context.ps1",
+    "maintenance\scripts\codex-eval.ps1",
+    "maintenance\scripts\codex-global-scan.ps1",
+    "maintenance\scripts\codex-harness-apply.ps1",
+    "maintenance\scripts\codex-harness-audit.ps1",
+    "maintenance\scripts\codex-harness-doctor.ps1",
+    "maintenance\scripts\codex-harness-plan.ps1",
+    "maintenance\scripts\codex-harness-repair.ps1",
+    "maintenance\scripts\codex-harness-uninstall.ps1",
     "maintenance\scripts\codex-runtime-process-cleanup.ps1",
+    "maintenance\scripts\codex-merge-config.ps1",
+    "maintenance\scripts\codex-repo-verify.ps1",
+    "maintenance\scripts\codex-retrieve.ps1",
+    "maintenance\scripts\codex-trajectory.ps1",
+    "maintenance\scripts\codex-verify.ps1",
+    "maintenance\scripts\codex_agent_harness.py",
+    "maintenance\scripts\codex_agent_harness_base.py",
+    "maintenance\scripts\codex_agent_harness_calibration.py",
+    "maintenance\scripts\codex_agent_harness_lifecycle.py",
+    "maintenance\scripts\codex_agent_harness_merge.py",
+    "maintenance\scripts\codex_agent_harness_smoke.py",
+    "maintenance\scripts\codex_agent_harness_status.py",
+    "maintenance\scripts\codex_agent_harness_workflows.py",
+    "maintenance\scripts\worker_watcher_templates.py",
     "maintenance\scripts\validate-codex-scaffold.ps1",
     "maintenance\scripts\codex-p0-integrity-loop.ps1",
     "maintenance\scripts\codex-home-maintenance.ps1",
@@ -1035,6 +1060,47 @@ Add-Check $checks "managed_source_live_sync" ($(if ((Test-Path -LiteralPath $man
     note = "Public-safe scripts and docs that live instructions call directly must stay byte-synced from managed source into CODEX_HOME."
 }
 
+$harnessWrapperExitPaths = @(
+    "maintenance\scripts\codex-benchmark.ps1",
+    "maintenance\scripts\codex-compact-summary.ps1",
+    "maintenance\scripts\codex-context.ps1",
+    "maintenance\scripts\codex-eval.ps1",
+    "maintenance\scripts\codex-global-scan.ps1",
+    "maintenance\scripts\codex-harness-apply.ps1",
+    "maintenance\scripts\codex-harness-audit.ps1",
+    "maintenance\scripts\codex-harness-doctor.ps1",
+    "maintenance\scripts\codex-harness-plan.ps1",
+    "maintenance\scripts\codex-harness-repair.ps1",
+    "maintenance\scripts\codex-harness-uninstall.ps1",
+    "maintenance\scripts\codex-merge-config.ps1",
+    "maintenance\scripts\codex-repo-verify.ps1",
+    "maintenance\scripts\codex-retrieve.ps1",
+    "maintenance\scripts\codex-trajectory.ps1",
+    "maintenance\scripts\codex-verify.ps1"
+)
+$harnessWrapperExitProblems = @()
+foreach ($relativePath in $harnessWrapperExitPaths) {
+    foreach ($rootPath in @($managedRepoRoot, $CodexHome)) {
+        $scriptPath = Join-Path $rootPath $relativePath
+        if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+            $harnessWrapperExitProblems += "missing:$scriptPath"
+            continue
+        }
+        $scriptText = Get-Content -Raw -LiteralPath $scriptPath
+        if ($scriptText -notmatch "(?m)^\s*exit\s+\`$LASTEXITCODE\s*$") {
+            $harnessWrapperExitProblems += "missing_exit_propagation:$scriptPath"
+        }
+        if ($scriptText -notmatch "--root" -or $scriptText -notmatch "Documents\\Codex") {
+            $harnessWrapperExitProblems += "missing_managed_root_default:$scriptPath"
+        }
+    }
+}
+Add-Check $checks "harness_wrapper_exit_propagation" ($(if ($harnessWrapperExitProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+    checked = $harnessWrapperExitPaths
+    problems = $harnessWrapperExitProblems
+    note = "Harness PowerShell wrappers must target the managed source root and propagate Python's exit code so tracebacks cannot become false-success exit 0 results."
+}
+
 $allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state","workflow")
 $top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)
 $topExtra = @($top | Where-Object { $_ -notin $allowedTop })
@@ -1054,6 +1120,9 @@ Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid 
 }
 $liveRuntimeNames = @(
     "artifacts",
+    "archived_logs",
+    "archived_sessions",
+    "attachments",
     "automations",
     "browser",
     "cache",
@@ -1066,6 +1135,8 @@ $liveRuntimeNames = @(
     "process_manager",
     "sessions",
     "sqlite",
+    "vendor_imports",
+    "worktrees",
     ".sandbox",
     ".sandbox-bin",
     ".tmp",
@@ -1082,7 +1153,7 @@ $quarantineNames = @("skills-disabled","archive")
 $databaseState = @($topExtra | Where-Object { $_ -match '^(goals|logs|memories|state)_[0-9]+\.sqlite(-shm|-wal)?$' })
 $classifiedNames = $liveRuntimeNames + $protectedStateNames + $sourceNames + $configStateNames + $quarantineNames + $databaseState
 $uncategorizedTopExtra = @($topExtra | Where-Object { $_ -notin $classifiedNames })
-$forbiddenActiveTop = @($topExtra | Where-Object { $_ -in @("vendor_imports","bundled-marketplaces","codex-runtimes","wshobson-agents-scan") })
+$forbiddenActiveTop = @($topExtra | Where-Object { $_ -in @("bundled-marketplaces","codex-runtimes","wshobson-agents-scan") })
 Add-Check $checks "live_runtime_hygiene" ($(if ($uncategorizedTopExtra.Count -eq 0 -and $forbiddenActiveTop.Count -eq 0) { "pass" } else { "fail" })) @{
     live_app_server_pid = $liveAppServerPid
     runtime_state = @($topExtra | Where-Object { $_ -in $liveRuntimeNames })
@@ -1093,7 +1164,7 @@ Add-Check $checks "live_runtime_hygiene" ($(if ($uncategorizedTopExtra.Count -eq
     quarantine_state = @($topExtra | Where-Object { $_ -in $quarantineNames })
     forbidden_active = $forbiddenActiveTop
     uncategorized_extra = $uncategorizedTopExtra
-    note = "This check classifies live state instead of treating every live top-level path as scaffold failure."
+    note = "This check classifies live state instead of treating every live top-level path as scaffold failure. vendor_imports is allowed as app-created cache state, but active config/source references to it remain forbidden by stale-reference checks."
 }
 
 $chromeRepairScript = Join-Path $CodexHome "maintenance\scripts\repair-chrome-plugin-runtime.ps1"

@@ -190,7 +190,12 @@ function Invoke-Repair {
     if (Test-Path -LiteralPath $pluginLink) {
         $target = Get-JunctionTarget -Path $pluginLink
         if ((ConvertTo-ComparablePath -Path $target) -ne (ConvertTo-ComparablePath -Path ([string]$selected.FullName))) {
-            throw "product-design marketplace path exists but does not target selected cache: $pluginLink"
+            $item = Get-Item -LiteralPath $pluginLink -Force
+            if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw "product-design marketplace path exists but is not a reparse point: $pluginLink"
+            }
+            Remove-Item -LiteralPath $pluginLink -Force
+            New-Item -ItemType Junction -Path $pluginLink -Target ([string]$selected.FullName) | Out-Null
         }
     } else {
         New-Item -ItemType Junction -Path $pluginLink -Target ([string]$selected.FullName) | Out-Null

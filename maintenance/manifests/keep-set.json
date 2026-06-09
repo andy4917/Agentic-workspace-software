@@ -26,6 +26,7 @@
       "debugging-and-error-recovery",
       "dependency-upgrade",
       "frontend-visual-debug",
+      "goal-decision",
       "keep-codex-fast",
       "migration-plan",
       "modern-web-guidance",

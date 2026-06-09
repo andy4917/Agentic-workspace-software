@@ -221,10 +221,17 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             skill_event_state = json.loads(read_text(state_path))
         except (OSError, json.JSONDecodeError):
             skill_event_state = {}
+        skill_stop_missing_skill_marker = run_stop_hook_sample(
+            root,
+            "FINAL_GOAL_AUDIT checked skill route sample. checks not run none. residual risk low. "
+            "status complete. PM independent verification complete. "
+            "SUBAGENT_CALL not_used reason smoke sample used direct hook state only direct evidence no spawn_agent event residual risk low.",
+        )
         skill_stop_with_marker = run_stop_hook_sample(
             root,
             "FINAL_GOAL_AUDIT checked skill route sample. checks not run none. residual risk low. "
             "status complete. PM independent verification complete. "
+            "SUBAGENT_CALL not_used reason smoke sample used direct hook state only direct evidence no spawn_agent event residual risk low. "
             "SKILL_EVIDENCE used reason clean-all-slop route direct evidence skills/clean-all-slop/SKILL.md residual risk low.",
         )
         add_check(
@@ -232,10 +239,11 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "clean-all-slop" in skill_stdout
             and skill_state.get("skillEvidenceRequired") is True
             and "clean-all-slop" in str(skill_state.get("skillRoute", ""))
-            and "skill workflow evidence" in skill_stop_missing.get("stdout_preview", "").lower()
+            and "subagent decision" in skill_stop_missing.get("stdout_preview", "").lower()
             and bool(skill_event_state.get("skillEvents"))
+            and "skill workflow evidence" in skill_stop_missing_skill_marker.get("stdout_preview", "").lower()
             and '"continue":true' in skill_stop_with_marker.get("stdout_preview", "").lower(),
-            "Prompt routing should persist matching skill workflow requirements, record SKILL.md access, and require SKILL_EVIDENCE before finalization.",
+            "Prompt routing should persist matching skill workflow requirements, record SKILL.md access, and allow finalization only after required SUBAGENT_CALL and SKILL_EVIDENCE markers.",
         )
         skill_events = skill_event_state.get("skillEvents", [])
         reminders = skill_event_state.get("requiredReminders", [])
@@ -360,7 +368,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         stop_with_subagent = run_stop_hook_sample(root, delegated_final_with_marker)
         add_check(
             "stop_requires_explicit_subagent_call_marker",
-            "subagent use was explicitly authorized or a subagent tool event was observed" in stop_missing_subagent.get("stdout_preview", "").lower()
+            "standing delegation authorization required a subagent decision" in stop_missing_subagent.get("stdout_preview", "").lower()
             and '"continue":true' in stop_with_subagent.get("stdout_preview", "").lower(),
             "Stop should reject delegated finals without SUBAGENT_CALL used/not_used and allow the explicit marker with reason/evidence.",
         )
@@ -385,11 +393,25 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         except (OSError, json.JSONDecodeError):
             pm_led_state = {}
         add_check(
-            "pm_led_team_preset_not_subagent_authorization",
+            "pm_led_team_preset_uses_standing_delegation_authorization",
             pm_led_probe.get("status") == "pass"
-            and pm_led_state.get("delegationAuthorized") is False
-            and pm_led_state.get("subagentDecisionRequired") is False,
-            "PM-led/team preset wording alone should not require SUBAGENT_CALL evidence.",
+            and pm_led_state.get("delegationAuthorized") is True
+            and pm_led_state.get("subagentDecisionRequired") is True,
+            "Standing authorization should be recorded without requiring a per-prompt subagent phrase; non-trivial workflow routing should still require a SUBAGENT_CALL decision.",
+        )
+        no_delegation_probe = run_prompt_hook_sample(root, "No delegation: review the local workflow policy and keep work local only.")
+        no_delegation_stdout = no_delegation_probe.get("stdout_preview", "").lower()
+        try:
+            no_delegation_state = json.loads(read_text(state_path))
+        except (OSError, json.JSONDecodeError):
+            no_delegation_state = {}
+        add_check(
+            "no_delegation_prompt_overrides_standing_authorization",
+            no_delegation_probe.get("status") == "pass"
+            and no_delegation_state.get("delegationAuthorized") is False
+            and no_delegation_state.get("subagentDecisionRequired") is False
+            and "user forbade subagents" in no_delegation_stdout,
+            "Current-user no-delegation wording must override standing authorization and keep work local.",
         )
         run_post_tool_hook_sample(root, "functions.shell_command", "rg WATCHER_REPORT maintenance")
         try:
@@ -455,7 +477,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         event_stop_with_marker = run_stop_hook_sample(root, event_final_with_marker)
         add_check(
             "stop_requires_marker_after_actual_subagent_tool_event",
-            "subagent use was explicitly authorized or a subagent tool event was observed" in event_stop_missing.get("stdout_preview", "").lower()
+            "standing delegation authorization required a subagent decision" in event_stop_missing.get("stdout_preview", "").lower()
             and '"continue":true' in event_stop_with_marker.get("stdout_preview", "").lower(),
             "Stop should require SUBAGENT_CALL evidence when a subagent tool event exists, even without prompt authorization state.",
         )

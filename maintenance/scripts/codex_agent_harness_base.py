@@ -30,24 +30,9 @@ COMMAND_PREVIEW_CHARS = 4000
 COMMAND_ARTIFACT_THRESHOLD_CHARS = 12000
 TRAJECTORY_VERSION = "codex-trajectory-v1"
 DOCTOR_TIERS = {
-    "core": [
-        "config", "harness_engine_modules",
-        "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter",
-        "harness_file_size", "stale_active_references", "sentinel_blockers",
-    ],
-    "extended": [
-        "config", "pm_subagent_protocol", "harness_engine_modules",
-        "app_runtime_state_writable", "generated_outputs_untracked",
-        "hook_subagent_vowline", "subagent_nickname_policy",
-        "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter",
-        "harness_file_size", "workspace_script_file_size",
-        "stale_active_references", "sentinel_blockers",
-    ],
-    "stress": [
-        "config", "harness_engine_modules", "generated_outputs_untracked",
-        "calibration_policy", "managed_files", "harness_file_size",
-        "stale_active_references", "sentinel_blockers",
-    ],
+    "core": ["config", "harness_engine_modules", "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter", "harness_file_size", "stale_active_references", "sentinel_blockers"],
+    "extended": ["config", "pm_subagent_protocol", "harness_engine_modules", "app_runtime_state_writable", "generated_outputs_untracked", "hook_subagent_vowline", "subagent_nickname_policy", "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter", "harness_file_size", "workspace_script_file_size", "stale_active_references", "sentinel_blockers"],
+    "stress": ["config", "harness_engine_modules", "generated_outputs_untracked", "calibration_policy", "managed_files", "harness_file_size", "stale_active_references", "sentinel_blockers"],
 }
 DOCTOR_TIERS["full"] = list(dict.fromkeys(DOCTOR_TIERS["extended"] + DOCTOR_TIERS["stress"]))
 
@@ -65,15 +50,7 @@ MODULES: dict[str, dict[str, str]] = {
 PROFILES: dict[str, list[str]] = {
     "minimal": ["codex-baseline", "rules-core"],
     "core": ["codex-baseline", "rules-core", "skills-core", "workflow-quality", "mcp-baseline"],
-    "developer": [
-        "codex-baseline",
-        "rules-core",
-        "skills-core",
-        "workflow-quality",
-        "mcp-baseline",
-        "benchmarking",
-        "orchestration",
-    ],
+    "developer": ["codex-baseline", "rules-core", "skills-core", "workflow-quality", "mcp-baseline", "benchmarking", "orchestration"],
     "security": ["codex-baseline", "rules-core", "skills-core", "workflow-quality", "security"],
     "full": list(MODULES),
 }
@@ -458,7 +435,13 @@ def wrapper_script(command: str) -> str:
     return f"""param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Args)
 $ErrorActionPreference = 'Stop'
 $Script = Join-Path $PSScriptRoot 'codex_agent_harness.py'
-python $Script {command} @Args
+$DefaultRoot = Join-Path $env:USERPROFILE 'Documents\\Codex'
+$RootArgs = @()
+if (Test-Path -LiteralPath $DefaultRoot -PathType Container) {{
+    $RootArgs = @('--root', $DefaultRoot)
+}}
+python $Script @RootArgs {command} @Args
+exit $LASTEXITCODE
 """
 
 
@@ -500,8 +483,27 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
     if "workflow-quality" in modules:
         templates["maintenance/SUBAGENT_DELEGATION_CHARTER.md"] = DELEGATION_CHARTER
         templates.update(WORKER_WATCHER_TEMPLATES)
-        templates["reports/README.md"] = "# Codex Harness Reports\n\nGenerated discovery, context, verification, eval, benchmark, and audit reports live here.\n"
-        templates["artifacts/tool-results/README.md"] = "# Tool Result Artifacts\n\nLarge command outputs can be stored here with metadata references from trajectories.\n"
+        templates["reports/README.md"] = (
+            "# Codex Harness Reports\n\n"
+            "Harness reports and templates for repo verification, context inspection,\n"
+            "retrieval, eval, benchmark, and audit work live here. `README.md`,\n"
+            "templates, and seed discovery files are active managed source.\n\n"
+            "`*.latest.json`, `*.latest.md`, and `*results.jsonl` are ignored\n"
+            "runtime outputs. Use them for triage only; rerun the responsible\n"
+            "command before treating a check as current validation. Keep not-run and\n"
+            "failed checks explicit, and use `maintenance/reports` for dated evidence.\n"
+        )
+        templates["artifacts/tool-results/README.md"] = (
+            "# Tool Result Artifacts\n\n"
+            "This directory is for large command-output artifacts written by the\n"
+            "harness. `README.md` is active managed source. `*.txt` files are ignored\n"
+            "runtime output and historical evidence, not fresh validation unless the\n"
+            "current run names the file and timestamp.\n\n"
+            "Do not copy live runtime logs, secrets, sessions, SQLite state, browser\n"
+            "state, or raw prompt payloads here. Prefer current command reruns, keep\n"
+            "artifact references in reports or trajectories, and handle deletion or\n"
+            "archiving in a separate bounded cleanup pass.\n"
+        )
         templates["artifacts/compact-summaries/README.md"] = "# Compact Summaries\n\nStructured phase-boundary summaries live here.\n"
         templates["trajectories/README.md"] = "# Trajectories\n\nJSONL run records for successes and failures live here.\n"
         templates["learning/README.md"] = "# Learning Drafts\n\nOnly unapproved, project-scoped instincts and skill candidates live here. Do not store raw private conversations or secrets.\n"

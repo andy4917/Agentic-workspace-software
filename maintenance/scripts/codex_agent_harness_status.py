@@ -139,12 +139,18 @@ def harness_engine_module_status(root: Path) -> dict[str, Any]:
 
 
 def app_runtime_state_writable_status(root: Path) -> dict[str, Any]:
+    runtime_root = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
+    runtime_only = {"config.toml", ".codex-global-state.json"}
     items = []
     failures = []
     for name in ["config.toml", ".codex-global-state.json", "hooks.json"]:
         path = root / name
+        source = "managed_root"
+        if not path.exists() and name in runtime_only:
+            path = runtime_root / name
+            source = "codex_home"
         if not path.exists():
-            items.append({"path": name, "exists": False, "writable": False, "readonly": None})
+            items.append({"path": name, "source": source, "resolved_path": str(path), "exists": False, "writable": False, "readonly": None})
             failures.append(name)
             continue
         try:
@@ -152,10 +158,10 @@ def app_runtime_state_writable_status(root: Path) -> dict[str, Any]:
         except AttributeError:
             readonly = not os.access(path, os.W_OK)
         writable = os.access(path, os.W_OK) and not readonly
-        items.append({"path": name, "exists": True, "writable": writable, "readonly": readonly})
+        items.append({"path": name, "source": source, "resolved_path": str(path), "exists": True, "writable": writable, "readonly": readonly})
         if not writable:
             failures.append(name)
-    return {"status": "pass" if not failures else "fail", "items": items, "failures": failures}
+    return {"status": "pass" if not failures else "fail", "items": items, "failures": failures, "runtime_root": str(runtime_root)}
 
 
 def generated_output_tracking_status(root: Path) -> dict[str, Any]:

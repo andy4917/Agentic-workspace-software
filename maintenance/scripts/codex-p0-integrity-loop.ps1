@@ -430,18 +430,38 @@ $deadPid = Get-MissingPid
 $beforeCleanup = $cleanupStatus
 $beforeRootPids = if ($null -ne $beforeCleanup -and $null -ne $beforeCleanup.managed_roots) { @($beforeCleanup.managed_roots | ForEach-Object { [int]$_.ProcessId } | Sort-Object) } else { @() }
 if ($ReportOnly) {
-    Add-Check $checks "dead_app_server_cleanup_regression" "not_run" @{
-        command = "not run: ReportOnly skips cleanup-all"
-        cwd = $repoRootResolved
-        timestamp_utc = (Get-Date).ToUniversalTime().ToString("o")
-        exit_code = $null
-        evidence = "not_run=true; mutation_skipped=true; before_app_server_pid=$($beforeCleanup.app_server_pid); before_root_pids=$($beforeRootPids -join ',')"
+    $deadCleanupRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $cleanupScript, "-Mode", "cleanup-all", "-ParentPid", ([string]$deadPid), "-CodexHome", $codexHomeResolved, "-DryRun", "-NoLedger")
+    $deadCleanup = ConvertFrom-JsonOutput -Text $deadCleanupRun.stdout
+    $afterStatusRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $cleanupScript, "-Mode", "status", "-CodexHome", $codexHomeResolved)
+    $afterCleanup = ConvertFrom-JsonOutput -Text $afterStatusRun.stdout
+    $afterRootPids = if ($null -ne $afterCleanup -and $null -ne $afterCleanup.managed_roots) { @($afterCleanup.managed_roots | ForEach-Object { [int]$_.ProcessId } | Sort-Object) } else { @() }
+    $plannedStops = if ($null -ne $deadCleanup -and $null -ne $deadCleanup.stopped) { @($deadCleanup.stopped) } else { @() }
+    $deadCleanupSafe = (
+        $deadCleanupRun.exit_code -eq 0 -and
+        $afterStatusRun.exit_code -eq 0 -and
+        $null -ne $deadCleanup -and
+        $plannedStops.Count -eq 0 -and
+        ($null -eq $beforeCleanup -or $beforeCleanup.app_server_pid -eq $afterCleanup.app_server_pid) -and
+        (($beforeRootPids -join ",") -eq ($afterRootPids -join ","))
+    )
+    Add-Check $checks "dead_app_server_cleanup_regression" ($(if ($deadCleanupSafe) { "pass" } else { "fail" })) @{
+        command = "$($deadCleanupRun.command_line); $($afterStatusRun.command_line)"
+        cwd = $deadCleanupRun.working_directory
+        timestamp_utc = $deadCleanupRun.started_utc
+        exit_code = $(if ($deadCleanupSafe) { 0 } else { 1 })
+        evidence = "dry_run=true; dead_pid=$deadPid; planned_stops=$($plannedStops.Count); before_app_server_pid=$($beforeCleanup.app_server_pid); after_app_server_pid=$($afterCleanup.app_server_pid); before_roots=$($beforeRootPids -join ','); after_roots=$($afterRootPids -join ',')"
         report_only = $true
         mutation_skipped = $true
-        reason = "ReportOnly is operationally read-only and does not call cleanup-all. Run full mode from a clean tree to execute this regression before refreshing clean baseline manifests."
+        dry_run = $true
         dead_app_server_pid = $deadPid
         before_app_server_pid = $(if ($null -ne $beforeCleanup) { $beforeCleanup.app_server_pid } else { $null })
+        after_app_server_pid = $(if ($null -ne $afterCleanup) { $afterCleanup.app_server_pid } else { $null })
         before_root_pids = $beforeRootPids
+        after_root_pids = $afterRootPids
+        planned_stop_count = $plannedStops.Count
+        cleanup_exit_code = $deadCleanupRun.exit_code
+        status_exit_code = $afterStatusRun.exit_code
+        reason = "ReportOnly uses cleanup-all -DryRun -NoLedger with a missing app-server PID, then rechecks runtime status. This proves the dead-PID decision path without stopping processes, writing cleanup ledger entries, or refreshing baseline manifests."
     }
 } else {
     $deadCleanupRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $cleanupScript, "-Mode", "cleanup-all", "-ParentPid", ([string]$deadPid), "-CodexHome", $codexHomeResolved)
@@ -797,6 +817,8 @@ $checkEvidenceRows = @($checks | ForEach-Object {
     $detail = $_.details
     "| $(Format-MarkdownCell $_.name) | $(Format-MarkdownCell $detail["command"]) | $(Format-MarkdownCell $detail["cwd"]) | $(Format-MarkdownCell $detail["timestamp_utc"]) | $(Format-MarkdownCell $detail["exit_code"]) | $(Format-MarkdownCell $_.status) | $(Format-MarkdownCell $detail["evidence"]) |"
 }) -join "`n"
+$deadCleanupCheck = @($checks | Where-Object { $_.name -eq "dead_app_server_cleanup_regression" } | Select-Object -First 1)[0]
+$deadCleanupDryRunUsed = [bool]($ReportOnly -and $null -ne $deadCleanupCheck -and [bool]$deadCleanupCheck.details.dry_run)
 
 $report = @"
 # Codex P0 Integrity Closed Loop
@@ -861,7 +883,7 @@ $checkEvidenceRows
 ## Not Run
 
 - Physical Codex Desktop close-button click was not automated because the Computer Use policy does not allow automating Codex Desktop app or Codex CLI input. Close lifecycle evidence must use user-performed close actions plus post-close process evidence, or non-Codex Windows tools such as Task Manager when Computer Use is available.
-- ReportOnly cleanup-all regression skip: $([bool]($ReportOnly -and -not $baselineDeadCleanupCovered))
+- ReportOnly cleanup-all dry-run proof used: $deadCleanupDryRunUsed
 "@
 
 if (-not $ReportOnly) {

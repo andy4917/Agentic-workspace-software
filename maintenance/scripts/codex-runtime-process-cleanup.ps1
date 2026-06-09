@@ -12,7 +12,8 @@ param(
     [switch]$StopAppServerOnOwnerExit,
     [switch]$StopAppServerOnOwnerNoVisibleWindow,
     [int]$OwnerNoVisibleWindowGraceSeconds = 5,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$NoLedger
 )
 
 $ErrorActionPreference = "Stop"
@@ -437,6 +438,10 @@ function Write-Ledger {
         [string]$Action,
         [object]$Details
     )
+
+    if ($NoLedger) {
+        return
+    }
 
     $stateDir = Join-Path $CodexHome "state"
     New-Item -ItemType Directory -Force -Path $stateDir | Out-Null

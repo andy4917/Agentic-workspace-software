@@ -55,6 +55,28 @@ repo scripts:
 - `handoff`: Where should changed behavior, accepted evidence, not-run checks,
   residual risks, and rollback notes be recorded?
 
+## Quality Gate Evidence
+
+For code-affecting work, connect the chain to the project-local Vibe Quality
+Gate before implementation:
+
+- `Boundary`: import direction, layer ownership, public APIs, cycles, and
+  re-export changes.
+- `Contract / SSOT`: canonical helper, type, schema, validator, mapper, shape,
+  and generated-output sources.
+- `Failure`: allowed error-handling boundary, fallback or retry behavior, and
+  failure-path coverage.
+- `Simplicity`: nesting, complexity, function size, file size, helper sprawl,
+  and dead-code pressure.
+- `Verification`: typecheck, lint, tests, boundary checks, edge cases, side
+  effects, and precise not-run reasons.
+
+When a TypeScript or JavaScript project has package tooling, prefer one
+project-local `quality` command that wraps the existing typecheck, lint, and
+test commands. Add ESLint, TypeScript strictness, dependency-cruiser, or CI
+enforcement only when that toolchain exists, the project needs it for the active
+request, or the user explicitly asks for expansion.
+
 ## Domain Additions
 
 Add only the domain pieces relevant to the requested work:

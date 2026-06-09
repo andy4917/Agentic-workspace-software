@@ -12,7 +12,7 @@ $state = Normalize-WorkflowState -State (Read-State)
 try {
 switch ($eventName) {
     "SessionStart" {
-        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Calibration source: CALIBRATION.md. Treat selected answers, diagnoses, plans, and patch rationales as candidate until direct evidence supports them; do not imply unchecked claims are verified. Subagents require user authorization; AGENTS.md records standing authorization mirrored by config.toml developer_instructions, and prompt phrases can also authorize a current goal. Use subagents only for bounded non-blocking sidecar work. Goal is a long-running tracking marker only, and PM owns parent-goal completion. Hooks are reminders and narrow safety checks, not completion authority. Memento and Serena are retired from the default MCP baseline; use current files, tests, command output, OpenAI Developer Docs, Context7, skills, and reviewed subagent evidence instead of support-memory or symbolic-MCP shortcuts."
+        $context = "Use the lightweight PM + skill workflow: DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP. Choose the smallest workflow preset, activate only matching skill workflows, use PM-selected team presets only when useful, preserve file ownership/work tracks, and finish with evidence. Calibration source: CALIBRATION.md. Treat selected answers, diagnoses, plans, and patch rationales as candidate until direct evidence supports them; do not imply unchecked claims are verified. Subagent use has standing user authorization in AGENTS.md mirrored by config.toml developer_instructions; no per-prompt parallel/delegation phrase is required. Use subagents autonomously for bounded non-blocking sidecar work when they reduce risk, review blind spots, or latency. Goal is a long-running tracking marker only, and PM owns parent-goal completion. Hooks are reminders and narrow safety checks, not completion authority. Memento and Serena are retired from the default MCP baseline; use current files, tests, command output, OpenAI Developer Docs, Context7, skills, and reviewed subagent evidence instead of support-memory or symbolic-MCP shortcuts."
         $repairContext = Invoke-ChromeExtensionOriginRepair
         if (-not [string]::IsNullOrWhiteSpace($repairContext)) {
             $context = $context + "`n`n" + $repairContext
@@ -318,11 +318,11 @@ switch ($eventName) {
         }
 
         if ($mustEnforceWorkflowEvidence -and -not $subagentDecisionReady -and -not [bool]$inputObject.stop_hook_active) {
-            $reason = "Subagent call declaration missing after explicit subagent authorization."
+            $reason = "Subagent call declaration missing after standing delegation authorization required it for this non-trivial task."
             Write-CodexStructuredLog -EventName "Stop" -Outcome "not_ready" -Reason $reason -NotReadyReason $reason -ChangedSurface @($state.changedSurfaces) -ValidationResult @($state.checksRun) -SubagentResult @($state.subagentEvents) | Out-Null
             Write-HookJson @{
                 decision = "block"
-                reason = "Final preflight: subagent use was explicitly authorized or a subagent tool event was observed. Before finalizing, include SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, even if task_class was unavailable."
+                reason = "Final preflight: standing delegation authorization required a subagent decision for this non-trivial task, or a subagent tool event was observed. Before finalizing, include SUBAGENT_CALL used/not_used with reason, direct evidence, and residual risk, even if task_class was unavailable."
             }
             break
         }

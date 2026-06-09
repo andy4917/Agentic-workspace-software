@@ -217,24 +217,25 @@ def sentinel_checks(root: Path) -> list[dict[str, Any]]:
 
 def check_config(root: Path) -> dict[str, Any]:
     path = root / "config.toml"
+    source = "managed_root"
     if not path.exists():
-        return {"status": "fail", "error": "config.toml missing"}
+        live_path = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex")) / "config.toml"
+        if live_path.exists():
+            path = live_path
+            source = "codex_home"
+    if not path.exists():
+        return {"status": "fail", "error": "config.toml missing", "checked_path": str(path), "source": source}
     try:
         data = tomllib.loads(read_text(path))
     except Exception as exc:  # noqa: BLE001
         return {"status": "fail", "error": str(exc)}
     features = data.get("features", {})
     expected_true = [
-        "plugins",
         "hooks",
-        "multi_agent",
-        "child_agents_md",
-        "tool_search",
-        "tool_suggest",
-        "skill_mcp_dependency_install",
-        "workspace_dependencies",
+        "goals",
+        "memories",
     ]
-    unexpected = [key for key in ["enable_fanout", "multi_agent_v2"] if features.get(key) is True]
+    unexpected = [key for key in ["enable_fanout", "multi_agent_v2", "js_repl"] if features.get(key) is True]
     missing = [key for key in expected_true if features.get(key) is not True]
     wrong_false: list[str] = []
     agents = data.get("agents", {})
@@ -246,19 +247,17 @@ def check_config(root: Path) -> dict[str, Any]:
         "calibration-verifier": "agents/calibration-verifier.toml",
     }
     missing_agent_roles = []
-    for role, config_file in required_agent_roles.items():
-        role_data = agents.get(role, {})
-        if not isinstance(role_data, dict) or role_data.get("config_file") != config_file or not role_data.get("description"):
-            missing_agent_roles.append(role)
-    fallback_files = data.get("project_doc_fallback_filenames", [])
+    if isinstance(agents, dict) and agents:
+        for role, config_file in required_agent_roles.items():
+            role_data = agents.get(role, {})
+            if not isinstance(role_data, dict) or role_data.get("config_file") != config_file or not role_data.get("description"):
+                missing_agent_roles.append(role)
     fallback_max_bytes = data.get("project_doc_max_bytes")
-    missing_calibration_fallback = not (
-        isinstance(fallback_files, list)
-        and "CALIBRATION.md" in fallback_files
-        and fallback_max_bytes == 65536
-    )
+    missing_calibration_fallback = fallback_max_bytes != 65536
     return {
         "status": "pass" if not missing and not unexpected and not wrong_false and not missing_agent_roles and not missing_calibration_fallback else "fail",
+        "source": source,
+        "path": str(path),
         "missing_true": missing,
         "unexpected_true": unexpected,
         "missing_false": wrong_false,

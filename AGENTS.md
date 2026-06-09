@@ -8,7 +8,8 @@ It is project guidance, not configuration, not an inventory, and not completion 
 Use it as a compact global contract for maintenance, implementation, tests, reviews,
 multi-agent orchestration, and handoff quality.
 
-Adopt `CODEX_WORKFLOW_APPLIED_REVIEW`,'CODEX_WORKFLOW_CONFIGURATION_INTERVIEW'as the active workflow profile:
+Adopt `CODEX_WORKFLOW_APPLIED_REVIEW` and
+`CODEX_WORKFLOW_CONFIGURATION_INTERVIEW` as the active workflow profiles:
 
 - preserve agent autonomy for ordinary engineering work;
 - keep the user as reviewer, not operator;
@@ -36,7 +37,8 @@ Adopt `CODEX_WORKFLOW_APPLIED_REVIEW`,'CODEX_WORKFLOW_CONFIGURATION_INTERVIEW'as
 - `AGENTS.md` is the primary file Codex agents should read first for scoped instructions.
 - `agent.md` is a secondary, lower-priority instruction file when both names exist in the same scope.
 - Use the uppercase/lowercase distinction intentionally to communicate priority.
-- User allowed, recommends to download and use any Tools you need.
+- The user allows Codex to download and use tools needed for scoped work,
+  subject to active safety, approval, and secret-handling rules.
 
 ## Default Workflow
 
@@ -47,22 +49,30 @@ Codex should operate as a PM-led workflow that combines:
 
 Runtime subagent activation rule:
 
-- current Codex runtime policy requires user authorization before calling subagents;
 - this tracked `AGENTS.md` is the reviewed source for the standing user
-  authorization to make bounded subagent calls on repo, workstation, workflow,
-  toolchain, review, remediation, and verification goals; `config.toml`
-  `developer_instructions` mirrors that authorization into runtime context, so
-  the user does not need to repeat a per-prompt delegation phrase for those
-  goals;
-- user phrases such as `multi-agent`, `subagent`, `spawn_agent`, `parallel agent`, `role separation`, `delegate`, `delegation`, or `delegated` still count as explicit authorization for the current goal; localized equivalents may be handled by hooks internally without storing non-ASCII trigger text in policy files;
-- `PM-led`, `team preset`, `workflow`, or `review` alone do not count as explicit subagent authorization; they may still raise the task level or justify a local review workflow.
-- when authorization is present, the PM should spawn bounded sidecar agents for independent exploration, verification, review, or disjoint implementation work that does not block the immediate next local step;
+  authorization to make bounded autonomous subagent calls on repo, workstation,
+  workflow, toolchain, review, remediation, and verification goals;
+  `config.toml` `developer_instructions` mirrors that authorization into
+  runtime context;
+- this authorization is standing and blanket for the bounded scopes above. The
+  user does not need to type a per-prompt phrase such as `multi-agent`,
+  `subagent`, `spawn_agent`, `parallel agent`, `role separation`, `delegate`,
+  `delegation`, or `delegated` before the PM may call subagents;
+- those phrases still help classify the current goal as delegation-relevant, but
+  absence of those phrases is not lack of permission;
+- the PM must decide autonomously whether bounded sidecar agents materially
+  reduce risk, latency, review blind spots, or verification gaps. Spawn them for
+  independent exploration, verification, review, or disjoint implementation work
+  that does not block the immediate next local step;
+- do not use subagents merely to create ceremony for tiny, obvious,
+  single-step, or tightly coupled immediate-blocking work; record the local
+  substitute check when a non-trivial task stays local;
 - enabled feature flags are capability, not evidence of actual subagent use.
-- when authorization is present or a subagent tool is used, the PM must repeat
-  the subagent call decision in final evidence as `SUBAGENT_CALL used` or
-  `SUBAGENT_CALL not_used` with reason, direct evidence or substitute check, and
-  residual risk; this declaration is required even if a hook reminder omits or
-  fails to show the task class.
+- for non-trivial delegation decisions, or whenever a subagent tool is used, the
+  PM must repeat the subagent call decision in final evidence as `SUBAGENT_CALL
+  used` or `SUBAGENT_CALL not_used` with reason, direct evidence or substitute
+  check, and residual risk; this declaration is required even if a hook reminder
+  omits or fails to show the task class.
 
 Default flow:
 
@@ -84,6 +94,20 @@ Keep simple tasks simple. Do not spawn or route extra work for tiny edits, simpl
 ## Goal Governance
 
 Use a persisted Codex Goal only for coherent long-running work with a clear stopping condition and validation loop.
+
+Goal decision routing:
+
+- Before the PM recommends, drafts, or creates a persisted Codex Goal, or before
+  it decides that an ordinary request should become a Goal when higher-priority
+  runtime rules permit that choice, load and use the `goal-decision` skill.
+- Treat `goal-decision` output (`USE_GOAL`, `USE_PROMPT`, `REFINE_FIRST`,
+  `PLAN_FIRST`, or `REQUIRE_HUMAN_APPROVAL`) as triage evidence. It does not
+  create completion authority, override user/system/developer restrictions on
+  `create_goal`, or convert simple prompts into Goals merely because the skill
+  exists.
+- If the skill returns `REFINE_FIRST`, `PLAN_FIRST`, or
+  `REQUIRE_HUMAN_APPROVAL`, do not create the Goal; refine, plan, or add human
+  approval gates as the decision class requires.
 
 Rules:
 
@@ -126,6 +150,98 @@ Use this lifecycle as the main workflow overlay. Scale the ceremony to the task,
 
 Treat skills as workflows, not essays. A useful skill has a trigger, ordered steps, checkpoint evidence, anti-rationalization reminders, and exit criteria.
 
+## Vibe Quality Gate
+
+For code changes in project repositories, use the smallest enforceable quality
+loop that fits the project instead of adding broad documentation or new
+tooling by default. The loop has five gates:
+
+- Boundary: imports, layer direction, cycles, public APIs, and re-export changes.
+- Contract / SSOT: canonical helper, type, schema, validator, mapper, and shape
+  sources.
+- Failure: error propagation, boundary handlers, retry or fallback behavior, and
+  failure tests.
+- Simplicity: nesting, complexity, function size, file size, helper sprawl, and
+  dead code.
+- Verification: typecheck, lint, tests, boundary checks, edge cases, side
+  effects, and not-run reasons.
+
+Before adding a new function, helper, type, shape, schema, mapper, file, or
+workflow asset, search the project with `rg` or the best available project
+search for existing implementations and report the result. If the search cannot
+be performed, do not claim no existing implementation exists; report it as
+unchecked or unavailable.
+
+For TypeScript and JavaScript projects, prefer a project-local `quality` script
+that runs the existing typecheck, lint, and test commands. Add dependency,
+ESLint, TypeScript, dependency-cruiser, or CI gates only when the project already
+has the corresponding toolchain or the user explicitly asks for that expansion.
+
+Hard bans for product code unless there is a documented boundary exception:
+
+- empty `catch` blocks, silent error swallowing, and masking fallbacks;
+- repeated caller-side defensive wrappers that should live at one boundary;
+- `as any`, `as unknown as`, and `@ts-ignore` without a reason, boundary, and
+  removal condition;
+- cross-importing another feature's private/internal implementation;
+- unrelated wildcard barrel exports or re-exports;
+- tests that mock internal helpers instead of external boundaries;
+- tests that only assert function names, string presence, or implementation
+  details instead of behavior, failure paths, and side effects.
+
+Default complexity pressure for new or touched code is `max-depth: 3`,
+`complexity: 10`, `max-lines-per-function: 60`, and a soft `300 LOC` file
+limit. Treat these as review and lint targets when the project has no configured
+enforcement yet.
+
+<!-- BEGIN CODEX WORKSPACE QUALITY GUARDRAILS -->
+
+## Codex Workspace Quality Guardrails
+
+Success means improving the real system the user cares about, not merely producing output that appears successful in the current run.
+
+### Reward-hacking prevention
+
+The following are failures, even if tests or benchmarks appear to pass:
+
+- Changing tests, benchmarks, evaluation harnesses, timers, counters, logs, output formatting, CI, or scripts to make results look better without solving the underlying task.
+- Detecting specific test names, benchmark names, input strings, filenames, hashes, AST shapes, term shapes, data-size patterns, or fixture structure to trigger special-case behavior.
+- Hardcoding expected outputs, expected counters, intermediate artifacts, benchmark results, or cached answers.
+- Skipping real computation, validation, invariant checks, error handling, or security checks for the sake of a better metric.
+- Adding hidden state, cross-run caches, environment-dependent shortcuts, nondeterminism, or undefined behavior that can make future runs unreliable.
+- Producing code that passes the visible tests but is not maintainable, general, or safe for adjacent unseen inputs.
+
+### Required invariants
+
+For any implementation change:
+
+- Preserve semantic behavior for the same inputs unless the user explicitly requests a behavior change.
+- Preserve public APIs, output contracts, persisted data formats, and compatibility expectations unless the change is deliberate and documented.
+- Keep validation criteria at least as strict as before.
+- Report metrics, counters, timings, and statuses honestly; never fabricate or massage them.
+- Prefer general mechanisms over case-specific patches.
+- Prefer small, reviewable changes over broad rewrites unless a rewrite is clearly justified.
+- Treat passing tests as a floor, not proof of quality.
+
+### Implementation discipline
+
+Before editing, identify the intended behavior, relevant invariants, and likely failure modes. During implementation, keep the diff minimal and avoid touching unrelated files. After implementation, run the most relevant available validation and report the exact commands and outcomes.
+
+If a shortcut, ambiguity, or missing requirement would compromise correctness, generalization, maintainability, or verification integrity, do not exploit it. State the risk and choose the safer implementation path.
+
+### Completion report requirements
+
+When finishing a task, report:
+
+1. What changed.
+2. Why the change satisfies the real objective.
+3. What validation was run and whether it passed.
+4. Any remaining risks, assumptions, or follow-up work.
+
+Do not present work as complete when validation is missing, failing, or only partially run.
+
+<!-- END CODEX WORKSPACE QUALITY GUARDRAILS -->
+
 ## Live Turn Calibration
 
 Use `CALIBRATION.md` as the canonical source for answer-status and
@@ -161,7 +277,7 @@ Task level routes workflow rigor; it is not proof of completion.
   signal.
 - `L3`: escalate from L2 when the request touches workflow, hooks, harness,
   MCP, toolchain, debugger tools, commit/push, multi-surface change, long-running
-  work, or explicit subagent authorization. L3 requires visible acceptance
+  work, or delegation-relevant work. L3 requires visible acceptance
   checks and not-run reasons.
 - `L4`: escalate when a root-cause, repeated-failure, false-pass,
   hidden-fallback, stale-state, skipped-validation, or P0 incident signal
@@ -214,6 +330,24 @@ Progressive disclosure rule:
 - load references only when the active skill needs them;
 - never bulk-load unrelated skills or external catalogs.
 
+## Implementation Request Interview
+
+For user implementation requests, confirm at least two of these three elements
+before editing product or workflow code:
+
+- `clarity`: what concrete outcome or behavior should change;
+- `direction`: the preferred approach, scope boundary, or product/workflow
+  direction;
+- `specificity`: target files, surfaces, examples, constraints, or acceptance
+  checks.
+
+If fewer than two are confirmed from the current prompt and local evidence,
+pause implementation and run a short interview. Ask only the minimum questions
+needed to confirm at least two elements, usually one to three concise questions.
+Do not turn the interview into broad discovery, and do not use it to shift
+ordinary implementation, testing, formatting, or cleanup work back to the user.
+Once two elements are confirmed, proceed with the smallest verifiable plan.
+
 Common skill routing:
 
 - vague idea or unclear scope: refine and define before implementation;
@@ -224,6 +358,9 @@ Common skill routing:
 - code/config change across more than one file: incremental implementation;
 - behavior change or bug fix: test-driven or prove-it workflow;
 - external API, library, framework, or version-sensitive work: source-backed documentation lookup;
+- goal drafting, "should this be a goal?", `/goal` recommendation, or autonomous
+  Goal suitability decisions: use the `goal-decision` skill before recommending
+  or creating a Goal;
 - HTML/CSS, clientside JavaScript, browser API, performance, accessibility, forms, layout, or modern web platform work: use the `modern-web-guidance` skill before implementation, then retrieve the most relevant guide rather than relying on memory;
 - frontend design, redesign, UI implementation, UX/UI review, visual polish, or frontend quality remediation: use the official `product-design` plugin workflow when it is installed and exposed; use `frontend-visual-debug` for rendered debugging and `modern-web-guidance` for web-platform implementation evidence;
 - unfamiliar, high-stakes, security-sensitive, or irreversible work: doubt/adversarial review;
@@ -635,6 +772,23 @@ Never treat any of these as completion by itself:
 
 Completion requires connecting the user goal, actual changed behavior, direct evidence, checks run, checks not run, and remaining risks.
 
+For code changes, final evidence must also cover the Vibe Quality Gate fields
+when applicable:
+
+- changed surfaces;
+- new helper, type, shape, schema, mapper, file, or workflow asset created, or
+  `none`;
+- existing implementation search result before any new helper, type, shape,
+  schema, mapper, file, or workflow asset;
+- boundary impact;
+- contract / canonical source impact;
+- error handling location;
+- edge cases tested or not tested with reasons;
+- commands run;
+- checks not run with reasons;
+- residual risks;
+- rollback note.
+
 ## Validation
 
 Before claiming completion:
@@ -649,3 +803,6 @@ Before claiming completion:
 - Use Korean polite language for user-facing output.
 - When doing Git/GitHub work, use the `git-easy-korean` skill when available.
 - Do not hide or lie, you must always tell the truth about any types of process.
+- Final answers must end with a concise conclusion summary. Keep it compressed
+  to the necessary facts while preserving accuracy, validation status, and
+  brevity.

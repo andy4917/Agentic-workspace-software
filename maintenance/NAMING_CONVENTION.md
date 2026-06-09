@@ -123,13 +123,13 @@ instead.
 Exact path-name sentinel blockers may be used for confirmed non-runtime roots
 only:
 
-- `vendor_imports`
 - `plugins\plugins`
 
 These blockers are files or managed empty directories, not active sources.
-Do not block `plugins\cache` with a sentinel file: Codex loads installed
-plugins from that runtime cache path. Treat `plugins\cache` as an allowed
-runtime cache and audit its contents for unexpected connectors instead.
+Do not block `vendor_imports` or `plugins\cache` with a sentinel file: Codex may
+create `vendor_imports` for curated skill or onboarding cache metadata and loads
+installed plugins from `plugins\cache`. Treat both as allowed runtime cache paths
+and audit their contents for unexpected active sources instead.
 
 When blocking a confirmed runtime recontamination path, `config.toml` may be kept
 read-only after verified edits. Remove the read-only bit only for intentional app

@@ -15,6 +15,10 @@ name = "vowline"
 enabled = true
 
 [[skills.config]]
+name = "goal-decision"
+enabled = true
+
+[[skills.config]]
 name = "keep-codex-fast"
 enabled = true
 
@@ -79,12 +83,12 @@ name = "playwright"
 enabled = true
 
 [marketplaces.openai-bundled]
-last_updated = "2026-05-30T10:22:36Z"
+last_updated = "2026-06-07T10:03:26Z"
 source_type = "local"
 source = '\\?\C:\Users\anise\.codex\plugins\marketplaces\openai-bundled'
 
 [marketplaces.openai-primary-runtime]
-last_updated = "2026-05-30T07:48:51Z"
+last_updated = "2026-06-07T10:12:31Z"
 source_type = "local"
 source = '\\?\C:\Users\anise\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'
 
@@ -92,3 +96,8 @@ source = '\\?\C:\Users\anise\.cache\codex-runtimes\codex-primary-runtime\plugins
 last_updated = "2026-06-02T19:40:00Z"
 source_type = "local"
 source = '\\?\C:\Users\anise\.codex\plugins\marketplaces\openai-curated-remote'
+
+[memories]
+generate_memories = true
+use_memories = true
+disable_on_external_context = true

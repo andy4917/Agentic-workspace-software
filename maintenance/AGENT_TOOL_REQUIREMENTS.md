@@ -114,6 +114,17 @@ which runtime surfaces were not checked.
 - Use `tsc`, `tsx`, `eslint`, `prettier`, `biome`, `pyright`, `yarn`, and `zx`
   when repo scripts or task validation call for them.
 
+### Windows Package Sources
+
+- Treat Scoop as an active local-chain package source for tools referenced by
+  `.codex` shims, including `bun`, `deno`, `opa`, `fzf`, `zig`, `java`, `mvn`,
+  and `gradle`.
+- Do not remove Scoop while those shims depend on `C:\Users\anise\scoop`.
+  Prefer `scoop status` and `scoop checkup` for health checks, then update only
+  the stale packages needed for the current workstation baseline.
+- Use Winget or direct installers only where they already own the selected shim
+  target or where Scoop does not provide the required tool.
+
 ### Rust
 
 - Use `cargo`, `rustc`, `rustfmt`, `cargo-clippy`, `cargo-nextest`, `cargo-insta`,
@@ -226,9 +237,10 @@ The plugin feature may stay enabled, but active source paths must not point at
 `.tmp`, `tmp`, `vendor_imports`, `bundled-marketplaces`, `plugins\cache`, or
 `plugins\plugins`.
 
-Do not use sentinel files to block `.tmp`, `tmp`, or `plugins\cache`. Codex uses
-`.tmp/marketplaces` for marketplace registration/loading and `plugins\cache` for
-installed plugin runtime material. Guard these paths by checking that they are
-not active config sources and that their contents stay bounded. Sentinel
-blockers are allowed only for confirmed non-runtime roots such as
-`vendor_imports` and `plugins\plugins`.
+Do not use sentinel files to block `.tmp`, `tmp`, `vendor_imports`, or
+`plugins\cache`. Codex uses `.tmp/marketplaces` for marketplace
+registration/loading, `plugins\cache` for installed plugin runtime material, and
+may create `vendor_imports` for curated skill or onboarding cache metadata. Guard
+these paths by checking that they are not active config sources and that their
+contents stay bounded. Sentinel blockers are allowed only for confirmed
+non-runtime roots such as `plugins\plugins`.
