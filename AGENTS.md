@@ -234,13 +234,64 @@ Hard rules for test-related work:
   is explicitly characterization or refactor-safety testing.
 - Treat mocks, snapshots, fixtures, and test utilities as control-system changes
   that require review, not as harmless support files.
-- If the repository provides `no-mistakes`, a test-integrity skill, PR template,
-  CI marker, or `.test-integrity` convention, use it. If that outer gate is not
-  installed or not configured, report it as not run with a reason and run the
-  closest project-native checks instead.
+- `no-mistakes` is an adopted workstation validation gate. When test-integrity
+  work intersects a Git repository with a real validation, push, PR, CI, or
+  release handoff need, run the `no-mistakes` gate through the approved shim
+  `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` after the local
+  intent/oracle/red/green/pollution evidence is coherent. If the target
+  repository is not initialized for the gate, initialize or configure it when
+  the repo has the required remote and current task scope permits the gate. If
+  the gate cannot run, record the exact blocker and do not silently downgrade it
+  to ordinary tests.
+- If a repository also provides a test-integrity skill, PR template, CI marker,
+  or `.test-integrity` convention, use it with `no-mistakes`; do not treat one
+  as replacing the other unless the repository's own gate says so.
 - Unresolved ambiguous intent, invalid red proof, snapshot-defined behavior, or
   a test that passes before implementation is a blocker or an ask-user item, not
   a success.
+
+## No-Mistakes Validation Gate
+
+`no-mistakes` is adopted as the workstation's outer validation gate whenever
+related repository work needs non-self-certified verification. This is broader
+than test work, but it is especially strict for Codex-authored tests and TDD.
+
+Trigger `no-mistakes` when any of these are true:
+
+- the user explicitly asks to gate, validate, ship, push safely, create a PR, or
+  use `no-mistakes`;
+- a change includes new or materially modified tests, fixtures, mocks,
+  snapshots, e2e specs, test utilities, or CI test commands and the repository
+  has a remote-backed Git workflow;
+- a repository already has a `no-mistakes` remote, `.no-mistakes` config,
+  `.agents/skills/no-mistakes`, or PR/CI marker requiring the gate;
+- Codex would otherwise be asking the user to trust a Codex-created validation
+  story before push, PR, release, or merge handoff.
+
+Use the approved shim:
+
+```powershell
+%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd
+```
+
+Gate rules:
+
+- Run local project-native checks first when they are needed to establish basic
+  correctness; then run `no-mistakes` as the outer gate for repository handoff.
+- Do not use unattended approval, broad skip flags, or direct `origin` push to
+  bypass `no-mistakes` for gated work unless the user gives an explicit
+  run-specific waiver and the waiver is recorded.
+- If `no-mistakes` returns an `ask-user` or intent-sensitive finding, surface it
+  as a decision point instead of auto-approving it.
+- If the CLI, daemon, repository remote, credentials, or initialization is
+  missing, fix the smallest in-scope blocker. If the blocker cannot be fixed in
+  scope, report `no-mistakes` as blocked with the command, reason, closest
+  checks run, and residual risk.
+- Do not invoke `no-mistakes` recursively from inside a no-mistakes-spawned gate
+  worktree or agent step. The primary PM may run the CLI/daemon from the main
+  checkout; gate agents should use project-native checks, scaffold validator
+  output, and fake-binary wrapper probes instead of calling `no-mistakes`
+  `--version`, `doctor`, `axi`, `daemon`, or the managed wrapper.
 
 <!-- BEGIN CODEX WORKSPACE QUALITY GUARDRAILS -->
 

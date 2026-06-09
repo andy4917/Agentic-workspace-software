@@ -58,12 +58,11 @@ Generated UTC: 2026-06-09T18:59:58.7936137Z
 
 ## Residual Risks
 
-- `no-mistakes` is not currently installed on PATH. Follow-up review on
-  2026-06-09T19:17:10Z classified it as an external optional gate for this
-  workstation baseline, not as a currently provided repo or scaffold command.
-  Use the project-native `test-integrity-gate` workflow and report
-  `no-mistakes` as not run unless a repository explicitly provides it or a
-  separate tool-install slice adopts the official gate.
+- `no-mistakes` is now adopted as the workstation outer validation gate after
+  the 2026-06-09T19:29:16Z follow-up. It is installed from the official
+  `kunchenguid/no-mistakes` release and invoked through
+  `.codex\toolchains\shims\no-mistakes.cmd` when related repository work needs
+  non-self-certified verification.
 - Full P0 loop previously reported only `scoop_health_current` as failing after
   the test-integrity commit. Follow-up remediation ran `scoop update`, after
   which `scoop status` reported `Scoop is up to date. Everything is ok!` and
@@ -83,8 +82,39 @@ Generated UTC: 2026-06-09T19:17:10.9031743Z
   `status=pass`, `fail_count=0`.
 - Verified: no active `Code.exe` processes were present in the
   `Win32_Process` check during this follow-up.
-- Not installed: `no-mistakes`. Official Windows install guidance includes a
-  daemon restart path, while the telemetry-off `go install` path was not
-  available because `go` was not installed. Scoop and winget had no matching
-  package; the npm package named `no-mistakes` pointed to a different
-  `jonathanong/no-mistakes` project, so it was rejected as a name collision.
+- Superseded: `no-mistakes` was not installed in this first closure. A later
+  follow-up adopted and installed the official gate.
+
+## no-mistakes Adoption Follow-up
+
+Generated UTC: 2026-06-09T19:29:16.2584172Z
+
+- Adopted: `no-mistakes` is now mandatory when related repository work needs
+  non-self-certified validation, especially test/TDD, push, PR, CI, release, or
+  safe-shipping handoff.
+- Installed: official `kunchenguid/no-mistakes` release `v1.26.0` under
+  `%LOCALAPPDATA%\no-mistakes\no-mistakes.exe`; the downloaded asset checksum
+  matched `checksums.txt`.
+- Active entrypoint: `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd`.
+  The wrapper sets `NO_MISTAKES_TELEMETRY=0` and
+  `NO_MISTAKES_NO_UPDATE_CHECK=1` for deterministic Codex-managed runs.
+  Follow-up integration testing showed the wrapper must also remove
+  `%USERPROFILE%\.codex\toolchains\shims` from the child `PATH`; otherwise
+  no-mistakes-spawned Codex agents resolve `pwsh.cmd` and every shell command
+  fails before execution with `batch file arguments are invalid`.
+  The PATH filter now normalizes `/` to `\` and removes trailing `\` before
+  comparing entries, so benign spelling variants of the shim directory are
+  filtered as well.
+- no-mistakes review findings fixed during adoption: the installed skill
+  mirrors now use the managed wrapper path instead of bare `no-mistakes`, do
+  not treat `--yes` as standing consent, and restrict `skip` to an explicit
+  run-specific waiver or inapplicable-step reason.
+- User environment: `NO_MISTAKES_TELEMETRY=0` and
+  `NO_MISTAKES_NO_UPDATE_CHECK=1` are set at User scope so daemon runs inherit
+  the same privacy and determinism posture where Windows environment propagation
+  allows it.
+- Runtime state: `no-mistakes doctor` reported `git`, `gh`, data directory,
+  database, daemon, and Codex agent as OK; `daemon status` reported running.
+- Rejected package route remains valid: the npm package named `no-mistakes`
+  points to a different `jonathanong/no-mistakes` project and must not be used
+  for this gate.

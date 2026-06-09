@@ -796,6 +796,199 @@ Add-Check $checks "shims_exact_set" ($(if ($missingShims.Count -eq 0 -and $extra
     extra = $extraShims
 }
 
+$noMistakesShim = Join-Path $shimRoot "no-mistakes.cmd"
+try {
+    $previousTelemetry = $env:NO_MISTAKES_TELEMETRY
+    $previousUpdateCheck = $env:NO_MISTAKES_NO_UPDATE_CHECK
+    $env:NO_MISTAKES_TELEMETRY = "0"
+    $env:NO_MISTAKES_NO_UPDATE_CHECK = "1"
+    $noMistakesWorktreeRoot = Join-Path $env:USERPROFILE ".no-mistakes\worktrees"
+    $noMistakesWorktreeRootFull = ""
+    $runningInsideNoMistakesWorktree = $false
+    try {
+        $noMistakesWorktreeRootFull = ([System.IO.Path]::GetFullPath($noMistakesWorktreeRoot)).TrimEnd("\") + "\"
+        $scriptFull = [System.IO.Path]::GetFullPath($PSCommandPath)
+        $cwdFull = [System.IO.Path]::GetFullPath((Get-Location).Path)
+        $runningInsideNoMistakesWorktree = (
+            $scriptFull.StartsWith($noMistakesWorktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $cwdFull.StartsWith($noMistakesWorktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)
+        )
+    } catch {
+        $runningInsideNoMistakesWorktree = $false
+    }
+    $noMistakesRealCliProbeAllowed = -not $runningInsideNoMistakesWorktree
+    $noMistakesRealCliProbeSkippedReason = if ($noMistakesRealCliProbeAllowed) {
+        ""
+    } else {
+        "running inside no-mistakes gate worktree; recursive CLI/daemon calls are forbidden"
+    }
+    $noMistakesVersionOutput = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
+        (& $noMistakesShim --version 2>&1 | Out-String).Trim()
+    } else {
+        ""
+    }
+    $noMistakesVersionExit = if ($noMistakesRealCliProbeAllowed) {
+        if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    } else {
+        $null
+    }
+    $noMistakesDoctorOutput = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
+        (& $noMistakesShim doctor 2>&1 | Out-String).Trim()
+    } else {
+        ""
+    }
+    $noMistakesDoctorExit = if ($noMistakesRealCliProbeAllowed) {
+        if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    } else {
+        $null
+    }
+    $noMistakesConfigPath = Join-Path $env:USERPROFILE ".no-mistakes\config.yaml"
+    $noMistakesConfigText = if (Test-Path -LiteralPath $noMistakesConfigPath -PathType Leaf) {
+        Get-Content -LiteralPath $noMistakesConfigPath -Raw
+    } else {
+        ""
+    }
+    $noMistakesShimText = if (Test-Path -LiteralPath $noMistakesShim -PathType Leaf) {
+        Get-Content -LiteralPath $noMistakesShim -Raw
+    } else {
+        ""
+    }
+    $noMistakesWrapperProbeError = ""
+    $noMistakesWrapperPathProbeOutput = ""
+    $noMistakesWrapperPathProbeExit = $null
+    $noMistakesWrapperPathProbeSanitizesVariants = $false
+    $noMistakesWrapperBangProbeOutput = ""
+    $noMistakesWrapperBangProbeExit = $null
+    $noMistakesWrapperPreservesBangArgs = $false
+    $noMistakesWrapperProbeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-no-mistakes-wrapper-probe-" + [guid]::NewGuid().ToString("N"))
+    $previousPathForNoMistakesProbe = $env:PATH
+    $previousLocalAppDataForNoMistakesProbe = $env:LOCALAPPDATA
+    $previousBangArgProbe = $env:NO_MISTAKES_PROBE_ARG
+    try {
+        if (Test-Path -LiteralPath $noMistakesShim -PathType Leaf) {
+            $fakeNoMistakesDir = Join-Path $noMistakesWrapperProbeRoot "no-mistakes"
+            New-Item -ItemType Directory -Path $fakeNoMistakesDir -Force | Out-Null
+            Copy-Item -LiteralPath $env:ComSpec -Destination (Join-Path $fakeNoMistakesDir "no-mistakes.exe") -Force
+            $shimRootForward = $shimRoot -replace "\\", "/"
+            $pathProbeInputs = @($shimRoot, "$shimRoot\", $shimRootForward, "$shimRootForward/")
+            if ($previousPathForNoMistakesProbe) {
+                $pathProbeInputs += $previousPathForNoMistakesProbe
+            }
+            $env:LOCALAPPDATA = $noMistakesWrapperProbeRoot
+            $env:PATH = $pathProbeInputs -join ";"
+            $noMistakesWrapperPathProbeOutput = (& $noMistakesShim /d /s /c "set PATH" 2>&1 | Out-String).Trim()
+            $noMistakesWrapperPathProbeExit = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+            $pathProbeLine = @($noMistakesWrapperPathProbeOutput -split "\r?\n" | Where-Object { $_ -match "(?i)^path=" } | Select-Object -First 1)
+            $pathProbeValue = if ($pathProbeLine.Count -gt 0) { ($pathProbeLine[0] -replace "(?i)^path=", "") } else { "" }
+            $normalizedShimRoot = ($shimRoot -replace "/", "\").TrimEnd("\")
+            $normalizedPathProbeEntries = @($pathProbeValue -split ";" | ForEach-Object {
+                ($_ -replace "/", "\").TrimEnd("\")
+            } | Where-Object { $_ })
+            $noMistakesWrapperPathProbeSanitizesVariants = (
+                $noMistakesWrapperPathProbeExit -eq 0 -and
+                -not (@($normalizedPathProbeEntries | Where-Object { $_ -ieq $normalizedShimRoot }).Count -gt 0)
+            )
+
+            $env:NO_MISTAKES_PROBE_ARG = "CORRUPTED"
+            $noMistakesWrapperBangProbeOutput = (& $noMistakesShim /d /s /c "echo !NO_MISTAKES_PROBE_ARG!" 2>&1 | Out-String).Trim()
+            $noMistakesWrapperBangProbeExit = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+            $noMistakesWrapperPreservesBangArgs = (
+                $noMistakesWrapperBangProbeExit -eq 0 -and
+                $noMistakesWrapperBangProbeOutput -eq "!NO_MISTAKES_PROBE_ARG!"
+            )
+        }
+    } catch {
+        $noMistakesWrapperProbeError = $_.Exception.Message
+    } finally {
+        $env:PATH = $previousPathForNoMistakesProbe
+        $env:LOCALAPPDATA = $previousLocalAppDataForNoMistakesProbe
+        $env:NO_MISTAKES_PROBE_ARG = $previousBangArgProbe
+        if (Test-Path -LiteralPath $noMistakesWrapperProbeRoot) {
+            Remove-Item -LiteralPath $noMistakesWrapperProbeRoot -Recurse -Force
+        }
+    }
+    $codexBatchShimPathPattern = "\.codex[\\/]toolchains[\\/]shims[\\/]codex\.cmd"
+    $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesDoctorOutput -match $codexBatchShimPathPattern)
+    $noMistakesConfigReady = (
+        $noMistakesConfigText -match "(?m)^agent:\s*codex\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*--sandbox\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*danger-full-access\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*--disable\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*plugins\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*--skip-git-repo-check\s*$" -and
+        -not ($noMistakesConfigText -match $codexBatchShimPathPattern)
+    )
+    $noMistakesWrapperSanitizesPath = (
+        $noMistakesShimText -match "CODEX_SHIM_DIR" -and
+        $noMistakesShimText -match "NM_ORIGINAL_PATH" -and
+        $noMistakesShimText -match "NO_MISTAKES_TELEMETRY=0" -and
+        $noMistakesShimText -match "NO_MISTAKES_NO_UPDATE_CHECK=1"
+    )
+    $noMistakesDaemonRunning = if ($noMistakesRealCliProbeAllowed) {
+        [bool]($noMistakesDoctorOutput -match "(?m)daemon\s+running")
+    } else {
+        $null
+    }
+    $noMistakesCodexAgentDetected = if ($noMistakesRealCliProbeAllowed) {
+        [bool]($noMistakesDoctorOutput -match "(?m)codex\s+")
+    } else {
+        $null
+    }
+    $noMistakesCliDaemonProbeReady = if ($noMistakesRealCliProbeAllowed) {
+        $noMistakesVersionExit -eq 0 -and
+        $noMistakesDoctorExit -eq 0 -and
+        $noMistakesVersionOutput -match "no-mistakes version" -and
+        $noMistakesDaemonRunning -and
+        $noMistakesCodexAgentDetected -and
+        -not $noMistakesCodexAgentUsesBatchShim
+    } else {
+        $true
+    }
+    $noMistakesReady = (
+        (Test-Path -LiteralPath $noMistakesShim -PathType Leaf) -and
+        $noMistakesCliDaemonProbeReady -and
+        $noMistakesConfigReady -and
+        $noMistakesWrapperSanitizesPath -and
+        $noMistakesWrapperPathProbeSanitizesVariants -and
+        $noMistakesWrapperPreservesBangArgs
+    )
+    Add-Check $checks "no_mistakes_gate_ready" ($(if ($noMistakesReady) { "pass" } else { "fail" })) @{
+        shim = $noMistakesShim
+        shim_exists = (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)
+        wrapper_sanitizes_codex_shim_path = $noMistakesWrapperSanitizesPath
+        wrapper_path_probe_sanitizes_variants = $noMistakesWrapperPathProbeSanitizesVariants
+        wrapper_path_probe_exit_code = $noMistakesWrapperPathProbeExit
+        wrapper_bang_arg_preserved = $noMistakesWrapperPreservesBangArgs
+        wrapper_bang_probe_exit_code = $noMistakesWrapperBangProbeExit
+        wrapper_probe_error = $noMistakesWrapperProbeError
+        config = $noMistakesConfigPath
+        config_ready = $noMistakesConfigReady
+        codex_args_include_skip_git_repo_check = [bool]($noMistakesConfigText -match "(?m)^\s*-\s*--skip-git-repo-check\s*$")
+        running_inside_no_mistakes_worktree = $runningInsideNoMistakesWorktree
+        no_mistakes_worktree_root = $noMistakesWorktreeRootFull
+        real_cli_daemon_probe_allowed = $noMistakesRealCliProbeAllowed
+        real_cli_daemon_probe_skipped_reason = $noMistakesRealCliProbeSkippedReason
+        cli_daemon_probe_ready = $noMistakesCliDaemonProbeReady
+        version_exit_code = $noMistakesVersionExit
+        version_output = $noMistakesVersionOutput
+        doctor_exit_code = $noMistakesDoctorExit
+        daemon_running = $noMistakesDaemonRunning
+        codex_agent_detected = $noMistakesCodexAgentDetected
+        codex_agent_uses_batch_shim = $noMistakesCodexAgentUsesBatchShim
+        batch_shim_path_pattern = $codexBatchShimPathPattern
+        telemetry_env = $env:NO_MISTAKES_TELEMETRY
+        update_check_env = $env:NO_MISTAKES_NO_UPDATE_CHECK
+        note = "no-mistakes is adopted as the outer validation gate. The wrapper must keep Codex toolchain .cmd shims out of the child PATH so Codex shell commands resolve real pwsh.exe."
+    }
+    $env:NO_MISTAKES_TELEMETRY = $previousTelemetry
+    $env:NO_MISTAKES_NO_UPDATE_CHECK = $previousUpdateCheck
+} catch {
+    Add-Check $checks "no_mistakes_gate_ready" "fail" @{
+        shim = $noMistakesShim
+        error = $_.Exception.Message
+    }
+}
+
 $bundleShimSources = @(
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "codex"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "node"),
@@ -994,6 +1187,7 @@ $syncPairs = @(
     "config.d\30-skills.toml",
     "hooks\compact-codex-hook.ps1",
     "maintenance\CHROME_DEVTOOLS_MCP_OBSERVER.md",
+    "maintenance\AGENT_TOOL_REQUIREMENTS.md",
     "maintenance\CODEX_STATE_MANAGEMENT.md",
     "maintenance\MEMORY_BOUNDARY_POLICY.md",
     "maintenance\AUTOMATION_TARGET_BOUNDARY.md",
@@ -1033,6 +1227,8 @@ $syncPairs = @(
     "maintenance\scripts\codex-p0-integrity-loop.ps1",
     "maintenance\scripts\codex-home-maintenance.ps1",
     "maintenance\NAMING_CONVENTION.md",
+    "toolchains\README.md",
+    "toolchains\shims\no-mistakes.cmd",
     "skills\frontend-visual-debug\SKILL.md",
     "skills\git-easy-korean\SKILL.md",
     "skills\test-integrity-gate\SKILL.md"

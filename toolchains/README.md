@@ -45,7 +45,7 @@ Current shim groups:
   `black`, `poetry`, `pdm`, `pre-commit`, `tox`, `nox`, `semgrep`,
   `fastapi`, `django-admin`, `flask`
 - Git/search/shell utilities: `git`, `gh`, `rg`, `fd`, `fzf`, `jq`, `es`, `7z`,
-  `code`, `pwsh`, `opa`
+  `code`, `pwsh`, `opa`, `no-mistakes`
 - Rust/JVM/build: `rustc`, `cargo`, `rustup`, `rustfmt`, `cargo-nextest`,
   `cargo-insta`, `cargo-dylint`, `just`, `rust-analyzer`, `cargo-tauri`,
   `trunk`, `wasm-pack`, `cargo-generate`, `cargo-add`, `cargo-rm`,
@@ -107,3 +107,12 @@ Last verification:
 - Tool invocations in Codex workstation maintenance used explicit shim paths
   under `%USERPROFILE%\.codex\toolchains\shims` for package-manager and local
   toolchain commands.
+- 2026-06-10 KST: `no-mistakes` adopted as the outer repository validation
+  gate. The active wrapper is
+  `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd`, which invokes the
+  official `kunchenguid/no-mistakes` release binary under
+  `%LOCALAPPDATA%\no-mistakes` with telemetry and background update checks
+  disabled for deterministic Codex-managed runs. The wrapper intentionally
+  removes the Codex shim directory from its child `PATH` so
+  no-mistakes-spawned Codex agents resolve real `pwsh.exe` and `codex.exe`
+  binaries instead of `.cmd` wrappers.

@@ -37,9 +37,10 @@ For new or materially changed behavior tests:
 7. Run targeted tests first, then the relevant broader suite and lint/typecheck
    where available.
 8. Complete a pollution scan that tries to invalidate the test.
-9. Use the repository's configured outer gate when present, such as
-   `no-mistakes`, CI marker checks, PR template requirements, or local verifier
-   scripts.
+9. Run the adopted `no-mistakes` outer gate for repository validation handoff
+   when the work has a suitable Git remote and needs non-self-certified
+   verification. Also use repository CI marker checks, PR template
+   requirements, or local verifier scripts when they exist.
 10. Report tests as evidence only after red proof, green proof, and pollution
     scan are current and coherent.
 
@@ -153,3 +154,14 @@ Stop or create an ask-user item when:
 - a snapshot or fixture change defines the new expected behavior;
 - no reliable oracle can be established;
 - an outer gate returns an ask-user finding.
+
+## no-mistakes Gate Use
+
+Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` for the outer gate.
+Treat missing CLI, daemon, repository initialization, remote, credentials, or
+gate findings as blockers to report or repair, not as reasons to silently rely
+only on local tests.
+
+Do not run broad skip flags, unattended approval, or direct `origin` push to
+bypass `no-mistakes` for test-related handoff unless the user gives an explicit
+run-specific waiver and the waiver is recorded in the Test Integrity Record.
