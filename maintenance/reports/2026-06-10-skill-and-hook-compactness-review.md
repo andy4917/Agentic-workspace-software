@@ -58,8 +58,33 @@ Generated UTC: 2026-06-09T18:59:58.7936137Z
 
 ## Residual Risks
 
-- `no-mistakes` is not currently installed on PATH.
+- `no-mistakes` is not currently installed on PATH. Follow-up review on
+  2026-06-09T19:17:10Z classified it as an external optional gate for this
+  workstation baseline, not as a currently provided repo or scaffold command.
+  Use the project-native `test-integrity-gate` workflow and report
+  `no-mistakes` as not run unless a repository explicitly provides it or a
+  separate tool-install slice adopts the official gate.
 - Full P0 loop previously reported only `scoop_health_current` as failing after
-  the test-integrity commit; this is a workstation package-manager freshness
-  warning and was not remediated in this scoped change.
+  the test-integrity commit. Follow-up remediation ran `scoop update`, after
+  which `scoop status` reported `Scoop is up to date. Everything is ok!` and
+  `scoop checkup` reported `No problems identified!`. The P0 loop was rerun
+  with a temp `-ReportPath` to avoid mutating the tracked historical report and
+  returned `status=pass`, `fail_count=0`.
 - Plugin skills were intentionally excluded from this review.
+
+## Follow-up Closure
+
+Generated UTC: 2026-06-09T19:17:10.9031743Z
+
+- Closed: `scoop_health_current` package-manager freshness warning.
+- Verified: `validate-codex-scaffold.ps1 -Json` returned
+  `overall_status=pass`, `fail_count=0`, `check_count=35`.
+- Verified: `codex-p0-integrity-loop.ps1 -Json -ReportPath <temp>` returned
+  `status=pass`, `fail_count=0`.
+- Verified: no active `Code.exe` processes were present in the
+  `Win32_Process` check during this follow-up.
+- Not installed: `no-mistakes`. Official Windows install guidance includes a
+  daemon restart path, while the telemetry-off `go install` path was not
+  available because `go` was not installed. Scoop and winget had no matching
+  package; the npm package named `no-mistakes` pointed to a different
+  `jonathanong/no-mistakes` project, so it was rejected as a name collision.
