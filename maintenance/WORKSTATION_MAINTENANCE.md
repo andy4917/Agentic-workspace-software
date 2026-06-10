@@ -125,6 +125,14 @@ Do not directly edit `config.toml` for this toggle unless the Codex CLI command
 itself is confirmed broken. If manual repair becomes necessary, document the
 exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
 
+`context7` is uninstalled from the active global MCP baseline:
+
+- remove the MCP registration from managed and live config;
+- stop any `@upstash/context7-mcp` process before treating runtime cleanup as
+  complete;
+- use official project documentation, an installed task-specific documentation
+  MCP, or web search for version-sensitive third-party library facts.
+
 `memento` is retired from the active Codex PM memory baseline:
 
 - remove or disable the MCP registration in live config;

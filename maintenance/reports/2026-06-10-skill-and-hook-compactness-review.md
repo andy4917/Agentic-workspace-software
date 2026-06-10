@@ -102,9 +102,9 @@ Generated UTC: 2026-06-09T19:29:16.2584172Z
   `%USERPROFILE%\.codex\toolchains\shims` from the child `PATH`; otherwise
   no-mistakes-spawned Codex agents resolve `pwsh.cmd` and every shell command
   fails before execution with `batch file arguments are invalid`.
-  The PATH filter now normalizes `/` to `\` and removes trailing `\` before
-  comparing entries, so benign spelling variants of the shim directory are
-  filtered as well.
+  The PATH filter now normalizes `/` to `\` and removes trailing `\` only for
+  the shim-directory comparison, so benign spelling variants are filtered while
+  retained entries, including paths containing `!`, are appended unchanged.
 - no-mistakes review findings fixed during adoption: the installed skill
   mirrors now use the managed wrapper path instead of bare `no-mistakes`, do
   not treat `--yes` as standing consent, and restrict `skip` to an explicit

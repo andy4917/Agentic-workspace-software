@@ -45,9 +45,9 @@ optional runtime substrates as blockers for unrelated managed-source work.
   credentials are absent.
 - `verify` is a compatibility command for the active stack, not the old
   install-state/full-doctor audit path.
-- Memento and Serena are retired from the active MCP baseline. No layer should
-  require Memento/PostgreSQL or Serena runtime health as normal success
-  evidence.
+- Context7 is absent from the active MCP baseline, and Memento and Serena are
+  retired. No layer should require Context7, Memento/PostgreSQL, or Serena
+  runtime health as normal success evidence.
 - Passing `repo` checks is evidence only; it does not prove live MCP tool
   injection, browser state, local secrets, or long-running runtime health.
 
@@ -55,8 +55,9 @@ optional runtime substrates as blockers for unrelated managed-source work.
 
 - Hook and workflow density: simple mode gives PMs a lower-cost path for work
   that does not touch control-plane surfaces.
-- Retired-runtime coupling: scaffold/P0 checks prove Memento and Serena are
-  absent or disabled instead of treating their runtime health as a blocker.
+- Retired-runtime coupling: scaffold/P0 checks prove Context7 is absent and
+  Memento and Serena are absent or disabled instead of treating their runtime
+  health as a blocker.
 - Reproducibility: `repo-verify` and the GitHub Actions workflow provide a
   public-safe CI path for tracked source quality.
 - Policy drift: this document is the layer source of truth; references in
