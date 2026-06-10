@@ -16,7 +16,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import tempfile
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -356,15 +355,6 @@ def harness_source_digest(root: Path) -> str:
     return h.hexdigest()
 
 
-def backup_file(path: Path, root: Path) -> Path:
-    backup_root = Path(tempfile.gettempdir()) / "codex-transient-backups" / f"codex-harness-{local_stamp()}"
-    ensure_dir(backup_root)
-    destination = backup_root / rel(path, root)
-    ensure_dir(destination.parent)
-    shutil.copy2(path, destination)
-    return destination
-
-
 def load_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
@@ -441,7 +431,7 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
         templates["reports/README.md"] = (
             "# Codex Harness Reports\n\n"
             "Harness reports and templates for repo verification, context inspection,\n"
-            "retrieval, eval, benchmark, and audit work live here. `README.md`,\n"
+            "retrieval, eval, benchmark, P0 integrity, and audit work live here. `README.md`,\n"
             "templates, and seed discovery files are active managed source.\n\n"
             "`*.latest.json`, `*.latest.md`, and `*results.jsonl` are ignored\n"
             "runtime outputs. Use them for triage only; rerun the responsible\n"

@@ -436,6 +436,12 @@ Add-Check $checks "config_fragment_reconcile_match" ($(if ($fragmentReconcile.ok
 $parsed = & python -c "import sys,tomllib,json; p=sys.argv[1]; data=tomllib.load(open(p,'rb')); print(json.dumps(data, sort_keys=True))" $configPath
 if ($LASTEXITCODE -eq 0) {
     $config = $parsed | ConvertFrom-Json
+    $globalAgentsOverride = Join-Path $CodexHome "AGENTS.override.md"
+    Add-Check $checks "global_agents_override_absent" ($(if (-not (Test-Path -LiteralPath $globalAgentsOverride)) { "pass" } else { "fail" })) @{
+        path = $globalAgentsOverride
+        exists = (Test-Path -LiteralPath $globalAgentsOverride)
+        note = "OpenAI Codex reads AGENTS.override.md before AGENTS.md at global scope. This workstation baseline keeps the active bootstrap in AGENTS.md, so a global override would hide the reviewed guidance."
+    }
     $approvalPolicy = if ($config.PSObject.Properties["approval_policy"]) { [string]$config.approval_policy } else { "" }
     $windowsSandbox = if ($null -ne $config.windows -and $config.windows.PSObject.Properties["sandbox"]) { [string]$config.windows.sandbox } else { "" }
     $permissionPostureOk = (
@@ -637,18 +643,65 @@ if ($LASTEXITCODE -eq 0) {
         note = "PLAN retires Serena and Memento as active MCPs. Validation must prove retirement by config/process absence, not by retired runtime health probes."
     }
     $hookCommands = @()
+    $hookCommandWindows = @()
+    $hookCommandProblems = @()
+    $hookCommandWindowsProblems = @()
+    $hookEventDetails = @()
     foreach ($event in @("SessionStart","UserPromptSubmit","PreToolUse","PostToolUse","Stop")) {
         $groups = @($config.hooks.$event)
         foreach ($group in $groups) {
-            foreach ($hook in @($group.hooks)) { $hookCommands += [string]$hook.command }
+            foreach ($hook in @($group.hooks)) {
+                $commandValue = [string]$hook.command
+                $commandWindowsValue = if ($hook.PSObject.Properties["commandWindows"]) {
+                    [string]$hook.commandWindows
+                } elseif ($hook.PSObject.Properties["command_windows"]) {
+                    [string]$hook.command_windows
+                } else {
+                    ""
+                }
+                $hookCommands += $commandValue
+                $hookCommandWindows += $commandWindowsValue
+                $hookEventDetails += [ordered]@{
+                    event = $event
+                    command = $commandValue
+                    command_windows = $commandWindowsValue
+                }
+            }
         }
     }
-    $badHookCommands = @($hookCommands | Where-Object {
-        [Environment]::ExpandEnvironmentVariables([string]$_) -notmatch [regex]::Escape($hookPath)
-    })
-    Add-Check $checks "hooks_one_runner" ($(if ($hookCommands.Count -eq 5 -and $badHookCommands.Count -eq 0) { "pass" } else { "fail" })) @{
-        count = $hookCommands.Count
-        bad = $badHookCommands
+    $testHookCommand = {
+        param([string]$CommandText)
+        if ([string]::IsNullOrWhiteSpace($CommandText)) { return $false }
+        $commandText = [string]$CommandText
+        $expandedCommand = [Environment]::ExpandEnvironmentVariables($commandText)
+        $referencesCompactHook = (
+            $expandedCommand -match [regex]::Escape($hookPath) -or
+            $commandText -match "(?i)compact-codex-hook\.ps1"
+        )
+        $usesLegacyHook = $commandText -match "(?i)(lightweight-codex|hooks\.json)"
+        $usesForegroundCmd = $commandText -match "(?i)\bcmd\s*/c\b"
+        $usesHiddenWrapper = $commandText -match "(?i)WindowStyle\s+Hidden"
+        return ($referencesCompactHook -and -not $usesLegacyHook -and -not $usesForegroundCmd -and $usesHiddenWrapper)
+    }
+    foreach ($commandItem in $hookCommands) {
+        if (-not (& $testHookCommand $commandItem)) { $hookCommandProblems += $commandItem }
+    }
+    foreach ($commandItem in $hookCommandWindows) {
+        if (-not (& $testHookCommand $commandItem)) { $hookCommandWindowsProblems += $commandItem }
+    }
+    Add-Check $checks "hooks_one_runner" ($(if ($hookCommands.Count -eq 5 -and $hookCommandWindows.Count -eq 5 -and $hookCommandProblems.Count -eq 0 -and $hookCommandWindowsProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+        command_count = $hookCommands.Count
+        command_windows_count = $hookCommandWindows.Count
+        command_bad = $hookCommandProblems
+        command_windows_bad = $hookCommandWindowsProblems
+        events = $hookEventDetails
+        note = "All hook events must route both command and commandWindows to the compact hook through the hidden wrapper, without foreground cmd.exe or retired hook names."
+    }
+    $userHooksJson = Join-Path $CodexHome "hooks.json"
+    Add-Check $checks "hooks_single_user_source" ($(if (-not (Test-Path -LiteralPath $userHooksJson)) { "pass" } else { "fail" })) @{
+        path = $userHooksJson
+        exists = (Test-Path -LiteralPath $userHooksJson)
+        note = "OpenAI Codex loads both hooks.json and inline [hooks] from an active layer. This workstation baseline keeps user-level hooks in inline config.toml only to avoid duplicate hook execution and startup warnings."
     }
 } else {
     Add-Check $checks "config_parse" "fail" @{ path = $configPath }
@@ -1239,6 +1292,7 @@ $syncPairs = @(
     "config.d\10-mcp.toml",
     "config.d\20-hooks.toml",
     "config.d\30-skills.toml",
+    "config.d\README.md",
     "hooks\compact-codex-hook.ps1",
     "maintenance\CHROME_DEVTOOLS_MCP_OBSERVER.md",
     "maintenance\AGENT_TOOL_REQUIREMENTS.md",
@@ -1353,22 +1407,6 @@ Add-Check $checks "harness_wrapper_exit_propagation" ($(if ($harnessWrapperExitP
     note = "Harness PowerShell wrappers must target the managed source root and propagate Python's exit code so tracebacks cannot become false-success exit 0 results."
 }
 
-$retiredConfigBackup = Join-Path $CodexHome ".codex-global-state.json.bak"
-$retiredConfigBackupRemoved = $false
-if (Test-Path -LiteralPath $retiredConfigBackup -PathType Leaf) {
-    $backupFull = [IO.Path]::GetFullPath($retiredConfigBackup)
-    $homeFull = [IO.Path]::GetFullPath($CodexHome)
-    if ($backupFull.StartsWith($homeFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-        Remove-Item -LiteralPath $backupFull -Force
-        $retiredConfigBackupRemoved = $true
-    }
-}
-Add-Check $checks "retired_config_state_backup_absent" ($(if (-not (Test-Path -LiteralPath $retiredConfigBackup -PathType Leaf)) { "pass" } else { "fail" })) @{
-    path = $retiredConfigBackup
-    removed_during_validation = $retiredConfigBackupRemoved
-    note = "Retired .codex-global-state backup files are contamination candidates and are removed before live runtime hygiene classification."
-}
-
 $liveAppServerPid = $null
 try {
     if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
@@ -1379,22 +1417,40 @@ try {
     $liveAppServerPid = $null
 }
 
-if (Test-Path -LiteralPath $retiredConfigBackup -PathType Leaf) {
-    $backupFull = [IO.Path]::GetFullPath($retiredConfigBackup)
-    $homeFull = [IO.Path]::GetFullPath($CodexHome)
-    if ($backupFull.StartsWith($homeFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-        Remove-Item -LiteralPath $backupFull -Force
-        $retiredConfigBackupRemoved = $true
+$globalStateNames = @(".codex-global-state.json",".codex-global-state.json.bak")
+$globalStateDetails = @()
+$globalStateTypeProblems = @()
+foreach ($name in $globalStateNames) {
+    $path = Join-Path $CodexHome $name
+    $isFile = Test-Path -LiteralPath $path -PathType Leaf
+    $isDirectory = Test-Path -LiteralPath $path -PathType Container
+    if ($isDirectory) {
+        $globalStateTypeProblems += $path
     }
+    $globalStateDetails += [ordered]@{
+        name = $name
+        path = $path
+        exists = [bool]($isFile -or $isDirectory)
+        is_file = [bool]$isFile
+        is_directory = [bool]$isDirectory
+    }
+}
+Add-Check $checks "global_state_runtime_files_classified" ($(if ($globalStateTypeProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+    files = $globalStateDetails
+    live_app_server_pid = $liveAppServerPid
+    type_problems = $globalStateTypeProblems
+    note = ".codex-global-state.json and .codex-global-state.json.bak are expected Codex Desktop runtime state when present. They are not configuration truth, rollback authority, or cleanup targets."
 }
 
 $allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state")
 $top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)
 $topExtra = @($top | Where-Object { $_ -notin $allowedTop })
-Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid -or $topExtra.Count -eq 0) { "pass" } else { "fail" })) @{
+$offlineBaselineExtra = @($topExtra | Where-Object { $_ -notin $globalStateNames })
+Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid -or $offlineBaselineExtra.Count -eq 0) { "pass" } else { "fail" })) @{
     live_app_server_pid = $liveAppServerPid
-    extra = $topExtra
-    note = "Offline baseline cleanup is enforced only after Codex is fully closed; live app-created runtime state is categorized separately."
+    extra = $offlineBaselineExtra
+    expected_global_state = @($topExtra | Where-Object { $_ -in $globalStateNames })
+    note = "Offline baseline cleanup is enforced only after Codex is fully closed; expected global state files are app runtime state and are categorized separately."
 }
 $liveRuntimeNames = @(
     "artifacts",
@@ -1424,12 +1480,13 @@ $liveRuntimeNames = @(
 )
 $protectedStateNames = @("auth.json","installation_id",".sandbox-secrets","cap_sid")
 $sourceNames = @("tools","agents","docs","evals")
-$configStateNames = @(".codex-global-state.json",".personality_migration","chrome-native-hosts.json","chrome-native-hosts-v2.json")
+$configStateNames = $globalStateNames + @(".personality_migration","chrome-native-hosts.json","chrome-native-hosts-v2.json")
 $quarantineNames = @()
 $databaseState = @($topExtra | Where-Object { $_ -match '^(goals|logs|memories|state)_[0-9]+\.sqlite(-shm|-wal)?$' })
 $classifiedNames = $liveRuntimeNames + $protectedStateNames + $sourceNames + $configStateNames + $quarantineNames + $databaseState
 $uncategorizedTopExtra = @($topExtra | Where-Object { $_ -notin $classifiedNames })
-$forbiddenActiveTop = @($topExtra | Where-Object { $_ -in @("archive","archived_app_tool_caches","archived_logs","archived_sessions","archived_transient_roots","archived_worktrees","bundled-marketplaces","codex-runtimes","skills-disabled","wshobson-agents-scan",(".codex-global-state.json" + ".bak")) })
+$forbiddenNames = @("archive","archived_app_tool_caches","archived_logs","archived_sessions","archived_transient_roots","archived_worktrees","bundled-marketplaces","codex-runtimes","skills-disabled","wshobson-agents-scan")
+$forbiddenActiveTop = @($topExtra | Where-Object { $_ -in $forbiddenNames })
 Add-Check $checks "live_runtime_hygiene" ($(if ($uncategorizedTopExtra.Count -eq 0 -and $forbiddenActiveTop.Count -eq 0) { "pass" } else { "fail" })) @{
     live_app_server_pid = $liveAppServerPid
     runtime_state = @($topExtra | Where-Object { $_ -in $liveRuntimeNames })

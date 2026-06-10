@@ -10,7 +10,10 @@ raw worker reports from becoming PM completion claims.
 
 ## Adversarial Review Mapping
 
-| read-only review result | Contamination score | Required action |
+Use `clean-all-slop` in read-only audit mode on the immediately previous
+relevant worker, PM, validation, merge, or completion claim.
+
+| Adversarial review result | Contamination score | Required action |
 |---|---:|---|
 | CLEAN with adequate checked evidence | C0 | Continue. |
 | Only P3 findings | C1 | Correct wording, ledger, or minor cleanup before continuing. |
@@ -26,7 +29,7 @@ If checked evidence is too narrow, downgrade to C1 or C2.
 PM-only long-running work does not bypass midpoint audit.
 
 1. Create `MIDPOINT_AUDIT_CONTEXT`.
-2. Apply `clean-all-slop` read-only audit to the immediately previous relevant turn.
+2. Apply `clean-all-slop` read-only audit mode to the immediately previous relevant turn.
 3. Map the verdict to C0-C4.
 4. Decide continue, correct-plan, redo-from-checkpoint, quarantine-and-restart,
    or stop-for-user.
@@ -36,7 +39,7 @@ PM-only long-running work does not bypass midpoint audit.
 Before final completion, commit, PR, publish, merge, or terminal handoff:
 
 1. Create `PRE_SHIP_AUDIT_CONTEXT`.
-2. Apply `clean-all-slop` read-only audit to the immediately previous completion claim.
+2. Apply `clean-all-slop` read-only audit mode to the immediately previous completion claim.
 3. Map the verdict to C0-C4.
 4. Block completion unless evidence, not-run reasons, residual risks, and PM
    independent verification are adequate.

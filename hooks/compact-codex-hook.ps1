@@ -65,13 +65,20 @@ New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 
 $runtimeCleanupWatch = $null
 if ($event -eq "SessionStart" -or $event -eq "UserPromptSubmit") {
-    try {
-        $runtimeCleanupWatch = Ensure-RuntimeCleanupWatch -CodexHome $codexHome
-    } catch {
+    if ($env:CODEX_HOOK_SMOKE -eq "1") {
         $runtimeCleanupWatch = [ordered]@{
-            attempted = $true
-            status = "error"
-            error = $_.Exception.Message
+            attempted = $false
+            status = "smoke_skipped"
+        }
+    } else {
+        try {
+            $runtimeCleanupWatch = Ensure-RuntimeCleanupWatch -CodexHome $codexHome
+        } catch {
+            $runtimeCleanupWatch = [ordered]@{
+                attempted = $true
+                status = "error"
+                error = $_.Exception.Message
+            }
         }
     }
 }

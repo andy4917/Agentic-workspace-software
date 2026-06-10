@@ -491,7 +491,8 @@ if ($ReportOnly) {
     }
 }
 
-$validationRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $validateScript, "-CodexHome", $codexHomeResolved, "-Json")
+$validationArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $validateScript, "-CodexHome", $codexHomeResolved, "-Json")
+$validationRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments $validationArguments
 $validation = ConvertFrom-JsonOutput -Text $validationRun.stdout
 Add-Check $checks "scaffold_validation_current" ($(if ($validationRun.exit_code -eq 0 -and $null -ne $validation -and $validation.overall_status -eq "pass") { "pass" } else { "fail" })) @{
     command = $validationRun.command_line

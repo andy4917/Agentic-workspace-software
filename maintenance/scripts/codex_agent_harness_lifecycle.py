@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import stat
 import sys
 import tomllib
@@ -112,7 +111,6 @@ def cmd_apply(args: argparse.Namespace) -> int:
                 )
                 continue
             if was_managed:
-                backup = backup_file(full, root)
                 write_text(full, content)
                 operations.append(
                     {
@@ -122,7 +120,6 @@ def cmd_apply(args: argparse.Namespace) -> int:
                         "owner": OWNER,
                         "managed": True,
                         "remove_on_uninstall": remove_on_uninstall,
-                        "backup": str(backup),
                     }
                 )
                 continue
@@ -393,8 +390,6 @@ def cmd_repair(args: argparse.Namespace) -> int:
         if full.exists() and sha256_file(full) == sha256_text(desired):
             continue
         if args.apply:
-            if full.exists():
-                backup_file(full, root)
             write_text(full, desired)
             repaired.append(path)
         else:
@@ -422,7 +417,6 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         return 0
     for item in sorted(targets, reverse=True):
         path = root / item
-        backup_file(path, root)
         path.unlink()
     print(json.dumps({"dry_run": False, "removed": targets}, ensure_ascii=False, indent=2))
     return 0

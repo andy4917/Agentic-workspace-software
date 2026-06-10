@@ -7,5 +7,5 @@ current run names the file and timestamp.
 
 Do not copy live runtime logs, secrets, sessions, SQLite state, browser
 state, or raw prompt payloads here. Prefer current command reruns, keep
-artifact references in reports or trajectories, and handle deletion or
-archiving in a separate bounded cleanup pass.
+artifact references in reports or trajectories, and delete retired
+generated artifacts in a separate bounded cleanup pass.

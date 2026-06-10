@@ -140,10 +140,11 @@ def harness_engine_module_status(root: Path) -> dict[str, Any]:
 
 def app_runtime_state_writable_status(root: Path) -> dict[str, Any]:
     runtime_root = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
-    runtime_only = {"config.toml", ".codex-global-state.json"}
+    runtime_only = {"config.toml", ".codex-global-state.json", ".codex-global-state.json.bak"}
+    optional_runtime_state = {".codex-global-state.json.bak"}
     items = []
     failures = []
-    for name in ["config.toml", ".codex-global-state.json", "config.d/20-hooks.toml"]:
+    for name in ["config.toml", ".codex-global-state.json", ".codex-global-state.json.bak", "config.d/20-hooks.toml"]:
         path = root / name
         source = "managed_root"
         if not path.exists() and name in runtime_only:
@@ -151,7 +152,8 @@ def app_runtime_state_writable_status(root: Path) -> dict[str, Any]:
             source = "codex_home"
         if not path.exists():
             items.append({"path": name, "source": source, "resolved_path": str(path), "exists": False, "writable": False, "readonly": None})
-            failures.append(name)
+            if name not in optional_runtime_state:
+                failures.append(name)
             continue
         try:
             readonly = bool(path.stat().st_file_attributes & stat.FILE_ATTRIBUTE_READONLY)

@@ -574,7 +574,13 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         matches.append({"pattern": "<all>", "path": "<not-run>", "line": "", "error": "rg not available"})
 
     scan_errors = [match for match in matches if match["path"] in {"<scan-error>", "<not-run>"}]
-    active_roots = [str(root / "config.toml"), str(root / ".codex-global-state.json"), str(root / "config.d" / "20-hooks.toml"), str(root / "AGENTS.md")]
+    active_roots = [
+        str(root / "config.toml"),
+        str(root / ".codex-global-state.json"),
+        str(root / ".codex-global-state.json.bak"),
+        str(root / "config.d" / "20-hooks.toml"),
+        str(root / "AGENTS.md"),
+    ]
     active_hits = []
     for match in matches:
         if match["path"] in {"<scan-error>", "<not-run>"}:

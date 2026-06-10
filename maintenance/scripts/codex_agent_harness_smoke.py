@@ -51,6 +51,7 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
 def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     env = os.environ.copy()
     env["CODEX_HOOK_SMOKE"] = "1"
+    env["CODEX_HOME"] = str(root)
     pwsh = Path(os.environ.get("USERPROFILE", "")) / ".codex" / "toolchains" / "shims" / "pwsh.cmd"
     executable = str(pwsh) if pwsh.exists() else "pwsh"
     try:
@@ -132,6 +133,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and ("lightweight" + "-codex") not in config_text
             and ("hooks" + ".json") not in config_text,
             "Active hook fragment should route only to compact-codex-hook.ps1.",
+        )
+        add_check(
+            "hook_config_runs_hidden_on_windows",
+            "WindowStyle Hidden" in config_text
+            and "cmd /c" not in config_text
+            and config_text.count("commandWindows") >= 5,
+            "Active hook fragment should define hidden commandWindows overrides for every hook while preserving stdout.",
         )
         add_check(
             "compact_hook_contains_current_contract",

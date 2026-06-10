@@ -825,6 +825,10 @@ Hooks support the PM workflow; they do not replace PM judgment or user review.
 - Keep hook and workflow logs small, local, structured, and non-authoritative.
 - Store current operational records in SQLite or small bounded ledgers.
 - Do not store raw secrets, full prompts, or full tool payloads by default.
+- Treat `.codex-global-state.json` and `.codex-global-state.json.bak` as
+  expected Codex Desktop runtime state when present. Do not delete them as
+  retired archives, and do not use them as configuration truth or rollback
+  authority; `config.toml` remains the runtime configuration truth.
 - Retired, archived, disabled, or backup roots are not active runtime truth. When
   the user explicitly authorizes removal, delete those contamination candidates
   directly after path-boundary verification instead of creating another retained

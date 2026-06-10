@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import tempfile
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -35,10 +34,8 @@ def cmd_merge_config(args: argparse.Namespace) -> int:
         "additions": [{"table": ".".join(item["table"]), "key": item["key"]} for item in additions],
     }
     if args.apply and addition_text:
-        backup = backup_file(target, root)
         merged_text = apply_toml_additions(read_text(target), additions, target_data)
         write_text(target, merged_text)
-        result["backup"] = str(backup)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
@@ -190,6 +187,8 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "[features]\n"
             "plugins = true\n"
             "hooks = true\n"
+            "goals = true\n"
+            "memories = true\n"
             "multi_agent = true\n"
             "child_agents_md = true\n"
             "tool_search = true\n"
@@ -242,7 +241,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "## Falsifier-First\n\nCheck the strongest contradiction before accepting.\n"
             "## Completion Authority\n\nTests, tools, and reports are evidence only.\n",
         )
-        write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
+        write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n.codex-global-state.json.bak\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})
         write_text(
             root / "config.d" / "20-hooks.toml",
@@ -250,14 +249,24 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "matcher = \"Bash|apply_patch|mcp__.*\"\n"
             "[[hooks.PreToolUse.hooks]]\n"
             "type = \"command\"\n"
-            "command = 'cmd /c \"%USERPROFILE%\\.codex\\toolchains\\shims\\pwsh.cmd\" -NoProfile -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.codex\\hooks\\compact-codex-hook.ps1\"'\n",
+            "command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"& $env:USERPROFILE\\.codex\\toolchains\\shims\\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\\.codex\\hooks\\compact-codex-hook.ps1\"'\n"
+            "commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"& $env:USERPROFILE\\.codex\\toolchains\\shims\\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\\.codex\\hooks\\compact-codex-hook.ps1\"'\n"
+            "\n"
+            "[[hooks.PostToolUse]]\n"
+            "matcher = \"Bash|apply_patch|mcp__.*\"\n"
+            "[[hooks.PostToolUse.hooks]]\n"
+            "type = \"command\"\n"
+            "command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"& $env:USERPROFILE\\.codex\\toolchains\\shims\\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\\.codex\\hooks\\compact-codex-hook.ps1\"'\n"
+            "commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"& $env:USERPROFILE\\.codex\\toolchains\\shims\\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\\.codex\\hooks\\compact-codex-hook.ps1\"'\n"
         )
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
         write_text(
             root / "hooks" / "compact-codex-hook.ps1",
             "$ErrorActionPreference = 'Stop'\n"
             "$ledger = 'hook-ledger.jsonl'\n"
-            "$runner = 'compact-codex-hook'\n"
+            "$runner = \"compact-codex-hook\"\n"
+            "# compact hook active\n"
+            "function Ensure-RuntimeCleanupWatch { return $true }\n"
             "# UserPromptSubmit PreToolUse treat claims as candidate until direct evidence supports them\n",
         )
         write_text(root / "evals" / "calibration-eval.yaml", "checks:\n  - confident_wrong\n  - unsupported_material_claim\n")

@@ -487,8 +487,13 @@ function Get-ToolchainInventory {
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $maintenanceRoot = Join-Path $CodexHome 'maintenance'
-$reportsRoot = Join-Path $maintenanceRoot 'reports'
-New-Directory -Path $reportsRoot
+$managedSourceRoot = Join-Path $env:USERPROFILE 'Documents\Codex'
+$managedReportsRoot = if (Test-Path -LiteralPath $managedSourceRoot -PathType Container) {
+    Join-Path $managedSourceRoot 'reports'
+} else {
+    Join-Path $CodexHome 'state'
+}
+New-Directory -Path $managedReportsRoot
 
 $transientRoots = @()
 if ($IncludeDotTmp -or $Mode -eq 'Report') { $transientRoots += Join-Path $CodexHome '.tmp' }
@@ -547,6 +552,6 @@ $report = [ordered]@{
     }
 }
 
-$reportPath = Join-Path $reportsRoot 'codex-home-maintenance.latest.json'
+$reportPath = Join-Path $managedReportsRoot 'codex-home-maintenance.latest.json'
 $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8
 $report

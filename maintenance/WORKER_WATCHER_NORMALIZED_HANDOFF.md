@@ -15,10 +15,9 @@ PM Goal
   -> Worker Dispatch
       -> Worker Result
       -> Watcher Dispatch
-          -> clean-all-slop read-only review of the immediately previous worker or PM turn
+          -> clean-all-slop read-only audit of the immediately previous worker or PM turn
           -> WATCHER_REPORT
-      -> Result Normalizer
-          -> NORMALIZED_WORKER_PACKET
+      -> Normalize output with maintenance/templates/NORMALIZED_WORKER_PACKET.md
   -> PM_MERGE_DECISION
   -> PM Independent Verification
   -> Goal Integrity Gate
@@ -27,7 +26,7 @@ PM Goal
 ## Required Artifacts
 
 - `NORMALIZED_WORKER_PACKET`: evidence-first packet extracted from worker output.
-- `WATCHER_REPORT`: read-only integrity review using `clean-all-slop`.
+- `WATCHER_REPORT`: read-only integrity review using `clean-all-slop` audit mode.
 - `WATCHER_NOT_USED`: required when a watcher is omitted.
 - `PM_MERGE_DECISION`: PM decision to accept, rework, reject, quarantine, or continue.
 

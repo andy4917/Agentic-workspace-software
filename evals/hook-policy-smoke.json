@@ -11,8 +11,8 @@
     "PreToolUse allows ordinary inspected tool use and records the event",
     "PostToolUse and Stop are record-only and do not claim completion authority",
     "Retired hook config names are absent from active hook routing",
-    "Synthetic hook smoke tests restore the live hook ledger after probing",
-    "Direct auth file reads remain blocked by higher-priority policy, not by broad hook cascades",
+    "Synthetic hook smoke tests use an isolated CODEX_HOME and restore the smoke ledger after probing",
+    "Windows hook commands use a hidden top-level PowerShell wrapper without cmd /c foreground windows",
     "Retired archive, disabled-skill, and backup roots are validator failures after cleanup authorization"
   ],
   "task": "Verify the compact hook stays minimal, deterministic, and aligned with AGENTS.md instead of reintroducing legacy hook enforcement or archive-first cleanup.",

@@ -4,16 +4,16 @@
 matcher = "startup|resume"
 [[hooks.SessionStart.hooks]]
 type = "command"
-command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
@@ -21,8 +21,8 @@ statusMessage = "compact scaffold hook"
 matcher = "Bash|apply_patch|mcp__.*"
 [[hooks.PreToolUse.hooks]]
 type = "command"
-command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
@@ -30,16 +30,16 @@ statusMessage = "compact scaffold hook"
 matcher = "Bash|apply_patch|mcp__.*"
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'cmd /c "%USERPROFILE%\.codex\toolchains\shims\pwsh.cmd" -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.codex\hooks\compact-codex-hook.ps1"'
+command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
 timeout = 10
 statusMessage = "compact scaffold hook"
 

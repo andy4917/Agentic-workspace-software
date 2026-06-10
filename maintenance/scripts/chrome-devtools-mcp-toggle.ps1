@@ -41,7 +41,6 @@ $CodexHome = Resolve-CodexHome
 $ShimDir = Join-PathStrict $CodexHome "toolchains\shims"
 $NpxWrapper = Join-PathStrict $ShimDir "npx.cmd"
 $ConfigPath = Join-PathStrict $CodexHome "config.toml"
-$BackupRoot = Join-PathStrict ([System.IO.Path]::GetTempPath()) "codex-transient-backups\mcp-toggle"
 $CodexExe = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin\codex.exe"
 
 if (-not (Test-Path -LiteralPath $CodexExe)) {
@@ -96,20 +95,6 @@ function Get-McpServerInfo {
 
 function Test-McpServerPresent {
     return ($null -ne (Get-McpServerInfo))
-}
-
-function Save-ConfigBackup {
-    param([Parameter(Mandatory = $true)][string] $Reason)
-
-    if (-not (Test-Path -LiteralPath $ConfigPath)) {
-        return
-    }
-
-    New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
-    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $destination = Join-PathStrict $BackupRoot "config.$Reason.$stamp.toml"
-    Copy-Item -LiteralPath $ConfigPath -Destination $destination -Force
-    Write-Host "backup=$destination"
 }
 
 function Write-Utf8NoBomLines {
@@ -301,8 +286,6 @@ if ($Action -eq "on") {
         throw "npx wrapper not found: $NpxWrapper"
     }
 
-    Save-ConfigBackup -Reason "before-chrome-devtools-on"
-
     Invoke-WithWritableConfig {
         if (Test-McpServerPresent) {
             Invoke-CodexCli -Arguments @("mcp", "remove", $ServerName)
@@ -319,8 +302,6 @@ if ($Action -eq "on") {
 }
 
 if ($Action -eq "off") {
-    Save-ConfigBackup -Reason "before-chrome-devtools-off"
-
     Invoke-WithWritableConfig {
         if (-not (Test-McpServerPresent)) {
             Add-McpServerConfig

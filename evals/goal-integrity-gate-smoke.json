@@ -9,6 +9,6 @@
     "Pre-ship gate reviews the completion claim",
     "C2 resets BUILD/VERIFY, C3 quarantines, and C4 stops for user approval"
   ],
-  "task": "Verify midpoint and pre-ship gates map read-only adversarial review results to reset, quarantine, stop, or continue decisions.",
+  "task": "Verify midpoint and pre-ship gates map adversarial review results to reset, quarantine, stop, or continue decisions.",
   "timeout_seconds": 30
 }
