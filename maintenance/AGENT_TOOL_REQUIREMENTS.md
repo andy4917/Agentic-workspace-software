@@ -97,6 +97,48 @@ managed-source work to full workstation runtime verification.
 Do not report a lower layer as proof of a higher layer. State the layer used and
 which runtime surfaces were not checked.
 
+## no-mistakes Outer Gate
+
+`no-mistakes` is adopted for repository work that needs non-self-certified
+validation, especially test/TDD changes, validation handoff, safe push, PR, CI,
+release, or merge handoff. Use the explicit wrapper:
+
+```powershell
+%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd
+```
+
+The active binary is the official `kunchenguid/no-mistakes` release under
+`%LOCALAPPDATA%\no-mistakes\no-mistakes.exe`. Do not use the npm package named
+`no-mistakes`; it is a different project. Keep telemetry and background update
+checks disabled for Codex-managed runs with `NO_MISTAKES_TELEMETRY=0` and
+`NO_MISTAKES_NO_UPDATE_CHECK=1`.
+
+The wrapper must also remove `%USERPROFILE%\.codex\toolchains\shims` from the
+child `PATH` before starting `no-mistakes`. This is intentional: no-mistakes
+spawns Codex agents, and Codex shell commands must resolve a real `pwsh.exe`,
+not the `.cmd` shim, or Windows batch argument handling can block every shell
+command with `batch file arguments are invalid`.
+Normalize PATH entries only for comparison with the Codex shim directory; append
+retained entries unchanged so paths containing `!`, forward slashes, or root
+trailing slashes are not corrupted.
+
+The no-mistakes Codex agent configuration must include `--sandbox
+danger-full-access`, `--disable plugins`, and `--skip-git-repo-check`.
+`--skip-git-repo-check` is scoped to no-mistakes-spawned agents so isolated gate
+worktrees under `%USERPROFILE%\.no-mistakes\worktrees` can run without being
+added as persistent trusted Codex project roots.
+
+Do not call `no-mistakes` recursively from inside a no-mistakes-spawned gate
+worktree or agent step. The primary PM may validate the CLI and daemon from the
+main checkout; gate agents should use project-native checks, scaffold validator
+output, or fake-binary wrapper probes so they do not interfere with the active
+pipeline daemon.
+
+If the target repository is not initialized for the gate, initialize or repair
+the smallest in-scope blocker when the repo has a suitable Git remote and the
+current task requires the gate. If it cannot run, report the exact blocker,
+closest project-native checks, and residual risk.
+
 ## Core Stacks
 
 ### Python
@@ -208,9 +250,10 @@ repository-specific command, credential source, or policy boundary.
 - Keep `openaiDeveloperDocs` enabled for current OpenAI API, model, Codex,
   plugin, app-server, and ChatGPT Apps documentation. Prefer it over web search
   for OpenAI product facts.
-- Keep `context7` enabled for current third-party library, framework, SDK, CLI,
-  or cloud-service documentation. Prefer it over web search for library
-  documentation; resolve the library id before fetching focused docs.
+- `context7` is uninstalled from the global MCP baseline. For current
+  third-party library, framework, SDK, CLI, or cloud-service documentation, use
+  official project documentation, an installed task-specific documentation MCP,
+  or web search when the documentation is version-sensitive.
 - Keep `chrome-devtools` optional and OFF by default. Enable it only for a
   bounded browser-observation task, reload/restart the app if the namespace is
   not visible, verify exposure with tool discovery, use it for the rendered
@@ -218,9 +261,9 @@ repository-specific command, credential source, or policy boundary.
 - Use `node_repl` as a Codex Desktop bundled execution primitive, not as a
   user-configured `[mcp_servers.*]` entry. Discover it with `tool_search` when
   needed for JavaScript execution or browser-plugin setup code.
-- Treat `memento`, `serena`, `shadcn`, `sequential_thinking`, and
+- Treat `context7`, `memento`, `serena`, `shadcn`, `sequential_thinking`, and
   `windows_powershell` as not part of the current default MCP baseline. Use CLI,
-  skills, official docs, Context7, browser tooling, or a future explicit user
+  skills, official docs, browser tooling, or a future explicit user
   request instead of silently reintroducing those MCP registrations.
 
 ## Reasoning Effort Policy

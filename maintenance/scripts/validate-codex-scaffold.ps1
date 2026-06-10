@@ -285,13 +285,41 @@ function Get-PluginRoot {
     return $null
 }
 
+function Test-InNoMistakesWorktree {
+    $noMistakesWorktreeRoot = Join-Path $env:USERPROFILE ".no-mistakes\worktrees"
+    try {
+        $noMistakesWorktreeRootFull = ([System.IO.Path]::GetFullPath($noMistakesWorktreeRoot)).TrimEnd("\") + "\"
+        $scriptFull = [System.IO.Path]::GetFullPath($PSCommandPath)
+        $cwdFull = [System.IO.Path]::GetFullPath((Get-Location).Path)
+        return (
+            $scriptFull.StartsWith($noMistakesWorktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $cwdFull.StartsWith($noMistakesWorktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)
+        )
+    } catch {
+        return $false
+    }
+}
+
+function Remove-NoMistakesReposProjectTrustBlock {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $noMistakesReposPath = (Join-Path $env:USERPROFILE ".no-mistakes\repos") -replace "/", "\"
+    $escapedNoMistakesReposPath = [regex]::Escape($noMistakesReposPath)
+    $pattern = "(?im)^\s*\[projects\.'$escapedNoMistakesReposPath'\]\s*\r?\n\s*trust_level\s*=\s*`"trusted`"\s*(\r?\n)?"
+    return [regex]::Replace($Text, $pattern, "")
+}
+
 function Test-FragmentReconcile {
-    param([Parameter(Mandatory = $true)][string]$Root)
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [switch]$AllowNoMistakesLocalProjectOverlay
+    )
 
     $fragments = @("00-policy.toml", "10-mcp.toml", "20-hooks.toml", "30-skills.toml")
     $configText = Get-Content -LiteralPath (Join-Path $Root "config.toml") -Raw
     $missing = @()
     $mismatched = @()
+    $allowedLocalOverlays = @()
     foreach ($name in $fragments) {
         $fragmentPath = Join-Path (Join-Path $Root "config.d") $name
         if (-not (Test-Path -LiteralPath $fragmentPath -PathType Leaf)) {
@@ -308,6 +336,13 @@ function Test-FragmentReconcile {
         $actualFragmentText = ($match.Groups[1].Value.Trim() -replace "\r\n?", "`n")
         $expectedFragmentText = ($fragmentText -replace "\r\n?", "`n")
         if ($actualFragmentText -ne $expectedFragmentText) {
+            if ($AllowNoMistakesLocalProjectOverlay -and $name -eq "00-policy.toml") {
+                $actualWithoutNoMistakesTrust = (Remove-NoMistakesReposProjectTrustBlock -Text $actualFragmentText).Trim()
+                if ($actualWithoutNoMistakesTrust -eq $expectedFragmentText) {
+                    $allowedLocalOverlays += "00-policy.toml: no-mistakes repos project trust"
+                    continue
+                }
+            }
             $mismatched += $name
         }
     }
@@ -316,6 +351,7 @@ function Test-FragmentReconcile {
         ok = ($missing.Count -eq 0 -and $mismatched.Count -eq 0)
         missing = $missing
         mismatched = $mismatched
+        allowed_local_overlays = $allowedLocalOverlays
     }
 }
 
@@ -390,10 +426,11 @@ Add-Check $checks "required_files" ($(if ((Test-Path $configPath) -and (Test-Pat
     hook = $hookPath
 }
 
-$fragmentReconcile = Test-FragmentReconcile -Root $CodexHome
+$fragmentReconcile = Test-FragmentReconcile -Root $CodexHome -AllowNoMistakesLocalProjectOverlay:(Test-InNoMistakesWorktree)
 Add-Check $checks "config_fragment_reconcile_match" ($(if ($fragmentReconcile.ok) { "pass" } else { "fail" })) @{
     missing = $fragmentReconcile.missing
     mismatched = $fragmentReconcile.mismatched
+    allowed_local_overlays = $fragmentReconcile.allowed_local_overlays
 }
 
 $parsed = & python -c "import sys,tomllib,json; p=sys.argv[1]; data=tomllib.load(open(p,'rb')); print(json.dumps(data, sort_keys=True))" $configPath
@@ -419,9 +456,9 @@ if ($LASTEXITCODE -eq 0) {
     }
     $mcpServers = $config.mcp_servers
     $mcpNames = if ($null -ne $mcpServers) { @($mcpServers.PSObject.Properties.Name | Sort-Object) } else { @() }
-    $requiredMcp = @("context7", "openaiDeveloperDocs")
-    $retiredMcp = @("memento", "serena")
-    $allowedMcp = @("chrome-devtools", "context7", "memento", "openaiDeveloperDocs", "serena")
+    $requiredMcp = @("openaiDeveloperDocs")
+    $retiredMcp = @("context7", "memento", "serena")
+    $allowedMcp = @("chrome-devtools", "memento", "openaiDeveloperDocs", "serena")
     $mcpProblems = New-Object System.Collections.Generic.List[string]
     $missingOrDisabledMcp = New-Object System.Collections.Generic.List[string]
     foreach ($name in $requiredMcp) {
@@ -464,7 +501,7 @@ if ($LASTEXITCODE -eq 0) {
         node_repl_user_mcp_configured = $nodeReplUserConfigured
         extra = $extraMcp
         problems = @($mcpProblems.ToArray())
-        note = "PLAN baseline: openaiDeveloperDocs/context7 enabled, memento/serena absent or disabled, chrome-devtools absent or disabled by default, and node_repl not registered as a user MCP server."
+        note = "PLAN baseline: openaiDeveloperDocs enabled, context7 absent from the MCP config, memento/serena absent or disabled, chrome-devtools absent or disabled by default, and node_repl not registered as a user MCP server."
     }
     $keepSet = Get-KeepSetManifest -Root $CodexHome
     $keepSetMcpProblems = New-Object System.Collections.Generic.List[string]
@@ -796,6 +833,211 @@ Add-Check $checks "shims_exact_set" ($(if ($missingShims.Count -eq 0 -and $extra
     extra = $extraShims
 }
 
+$noMistakesShim = Join-Path $shimRoot "no-mistakes.cmd"
+try {
+    $previousTelemetry = $env:NO_MISTAKES_TELEMETRY
+    $previousUpdateCheck = $env:NO_MISTAKES_NO_UPDATE_CHECK
+    $env:NO_MISTAKES_TELEMETRY = "0"
+    $env:NO_MISTAKES_NO_UPDATE_CHECK = "1"
+    $noMistakesWorktreeRoot = Join-Path $env:USERPROFILE ".no-mistakes\worktrees"
+    $noMistakesWorktreeRootFull = ""
+    $runningInsideNoMistakesWorktree = $false
+    try {
+        $noMistakesWorktreeRootFull = ([System.IO.Path]::GetFullPath($noMistakesWorktreeRoot)).TrimEnd("\") + "\"
+        $scriptFull = [System.IO.Path]::GetFullPath($PSCommandPath)
+        $cwdFull = [System.IO.Path]::GetFullPath((Get-Location).Path)
+        $runningInsideNoMistakesWorktree = (
+            $scriptFull.StartsWith($noMistakesWorktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $cwdFull.StartsWith($noMistakesWorktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)
+        )
+    } catch {
+        $runningInsideNoMistakesWorktree = $false
+    }
+    $noMistakesRealCliProbeAllowed = -not $runningInsideNoMistakesWorktree
+    $noMistakesRealCliProbeSkippedReason = if ($noMistakesRealCliProbeAllowed) {
+        ""
+    } else {
+        "running inside no-mistakes gate worktree; recursive CLI/daemon calls are forbidden"
+    }
+    $noMistakesVersionOutput = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
+        (& $noMistakesShim --version 2>&1 | Out-String).Trim()
+    } else {
+        ""
+    }
+    $noMistakesVersionExit = if ($noMistakesRealCliProbeAllowed) {
+        if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    } else {
+        $null
+    }
+    $noMistakesDoctorOutput = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
+        (& $noMistakesShim doctor 2>&1 | Out-String).Trim()
+    } else {
+        ""
+    }
+    $noMistakesDoctorExit = if ($noMistakesRealCliProbeAllowed) {
+        if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    } else {
+        $null
+    }
+    $noMistakesConfigPath = Join-Path $env:USERPROFILE ".no-mistakes\config.yaml"
+    $noMistakesConfigText = if (Test-Path -LiteralPath $noMistakesConfigPath -PathType Leaf) {
+        Get-Content -LiteralPath $noMistakesConfigPath -Raw
+    } else {
+        ""
+    }
+    $noMistakesShimText = if (Test-Path -LiteralPath $noMistakesShim -PathType Leaf) {
+        Get-Content -LiteralPath $noMistakesShim -Raw
+    } else {
+        ""
+    }
+    $noMistakesWrapperProbeError = ""
+    $noMistakesWrapperPathProbeOutput = ""
+    $noMistakesWrapperPathProbeExit = $null
+    $noMistakesWrapperPathProbeSanitizesVariants = $false
+    $noMistakesWrapperPathProbePreservesOriginalEntries = $false
+    $noMistakesWrapperBangProbeOutput = ""
+    $noMistakesWrapperBangProbeExit = $null
+    $noMistakesWrapperPreservesBangArgs = $false
+    $noMistakesWrapperProbeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-no-mistakes-wrapper-probe-" + [guid]::NewGuid().ToString("N"))
+    $previousPathForNoMistakesProbe = $env:PATH
+    $previousLocalAppDataForNoMistakesProbe = $env:LOCALAPPDATA
+    $previousBangArgProbe = $env:NO_MISTAKES_PROBE_ARG
+    try {
+        if (Test-Path -LiteralPath $noMistakesShim -PathType Leaf) {
+            $fakeNoMistakesDir = Join-Path $noMistakesWrapperProbeRoot "no-mistakes"
+            New-Item -ItemType Directory -Path $fakeNoMistakesDir -Force | Out-Null
+            Copy-Item -LiteralPath $env:ComSpec -Destination (Join-Path $fakeNoMistakesDir "no-mistakes.exe") -Force
+            $shimRootForward = $shimRoot -replace "\\", "/"
+            $pathProbeOriginalBangEntry = "C:\Codex!PathProbe\Tools"
+            $pathProbeOriginalSlashEntry = "C:/CodexPathProbe/Tools/"
+            $pathProbeInputs = @($shimRoot, "$shimRoot\", $shimRootForward, "$shimRootForward/", $pathProbeOriginalBangEntry, $pathProbeOriginalSlashEntry)
+            if ($previousPathForNoMistakesProbe) {
+                $pathProbeInputs += $previousPathForNoMistakesProbe
+            }
+            $env:LOCALAPPDATA = $noMistakesWrapperProbeRoot
+            $env:PATH = $pathProbeInputs -join ";"
+            $noMistakesWrapperPathProbeOutput = (& $noMistakesShim /d /s /c "set PATH" 2>&1 | Out-String).Trim()
+            $noMistakesWrapperPathProbeExit = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+            $pathProbeLine = @($noMistakesWrapperPathProbeOutput -split "\r?\n" | Where-Object { $_ -match "(?i)^path=" } | Select-Object -First 1)
+            $pathProbeValue = if ($pathProbeLine.Count -gt 0) { ($pathProbeLine[0] -replace "(?i)^path=", "") } else { "" }
+            $normalizedShimRoot = ($shimRoot -replace "/", "\").TrimEnd("\")
+            $normalizedPathProbeEntries = @($pathProbeValue -split ";" | ForEach-Object {
+                ($_ -replace "/", "\").TrimEnd("\")
+            } | Where-Object { $_ })
+            $noMistakesWrapperPathProbeSanitizesVariants = (
+                $noMistakesWrapperPathProbeExit -eq 0 -and
+                -not (@($normalizedPathProbeEntries | Where-Object { $_ -ieq $normalizedShimRoot }).Count -gt 0)
+            )
+            $noMistakesWrapperPathProbePreservesOriginalEntries = (
+                $noMistakesWrapperPathProbeExit -eq 0 -and
+                $pathProbeValue -like "*$pathProbeOriginalBangEntry*" -and
+                $pathProbeValue -like "*$pathProbeOriginalSlashEntry*"
+            )
+
+            $env:NO_MISTAKES_PROBE_ARG = "CORRUPTED"
+            $noMistakesWrapperBangProbeOutput = (& $noMistakesShim /d /s /c "echo !NO_MISTAKES_PROBE_ARG!" 2>&1 | Out-String).Trim()
+            $noMistakesWrapperBangProbeExit = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+            $noMistakesWrapperPreservesBangArgs = (
+                $noMistakesWrapperBangProbeExit -eq 0 -and
+                $noMistakesWrapperBangProbeOutput -eq "!NO_MISTAKES_PROBE_ARG!"
+            )
+        }
+    } catch {
+        $noMistakesWrapperProbeError = $_.Exception.Message
+    } finally {
+        $env:PATH = $previousPathForNoMistakesProbe
+        $env:LOCALAPPDATA = $previousLocalAppDataForNoMistakesProbe
+        $env:NO_MISTAKES_PROBE_ARG = $previousBangArgProbe
+        if (Test-Path -LiteralPath $noMistakesWrapperProbeRoot) {
+            Remove-Item -LiteralPath $noMistakesWrapperProbeRoot -Recurse -Force
+        }
+    }
+    $codexBatchShimPathPattern = "\.codex[\\/]toolchains[\\/]shims[\\/]codex\.cmd"
+    $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesDoctorOutput -match $codexBatchShimPathPattern)
+    $noMistakesConfigReady = (
+        $noMistakesConfigText -match "(?m)^agent:\s*codex\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*--sandbox\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*danger-full-access\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*--disable\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*plugins\s*$" -and
+        $noMistakesConfigText -match "(?m)^\s*-\s*--skip-git-repo-check\s*$" -and
+        -not ($noMistakesConfigText -match $codexBatchShimPathPattern)
+    )
+    $noMistakesWrapperSanitizesPath = (
+        $noMistakesShimText -match "CODEX_SHIM_DIR" -and
+        $noMistakesShimText -match "NM_ORIGINAL_PATH" -and
+        $noMistakesShimText -match "NM_PATH_ENTRY_ORIGINAL" -and
+        $noMistakesShimText -match "NM_PATH_ENTRY_NORMALIZED" -and
+        $noMistakesShimText -match "NO_MISTAKES_TELEMETRY=0" -and
+        $noMistakesShimText -match "NO_MISTAKES_NO_UPDATE_CHECK=1"
+    )
+    $noMistakesDaemonRunning = if ($noMistakesRealCliProbeAllowed) {
+        [bool]($noMistakesDoctorOutput -match "(?m)daemon\s+running")
+    } else {
+        $null
+    }
+    $noMistakesCodexAgentDetected = if ($noMistakesRealCliProbeAllowed) {
+        [bool]($noMistakesDoctorOutput -match "(?m)codex\s+")
+    } else {
+        $null
+    }
+    $noMistakesCliDaemonProbeReady = if ($noMistakesRealCliProbeAllowed) {
+        $noMistakesVersionExit -eq 0 -and
+        $noMistakesDoctorExit -eq 0 -and
+        $noMistakesVersionOutput -match "no-mistakes version" -and
+        $noMistakesDaemonRunning -and
+        $noMistakesCodexAgentDetected -and
+        -not $noMistakesCodexAgentUsesBatchShim
+    } else {
+        $true
+    }
+    $noMistakesReady = (
+        (Test-Path -LiteralPath $noMistakesShim -PathType Leaf) -and
+        $noMistakesCliDaemonProbeReady -and
+        $noMistakesConfigReady -and
+        $noMistakesWrapperSanitizesPath -and
+        $noMistakesWrapperPathProbeSanitizesVariants -and
+        $noMistakesWrapperPathProbePreservesOriginalEntries -and
+        $noMistakesWrapperPreservesBangArgs
+    )
+    Add-Check $checks "no_mistakes_gate_ready" ($(if ($noMistakesReady) { "pass" } else { "fail" })) @{
+        shim = $noMistakesShim
+        shim_exists = (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)
+        wrapper_sanitizes_codex_shim_path = $noMistakesWrapperSanitizesPath
+        wrapper_path_probe_sanitizes_variants = $noMistakesWrapperPathProbeSanitizesVariants
+        wrapper_path_probe_preserves_original_entries = $noMistakesWrapperPathProbePreservesOriginalEntries
+        wrapper_path_probe_exit_code = $noMistakesWrapperPathProbeExit
+        wrapper_bang_arg_preserved = $noMistakesWrapperPreservesBangArgs
+        wrapper_bang_probe_exit_code = $noMistakesWrapperBangProbeExit
+        wrapper_probe_error = $noMistakesWrapperProbeError
+        config = $noMistakesConfigPath
+        config_ready = $noMistakesConfigReady
+        codex_args_include_skip_git_repo_check = [bool]($noMistakesConfigText -match "(?m)^\s*-\s*--skip-git-repo-check\s*$")
+        running_inside_no_mistakes_worktree = $runningInsideNoMistakesWorktree
+        no_mistakes_worktree_root = $noMistakesWorktreeRootFull
+        real_cli_daemon_probe_allowed = $noMistakesRealCliProbeAllowed
+        real_cli_daemon_probe_skipped_reason = $noMistakesRealCliProbeSkippedReason
+        cli_daemon_probe_ready = $noMistakesCliDaemonProbeReady
+        version_exit_code = $noMistakesVersionExit
+        version_output = $noMistakesVersionOutput
+        doctor_exit_code = $noMistakesDoctorExit
+        daemon_running = $noMistakesDaemonRunning
+        codex_agent_detected = $noMistakesCodexAgentDetected
+        codex_agent_uses_batch_shim = $noMistakesCodexAgentUsesBatchShim
+        batch_shim_path_pattern = $codexBatchShimPathPattern
+        telemetry_env = $env:NO_MISTAKES_TELEMETRY
+        update_check_env = $env:NO_MISTAKES_NO_UPDATE_CHECK
+        note = "no-mistakes is adopted as the outer validation gate. The wrapper must keep Codex toolchain .cmd shims out of the child PATH so Codex shell commands resolve real pwsh.exe."
+    }
+    $env:NO_MISTAKES_TELEMETRY = $previousTelemetry
+    $env:NO_MISTAKES_NO_UPDATE_CHECK = $previousUpdateCheck
+} catch {
+    Add-Check $checks "no_mistakes_gate_ready" "fail" @{
+        shim = $noMistakesShim
+        error = $_.Exception.Message
+    }
+}
+
 $bundleShimSources = @(
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "codex"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "node"),
@@ -994,6 +1236,7 @@ $syncPairs = @(
     "config.d\30-skills.toml",
     "hooks\compact-codex-hook.ps1",
     "maintenance\CHROME_DEVTOOLS_MCP_OBSERVER.md",
+    "maintenance\AGENT_TOOL_REQUIREMENTS.md",
     "maintenance\CODEX_STATE_MANAGEMENT.md",
     "maintenance\MEMORY_BOUNDARY_POLICY.md",
     "maintenance\AUTOMATION_TARGET_BOUNDARY.md",
@@ -1033,6 +1276,8 @@ $syncPairs = @(
     "maintenance\scripts\codex-p0-integrity-loop.ps1",
     "maintenance\scripts\codex-home-maintenance.ps1",
     "maintenance\NAMING_CONVENTION.md",
+    "toolchains\README.md",
+    "toolchains\shims\no-mistakes.cmd",
     "skills\frontend-visual-debug\SKILL.md",
     "skills\git-easy-korean\SKILL.md",
     "skills\test-integrity-gate\SKILL.md"
@@ -1221,8 +1466,12 @@ try {
     $retiredMcpRuntimeProcesses = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $processName = [string]$_.Name
         $commandLine = [string]$_.CommandLine
+        if ($processName -ieq "codex.exe") {
+            return $false
+        }
         ($processName -ieq "serena.exe" -and $commandLine -match "start-mcp-server") -or
-            ($commandLine -match "(?i)(memento-mcp-runtime\.ps1|[\\/]memento-mcp([\\/]|\\b)|state[\\/]memento-mcp|tools[\\/]memento-mcp)")
+            ($commandLine -match "(?i)(memento-mcp-runtime\.ps1|[\\/]memento-mcp([\\/]|\\b)|state[\\/]memento-mcp|tools[\\/]memento-mcp)") -or
+            ($commandLine -match "(?i)@upstash[\\/]context7-mcp")
     })
 } catch {
     $retiredMcpRuntimeProcesses = @()
@@ -1232,7 +1481,7 @@ Add-Check $checks "retired_mcp_runtime_processes_absent" ($(if ($retiredMcpRunti
     processes = @($retiredMcpRuntimeProcesses | ForEach-Object {
         [ordered]@{ pid = $_.ProcessId; parent_pid = $_.ParentProcessId; name = $_.Name; command_line = $_.CommandLine }
     })
-    note = "PLAN retires Serena and Memento MCP runtimes; no active serena start-mcp-server or memento-mcp runtime process should remain after runtime cleanup or app reload."
+    note = "PLAN removes Context7 and retires Serena and Memento MCP runtimes; no active context7, serena start-mcp-server, or memento-mcp runtime process should remain after runtime cleanup or app reload."
 }
 
 $failedChecks = @($checks | Where-Object { $_.status -ne "pass" })

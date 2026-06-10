@@ -17,7 +17,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$RetiredRootKeys = @("memento", "serena")
+$RetiredRootKeys = @("context7", "memento", "serena")
 $OptionalMcpRootKeys = @("chrome-devtools")
 
 function Get-ProcessTable {

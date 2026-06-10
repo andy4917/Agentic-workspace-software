@@ -7,15 +7,6 @@ required = false
 default_tools_approval_mode = "prompt"
 startup_timeout_sec = 30
 
-[mcp_servers.context7]
-command = "cmd"
-args = ["/c", '%USERPROFILE%\.codex\toolchains\shims\npx.cmd', "-y", "@upstash/context7-mcp"]
-env_vars = ["CONTEXT7_API_KEY"]
-enabled = true
-required = false
-default_tools_approval_mode = "prompt"
-startup_timeout_sec = 30
-
 [mcp_servers.chrome-devtools]
 command = "cmd"
 args = ["/c", '%USERPROFILE%\.codex\toolchains\shims\npx.cmd', "-y", "chrome-devtools-mcp@latest", "--slim", "--headless", "--isolated", "--no-usage-statistics", "--no-performance-crux"]

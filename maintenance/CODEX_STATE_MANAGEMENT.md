@@ -121,15 +121,22 @@ The sync direction is intentional:
 4. Run live runtime checks from `CODEX_HOME`.
 5. Commit only managed-source files and sanitized reports.
 
-Currently byte-synced live-copy files:
+Currently byte-synced live-copy files are the public-safe paths named by the
+`managed_source_live_sync` check in
+`maintenance\scripts\validate-codex-scaffold.ps1`. The set includes:
 
-- `config.d\00-policy.toml`
-- `hooks\compact-codex-hook.ps1`
-- `maintenance\scripts\codex-runtime-process-cleanup.ps1`
-- `maintenance\scripts\validate-codex-scaffold.ps1`
-- `maintenance\scripts\codex-p0-integrity-loop.ps1`
-- `maintenance\scripts\codex-home-maintenance.ps1`
-- `maintenance\NAMING_CONVENTION.md`
+- `config.d\*.toml` fragments;
+- `hooks\compact-codex-hook.ps1`;
+- core maintenance docs and manifests such as
+  `maintenance\AGENT_TOOL_REQUIREMENTS.md`,
+  `maintenance\CODEX_STATE_MANAGEMENT.md`, and
+  `maintenance\manifests\keep-set.json`;
+- public-safe maintenance scripts used by the scaffold, harness, P0 loop,
+  browser/MCP toggles, and runtime cleanup;
+- `toolchains\README.md` and `toolchains\shims\no-mistakes.cmd`;
+- active live-called skills such as `skills\frontend-visual-debug\SKILL.md`,
+  `skills\git-easy-korean\SKILL.md`, and
+  `skills\test-integrity-gate\SKILL.md`.
 
 `C:\Users\anise\.codex\AGENTS.md` is a compact live bootstrap. It is not byte
 identical to the managed-source `AGENTS.md` by design.
@@ -140,8 +147,9 @@ Codex checks its own environment through these layers:
 
 1. `validate-codex-scaffold.ps1`
    - verifies config fragments, MCP set, command sources, retired MCP runtime absence,
-     hooks, skills, shims, PATH hygiene, secret scan, runtime process state,
-     live-runtime state classification, and managed-source/live-copy sync.
+     hooks, skills, shims, no-mistakes gate readiness, PATH hygiene, secret
+     scan, runtime process state, live-runtime state classification, and
+     managed-source/live-copy sync.
 2. `codex-runtime-process-cleanup.ps1`
    - reports app-server, watcher, managed roots, orphan processes, duplicate
      roots, and close-lifecycle cleanup readiness.
