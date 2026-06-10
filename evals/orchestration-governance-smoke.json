@@ -7,7 +7,7 @@
     "AGENTS.md records Goal as a tracking marker and PM-owned completion audit",
     "Subagent delegation charter states evidence-only authority",
     "Goal templates require checked, not-run, risks, and PM independent verification",
-    "Stop hook synthetic input blocks missing audit and allows audit-present final text"
+    "Stop hook runtime sample is record-only and does not claim audit-blocking completion authority"
   ],
   "task": "Verify the local Goal governance policy, templates, and Stop hook audit prompt shape.",
   "timeout_seconds": 30

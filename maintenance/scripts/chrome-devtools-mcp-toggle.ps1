@@ -137,6 +137,31 @@ function Invoke-WithWritableConfig {
     }
 }
 
+function Invoke-WithConfigRollback {
+    param([Parameter(Mandatory = $true)][scriptblock] $Body)
+
+    $backupPath = $null
+    if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
+        $backupPath = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-mcp-config-{0}.toml" -f ([System.Guid]::NewGuid().ToString("N")))
+        Copy-Item -LiteralPath $ConfigPath -Destination $backupPath -Force
+    }
+
+    try {
+        & $Body
+    }
+    catch {
+        if ($null -ne $backupPath -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+            Copy-Item -LiteralPath $backupPath -Destination $ConfigPath -Force
+        }
+        throw
+    }
+    finally {
+        if ($null -ne $backupPath -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+            Remove-Item -LiteralPath $backupPath -Force
+        }
+    }
+}
+
 function Get-DesiredArgs {
     $args = @("-y", "chrome-devtools-mcp@latest")
 
@@ -287,12 +312,14 @@ if ($Action -eq "on") {
     }
 
     Invoke-WithWritableConfig {
-        if (Test-McpServerPresent) {
-            Invoke-CodexCli -Arguments @("mcp", "remove", $ServerName)
-        }
+        Invoke-WithConfigRollback {
+            if (Test-McpServerPresent) {
+                Invoke-CodexCli -Arguments @("mcp", "remove", $ServerName)
+            }
 
-        Add-McpServerConfig
-        Set-McpServerEnabledInConfig -Enabled $true
+            Add-McpServerConfig
+            Set-McpServerEnabledInConfig -Enabled $true
+        }
     }
 
     Write-Host "state=on"
@@ -303,11 +330,13 @@ if ($Action -eq "on") {
 
 if ($Action -eq "off") {
     Invoke-WithWritableConfig {
-        if (-not (Test-McpServerPresent)) {
-            Add-McpServerConfig
-        }
+        Invoke-WithConfigRollback {
+            if (-not (Test-McpServerPresent)) {
+                Add-McpServerConfig
+            }
 
-        Set-McpServerEnabledInConfig -Enabled $false
+            Set-McpServerEnabledInConfig -Enabled $false
+        }
     }
 
     Write-Host "state=off"

@@ -81,9 +81,9 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "exists_unmanaged_preserved",
+      "action": "unchanged",
       "digest": "11958c885c2100262419c2fcfd074c86f8d4f1ca172416684ce4d419513d2cba",
-      "managed": false,
+      "managed": true,
       "owner": "codex-agent-harness",
       "path": "evals/adversarial-review-integration-smoke.json",
       "remove_on_uninstall": false
@@ -121,9 +121,9 @@
       "remove_on_uninstall": true
     },
     {
-      "action": "exists_unmanaged_preserved",
+      "action": "unchanged",
       "digest": "d15326323ce0d7be2c1c0add5a3848d9b2e4e1a54c53e27687afadcaee080e51",
-      "managed": false,
+      "managed": true,
       "owner": "codex-agent-harness",
       "path": "evals/doctor-tier-smoke.json",
       "remove_on_uninstall": false
@@ -146,7 +146,7 @@
     },
     {
       "action": "unchanged",
-      "digest": "9e75b52085981608e41c73e19149843c1c75641242c0559d6238204ee71ad326",
+      "digest": "899cffe6d0db8132821c5e8f66c1fcda37fa0733771c996fe914892f28fea3ee",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "evals/orchestration-governance-smoke.json",
@@ -457,18 +457,19 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-06-10T18:37:19+00:00",
+  "installed_at": "2026-06-10T22:32:56+00:00",
   "requested_modules": [],
-  "requested_profile": "developer",
+  "requested_profile": "full",
   "schema_version": "1",
   "selected_modules": [
     "codex-baseline",
     "rules-core",
     "skills-core",
     "workflow-quality",
+    "security",
+    "orchestration",
     "mcp-baseline",
-    "benchmarking",
-    "orchestration"
+    "benchmarking"
   ],
   "skipped_modules": [],
   "source": {

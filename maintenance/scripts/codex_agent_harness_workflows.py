@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,67 @@ def load_eval_definition(root: Path, eval_id: str) -> tuple[dict[str, Any], list
     if not isinstance(data.get("grader"), str) or not data.get("grader"):
         errors.append("grader must be a non-empty string")
     return data, errors
+
+
+def compact_hook_route_scan(root: Path) -> dict[str, Any]:
+    targets = ["config.d/20-hooks.toml", "hooks/compact-codex-hook.ps1"]
+    missing = []
+    hits = []
+    failures = []
+    for relative in targets:
+        path = root / relative
+        if not path.exists():
+            missing.append(relative)
+    if not missing:
+        try:
+            config = tomllib.loads(read_text(root / "config.d" / "20-hooks.toml"))
+        except tomllib.TOMLDecodeError as exc:
+            config = {}
+            failures.append(f"config.d/20-hooks.toml: invalid TOML: {exc}")
+        expected_events = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]
+        hook_section = config.get("hooks", {}) if isinstance(config, dict) else {}
+        for event in expected_events:
+            event_entries = hook_section.get(event, [])
+            if not isinstance(event_entries, list) or not event_entries:
+                failures.append(f"{event}: missing hook event table")
+                continue
+            event_has_valid_route = False
+            for entry_index, event_entry in enumerate(event_entries):
+                hook_entries = event_entry.get("hooks", []) if isinstance(event_entry, dict) else []
+                if not isinstance(hook_entries, list) or not hook_entries:
+                    failures.append(f"{event}[{entry_index}]: missing command hook")
+                    continue
+                for hook_index, hook_entry in enumerate(hook_entries):
+                    if not isinstance(hook_entry, dict):
+                        failures.append(f"{event}[{entry_index}].hooks[{hook_index}]: invalid command hook")
+                        continue
+                    command = str(hook_entry.get("command", ""))
+                    command_windows = str(hook_entry.get("commandWindows", ""))
+                    route_text = f"{command}\n{command_windows}"
+                    route_terms = ["pwsh.exe", "WindowStyle Hidden", "compact-codex-hook.ps1"]
+                    route_ok = (
+                        bool(command)
+                        and bool(command_windows)
+                        and all(term in command and term in command_windows for term in route_terms)
+                        and "pwsh.cmd" not in route_text.lower()
+                        and not re.search(r"(?i)\bcmd(?:\.exe)?\s*/c\b", route_text)
+                    )
+                    if route_ok:
+                        event_has_valid_route = True
+                        hits.append(f"{event}[{entry_index}].hooks[{hook_index}]: hidden compact runner route")
+                    else:
+                        failures.append(f"{event}[{entry_index}].hooks[{hook_index}]: command/commandWindows route mismatch")
+            if not event_has_valid_route:
+                failures.append(f"{event}: no valid commandWindows compact hook route")
+    ok = bool(hits) and not missing and not failures
+    return {
+        "status": "pass" if ok else "fail",
+        "exit_code": 0 if ok else 1,
+        "stdout_preview": "\n".join(hits[:5]),
+        "stderr_preview": "; ".join([*(f"missing {item}" for item in missing), *failures[:10]]),
+        "duration_seconds": 0,
+    }
+
 
 def cmd_context(args: argparse.Namespace) -> int:
     root = root_path(args)
@@ -140,7 +202,7 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
     checks.append({"name": "json_eval_definitions", **run_command([sys.executable, "-c", "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('evals').glob('*.json')]"], root)})
     checks.append({"name": "agent_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('agents').glob('*.toml')]"], root)})
     checks.append({"name": "hook_config_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; tomllib.loads(pathlib.Path('config.d/20-hooks.toml').read_text(encoding='utf-8'))"], root)})
-    checks.append({"name": "compact_hook_route_scan", **run_command(["rg", "-n", "compact-codex-hook.ps1", "config.d/20-hooks.toml", "hooks/compact-codex-hook.ps1"], root)})
+    checks.append({"name": "compact_hook_route_scan", **compact_hook_route_scan(root)})
     calibration = check_calibration_policy(root, require_config=False)
     checks.append(
         {
@@ -576,10 +638,12 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
     scan_errors = [match for match in matches if match["path"] in {"<scan-error>", "<not-run>"}]
     active_roots = [
         str(root / "config.toml"),
-        str(root / ".codex-global-state.json"),
-        str(root / ".codex-global-state.json.bak"),
         str(root / "config.d" / "20-hooks.toml"),
         str(root / "AGENTS.md"),
+    ]
+    runtime_only_roots = [
+        str(root / ".codex-global-state.json"),
+        str(root / ".codex-global-state.json.bak"),
     ]
     active_hits = []
     for match in matches:
@@ -594,6 +658,7 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
     report = {
         "generated_at": utc_now(),
         "scan_roots": [str(path) for path in scan_roots],
+        "runtime_only_roots": runtime_only_roots,
         "desktop_excluded": True,
         "content_redacted": True,
         "harness_digest": harness_source_digest(root),
@@ -619,6 +684,8 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         "## Scan Roots",
     ]
     lines.extend(f"- {path}" for path in report["scan_roots"])
+    lines.extend(["", "## Runtime-Only Roots"])
+    lines.extend(f"- {path}" for path in runtime_only_roots)
     lines.extend(["", "## Active Hits"])
     lines.extend(f"- {hit['path']}:{hit['line']} pattern={hit['pattern']}" for hit in active_hits or [])
     if not active_hits:

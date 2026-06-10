@@ -79,6 +79,17 @@ def cmd_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def resolve_state_child_path(root: Path, path: str) -> tuple[Path | None, str | None]:
+    candidate = Path(path)
+    if candidate.is_absolute() or candidate.drive or ".." in candidate.parts:
+        return None, "invalid_path"
+    root_resolved = root.resolve()
+    full = (root / candidate).resolve()
+    if full == root_resolved or root_resolved not in full.parents:
+        return None, "outside_root"
+    return full, None
+
+
 def cmd_apply(args: argparse.Namespace) -> int:
     root = root_path(args)
     modules = selected_modules(args.profile, args.module)
@@ -90,27 +101,88 @@ def cmd_apply(args: argparse.Namespace) -> int:
         if isinstance(op, dict) and op.get("path")
     }
     operations = []
+    for path, previous in sorted(previous_ops.items()):
+        if path in templates:
+            continue
+        previous_digest = previous.get("digest")
+        full, path_error = resolve_state_child_path(root, path)
+        if path_error == "invalid_path":
+            operations.append(
+                {
+                    "path": path,
+                    "action": "stale_preserved_invalid_path",
+                    "digest": previous_digest,
+                    "owner": OWNER,
+                    "managed": False,
+                    "remove_on_uninstall": False,
+                }
+            )
+            continue
+        if path_error == "outside_root":
+            operations.append(
+                {
+                    "path": path,
+                    "action": "stale_preserved_outside_root",
+                    "digest": previous_digest,
+                    "owner": OWNER,
+                    "managed": False,
+                    "remove_on_uninstall": False,
+                }
+            )
+            continue
+        assert full is not None
+        if previous.get("managed") is not True or previous.get("remove_on_uninstall") is not True:
+            continue
+        if not full.is_file():
+            continue
+        if previous_digest and sha256_file(full) == previous_digest:
+            full.unlink()
+            operations.append(
+                {
+                    "path": path,
+                    "action": "removed_stale",
+                    "digest": previous_digest,
+                    "owner": OWNER,
+                    "managed": False,
+                    "remove_on_uninstall": False,
+                }
+            )
+            continue
+        operations.append(
+            {
+                "path": path,
+                "action": "stale_preserved_modified",
+                "digest": previous_digest,
+                "current_digest": sha256_file(full),
+                "owner": OWNER,
+                "managed": True,
+                "remove_on_uninstall": True,
+            }
+        )
     for path, content in sorted(templates.items()):
         full = root / path
         digest = sha256_text(content)
         previous = previous_ops.get(path, {})
         was_managed = previous.get("managed") is True or previous.get("action") in {"created", "updated", "unchanged"}
-        remove_on_uninstall = bool(previous.get("remove_on_uninstall", was_managed))
         if full.exists():
             current = sha256_file(full)
             if current == digest:
+                seen_by_harness = bool(previous)
+                managed_now = bool(was_managed or (seen_by_harness and previous.get("owner") == OWNER))
+                remove_on_uninstall = bool(previous.get("remove_on_uninstall", was_managed))
                 operations.append(
                     {
                         "path": path,
                         "action": "unchanged",
                         "digest": digest,
                         "owner": OWNER,
-                        "managed": was_managed,
+                        "managed": managed_now,
                         "remove_on_uninstall": remove_on_uninstall,
                     }
                 )
                 continue
             if was_managed:
+                remove_on_uninstall = bool(previous.get("remove_on_uninstall", True))
                 write_text(full, content)
                 operations.append(
                     {
@@ -172,8 +244,11 @@ def load_state(root: Path) -> dict[str, Any]:
 
 def stale_active_references(root: Path) -> list[dict[str, Any]]:
     # Global state can contain prompt history; stale source checks should inspect policy/config surfaces only.
-    active = [root / "config.toml", root / "config.d" / "20-hooks.toml", root / "AGENTS.md", root / "agent.md"]
-    pattern = re.compile(r"(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\cache|plugins\\plugins)", re.I)
+    active = [root / "config.toml", root / "AGENTS.md", root / "agent.md"]
+    config_dir = root / "config.d"
+    if config_dir.exists():
+        active.extend(sorted(config_dir.glob("*.toml")))
+    pattern = re.compile(r"(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|codex-runtimes|plugins\\cache|plugins\\plugins)", re.I)
     matches = []
     for path in active:
         if not path.exists() or path.name in {"auth.json", ".credentials.json"}:
@@ -310,26 +385,42 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
         return {"status": "fail", "error": "config.d/20-hooks.toml missing"}
     text = read_text(path)
     lowered = text.lower()
-    events = ["hooks.PreToolUse", "hooks.PostToolUse"]
     required_fragments = [
         "compact-codex-hook.ps1",
         "Bash",
         "apply_patch",
         "mcp__.*",
+        "functions\\..*",
+        "multi_tool_use\\..*",
+        "tool_search\\..*",
+        "web\\..*",
+        "image_gen\\..*",
     ]
+    try:
+        data = tomllib.loads(text)
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "fail", "error": f"config.d/20-hooks.toml parse failed: {exc}"}
+    hooks = data.get("hooks", {}) if isinstance(data, dict) else {}
     missing: dict[str, list[str]] = {}
-    for event in events:
-        if event.lower() not in lowered:
+    event_matchers: dict[str, list[str]] = {}
+    for event in ["PreToolUse", "PostToolUse"]:
+        groups = hooks.get(event, []) if isinstance(hooks, dict) else []
+        if not groups:
             missing[event] = ["event"]
             continue
-        absent = [fragment for fragment in required_fragments if fragment not in text]
+        matchers = [str(group.get("matcher", "")) for group in groups if isinstance(group, dict)]
+        event_matchers[event] = matchers
+        matcher_text = "|".join(matchers)
+        absent = [fragment for fragment in required_fragments if fragment != "compact-codex-hook.ps1" and fragment not in matcher_text]
         if absent:
             missing[event] = absent
+    if "compact-codex-hook.ps1" not in lowered:
+        missing["runner"] = ["compact-codex-hook.ps1"]
     legacy_hook = "lightweight" + "-codex"
     legacy_config = "hooks" + ".json"
     if legacy_hook in lowered or legacy_config in lowered:
         missing["legacy"] = ["legacy hook reference"]
-    return {"status": "pass" if not missing else "fail", "missing": missing}
+    return {"status": "pass" if not missing else "fail", "missing": missing, "matchers": event_matchers}
 
 
 def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
@@ -405,13 +496,22 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         print("install-state missing; nothing to uninstall")
         return 0
     targets = []
+    refused = []
     for op in state.get("applied_operations", []):
         if op.get("remove_on_uninstall") is True:
-            path = root / op["path"]
+            raw_path = str(op.get("path", ""))
+            path, path_error = resolve_state_child_path(root, raw_path)
+            if path_error:
+                refused.append({"path": raw_path, "reason": path_error})
+                continue
+            assert path is not None
             if path.exists() and sha256_file(path) == op.get("digest"):
-                targets.append(op["path"])
+                targets.append(rel(path, root))
     if install_state_path(root).exists():
         targets.append(rel(install_state_path(root), root))
+    if refused:
+        print(json.dumps({"dry_run": not args.apply, "would_remove": targets, "refused": refused}, ensure_ascii=False, indent=2))
+        return 1
     if not args.apply:
         print(json.dumps({"dry_run": True, "would_remove": targets}, ensure_ascii=False, indent=2))
         return 0

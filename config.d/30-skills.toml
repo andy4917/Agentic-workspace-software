@@ -94,7 +94,7 @@ source = '\\?\C:\Users\anise\.codex\plugins\marketplaces\openai-bundled'
 [marketplaces.openai-primary-runtime]
 last_updated = "2026-06-07T10:12:31Z"
 source_type = "local"
-source = '\\?\C:\Users\anise\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'
+source = '\\?\C:\Users\anise\.codex\plugins\marketplaces\openai-primary-runtime'
 
 [marketplaces.openai-curated-remote]
 last_updated = "2026-06-02T19:40:00Z"

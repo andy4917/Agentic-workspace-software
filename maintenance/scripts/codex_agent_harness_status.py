@@ -184,6 +184,7 @@ def generated_output_tracking_status(root: Path) -> dict[str, Any]:
             errors="replace",
             capture_output=True,
             timeout=15,
+            creationflags=no_window_creationflags(),
         )
     except Exception as exc:  # noqa: BLE001 - git may not exist in temp self-test roots.
         return {"status": "pass", "not_applicable": True, "reason": str(exc), "tracked": []}

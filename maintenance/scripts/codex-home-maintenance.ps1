@@ -3,6 +3,7 @@ param(
     [ValidateSet('Report', 'Clean')]
     [string]$Mode = 'Report',
     [string]$CodexHome = "$env:USERPROFILE\.codex",
+    [string]$ReportRoot = "",
     [switch]$IncludeTmp,
     [switch]$IncludeVendorImports,
     [switch]$IncludeDotTmp
@@ -15,6 +16,64 @@ function New-Directory {
     if (-not (Test-Path -LiteralPath $Path)) {
         New-Item -ItemType Directory -Force -Path $Path | Out-Null
     }
+}
+
+function Resolve-NormalizedPath {
+    param([string]$Path)
+    return ([IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))).TrimEnd('\')
+}
+
+function Test-PathUnderRoot {
+    param(
+        [string]$Path,
+        [string]$Root
+    )
+    return (
+        $Path.Equals($Root, [System.StringComparison]::OrdinalIgnoreCase) -or
+        $Path.StartsWith("$Root\", [System.StringComparison]::OrdinalIgnoreCase)
+    )
+}
+
+function Resolve-ExpectedCodexHome {
+    if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        throw "USERPROFILE is required to validate the default CodexHome runtime root"
+    }
+    return (Resolve-Path -LiteralPath (Join-Path $env:USERPROFILE '.codex')).Path.TrimEnd('\')
+}
+
+function Assert-DefaultCodexHome {
+    param([string]$Root)
+
+    $resolvedRoot = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\')
+    $expectedRoot = Resolve-ExpectedCodexHome
+    if (-not $resolvedRoot.Equals($expectedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing direct cleanup for non-default CodexHome: $resolvedRoot"
+    }
+    return $resolvedRoot
+}
+
+function Resolve-ReportRoot {
+    param(
+        [string]$Path,
+        [string]$CodexHome
+    )
+
+    $candidate = Resolve-NormalizedPath -Path $Path
+    $approvedRoots = @(
+        (Resolve-NormalizedPath -Path (Join-Path $CodexHome 'state')),
+        (Resolve-NormalizedPath -Path (Join-Path $CodexHome 'reports'))
+    )
+    if ($env:USERPROFILE) {
+        $approvedRoots += Resolve-NormalizedPath -Path (Join-Path $env:USERPROFILE 'Documents\Codex\reports')
+    }
+
+    foreach ($root in $approvedRoots) {
+        if (Test-PathUnderRoot -Path $candidate -Root $root) {
+            return $candidate
+        }
+    }
+
+    throw "ReportRoot must stay under an approved report root: $candidate"
 }
 
 function Get-DirectorySummary {
@@ -62,11 +121,14 @@ function Get-ActiveReferenceMatches {
 
     $activeFiles = @(
         (Join-Path $Root 'config.toml'),
-        (Join-Path $Root 'config.d\20-hooks.toml'),
         (Join-Path $Root 'AGENTS.md')
     ) | Where-Object { Test-Path -LiteralPath $_ }
+    $configDir = Join-Path $Root 'config.d'
+    if (Test-Path -LiteralPath $configDir -PathType Container) {
+        $activeFiles += @(Get-ChildItem -LiteralPath $configDir -Filter '*.toml' -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+    }
 
-    $pattern = '\\.tmp|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\plugins|wshobson-agents-scan|cache\\codex_apps_tools|plugins\\cache'
+    $pattern = '\\.tmp|\\tmp\\|vendor_imports|bundled-marketplaces|codex-runtimes|plugins\\plugins|wshobson-agents-scan|cache\\codex_apps_tools|plugins\\cache'
     $matches = @()
     foreach ($file in $activeFiles) {
         $hits = @(Select-String -LiteralPath $file -Pattern $pattern -AllMatches -ErrorAction SilentlyContinue)
@@ -109,11 +171,14 @@ function Remove-PathDirectly {
     param([string]$Path)
 
     $resolvedTarget = (Resolve-Path -LiteralPath $Path).Path
-    $resolvedRoot = (Resolve-Path -LiteralPath $CodexHome).Path.TrimEnd('\')
-    if ($resolvedTarget -ne $resolvedRoot -and -not $resolvedTarget.StartsWith("$resolvedRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
+    $resolvedRoot = Assert-DefaultCodexHome -Root $CodexHome
+    if ($resolvedTarget.Equals($resolvedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to delete CodexHome root: $resolvedTarget"
+    }
+    if (-not $resolvedTarget.StartsWith("$resolvedRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to delete outside CodexHome: $resolvedTarget"
     }
-    Remove-Item -LiteralPath $Path -Recurse -Force
+    Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
 }
 
 function Stop-GitFsmonitorUnderRoot {
@@ -344,18 +409,29 @@ function Get-CommandResolutionSummary {
     if ($ShimRoot) {
         $env:Path = "$ShimRoot;$userPath;$machinePath"
     }
-    foreach ($command in $Commands) {
-        $hits = @(where.exe $command 2>$null)
-        $first = if ($hits.Count -gt 0) { $hits[0] } else { $null }
-        $summaries += [ordered]@{
-            command = $command
-            count = $hits.Count
-            first = $first
-            uses_codex_shim = ($null -ne $first -and $first.StartsWith($ShimRoot, [System.StringComparison]::OrdinalIgnoreCase))
-            all = $hits
+    try {
+        foreach ($command in $Commands) {
+            $hits = @()
+            try {
+                $whereOutput = @(where.exe $command 2>&1)
+                if ($LASTEXITCODE -eq 0) {
+                    $hits = @($whereOutput | Where-Object { $_ -and ($_ -notmatch '^INFO:') })
+                }
+            } catch {
+                $hits = @()
+            }
+            $first = if ($hits.Count -gt 0) { $hits[0] } else { $null }
+            $summaries += [ordered]@{
+                command = $command
+                count = $hits.Count
+                first = $first
+                uses_codex_shim = ([bool]$ShimRoot -and $null -ne $first -and $first.StartsWith($ShimRoot, [System.StringComparison]::OrdinalIgnoreCase))
+                all = $hits
+            }
         }
+    } finally {
+        $env:Path = $oldPath
     }
-    $env:Path = $oldPath
     return $summaries
 }
 
@@ -486,14 +562,17 @@ function Get-ToolchainInventory {
 }
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$maintenanceRoot = Join-Path $CodexHome 'maintenance'
-$managedSourceRoot = Join-Path $env:USERPROFILE 'Documents\Codex'
-$managedReportsRoot = if (Test-Path -LiteralPath $managedSourceRoot -PathType Container) {
-    Join-Path $managedSourceRoot 'reports'
-} else {
-    Join-Path $CodexHome 'state'
+if ($Mode -eq 'Clean') {
+    $CodexHome = Assert-DefaultCodexHome -Root $CodexHome
 }
-New-Directory -Path $managedReportsRoot
+
+$maintenanceRoot = Join-Path $CodexHome 'maintenance'
+$resolvedReportRoot = if (-not [string]::IsNullOrWhiteSpace($ReportRoot)) {
+    Resolve-ReportRoot -Path $ReportRoot -CodexHome $CodexHome
+} else {
+    Resolve-ReportRoot -Path (Join-Path $CodexHome 'state') -CodexHome $CodexHome
+}
+New-Directory -Path $resolvedReportRoot
 
 $transientRoots = @()
 if ($IncludeDotTmp -or $Mode -eq 'Report') { $transientRoots += Join-Path $CodexHome '.tmp' }
@@ -525,6 +604,7 @@ $report = [ordered]@{
     mode = $Mode
     codex_home = $CodexHome
     cleanup_target = if ($Mode -eq 'Clean') { 'direct delete' } else { $null }
+    report_root = $resolvedReportRoot
     active_reference_matches = $activeReferenceMatches
     runtime_guards = Get-RuntimeGuardSummary -Root $CodexHome
     native_messaging_hosts = Get-NativeMessagingHostSummary -Root $CodexHome
@@ -552,6 +632,6 @@ $report = [ordered]@{
     }
 }
 
-$reportPath = Join-Path $managedReportsRoot 'codex-home-maintenance.latest.json'
+$reportPath = Join-Path $resolvedReportRoot 'codex-home-maintenance.latest.json'
 $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8
 $report

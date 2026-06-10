@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -11,20 +13,26 @@ from codex_agent_harness_base import *
 
 def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
+    ledger_path = root / "state" / "hook-ledger.jsonl"
+    original_ledger_exists = ledger_path.exists()
+    original_ledger_bytes = ledger_path.read_bytes() if original_ledger_exists else None
 
     def add_check(name: str, passed: bool, detail: str) -> None:
         checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
 
     agents_text = read_text(root / "AGENTS.md")
     charter_text = read_text(root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md")
-    audit_text = read_text(root / "codex-goals" / "_template" / "FINAL_GOAL_AUDIT.md")
+    audit_template = root / "codex-goals" / "_template" / "FINAL_GOAL_AUDIT.md"
+    audit_text = read_text(audit_template) if audit_template.exists() else ""
     hook_files = [root / "hooks" / "compact-codex-hook.ps1", root / "config.d" / "20-hooks.toml"]
     hook_text = "\n".join(read_text(path) for path in hook_files if path.exists())
+    full_agents_goal_governance = all(term in agents_text for term in ["## Goal Governance", "tracking marker", "final goal audit", "Subagents receive contractual subgoals"])
+    compact_agents_goal_governance = all(term in agents_text for term in ["compact live bootstrap", "reviewed repo `AGENTS.md`", "outputs evidence-only", "completion authority"])
 
     add_check(
         "agents_goal_governance",
-        all(term in agents_text for term in ["## Goal Governance", "tracking marker", "final goal audit", "Subagents receive contractual subgoals"]),
-        "AGENTS.md should define parent-goal ownership and audit requirements.",
+        full_agents_goal_governance or compact_agents_goal_governance,
+        "AGENTS.md should define parent-goal ownership directly or delegate compact live bootstrap governance to the reviewed managed source.",
     )
     add_check(
         "subagent_authority_boundary",
@@ -36,10 +44,29 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
         all(term in audit_text for term in ["# FINAL_GOAL_AUDIT", "Direct Checks Not Run", "Residual Risks", "PM Independent Verification", "Decision"]),
         "Final audit template should require checked, not-run, risks, PM verification, and status.",
     )
+    try:
+        stop_probe = run_stop_hook_sample(root, "final answer without a synthetic goal audit")
+        stop_stdout = stop_probe.get("stdout_preview", "").lower()
+        add_check(
+            "stop_hook_record_only_runtime",
+            stop_probe.get("status") == "pass" and "permissiondecision" not in stop_stdout and "deny" not in stop_stdout,
+            "Compact Stop hook should record evidence without claiming audit-blocking completion authority.",
+        )
+    finally:
+        if original_ledger_exists:
+            ledger_path.parent.mkdir(parents=True, exist_ok=True)
+            ledger_path.write_bytes(original_ledger_bytes or b"")
+        else:
+            try:
+                ledger_path.unlink()
+            except FileNotFoundError:
+                pass
+    restored_ledger_exists = ledger_path.exists()
+    restored_ledger_bytes = ledger_path.read_bytes() if restored_ledger_exists else None
     add_check(
-        "stop_hook_audit_prompt",
-        all(term in hook_text for term in ["compact-codex-hook", "hook-ledger.jsonl", "UserPromptSubmit", "PreToolUse"]),
-        "Compact hook should record evidence and emit minimal prompt/tool context.",
+        "orchestration_smoke_restores_live_ledger",
+        restored_ledger_exists == original_ledger_exists and restored_ledger_bytes == original_ledger_bytes,
+        "Synthetic orchestration Stop samples must not leave hook ledger mutations behind.",
     )
 
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
@@ -52,8 +79,8 @@ def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, An
     env = os.environ.copy()
     env["CODEX_HOOK_SMOKE"] = "1"
     env["CODEX_HOME"] = str(root)
-    pwsh = Path(os.environ.get("USERPROFILE", "")) / ".codex" / "toolchains" / "shims" / "pwsh.cmd"
-    executable = str(pwsh) if pwsh.exists() else "pwsh"
+    windows_pwsh = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WindowsApps" / "pwsh.exe"
+    executable = str(windows_pwsh) if os.name == "nt" and windows_pwsh.exists() else "pwsh"
     try:
         completed = subprocess.run(
             [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "hooks/compact-codex-hook.ps1"],
@@ -63,6 +90,7 @@ def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, An
             text=True,
             capture_output=True,
             timeout=30,
+            creationflags=no_window_creationflags(),
         )
         return {
             "status": "pass" if completed.returncode == 0 else "fail",
@@ -134,12 +162,69 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and ("hooks" + ".json") not in config_text,
             "Active hook fragment should route only to compact-codex-hook.ps1.",
         )
+        required_matcher_terms = ["functions\\\\..*", "multi_tool_use\\\\..*", "tool_search\\\\..*", "web\\\\..*", "image_gen\\\\..*", "mcp__.*"]
+        hook_matchers: dict[str, str] = {}
+        current_hook_event = ""
+        for raw_line in config_text.splitlines():
+            line = raw_line.strip()
+            if line == "[[hooks.PreToolUse]]":
+                current_hook_event = "PreToolUse"
+            elif line == "[[hooks.PostToolUse]]":
+                current_hook_event = "PostToolUse"
+            elif line.startswith("[[hooks."):
+                current_hook_event = ""
+            elif current_hook_event and line.startswith("matcher"):
+                hook_matchers[current_hook_event] = line
+        add_check(
+            "hook_config_covers_desktop_tool_namespaces",
+            all(all(term in hook_matchers.get(event, "") for term in required_matcher_terms) for event in ["PreToolUse", "PostToolUse"]),
+            "Active PreToolUse and PostToolUse matchers should each cover Desktop tool namespaces that can carry shell, MCP, or automation payloads.",
+        )
         add_check(
             "hook_config_runs_hidden_on_windows",
             "WindowStyle Hidden" in config_text
             and "cmd /c" not in config_text
             and config_text.count("commandWindows") >= 5,
             "Active hook fragment should define hidden commandWindows overrides for every hook while preserving stdout.",
+        )
+        route_errors: list[str] = []
+        route_hits: list[str] = []
+        try:
+            hook_config = tomllib.loads(config_text)
+        except tomllib.TOMLDecodeError as exc:
+            hook_config = {}
+            route_errors.append(f"invalid hook TOML: {exc}")
+        hook_section = hook_config.get("hooks", {}) if isinstance(hook_config, dict) else {}
+        for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]:
+            event_entries = hook_section.get(event, [])
+            if not isinstance(event_entries, list) or not event_entries:
+                route_errors.append(f"{event}: missing event")
+                continue
+            event_ok = False
+            for event_entry in event_entries:
+                hook_entries = event_entry.get("hooks", []) if isinstance(event_entry, dict) else []
+                for hook_entry in hook_entries if isinstance(hook_entries, list) else []:
+                    if not isinstance(hook_entry, dict):
+                        continue
+                    command = str(hook_entry.get("command", ""))
+                    command_windows = str(hook_entry.get("commandWindows", ""))
+                    route_terms = ["pwsh.exe", "WindowStyle Hidden", "compact-codex-hook.ps1"]
+                    if (
+                        command
+                        and command_windows
+                        and all(term in command and term in command_windows for term in route_terms)
+                        and "pwsh.cmd" not in f"{command}\n{command_windows}".lower()
+                        and "cmd /c" not in f"{command}\n{command_windows}".lower()
+                        and "cmd.exe /c" not in f"{command}\n{command_windows}".lower()
+                    ):
+                        event_ok = True
+                        route_hits.append(event)
+            if not event_ok:
+                route_errors.append(f"{event}: missing configured hidden wrapper route")
+        add_check(
+            "hook_config_uses_configured_hidden_wrapper_routes",
+            not route_errors and len(set(route_hits)) == 5,
+            "; ".join(route_errors[:5]) if route_errors else "All hook events route through command and commandWindows hidden compact runner definitions without cmd shim nesting.",
         )
         add_check(
             "compact_hook_contains_current_contract",
@@ -170,7 +255,291 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             pre_probe.get("status") == "pass"
             and "permissiondecision" in pre_probe.get("stdout_preview", "").lower()
             and "allow" in pre_probe.get("stdout_preview", "").lower(),
-            "PreToolUse should allow and record evidence only.",
+            "PreToolUse should allow ordinary inspected tool use and record evidence.",
+        )
+        encoded_payload = base64.b64encode("Write-Output encoded-smoke".encode("utf-16le")).decode("ascii")
+        encoded_probe = run_hook_sample(root, f"powershell -EncodedCommand {encoded_payload}")
+        encoded_stdout = encoded_probe.get("stdout_preview", "").lower()
+        nested_encoded_probe = run_hook_sample(root, f"cmd /c pwsh -enc {encoded_payload}")
+        nested_encoded_stdout = nested_encoded_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_encoded_powershell",
+            encoded_probe.get("status") == "pass"
+            and "permissiondecision" in encoded_stdout
+            and "deny" in encoded_stdout
+            and nested_encoded_probe.get("status") == "pass"
+            and "deny" in nested_encoded_stdout,
+            "PreToolUse should deny encoded PowerShell payloads instead of trusting plaintext path inspection.",
+        )
+        readonly_destructive_search_probe = run_hook_sample(root, 'rg -n "Remove-Item|rm -rf" hooks\\*.ps1 maintenance\\*.py')
+        readonly_destructive_search_stdout = readonly_destructive_search_probe.get("stdout_preview", "").lower()
+        select_destructive_search_probe = run_hook_sample(root, 'Select-String -Pattern "Remove-Item -Recurse *" -Path hooks\\*.ps1')
+        select_destructive_search_stdout = select_destructive_search_probe.get("stdout_preview", "").lower()
+        readonly_git_clean_name_probe = run_hook_sample(root, "git ls-files -- .codex/skills/clean-all-slop/SKILL.md")
+        readonly_git_clean_name_stdout = readonly_git_clean_name_probe.get("stdout_preview", "").lower()
+        git_clean_long_force_probe = run_hook_sample(root, "git clean --force -d")
+        git_clean_long_force_stdout = git_clean_long_force_probe.get("stdout_preview", "").lower()
+        git_scoped_clean_long_force_probe = run_hook_sample(root, "git -C . clean --force -d")
+        git_scoped_clean_long_force_stdout = git_scoped_clean_long_force_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_allows_readonly_destructive_reference_search",
+            readonly_destructive_search_probe.get("status") == "pass"
+            and "allow" in readonly_destructive_search_stdout
+            and select_destructive_search_probe.get("status") == "pass"
+            and "allow" in select_destructive_search_stdout
+            and readonly_git_clean_name_probe.get("status") == "pass"
+            and "allow" in readonly_git_clean_name_stdout,
+            "PreToolUse should not deny read-only search or Git listing commands merely because arguments mention destructive command names.",
+        )
+        add_check(
+            "pretooluse_blocks_git_clean_long_force",
+            git_clean_long_force_probe.get("status") == "pass"
+            and "deny" in git_clean_long_force_stdout
+            and git_scoped_clean_long_force_probe.get("status") == "pass"
+            and "deny" in git_scoped_clean_long_force_stdout,
+            "PreToolUse should deny git clean --force forms, including when git -C is used before the clean subcommand.",
+        )
+        blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
+        blocked_stdout = blocked_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_direct_secret_reads",
+            blocked_probe.get("status") == "pass"
+            and "permissiondecision" in blocked_stdout
+            and "deny" in blocked_stdout
+            and "credential" in blocked_stdout,
+            "PreToolUse should deny direct credential-file read probes instead of unconditionally allowing them.",
+        )
+        mcp_blocked_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "mcp__fs__read",
+                "tool_input": {"path": str(Path.home() / ".codex" / "auth.json")},
+            },
+        )
+        mcp_blocked_stdout = mcp_blocked_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_mcp_secret_reads",
+            mcp_blocked_probe.get("status") == "pass"
+            and "permissiondecision" in mcp_blocked_stdout
+            and "deny" in mcp_blocked_stdout
+            and "credential" in mcp_blocked_stdout,
+            "PreToolUse should deny MCP credential-file read probes as well as shell probes.",
+        )
+        mcp_non_file_get_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "mcp__github__get_issue",
+                "tool_input": {"query": "docs mention auth.json but no file path is read"},
+            },
+        )
+        mcp_non_file_get_stdout = mcp_non_file_get_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_allows_non_file_mcp_getters",
+            mcp_non_file_get_probe.get("status") == "pass"
+            and "permissiondecision" in mcp_non_file_get_stdout
+            and "allow" in mcp_non_file_get_stdout,
+            "PreToolUse should not classify every MCP getter as a filesystem read.",
+        )
+        more_blocked_probe = run_hook_sample(root, "more $env:USERPROFILE\\.codex\\auth.json")
+        more_blocked_stdout = more_blocked_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_more_secret_reads",
+            more_blocked_probe.get("status") == "pass"
+            and "permissiondecision" in more_blocked_stdout
+            and "deny" in more_blocked_stdout,
+            "PreToolUse should deny direct credential-file reads through more as well as cat/Get-Content.",
+        )
+        generic_name_probe = run_hook_sample(root, "Get-Content .\\token.json")
+        generic_name_stdout = generic_name_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_generic_secret_filenames",
+            generic_name_probe.get("status") == "pass"
+            and "permissiondecision" in generic_name_stdout
+            and "deny" in generic_name_stdout,
+            "PreToolUse should deny generic secret-like filenames, not only auth.json and key material.",
+        )
+        interpreter_probe = run_hook_sample(root, "python -c \"open('$env:USERPROFILE\\.codex\\auth.json').read()\"")
+        interpreter_stdout = interpreter_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_interpreter_secret_reads",
+            interpreter_probe.get("status") == "pass"
+            and "permissiondecision" in interpreter_stdout
+            and "deny" in interpreter_stdout,
+            "PreToolUse should deny interpreter payloads that directly target sensitive files.",
+        )
+        user_profile_ref = "$" + "env:USERPROFILE"
+        private_path = f"{user_profile_ref}\\.codex\\{'auth' + '.json'}"
+        nested_read_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "multi_tool_use.parallel",
+                "tool_input": {
+                    "tool_uses": [
+                        {
+                            "recipient_name": "functions.shell_command",
+                            "parameters": {"command": f"Get-Content {private_path}"},
+                        }
+                    ]
+                },
+            },
+        )
+        nested_read_stdout = nested_read_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_nested_multitool_secret_reads",
+            nested_read_probe.get("status") == "pass"
+            and "permissiondecision" in nested_read_stdout
+            and "deny" in nested_read_stdout,
+            "PreToolUse should inspect nested multi_tool_use calls before allowing the wrapper call.",
+        )
+        safe_reference_probe = run_hook_sample(root, "rg auth.json docs")
+        safe_reference_stdout = safe_reference_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_allows_safe_secret_reference_search",
+            safe_reference_probe.get("status") == "pass"
+            and "permissiondecision" in safe_reference_stdout
+            and "allow" in safe_reference_stdout,
+            "PreToolUse should allow safe reference searches that mention sensitive filenames without targeting the sensitive file path.",
+        )
+        unsafe_search_probe = run_hook_sample(root, "rg " + "to" + "ken" + " " + "to" + "ken" + ".txt")
+        unsafe_search_stdout = unsafe_search_probe.get("stdout_preview", "").lower()
+        extra_target_search_probe = run_hook_sample(root, "rg " + "auth" + ".json docs " + "auth" + ".json")
+        extra_target_search_stdout = extra_target_search_probe.get("stdout_preview", "").lower()
+        select_unsafe_probe = run_hook_sample(root, "Select-String -Pattern " + "to" + "ken" + " -Path " + "to" + "ken" + ".txt")
+        select_unsafe_stdout = select_unsafe_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_search_secret_file_targets",
+            unsafe_search_probe.get("status") == "pass"
+            and "deny" in unsafe_search_stdout
+            and extra_target_search_probe.get("status") == "pass"
+            and "deny" in extra_target_search_stdout
+            and select_unsafe_probe.get("status") == "pass"
+            and "deny" in select_unsafe_stdout,
+            "PreToolUse safe-reference exceptions should not allow secret-like search targets.",
+        )
+        select_string_blocked_probe = run_hook_sample(root, "Select-String -Pattern . -Path $env:USERPROFILE\\.codex\\auth.json")
+        select_string_blocked_stdout = select_string_blocked_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_select_string_secret_path",
+            select_string_blocked_probe.get("status") == "pass"
+            and "permissiondecision" in select_string_blocked_stdout
+            and "deny" in select_string_blocked_stdout,
+            "PreToolUse should deny Select-String when the path target is a credential file.",
+        )
+        select_string_positional_probe = run_hook_sample(root, "Select-String -Pattern . $env:USERPROFILE\\.codex\\auth.json")
+        select_string_positional_stdout = select_string_positional_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_select_string_positional_secret_path",
+            select_string_positional_probe.get("status") == "pass"
+            and "permissiondecision" in select_string_positional_stdout
+            and "deny" in select_string_positional_stdout,
+            "PreToolUse should deny Select-String when a positional path target is a credential file.",
+        )
+        select_string_reference_probe = run_hook_sample(root, "Select-String -Pattern auth.json -Path docs")
+        select_string_reference_stdout = select_string_reference_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_allows_select_string_reference_search",
+            select_string_reference_probe.get("status") == "pass"
+            and "permissiondecision" in select_string_reference_stdout
+            and "allow" in select_string_reference_stdout,
+            "PreToolUse should allow Select-String reference searches when the target path is not sensitive.",
+        )
+        destructive_order_probe = run_hook_sample(root, "Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force")
+        destructive_order_stdout = destructive_order_probe.get("stdout_preview", "").lower()
+        destructive_home_probe = run_hook_sample(root, "Remove-Item $HOME\\.codex\\tmp -Recurse -Force")
+        destructive_home_stdout = destructive_home_probe.get("stdout_preview", "").lower()
+        destructive_pwd_probe = run_hook_sample(root, "Remove-Item $PWD -Recurse -Force")
+        destructive_pwd_stdout = destructive_pwd_probe.get("stdout_preview", "").lower()
+        destructive_drive_root_probe = run_hook_sample(root, "Remove-Item \\ -Recurse -Force")
+        destructive_drive_root_stdout = destructive_drive_root_probe.get("stdout_preview", "").lower()
+        destructive_forward_root_probe = run_hook_sample(root, "Remove-Item / -Recurse -Force")
+        destructive_forward_root_stdout = destructive_forward_root_probe.get("stdout_preview", "").lower()
+        forward_drive_target = (Path.home() / ".codex" / "tmp").as_posix()
+        destructive_colon_recurse_probe = run_hook_sample(root, f"Remove-Item {forward_drive_target} -Recurse:$true -Force")
+        destructive_colon_recurse_stdout = destructive_colon_recurse_probe.get("stdout_preview", "").lower()
+        nonrecursive_force_probe = run_hook_sample(root, "Remove-Item .\\some-file.tmp -Force")
+        nonrecursive_force_stdout = nonrecursive_force_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_destructive_any_argument_order",
+            destructive_order_probe.get("status") == "pass"
+            and "permissiondecision" in destructive_order_stdout
+            and "deny" in destructive_order_stdout,
+            "PreToolUse should deny broad recursive destructive operations regardless of argument order.",
+        )
+        add_check(
+            "pretooluse_blocks_destructive_powershell_home_pwd",
+            destructive_home_probe.get("status") == "pass"
+            and "deny" in destructive_home_stdout
+            and destructive_pwd_probe.get("status") == "pass"
+            and "deny" in destructive_pwd_stdout
+            and destructive_drive_root_probe.get("status") == "pass"
+            and "deny" in destructive_drive_root_stdout
+            and destructive_forward_root_probe.get("status") == "pass"
+            and "deny" in destructive_forward_root_stdout,
+            "PreToolUse should treat $HOME, $PWD, and current-drive root aliases as broad destructive targets.",
+        )
+        add_check(
+            "pretooluse_blocks_forward_drive_recurse_true_delete",
+            destructive_colon_recurse_probe.get("status") == "pass"
+            and "permissiondecision" in destructive_colon_recurse_stdout
+            and "deny" in destructive_colon_recurse_stdout,
+            "PreToolUse should deny broad Windows paths written with forward slashes and -Recurse:$true.",
+        )
+        add_check(
+            "pretooluse_allows_nonrecursive_remove_item_force",
+            nonrecursive_force_probe.get("status") == "pass"
+            and "permissiondecision" in nonrecursive_force_stdout
+            and "allow" in nonrecursive_force_stdout,
+            "PreToolUse should not treat ordinary nonrecursive Remove-Item -Force as a broad recursive delete.",
+        )
+        relative_destructive_probe = run_hook_sample(root, "Remove-Item . -Recurse -Force")
+        relative_destructive_stdout = relative_destructive_probe.get("stdout_preview", "").lower()
+        rm_relative_probe = run_hook_sample(root, "rm -rf .")
+        rm_relative_stdout = rm_relative_probe.get("stdout_preview", "").lower()
+        ri_relative_probe = run_hook_sample(root, "ri . -r -Force")
+        ri_relative_stdout = ri_relative_probe.get("stdout_preview", "").lower()
+        rd_relative_probe = run_hook_sample(root, "cmd /c rd /s .")
+        rd_relative_stdout = rd_relative_probe.get("stdout_preview", "").lower()
+        del_relative_probe = run_hook_sample(root, "cmd /c del /s .")
+        del_relative_stdout = del_relative_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_relative_recursive_delete",
+            relative_destructive_probe.get("status") == "pass"
+            and "deny" in relative_destructive_stdout
+            and rm_relative_probe.get("status") == "pass"
+            and "deny" in rm_relative_stdout
+            and ri_relative_probe.get("status") == "pass"
+            and "deny" in ri_relative_stdout
+            and rd_relative_probe.get("status") == "pass"
+            and "deny" in rd_relative_stdout
+            and del_relative_probe.get("status") == "pass"
+            and "deny" in del_relative_stdout,
+            "PreToolUse should deny recursive deletes of current or parent relative roots, including common Windows aliases.",
+        )
+        nested_destructive_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "multi_tool_use.parallel",
+                "tool_input": {
+                    "tool_uses": [
+                        {
+                            "recipient_name": "functions.shell_command",
+                            "parameters": {"command": "Remove-Item $HOME\\.codex\\tmp -Recurse -Force"},
+                        }
+                    ]
+                },
+            },
+        )
+        nested_destructive_stdout = nested_destructive_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_nested_multitool_destructive",
+            nested_destructive_probe.get("status") == "pass"
+            and "permissiondecision" in nested_destructive_stdout
+            and "deny" in nested_destructive_stdout,
+            "PreToolUse should inspect nested multi_tool_use destructive shell commands before allowing the wrapper call.",
         )
         post_probe = run_post_tool_hook_sample(root, "functions.shell_command", "Write-Output compact-hook-smoke")
         stop_probe = run_stop_hook_sample(root, "compact hook smoke final")

@@ -502,6 +502,14 @@ reporting. Do not treat a frontend-only chain, backend-only chain, installed
 tool, MCP registration, or skill availability as a complete project workflow
 chain for unrelated work.
 
+For product-surface or browser-extension work with repeated failure or
+contamination signals, explicitly separate source-of-truth product/data owners,
+visual targets, implementation, validation scripts, and runtime target
+evidence. A generated image, callable plugin, static DOM marker, passing text
+smoke, or wrong-target screenshot is not user-surface proof. Record missing
+Chrome profile, extension side panel, external data, auth/session, or plugin
+target reachability as blockers instead of converting them into success.
+
 ## Frontend Design Workflow
 
 Before any frontend or UI work, read and follow `docs/codex_frontend_quality_directive.md`. Treat it as the mandatory final deployment administrator directive for frontend quality. If this document conflicts with lighter frontend habits or generic UI-generation defaults, the directive wins within frontend/UI scope.

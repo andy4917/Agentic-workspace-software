@@ -82,9 +82,14 @@ request, or the user explicitly asks for expansion.
 Add only the domain pieces relevant to the requested work:
 
 - Frontend/UI: follow `docs/codex_frontend_quality_directive.md`, including
-  the official Product Design workflow when exposed, `PRODUCT.md`, `DESIGN.md`, component
-  contract, shadcn/components checks when applicable, Storybook or equivalent
-  rendered state coverage, and browser/runtime observation when practical.
+  the official Product Design workflow when exposed, `PRODUCT.md`, `DESIGN.md`,
+  component contract, shadcn/components checks when applicable, Storybook or
+  equivalent rendered state coverage, and browser/runtime observation when
+  practical. Keep visual target material, product data owners, UI
+  implementation, and validation scripts separate. Image generation outputs,
+  screenshots, DOM text markers, or viewport-only visibility checks are not
+  implementation authority unless a project contract explicitly promotes them
+  and a current rendered proof confirms the user-facing surface.
 - Backend/API: identify API contracts, request/response schemas, validation
   layer, auth/permission boundary, persistence boundary, migration workflow,
   integration tests, and service runbook.
@@ -96,6 +101,9 @@ Add only the domain pieces relevant to the requested work:
   behavior.
 - Browser extensions/apps: identify manifest, permissions, content/background
   boundaries, UI surface, packaging command, and install/runtime verification.
+  Treat plugin or MCP tool availability as capability evidence only. Completion
+  needs target evidence for the actual extension/app surface, or a blocker that
+  names the missing target, auth/session state, browser profile, or data proof.
 - Infrastructure/deployment: identify environment boundaries, secrets metadata
   without reading secret values, plan/diff command, rollback, and blast radius.
 - Documentation/content: identify audience, source of truth, generated outputs,

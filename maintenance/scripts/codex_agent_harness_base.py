@@ -213,7 +213,7 @@ EVAL_TEMPLATES = {
             "AGENTS.md records Goal as a tracking marker and PM-owned completion audit",
             "Subagent delegation charter states evidence-only authority",
             "Goal templates require checked, not-run, risks, and PM independent verification",
-            "Stop hook synthetic input blocks missing audit and allows audit-present final text",
+            "Stop hook runtime sample is record-only and does not claim audit-blocking completion authority",
         ],
         "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id orchestration-governance-smoke",
         "timeout_seconds": 30,
@@ -237,7 +237,7 @@ EVAL_TEMPLATES = {
     },
     "evals/doctor-tier-smoke.json": {
         "eval_id": "doctor-tier-smoke",
-        "task": "Verify doctor tiering keeps core managed-source checks separate from heavier stress/full checks.",
+        "task": "Verify doctor tiering separates core managed-source checks from optional runtime checks.",
         "setup": "Run from CODEX_HOME after doctor tier or runtime-health changes.",
         "success_criteria": [
             "core doctor excludes generated_outputs_untracked",
@@ -545,6 +545,10 @@ def command_exists(command: str) -> bool:
     return shutil.which(command) is not None
 
 
+def no_window_creationflags() -> int:
+    return int(getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
 def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_stdout: bool = False) -> dict[str, Any]:
     started = dt.datetime.now()
     try:
@@ -556,6 +560,7 @@ def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_std
             errors="replace",
             capture_output=True,
             timeout=timeout,
+            creationflags=no_window_creationflags(),
         )
         status = "pass" if completed.returncode == 0 else "fail"
         result = {
@@ -712,7 +717,16 @@ def store_tool_artifact(root: Path, name: str, content: str) -> dict[str, Any]:
 def current_git_state(root: Path) -> dict[str, Any]:
     def run_git(args: list[str]) -> str:
         try:
-            completed = subprocess.run(["git", *args], cwd=str(root), text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=15)
+            completed = subprocess.run(
+                ["git", *args],
+                cwd=str(root),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=15,
+                creationflags=no_window_creationflags(),
+            )
         except Exception:  # noqa: BLE001 - best-effort metadata
             return ""
         return completed.stdout.strip() if completed.returncode == 0 else ""

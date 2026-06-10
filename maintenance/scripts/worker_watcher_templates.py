@@ -577,13 +577,13 @@ EVAL_TEMPLATES.update(
     {
         "evals/adversarial-review-integration-smoke.json": {
             "eval_id": "adversarial-review-integration-smoke",
-            "task": "Verify clean-all-slop remains the read-only adversarial review lens inside Worker-Watcher and Goal Integrity gates.",
+            "task": "Verify clean-all-slop read-only audit mode is the active adversarial review lens inside Goal Integrity Gates.",
             "setup": "Run from CODEX_HOME after worker-watcher managed-source changes.",
             "success_criteria": [
-                "clean-all-slop skill remains available for read-only audit mode",
+                "clean-all-slop remains available as the read-only adversarial audit lens",
                 "CLEAN/P0-P3 verdicts map to C0-C4 contamination scores",
                 "CLEAN is not completion authority",
-                "watcher and pre-ship templates require the clean-all-slop lens",
+                "watcher and pre-ship templates require the active clean-all-slop lens",
             ],
             "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id adversarial-review-integration-smoke",
             "timeout_seconds": 30,

@@ -674,14 +674,17 @@ if ($LASTEXITCODE -eq 0) {
         if ([string]::IsNullOrWhiteSpace($CommandText)) { return $false }
         $commandText = [string]$CommandText
         $expandedCommand = [Environment]::ExpandEnvironmentVariables($commandText)
-        $referencesCompactHook = (
-            $expandedCommand -match [regex]::Escape($hookPath) -or
-            $commandText -match "(?i)compact-codex-hook\.ps1"
-        )
+        if ($env:USERPROFILE) {
+            $expandedCommand = $expandedCommand.Replace('$env:USERPROFILE', $env:USERPROFILE)
+            $expandedCommand = $expandedCommand.Replace('${env:USERPROFILE}', $env:USERPROFILE)
+        }
+        $referencesCompactHook = $expandedCommand -match [regex]::Escape($hookPath)
         $usesLegacyHook = $commandText -match "(?i)(lightweight-codex|hooks\.json)"
-        $usesForegroundCmd = $commandText -match "(?i)\bcmd\s*/c\b"
+        $usesForegroundCmd = $commandText -match "(?i)\bcmd(?:\.exe)?\s*/c\b"
+        $usesCmdShim = $commandText -match "(?i)\bpwsh\.cmd\b"
         $usesHiddenWrapper = $commandText -match "(?i)WindowStyle\s+Hidden"
-        return ($referencesCompactHook -and -not $usesLegacyHook -and -not $usesForegroundCmd -and $usesHiddenWrapper)
+        $usesDirectPwsh = $commandText -match "(?i)\bpwsh\.exe\b"
+        return ($referencesCompactHook -and -not $usesLegacyHook -and -not $usesForegroundCmd -and -not $usesCmdShim -and $usesHiddenWrapper -and $usesDirectPwsh)
     }
     foreach ($commandItem in $hookCommands) {
         if (-not (& $testHookCommand $commandItem)) { $hookCommandProblems += $commandItem }
@@ -695,7 +698,28 @@ if ($LASTEXITCODE -eq 0) {
         command_bad = $hookCommandProblems
         command_windows_bad = $hookCommandWindowsProblems
         events = $hookEventDetails
-        note = "All hook events must route both command and commandWindows to the compact hook through the hidden wrapper, without foreground cmd.exe or retired hook names."
+        note = "All hook events must route both command and commandWindows to the compact hook through direct hidden pwsh.exe, without foreground cmd.exe, .cmd shim nesting, or retired hook names."
+    }
+    $toolRoutingRequired = @("functions\..*", "multi_tool_use\..*", "tool_search\..*", "web\..*", "image_gen\..*", "mcp__.*")
+    $toolRoutingByEvent = [ordered]@{}
+    $toolRoutingMissing = @()
+    foreach ($eventName in @("PreToolUse", "PostToolUse")) {
+        $eventMatchers = @($config.hooks.$eventName | ForEach-Object { [string]$_.matcher })
+        $eventText = ($eventMatchers -join "|")
+        $missingForEvent = @($toolRoutingRequired | Where-Object { $eventText -notmatch [regex]::Escape($_) })
+        $toolRoutingByEvent[$eventName] = [ordered]@{
+            matchers = $eventMatchers
+            missing = $missingForEvent
+        }
+        foreach ($missingTerm in $missingForEvent) {
+            $toolRoutingMissing += "$eventName`:$missingTerm"
+        }
+    }
+    Add-Check $checks "hook_tool_routing_status" ($(if ($toolRoutingMissing.Count -eq 0) { "pass" } else { "fail" })) @{
+        required_matcher_fragments = $toolRoutingRequired
+        missing = $toolRoutingMissing
+        by_event = $toolRoutingByEvent
+        note = "PreToolUse and PostToolUse must cover Codex Desktop tool namespaces, not only legacy Bash/apply_patch/MCP aliases."
     }
     $userHooksJson = Join-Path $CodexHome "hooks.json"
     Add-Check $checks "hooks_single_user_source" ($(if (-not (Test-Path -LiteralPath $userHooksJson)) { "pass" } else { "fail" })) @{
@@ -1206,6 +1230,7 @@ $activeGuidanceFiles = @(
     "docs\codex_frontend_quality_directive.md",
     "maintenance\PROJECT_WORKFLOW_CHAIN.md",
     "maintenance\WORKSTATION_MAINTENANCE.md",
+    "maintenance\WORKSTATION_CONTROL_RUNBOOK.md",
     "maintenance\CODEX_STATE_MANAGEMENT.md",
     "maintenance\CODEX_SELF_MANAGEMENT_LOOP.md",
     "maintenance\MCP_RUNTIME_STATUS.md",
@@ -1243,6 +1268,43 @@ Add-Check $checks "active_guidance_retired_runtime_commands_absent" ($(if ($acti
     scanned = @($activeGuidanceFiles)
     forbidden_hits = $activeGuidanceForbiddenHits
     note = "Active guidance must not reintroduce retired Memento/Serena checks or make ReportOnly+SkipScoop the final P0 command. Historical reports are intentionally not scanned here."
+}
+
+$failurePatternDocRequirements = @(
+    [ordered]@{
+        path = "maintenance\WORKSTATION_CONTROL_RUNBOOK.md"
+        terms = @("Cross-Session Failure Pattern Controls", "oracle-echo", "target-proof-gap", "blocker-laundering")
+    },
+    [ordered]@{
+        path = "maintenance\PROJECT_WORKFLOW_CHAIN.md"
+        terms = @("Image generation outputs", "capability evidence", "actual extension/app surface")
+    },
+    [ordered]@{
+        path = "maintenance\AUTOMATION_TARGET_BOUNDARY.md"
+        terms = @("Capability Versus Target Proof", "ERR_BLOCKED_BY_CLIENT", "screenshot from the wrong target")
+    },
+    [ordered]@{
+        path = "maintenance\CHROME_DEVTOOLS_MCP_OBSERVER.md"
+        terms = @("Observation success must include target identity", "missing side-panel targets")
+    }
+)
+$failurePatternProblems = New-Object System.Collections.Generic.List[object]
+foreach ($requirement in $failurePatternDocRequirements) {
+    $path = Join-Path $managedRepoRoot $requirement.path
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        $failurePatternProblems.Add([ordered]@{ path = $requirement.path; missing = @("file") }) | Out-Null
+        continue
+    }
+    $text = Get-Content -LiteralPath $path -Raw
+    $missingTerms = @($requirement.terms | Where-Object { -not $text.Contains($_) })
+    if ($missingTerms.Count -gt 0) {
+        $failurePatternProblems.Add([ordered]@{ path = $requirement.path; missing = $missingTerms }) | Out-Null
+    }
+}
+Add-Check $checks "cross_session_failure_controls_documented" ($(if ($failurePatternProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+    requirements = $failurePatternDocRequirements
+    problems = @($failurePatternProblems.ToArray())
+    note = "Repeated product-surface, plugin-target, and fake-validation failures must stay separated in active runbooks without creating a heavy gate."
 }
 
 $frontendDirectivePath = Join-Path $managedRepoRoot "docs\codex_frontend_quality_directive.md"
@@ -1296,6 +1358,9 @@ $syncPairs = @(
     "hooks\compact-codex-hook.ps1",
     "maintenance\CHROME_DEVTOOLS_MCP_OBSERVER.md",
     "maintenance\AGENT_TOOL_REQUIREMENTS.md",
+    "maintenance\PROJECT_WORKFLOW_CHAIN.md",
+    "maintenance\WORKSTATION_MAINTENANCE.md",
+    "maintenance\WORKSTATION_CONTROL_RUNBOOK.md",
     "maintenance\CODEX_STATE_MANAGEMENT.md",
     "maintenance\MEMORY_BOUNDARY_POLICY.md",
     "maintenance\AUTOMATION_TARGET_BOUNDARY.md",
@@ -1442,16 +1507,6 @@ Add-Check $checks "global_state_runtime_files_classified" ($(if ($globalStateTyp
     note = ".codex-global-state.json and .codex-global-state.json.bak are expected Codex Desktop runtime state when present. They are not configuration truth, rollback authority, or cleanup targets."
 }
 
-$allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state")
-$top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)
-$topExtra = @($top | Where-Object { $_ -notin $allowedTop })
-$offlineBaselineExtra = @($topExtra | Where-Object { $_ -notin $globalStateNames })
-Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid -or $offlineBaselineExtra.Count -eq 0) { "pass" } else { "fail" })) @{
-    live_app_server_pid = $liveAppServerPid
-    extra = $offlineBaselineExtra
-    expected_global_state = @($topExtra | Where-Object { $_ -in $globalStateNames })
-    note = "Offline baseline cleanup is enforced only after Codex is fully closed; expected global state files are app runtime state and are categorized separately."
-}
 $liveRuntimeNames = @(
     "artifacts",
     "attachments",
@@ -1465,8 +1520,10 @@ $liveRuntimeNames = @(
     "pets",
     "plugins",
     "process_manager",
+    "reports",
     "sessions",
     "sqlite",
+    "trajectories",
     "vendor_imports",
     "worktrees",
     ".sandbox",
@@ -1479,11 +1536,21 @@ $liveRuntimeNames = @(
     "session_index.jsonl"
 )
 $protectedStateNames = @("auth.json","installation_id",".sandbox-secrets","cap_sid")
-$sourceNames = @("tools","agents","docs","evals")
+$sourceNames = @("tools","agents","docs","evals","codex-goals")
 $configStateNames = $globalStateNames + @(".personality_migration","chrome-native-hosts.json","chrome-native-hosts-v2.json")
 $quarantineNames = @()
+$allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state")
+$top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)
+$topExtra = @($top | Where-Object { $_ -notin $allowedTop })
 $databaseState = @($topExtra | Where-Object { $_ -match '^(goals|logs|memories|state)_[0-9]+\.sqlite(-shm|-wal)?$' })
 $classifiedNames = $liveRuntimeNames + $protectedStateNames + $sourceNames + $configStateNames + $quarantineNames + $databaseState
+$offlineBaselineExtra = @($topExtra | Where-Object { $_ -notin $classifiedNames })
+Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid -or $offlineBaselineExtra.Count -eq 0) { "pass" } else { "fail" })) @{
+    live_app_server_pid = $liveAppServerPid
+    extra = $offlineBaselineExtra
+    expected_classified_state = @($topExtra | Where-Object { $_ -in $classifiedNames })
+    note = "Offline baseline cleanup is enforced only after Codex is fully closed; classified live source, runtime, config, database, and protected state are not contamination by themselves."
+}
 $uncategorizedTopExtra = @($topExtra | Where-Object { $_ -notin $classifiedNames })
 $forbiddenNames = @("archive","archived_app_tool_caches","archived_logs","archived_sessions","archived_transient_roots","archived_worktrees","bundled-marketplaces","codex-runtimes","skills-disabled","wshobson-agents-scan")
 $forbiddenActiveTop = @($topExtra | Where-Object { $_ -in $forbiddenNames })

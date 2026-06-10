@@ -4,58 +4,58 @@
 matcher = "startup|resume"
 [[hooks.SessionStart.hooks]]
 type = "command"
-command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
 [[hooks.PreToolUse]]
-matcher = "Bash|apply_patch|mcp__.*"
+matcher = "Bash|functions\\..*|multi_tool_use\\..*|multi_agent.*|tool_search\\..*|web\\..*|image_gen\\..*|codex_app\\..*|apply_patch|mcp__.*"
 [[hooks.PreToolUse.hooks]]
 type = "command"
-command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
 [[hooks.PostToolUse]]
-matcher = "Bash|apply_patch|mcp__.*"
+matcher = "Bash|functions\\..*|multi_tool_use\\..*|multi_agent.*|tool_search\\..*|web\\..*|image_gen\\..*|codex_app\\..*|apply_patch|mcp__.*"
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
-commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& $env:USERPROFILE\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\.codex\hooks\compact-codex-hook.ps1"'
+command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 10
 statusMessage = "compact scaffold hook"
 
 [hooks.state]
 
 [hooks.state.'C:\Users\anise\.codex\config.toml:pre_tool_use:0:0']
-trusted_hash = "sha256:c370e05a5bcb1b3b9c4b56595f797e2e79aaf386173f076238c6f62d90d47878"
+trusted_hash = "sha256:f1de5b15102bf1c79c93743fd9660e51ee047d372d9d7b58f42716e595c880a4"
 
 [hooks.state.'C:\Users\anise\.codex\config.toml:post_tool_use:0:0']
-trusted_hash = "sha256:e98254ca5f3e3e5194db5170563eea84b85e21d8733af98a5e7b5097cb06fd99"
+trusted_hash = "sha256:865c8762d86d17666f6794526cc983576ecb4f5597a9596ce28b679662ee70be"
 
 [hooks.state.'C:\Users\anise\.codex\config.toml:session_start:0:0']
-trusted_hash = "sha256:39cd206f4d923333476695dc569846e459268084a9f644ed7d8aecf685e96faf"
+trusted_hash = "sha256:a9fc6364477f81ff9c6b284fee78b08c4bf00d4301ef3923e6e12dc75f5cc470"
 
 [hooks.state.'C:\Users\anise\.codex\config.toml:user_prompt_submit:0:0']
-trusted_hash = "sha256:93a8769e69fdae4f342948277234b08bcb655008c996b1e176eaa84196999e0b"
+trusted_hash = "sha256:18c1635be4f26e63b4baa880cbcfe4559818e1e8e1abed0e59c90695ef59c09a"
 
 [hooks.state.'C:\Users\anise\.codex\config.toml:stop:0:0']
-trusted_hash = "sha256:0662703b46f793a0e546a40e4520b399d94439dbd01c0fcda13b38dddac53357"
+trusted_hash = "sha256:c297f38a4c29c0aba9b6ba59be21d9b8b31d9340f2853e7c2b7855444ece87f5"

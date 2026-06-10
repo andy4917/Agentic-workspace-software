@@ -147,6 +147,26 @@ Classify failures with the smallest accurate set from: `claim failure`,
 Do not claim root cause until the mechanism level is evidenced:
 reproduce, boundary, mechanism, masking, prevention.
 
+### Cross-Session Failure Pattern Controls
+
+When a user points to repeated failures across sessions, classify the pattern
+before adding new workflow:
+
+- `oracle-echo`: tests, smokes, screenshots, or docs assert current
+  implementation details, generated-image candidates, text markers, or viewport
+  visibility instead of user behavior.
+- `target-proof-gap`: a plugin, MCP, browser, or desktop tool is callable, but
+  the actual user target is not reachable or not the surface being inspected.
+- `owner-duplication`: product IDs, surface lists, filters, or external-data
+  requirements are duplicated in UI code, tests, smoke scripts, and docs.
+- `blocker-laundering`: missing external data, auth/session state, plugin
+  transport, or real-browser proof is converted into success language.
+
+For these classes, the smallest useful fix is usually to restore one source of
+truth, make the same failed proof fail clearly, and record the plugin or runtime
+target blocker as a blocker. Do not create broad new gates, accepted-image
+authority, or test-only success markers to compensate for missing runtime proof.
+
 ### Same-Proof Rerun And Goal Bridge
 
 If a change fixes a confirmed failure, rerun the exact proof that failed before

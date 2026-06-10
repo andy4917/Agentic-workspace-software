@@ -115,8 +115,9 @@ not be left always-on just because they are useful sometimes.
   observation when the tools are exposed.
 - `rollback`: run `off` to restore `enabled = false`; use `codex mcp remove
   chrome-devtools` only when the settings entry should disappear completely.
-  Any pre-change config copy is transient under `%TEMP%\codex-transient-backups`
-  and is not retained runtime fallback state.
+  Any pre-change config copy is a transient `%TEMP%\codex-mcp-config-{guid}.toml`
+  file and is deleted after success or rollback handling, not retained runtime
+  fallback state.
 
 Other frontend registry tools, including shadcn, are CLI or project-local
 fallbacks under the current minimal MCP baseline. Do not add them as global MCPs
@@ -216,7 +217,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
 %USERPROFILE%\.codex\toolchains\shims\python.cmd %USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py doctor --json
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -Json
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -ReportRoot %USERPROFILE%\Documents\Codex\reports
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-staged-sensitive-diff.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-worktree-sensitive-diff.ps1
 git -C %USERPROFILE%\.codex status --short

@@ -11,6 +11,10 @@ from codex_agent_harness_base import *
 from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, cmd_apply, doctor_data, load_state
 from codex_agent_harness_workflows import cmd_compact_summary, cmd_context, cmd_retrieve, write_verification_report
 
+
+HOOK_MATCHER = "Bash|functions\\..*|multi_tool_use\\..*|multi_agent.*|tool_search\\..*|web\\..*|image_gen\\..*|codex_app\\..*|apply_patch|mcp__.*"
+
+
 def cmd_merge_config(args: argparse.Namespace) -> int:
     root = root_path(args)
     source = Path(args.source).resolve()
@@ -243,21 +247,24 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         )
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n.codex-global-state.json.bak\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})
+        hook_pwsh = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+        hook_runner = Path.home() / ".codex" / "hooks" / "compact-codex-hook.ps1"
+        hidden_hook_command = f"{hook_pwsh} -NoProfile -NonInteractive -WindowStyle Hidden -File {hook_runner}"
         write_text(
             root / "config.d" / "20-hooks.toml",
             "[[hooks.PreToolUse]]\n"
-            "matcher = \"Bash|apply_patch|mcp__.*\"\n"
+            f"matcher = {json.dumps(HOOK_MATCHER)}\n"
             "[[hooks.PreToolUse.hooks]]\n"
             "type = \"command\"\n"
-            "command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"& $env:USERPROFILE\\.codex\\toolchains\\shims\\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\\.codex\\hooks\\compact-codex-hook.ps1\"'\n"
-            "commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"& $env:USERPROFILE\\.codex\\toolchains\\shims\\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\\.codex\\hooks\\compact-codex-hook.ps1\"'\n"
+            f"command = '{hidden_hook_command}'\n"
+            f"commandWindows = '{hidden_hook_command}'\n"
             "\n"
             "[[hooks.PostToolUse]]\n"
-            "matcher = \"Bash|apply_patch|mcp__.*\"\n"
+            f"matcher = {json.dumps(HOOK_MATCHER)}\n"
             "[[hooks.PostToolUse.hooks]]\n"
             "type = \"command\"\n"
-            "command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"& $env:USERPROFILE\\.codex\\toolchains\\shims\\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\\.codex\\hooks\\compact-codex-hook.ps1\"'\n"
-            "commandWindows = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"& $env:USERPROFILE\\.codex\\toolchains\\shims\\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File $env:USERPROFILE\\.codex\\hooks\\compact-codex-hook.ps1\"'\n"
+            f"command = '{hidden_hook_command}'\n"
+            f"commandWindows = '{hidden_hook_command}'\n"
         )
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
         write_text(
