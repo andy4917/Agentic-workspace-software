@@ -118,6 +118,9 @@ child `PATH` before starting `no-mistakes`. This is intentional: no-mistakes
 spawns Codex agents, and Codex shell commands must resolve a real `pwsh.exe`,
 not the `.cmd` shim, or Windows batch argument handling can block every shell
 command with `batch file arguments are invalid`.
+Normalize PATH entries only for comparison with the Codex shim directory; append
+retained entries unchanged so paths containing `!`, forward slashes, or root
+trailing slashes are not corrupted.
 
 The no-mistakes Codex agent configuration must include `--sandbox
 danger-full-access`, `--disable plugins`, and `--skip-git-repo-check`.

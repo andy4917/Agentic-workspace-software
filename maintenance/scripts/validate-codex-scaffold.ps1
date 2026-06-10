@@ -857,6 +857,7 @@ try {
     $noMistakesWrapperPathProbeOutput = ""
     $noMistakesWrapperPathProbeExit = $null
     $noMistakesWrapperPathProbeSanitizesVariants = $false
+    $noMistakesWrapperPathProbePreservesOriginalEntries = $false
     $noMistakesWrapperBangProbeOutput = ""
     $noMistakesWrapperBangProbeExit = $null
     $noMistakesWrapperPreservesBangArgs = $false
@@ -870,7 +871,9 @@ try {
             New-Item -ItemType Directory -Path $fakeNoMistakesDir -Force | Out-Null
             Copy-Item -LiteralPath $env:ComSpec -Destination (Join-Path $fakeNoMistakesDir "no-mistakes.exe") -Force
             $shimRootForward = $shimRoot -replace "\\", "/"
-            $pathProbeInputs = @($shimRoot, "$shimRoot\", $shimRootForward, "$shimRootForward/")
+            $pathProbeOriginalBangEntry = "C:\Codex!PathProbe\Tools"
+            $pathProbeOriginalSlashEntry = "C:/CodexPathProbe/Tools/"
+            $pathProbeInputs = @($shimRoot, "$shimRoot\", $shimRootForward, "$shimRootForward/", $pathProbeOriginalBangEntry, $pathProbeOriginalSlashEntry)
             if ($previousPathForNoMistakesProbe) {
                 $pathProbeInputs += $previousPathForNoMistakesProbe
             }
@@ -887,6 +890,11 @@ try {
             $noMistakesWrapperPathProbeSanitizesVariants = (
                 $noMistakesWrapperPathProbeExit -eq 0 -and
                 -not (@($normalizedPathProbeEntries | Where-Object { $_ -ieq $normalizedShimRoot }).Count -gt 0)
+            )
+            $noMistakesWrapperPathProbePreservesOriginalEntries = (
+                $noMistakesWrapperPathProbeExit -eq 0 -and
+                $pathProbeValue -like "*$pathProbeOriginalBangEntry*" -and
+                $pathProbeValue -like "*$pathProbeOriginalSlashEntry*"
             )
 
             $env:NO_MISTAKES_PROBE_ARG = "CORRUPTED"
@@ -921,6 +929,8 @@ try {
     $noMistakesWrapperSanitizesPath = (
         $noMistakesShimText -match "CODEX_SHIM_DIR" -and
         $noMistakesShimText -match "NM_ORIGINAL_PATH" -and
+        $noMistakesShimText -match "NM_PATH_ENTRY_ORIGINAL" -and
+        $noMistakesShimText -match "NM_PATH_ENTRY_NORMALIZED" -and
         $noMistakesShimText -match "NO_MISTAKES_TELEMETRY=0" -and
         $noMistakesShimText -match "NO_MISTAKES_NO_UPDATE_CHECK=1"
     )
@@ -950,6 +960,7 @@ try {
         $noMistakesConfigReady -and
         $noMistakesWrapperSanitizesPath -and
         $noMistakesWrapperPathProbeSanitizesVariants -and
+        $noMistakesWrapperPathProbePreservesOriginalEntries -and
         $noMistakesWrapperPreservesBangArgs
     )
     Add-Check $checks "no_mistakes_gate_ready" ($(if ($noMistakesReady) { "pass" } else { "fail" })) @{
@@ -957,6 +968,7 @@ try {
         shim_exists = (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)
         wrapper_sanitizes_codex_shim_path = $noMistakesWrapperSanitizesPath
         wrapper_path_probe_sanitizes_variants = $noMistakesWrapperPathProbeSanitizesVariants
+        wrapper_path_probe_preserves_original_entries = $noMistakesWrapperPathProbePreservesOriginalEntries
         wrapper_path_probe_exit_code = $noMistakesWrapperPathProbeExit
         wrapper_bang_arg_preserved = $noMistakesWrapperPreservesBangArgs
         wrapper_bang_probe_exit_code = $noMistakesWrapperBangProbeExit

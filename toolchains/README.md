@@ -115,4 +115,5 @@ Last verification:
   disabled for deterministic Codex-managed runs. The wrapper intentionally
   removes the Codex shim directory from its child `PATH` so
   no-mistakes-spawned Codex agents resolve real `pwsh.exe` and `codex.exe`
-  binaries instead of `.cmd` wrappers.
+  binaries instead of `.cmd` wrappers. It must normalize PATH entries only for
+  the shim-directory comparison and append retained entries unchanged.

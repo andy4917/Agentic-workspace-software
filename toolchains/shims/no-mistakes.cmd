@@ -8,18 +8,17 @@ if "%CODEX_SHIM_DIR:~-1%"=="\" set "CODEX_SHIM_DIR=%CODEX_SHIM_DIR:~0,-1%"
 set "NM_ORIGINAL_PATH=%PATH%"
 set "PATH="
 for %%P in ("%NM_ORIGINAL_PATH:;=" "%") do (
-  set "NM_PATH_ENTRY=%%~P"
-  call :AppendPathEntry
+  call :AppendPathEntry "%%~P"
 )
 goto :RunNoMistakes
 
 :AppendPathEntry
-if not defined NM_PATH_ENTRY exit /b 0
-set "NM_PATH_COMPARE=%NM_PATH_ENTRY:/=\%"
-if "%NM_PATH_COMPARE:~-1%"=="\" set "NM_PATH_COMPARE=%NM_PATH_COMPARE:~0,-1%"
-if /I "%NM_PATH_COMPARE%"=="%CODEX_SHIM_DIR%" exit /b 0
-if defined PATH set "PATH=%PATH%;%NM_PATH_ENTRY%"
-if not defined PATH set "PATH=%NM_PATH_ENTRY%"
+set "NM_PATH_ENTRY_ORIGINAL=%~1"
+if not defined NM_PATH_ENTRY_ORIGINAL exit /b 0
+set "NM_PATH_ENTRY_NORMALIZED=%NM_PATH_ENTRY_ORIGINAL:/=\%"
+if "%NM_PATH_ENTRY_NORMALIZED:~-1%"=="\" set "NM_PATH_ENTRY_NORMALIZED=%NM_PATH_ENTRY_NORMALIZED:~0,-1%"
+if /I "%NM_PATH_ENTRY_NORMALIZED%"=="%CODEX_SHIM_DIR%" exit /b 0
+if defined PATH (set "PATH=%PATH%;%NM_PATH_ENTRY_ORIGINAL%") else set "PATH=%NM_PATH_ENTRY_ORIGINAL%"
 exit /b 0
 
 :RunNoMistakes
