@@ -285,13 +285,41 @@ function Get-PluginRoot {
     return $null
 }
 
+function Test-InNoMistakesWorktree {
+    $noMistakesWorktreeRoot = Join-Path $env:USERPROFILE ".no-mistakes\worktrees"
+    try {
+        $noMistakesWorktreeRootFull = ([System.IO.Path]::GetFullPath($noMistakesWorktreeRoot)).TrimEnd("\") + "\"
+        $scriptFull = [System.IO.Path]::GetFullPath($PSCommandPath)
+        $cwdFull = [System.IO.Path]::GetFullPath((Get-Location).Path)
+        return (
+            $scriptFull.StartsWith($noMistakesWorktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $cwdFull.StartsWith($noMistakesWorktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)
+        )
+    } catch {
+        return $false
+    }
+}
+
+function Remove-NoMistakesReposProjectTrustBlock {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $noMistakesReposPath = (Join-Path $env:USERPROFILE ".no-mistakes\repos") -replace "/", "\"
+    $escapedNoMistakesReposPath = [regex]::Escape($noMistakesReposPath)
+    $pattern = "(?im)^\s*\[projects\.'$escapedNoMistakesReposPath'\]\s*\r?\n\s*trust_level\s*=\s*`"trusted`"\s*(\r?\n)?"
+    return [regex]::Replace($Text, $pattern, "")
+}
+
 function Test-FragmentReconcile {
-    param([Parameter(Mandatory = $true)][string]$Root)
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [switch]$AllowNoMistakesLocalProjectOverlay
+    )
 
     $fragments = @("00-policy.toml", "10-mcp.toml", "20-hooks.toml", "30-skills.toml")
     $configText = Get-Content -LiteralPath (Join-Path $Root "config.toml") -Raw
     $missing = @()
     $mismatched = @()
+    $allowedLocalOverlays = @()
     foreach ($name in $fragments) {
         $fragmentPath = Join-Path (Join-Path $Root "config.d") $name
         if (-not (Test-Path -LiteralPath $fragmentPath -PathType Leaf)) {
@@ -308,6 +336,13 @@ function Test-FragmentReconcile {
         $actualFragmentText = ($match.Groups[1].Value.Trim() -replace "\r\n?", "`n")
         $expectedFragmentText = ($fragmentText -replace "\r\n?", "`n")
         if ($actualFragmentText -ne $expectedFragmentText) {
+            if ($AllowNoMistakesLocalProjectOverlay -and $name -eq "00-policy.toml") {
+                $actualWithoutNoMistakesTrust = (Remove-NoMistakesReposProjectTrustBlock -Text $actualFragmentText).Trim()
+                if ($actualWithoutNoMistakesTrust -eq $expectedFragmentText) {
+                    $allowedLocalOverlays += "00-policy.toml: no-mistakes repos project trust"
+                    continue
+                }
+            }
             $mismatched += $name
         }
     }
@@ -316,6 +351,7 @@ function Test-FragmentReconcile {
         ok = ($missing.Count -eq 0 -and $mismatched.Count -eq 0)
         missing = $missing
         mismatched = $mismatched
+        allowed_local_overlays = $allowedLocalOverlays
     }
 }
 
@@ -390,10 +426,11 @@ Add-Check $checks "required_files" ($(if ((Test-Path $configPath) -and (Test-Pat
     hook = $hookPath
 }
 
-$fragmentReconcile = Test-FragmentReconcile -Root $CodexHome
+$fragmentReconcile = Test-FragmentReconcile -Root $CodexHome -AllowNoMistakesLocalProjectOverlay:(Test-InNoMistakesWorktree)
 Add-Check $checks "config_fragment_reconcile_match" ($(if ($fragmentReconcile.ok) { "pass" } else { "fail" })) @{
     missing = $fragmentReconcile.missing
     mismatched = $fragmentReconcile.mismatched
+    allowed_local_overlays = $fragmentReconcile.allowed_local_overlays
 }
 
 $parsed = & python -c "import sys,tomllib,json; p=sys.argv[1]; data=tomllib.load(open(p,'rb')); print(json.dumps(data, sort_keys=True))" $configPath
@@ -1429,6 +1466,9 @@ try {
     $retiredMcpRuntimeProcesses = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $processName = [string]$_.Name
         $commandLine = [string]$_.CommandLine
+        if ($processName -ieq "codex.exe") {
+            return $false
+        }
         ($processName -ieq "serena.exe" -and $commandLine -match "start-mcp-server") -or
             ($commandLine -match "(?i)(memento-mcp-runtime\.ps1|[\\/]memento-mcp([\\/]|\\b)|state[\\/]memento-mcp|tools[\\/]memento-mcp)") -or
             ($commandLine -match "(?i)@upstash[\\/]context7-mcp")
