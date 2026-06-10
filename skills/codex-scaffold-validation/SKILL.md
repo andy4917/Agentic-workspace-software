@@ -9,7 +9,7 @@ description: Use when validating or changing this workstation's Codex scaffold, 
 
 Use the latest user plan and current files as authority. For the PLAN FOR WORK baseline:
 
-- `openaiDeveloperDocs` and `context7` are the always-on MCP servers.
+- `openaiDeveloperDocs` is the only always-on MCP server.
 - `chrome-devtools` is optional and disabled by default unless the active task enables it.
 - `memento` and `serena` are retired and must be absent or disabled.
 - `node_repl` is a Codex Desktop bundled execution primitive, not a user-authored MCP entry.

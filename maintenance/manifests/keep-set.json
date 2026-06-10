@@ -41,13 +41,13 @@
       "vowline"
     ],
     "mcp_servers": [
-      "openaiDeveloperDocs",
-      "context7"
+      "openaiDeveloperDocs"
     ],
     "optional_mcp_servers_disabled_by_default": [
       "chrome-devtools"
     ],
     "retired_mcp_servers": [
+      "context7",
       "memento",
       "serena"
     ],

@@ -1,19 +1,19 @@
 # MCP Runtime Status
 
-Updated for the 2026-06-01 PLAN FOR WORK baseline.
+Updated for the 2026-06-10 context7 uninstall baseline.
 
 ## Current Finding
 
 The workstation MCP baseline is intentionally small:
 
 - `openaiDeveloperDocs`: enabled, required false, prompt approval.
-- `context7`: enabled, required false, prompt approval.
 - `chrome-devtools`: optional and configured OFF by default.
 
-`memento` and `serena` are retired from the active MCP baseline. They must be
-absent or disabled in live config, and should not be started or verified as part
-of normal scaffold health. `node_repl` remains useful, but as a Codex Desktop
-bundled execution primitive, not as a user-authored `[mcp_servers.*]` entry.
+`context7` must be absent from live config. `memento` and `serena` must be
+absent or disabled in live config, and none of these runtimes should be started
+or verified as part of normal scaffold health. `node_repl` remains useful, but
+as a Codex Desktop bundled execution primitive, not as a user-authored
+`[mcp_servers.*]` entry.
 
 ## Global MCP Scope
 
@@ -28,8 +28,6 @@ credential source, or policy boundary.
 - `openaiDeveloperDocs`: use for current OpenAI API, model, Codex, plugin,
   app-server, and ChatGPT Apps documentation. Prefer it over web search for
   OpenAI product facts.
-- `context7`: use for current third-party library, framework, SDK, CLI, and
-  cloud-service documentation. Resolve the library id before focused docs.
 - `chrome-devtools`: use only as a temporary browser-observation role. It stays
   disabled by default, runs through the `.codex\toolchains\shims\npx.cmd`
   wrapper when enabled, and should be disabled again after the bounded check.
@@ -39,6 +37,9 @@ credential source, or policy boundary.
 
 ## Retired MCPs
 
+- `context7`: uninstalled from the global MCP baseline. Use official project
+  documentation, an installed task-specific documentation MCP, or web search for
+  current third-party library, framework, SDK, CLI, and cloud-service facts.
 - `memento`: retired as active PM memory. Do not use memory reads/writes as
   workflow support unless a future current user instruction reopens that
   boundary. Historical reports and patches are maintenance evidence, not active
@@ -65,7 +66,8 @@ codex doctor --json
 Expected scaffold validation:
 
 - `mcp_plan_baseline: pass`
-- `openaiDeveloperDocs` and `context7` configured and enabled
+- `openaiDeveloperDocs` configured and enabled
+- `context7` absent
 - `memento` and `serena` absent or disabled
 - `chrome-devtools` absent or disabled by default
 - `node_repl` absent from user-authored MCP config

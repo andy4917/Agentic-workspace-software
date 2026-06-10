@@ -247,9 +247,10 @@ repository-specific command, credential source, or policy boundary.
 - Keep `openaiDeveloperDocs` enabled for current OpenAI API, model, Codex,
   plugin, app-server, and ChatGPT Apps documentation. Prefer it over web search
   for OpenAI product facts.
-- Keep `context7` enabled for current third-party library, framework, SDK, CLI,
-  or cloud-service documentation. Prefer it over web search for library
-  documentation; resolve the library id before fetching focused docs.
+- `context7` is uninstalled from the global MCP baseline. For current
+  third-party library, framework, SDK, CLI, or cloud-service documentation, use
+  official project documentation, an installed task-specific documentation MCP,
+  or web search when the documentation is version-sensitive.
 - Keep `chrome-devtools` optional and OFF by default. Enable it only for a
   bounded browser-observation task, reload/restart the app if the namespace is
   not visible, verify exposure with tool discovery, use it for the rendered
@@ -257,9 +258,9 @@ repository-specific command, credential source, or policy boundary.
 - Use `node_repl` as a Codex Desktop bundled execution primitive, not as a
   user-configured `[mcp_servers.*]` entry. Discover it with `tool_search` when
   needed for JavaScript execution or browser-plugin setup code.
-- Treat `memento`, `serena`, `shadcn`, `sequential_thinking`, and
+- Treat `context7`, `memento`, `serena`, `shadcn`, `sequential_thinking`, and
   `windows_powershell` as not part of the current default MCP baseline. Use CLI,
-  skills, official docs, Context7, browser tooling, or a future explicit user
+  skills, official docs, browser tooling, or a future explicit user
   request instead of silently reintroducing those MCP registrations.
 
 ## Reasoning Effort Policy

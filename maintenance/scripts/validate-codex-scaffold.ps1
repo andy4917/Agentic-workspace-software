@@ -419,9 +419,9 @@ if ($LASTEXITCODE -eq 0) {
     }
     $mcpServers = $config.mcp_servers
     $mcpNames = if ($null -ne $mcpServers) { @($mcpServers.PSObject.Properties.Name | Sort-Object) } else { @() }
-    $requiredMcp = @("context7", "openaiDeveloperDocs")
-    $retiredMcp = @("memento", "serena")
-    $allowedMcp = @("chrome-devtools", "context7", "memento", "openaiDeveloperDocs", "serena")
+    $requiredMcp = @("openaiDeveloperDocs")
+    $retiredMcp = @("context7", "memento", "serena")
+    $allowedMcp = @("chrome-devtools", "memento", "openaiDeveloperDocs", "serena")
     $mcpProblems = New-Object System.Collections.Generic.List[string]
     $missingOrDisabledMcp = New-Object System.Collections.Generic.List[string]
     foreach ($name in $requiredMcp) {
@@ -464,7 +464,7 @@ if ($LASTEXITCODE -eq 0) {
         node_repl_user_mcp_configured = $nodeReplUserConfigured
         extra = $extraMcp
         problems = @($mcpProblems.ToArray())
-        note = "PLAN baseline: openaiDeveloperDocs/context7 enabled, memento/serena absent or disabled, chrome-devtools absent or disabled by default, and node_repl not registered as a user MCP server."
+        note = "PLAN baseline: openaiDeveloperDocs enabled, context7 absent from the MCP config, memento/serena absent or disabled, chrome-devtools absent or disabled by default, and node_repl not registered as a user MCP server."
     }
     $keepSet = Get-KeepSetManifest -Root $CodexHome
     $keepSetMcpProblems = New-Object System.Collections.Generic.List[string]
@@ -1418,7 +1418,8 @@ try {
         $processName = [string]$_.Name
         $commandLine = [string]$_.CommandLine
         ($processName -ieq "serena.exe" -and $commandLine -match "start-mcp-server") -or
-            ($commandLine -match "(?i)(memento-mcp-runtime\.ps1|[\\/]memento-mcp([\\/]|\\b)|state[\\/]memento-mcp|tools[\\/]memento-mcp)")
+            ($commandLine -match "(?i)(memento-mcp-runtime\.ps1|[\\/]memento-mcp([\\/]|\\b)|state[\\/]memento-mcp|tools[\\/]memento-mcp)") -or
+            ($commandLine -match "(?i)@upstash[\\/]context7-mcp")
     })
 } catch {
     $retiredMcpRuntimeProcesses = @()
@@ -1428,7 +1429,7 @@ Add-Check $checks "retired_mcp_runtime_processes_absent" ($(if ($retiredMcpRunti
     processes = @($retiredMcpRuntimeProcesses | ForEach-Object {
         [ordered]@{ pid = $_.ProcessId; parent_pid = $_.ParentProcessId; name = $_.Name; command_line = $_.CommandLine }
     })
-    note = "PLAN retires Serena and Memento MCP runtimes; no active serena start-mcp-server or memento-mcp runtime process should remain after runtime cleanup or app reload."
+    note = "PLAN removes Context7 and retires Serena and Memento MCP runtimes; no active context7, serena start-mcp-server, or memento-mcp runtime process should remain after runtime cleanup or app reload."
 }
 
 $failedChecks = @($checks | Where-Object { $_.status -ne "pass" })
