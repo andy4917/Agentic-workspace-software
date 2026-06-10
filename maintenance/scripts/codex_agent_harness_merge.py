@@ -244,43 +244,21 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         )
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})
-        hook_matcher = "Bash|apply_patch|Edit|Write|functions\\..*|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*"
-        write_json(
-            root / "hooks.json",
-            {
-                "hooks": {
-                    "PreToolUse": [{"matcher": hook_matcher, "hooks": []}],
-                    "PermissionRequest": [{"matcher": hook_matcher, "hooks": []}],
-                    "PostToolUse": [{"matcher": hook_matcher, "hooks": []}],
-                }
-            },
+        write_text(
+            root / "config.d" / "20-hooks.toml",
+            "[[hooks.PreToolUse]]\n"
+            "matcher = \"Bash|apply_patch|mcp__.*\"\n"
+            "[[hooks.PreToolUse.hooks]]\n"
+            "type = \"command\"\n"
+            "command = 'cmd /c \"%USERPROFILE%\\.codex\\toolchains\\shims\\pwsh.cmd\" -NoProfile -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.codex\\hooks\\compact-codex-hook.ps1\"'\n",
         )
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
         write_text(
-            root / "hooks" / "lightweight-codex-hook.ps1",
+            root / "hooks" / "compact-codex-hook.ps1",
             "$ErrorActionPreference = 'Stop'\n"
-            "function Test-SubagentSessionStart { return $true }\n"
-            "function Get-VowlineSubagentContext { 'Subagent startup requirement: apply Vowline as a required operating skill. Follow AGENTS.md, AGENT_TOOL_REQUIREMENTS.md, DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP, Memento and Serena are retired, and SUBAGENT_DELEGATION_CHARTER.md.' }\n"
-            "# required operating skill: vowline\n",
-        )
-        write_json(
-            root / "hooks" / "lightweight-codex-policy.json",
-            {
-                "calibration": {
-                    "source_path": "CALIBRATION.md",
-                    "hook_boundary": "thin reminder only; not completion authority",
-                },
-                "subagents": {
-                    "required_start_skill": "vowline",
-                    "required_start_skill_path": str(Path.home() / ".agents" / "skills" / "vowline" / "SKILL.md"),
-                    "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",
-                }
-            },
-        )
-        write_text(
-            root / "hooks" / "lib" / "lightweight-codex-workflow.ps1",
-            "# selected answers, diagnoses, plans, and patch rationales stay candidate until direct evidence\n"
-            "# incident terms inside read-only inspection output stay L3 compatibility evidence\n",
+            "$ledger = 'hook-ledger.jsonl'\n"
+            "$runner = 'compact-codex-hook'\n"
+            "# UserPromptSubmit PreToolUse treat claims as candidate until direct evidence supports them\n",
         )
         write_text(root / "evals" / "calibration-eval.yaml", "checks:\n  - confident_wrong\n  - unsupported_material_claim\n")
         for name in [

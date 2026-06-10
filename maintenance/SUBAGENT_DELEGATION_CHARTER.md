@@ -65,7 +65,7 @@ Worker raw output is source material only. The PM-facing artifact is a
 `NORMALIZED_WORKER_PACKET`, and that packet is candidate evidence rather than
 completion authority.
 
-The watcher uses `dont-even-try` as a read-only adversarial review lens for the
+The watcher uses `clean-all-slop` as a read-only adversarial review lens for the
 immediately previous worker or PM turn. A `CLEAN` watcher verdict is not PM
 completion, and `FIX REQUIRED` findings must be mapped to the Goal Integrity
 Gate before merge decisions.

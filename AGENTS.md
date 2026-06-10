@@ -5,11 +5,13 @@
 This file is the primary scoped guidance for Codex work under `%USERPROFILE%\.codex`.
 It is project guidance, not configuration, not an inventory, and not completion authority.
 
-Use it as a compact global contract for maintenance, implementation, tests, reviews,
-multi-agent orchestration, and handoff quality.
+Use it as the active workflow profile for maintenance, implementation, tests,
+reviews, multi-agent orchestration, and handoff quality. Keep runtime details in
+`config.d`, `config.toml`, the compact hook, and focused runbooks; retired
+workflow profile documents are contamination candidates and must not be restored
+as active authority.
 
-Adopt `CODEX_WORKFLOW_APPLIED_REVIEW` and
-`CODEX_WORKFLOW_CONFIGURATION_INTERVIEW` as the active workflow profiles:
+The active workflow profile should:
 
 - preserve agent autonomy for ordinary engineering work;
 - keep the user as reviewer, not operator;
@@ -129,12 +131,13 @@ long-running PM-only work.
   decisions.
 - Non-trivial worker subagent dispatch requires at least one independent watcher
   by default before PM merge or finalization.
-- Watchers use `dont-even-try` as a read-only adversarial review of the
-  immediately previous worker or PM turn. They do not repair by default.
+- Watchers use `clean-all-slop` in read-only audit mode as an adversarial review
+  of the immediately previous worker or PM turn. They do not repair by default.
 - If a watcher is omitted, record `WATCHER_NOT_USED` with reason, risk,
   substitute check, and confidence impact. Omission is not a pass.
-- Midpoint and pre-ship gates map `dont-even-try` `CLEAN`/`P0-P3` outcomes to
-  `C0-C4` contamination decisions. `CLEAN` is not completion authority.
+- Midpoint and pre-ship gates map read-only adversarial review
+  `CLEAN`/`P0-P3` outcomes to `C0-C4` contamination decisions. `CLEAN` is not
+  completion authority.
 - PM-only long-running work does not bypass midpoint and pre-ship gates.
 
 ## Main Engineering Lifecycle
@@ -404,8 +407,8 @@ wording:
 3. Reclassify the current work as debug/incident trace.
 4. Identify whether the issue is in PM behavior, hook state, harness smoke
    tests, tool/runtime behavior, docs/skills, or user-facing reporting.
-5. Check for overlap with existing Goal, Worker-Watcher, Stop-hook,
-   incident-manual, and verification-loop processes before adding a new process.
+5. Check for overlap with existing Goal, Worker-Watcher, Stop-hook, and active
+   verification processes before adding a new process.
 6. Patch only the smallest confirmed surface, or record a precise not-run
    reason and residual risk.
 7. Resume the original work only after the anomaly has a root cause, a bounded
@@ -551,27 +554,10 @@ tokens/components, rendered verification, and this frontend directive. Include
 the relevant frontend checks in final verification: accessibility, responsive
 layout, text/container fit, interaction states, motion, and visual consistency.
 
-`ui-ux-pro-max` is retired for this workstation baseline. Treat leftover
-references as historical evidence or contamination candidates unless a current
-user instruction explicitly reopens that boundary.
-
-When the `impeccable` skill is installed and the task touches frontend UI, this remains a compatible recommended workflow:
-
-1. Project context: run `$impeccable teach` so the project has `PRODUCT.md` and, when possible, `DESIGN.md`.
-2. Existing project documentation: for an existing codebase, run `$impeccable document` to derive `DESIGN.md` from current design tokens, components, colors, and typography.
-3. Shape before code: before creating a new screen or major UI surface, run `$impeccable shape <target>` and settle the UI direction, layout, information architecture, and visual strategy before implementation.
-4. Implement: run `$impeccable craft <target>` only after a user-confirmed shape brief exists. `teach` and `PRODUCT.md` do not count as shape confirmation.
-5. Post-process: after implementation, run the smallest useful set of `$impeccable audit <target>`, `$impeccable critique <target>`, and `$impeccable polish <target>`.
-
-Use targeted Impeccable refinements when the problem is specific:
-
-- Bland or too safe: `$impeccable bolder <target>`.
-- Too loud or overstimulating: `$impeccable quieter <target>`.
-- Layout or spacing failure: `$impeccable layout <target>`.
-- Typography hierarchy failure: `$impeccable typeset <target>`.
-- Weak color strategy: `$impeccable colorize <target>`.
-
-Treat Impeccable output as workflow evidence, not completion authority. Final completion still requires direct verification, browser/runtime checks when practical, and a concise report of checks run, checks not run, and remaining risks.
+`ui-ux-pro-max` and prior frontend compatibility workflows are retired for this
+workstation baseline. Treat leftover references as contamination candidates
+unless a future current user instruction explicitly reopens that boundary.
+Product Design is the active frontend product-design workflow.
 
 For frontend browser observation, use Chrome DevTools MCP only as a temporary
 role. Prefer the registered `chrome-devtools` MCP when the active session exposes
@@ -824,7 +810,7 @@ Before adopting or changing a skill, role, prompt recipe, hook, or capability pa
 - no environment-specific assumption that does not apply to Codex;
 - no heavy blocker behavior or completion gate.
 
-## Lightweight Hooks
+## Compact Hooks
 
 Hooks support the PM workflow; they do not replace PM judgment or user review.
 
@@ -837,9 +823,12 @@ Hooks support the PM workflow; they do not replace PM judgment or user review.
 ## Log Hygiene
 
 - Keep hook and workflow logs small, local, structured, and non-authoritative.
-- Store current operational records in SQLite; archive old raw logs by month.
+- Store current operational records in SQLite or small bounded ledgers.
 - Do not store raw secrets, full prompts, or full tool payloads by default.
-- Before removing old logs, create a manifest, verify the archive, and move originals to Windows Recycle Bin for user review.
+- Retired, archived, disabled, or backup roots are not active runtime truth. When
+  the user explicitly authorizes removal, delete those contamination candidates
+  directly after path-boundary verification instead of creating another retained
+  archive.
 - Never delete SQLite WAL/SHM files directly; use checkpoint/maintenance commands.
 
 ## Ask Or Stop Conditions

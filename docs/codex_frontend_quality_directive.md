@@ -189,7 +189,8 @@ Keep this sequence evidence-based:
 - Apply `modern-web-guidance` for web-platform details.
 - Verify rendered behavior through Browser, Chrome, Chrome DevTools, screenshots, or an equivalent direct check.
 
-Use Impeccable only as an optional compatibility workflow when an installed `impeccable` skill is actually present and exposed. Impeccable output is evidence, not completion authority.
+Do not use retired frontend compatibility workflows for this baseline. Product
+Design is the active frontend product-design workflow.
 
 ### 5.3 If Product Design Is Missing
 
@@ -230,7 +231,7 @@ current_route_or_surface=identified
 states_required=listed
 responsive_targets=defined
 product_design=available|unavailable|not_exposed
-impeccable_compat=available|unavailable|not_applicable
+retired_frontend_compat=absent
 mutation_permission=open|blocked
 ```
 

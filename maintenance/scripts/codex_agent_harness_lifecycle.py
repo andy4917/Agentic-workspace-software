@@ -15,10 +15,10 @@ from codex_agent_harness_base import *
 from codex_agent_harness_calibration import check_calibration_policy
 from codex_agent_harness_status import (
     app_runtime_state_writable_status,
+    compact_hook_contract_status,
     generated_output_tracking_status,
     harness_engine_module_status,
     harness_line_count_status,
-    hook_subagent_vowline_status,
     pm_subagent_protocol_status,
     subagent_nickname_policy_status,
     workspace_script_line_count_status,
@@ -175,7 +175,7 @@ def load_state(root: Path) -> dict[str, Any]:
 
 def stale_active_references(root: Path) -> list[dict[str, Any]]:
     # Global state can contain prompt history; stale source checks should inspect policy/config surfaces only.
-    active = [root / "config.toml", root / "hooks.json", root / "AGENTS.md", root / "agent.md"]
+    active = [root / "config.toml", root / "config.d" / "20-hooks.toml", root / "AGENTS.md", root / "agent.md"]
     pattern = re.compile(r"(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\cache|plugins\\plugins)", re.I)
     matches = []
     for path in active:
@@ -308,30 +308,30 @@ def check_skill_frontmatter(root: Path) -> dict[str, Any]:
 
 
 def hook_tool_routing_status(root: Path) -> dict[str, Any]:
-    path = root / "hooks.json"
+    path = root / "config.d" / "20-hooks.toml"
     if not path.exists():
-        return {"status": "fail", "error": "hooks.json missing"}
-    try:
-        data = json.loads(read_text(path))
-    except json.JSONDecodeError as exc:
-        return {"status": "fail", "error": str(exc)}
-    hooks = data.get("hooks", {})
-    events = ["PreToolUse", "PermissionRequest", "PostToolUse"]
+        return {"status": "fail", "error": "config.d/20-hooks.toml missing"}
+    text = read_text(path)
+    lowered = text.lower()
+    events = ["hooks.PreToolUse", "hooks.PostToolUse"]
     required_fragments = [
+        "compact-codex-hook.ps1",
+        "Bash",
         "apply_patch",
-        "functions\\..*",
         "mcp__.*",
-        "multi_tool_use\\..*",
-        "tool_search\\..*",
-        "web\\..*",
-        "image_gen\\..*",
     ]
     missing: dict[str, list[str]] = {}
     for event in events:
-        matcher_text = " ".join(str(item.get("matcher", "")) for item in hooks.get(event, []) if isinstance(item, dict))
-        absent = [fragment for fragment in required_fragments if fragment not in matcher_text]
+        if event.lower() not in lowered:
+            missing[event] = ["event"]
+            continue
+        absent = [fragment for fragment in required_fragments if fragment not in text]
         if absent:
             missing[event] = absent
+    legacy_hook = "lightweight" + "-codex"
+    legacy_config = "hooks" + ".json"
+    if legacy_hook in lowered or legacy_config in lowered:
+        missing["legacy"] = ["legacy hook reference"]
     return {"status": "pass" if not missing else "fail", "missing": missing}
 
 
@@ -343,7 +343,7 @@ def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
         "harness_engine_modules": lambda: harness_engine_module_status(root),
         "app_runtime_state_writable": lambda: app_runtime_state_writable_status(root),
         "generated_outputs_untracked": lambda: generated_output_tracking_status(root),
-        "hook_subagent_vowline": lambda: hook_subagent_vowline_status(root),
+        "compact_hook_contract": lambda: compact_hook_contract_status(root),
         "subagent_nickname_policy": lambda: subagent_nickname_policy_status(root),
         "calibration_policy": lambda: check_calibration_policy(root),
         "hook_tool_routing": lambda: hook_tool_routing_status(root),
@@ -464,10 +464,10 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("harness python files stay under line limit", harness_line_count_status(root).get("status") == "pass"),
             ("active app runtime state files are writable", app_runtime_state_writable_status(root).get("status") == "pass"),
             ("mutable generated outputs are not git-tracked", generated_output_tracking_status(root).get("status") == "pass"),
-            ("subagent session start injects Vowline context", hook_subagent_vowline_status(root).get("status") == "pass"),
+            ("compact hook contract is current", compact_hook_contract_status(root).get("status") == "pass"),
             ("subagent nicknames are role-prefixed", subagent_nickname_policy_status(root).get("status") == "pass"),
-            ("hook tool routing covers active namespaces", hook_tool_routing_status(root).get("status") == "pass"),
-            ("hook script parses by existence", (root / "hooks" / "lightweight-codex-hook.ps1").exists()),
+            ("hook tool routing uses compact config fragment", hook_tool_routing_status(root).get("status") == "pass"),
+            ("hook script parses by existence", (root / "hooks" / "compact-codex-hook.ps1").exists()),
             ("core doctor currently passes", doctor.get("status") == "pass"),
             ("latest verification report exists", bool(verification)),
             ("latest verification matches current harness source", verification_fresh),

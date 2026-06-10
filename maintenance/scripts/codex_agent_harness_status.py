@@ -18,7 +18,7 @@ WORKSPACE_SCRIPT_SUFFIXES = {".js", ".mjs", ".py", ".ps1", ".ts", ".tsx", ".md"}
 def harness_line_count_status(root: Path) -> dict[str, Any]:
     files = sorted((root / "maintenance" / "scripts").glob("codex_agent_harness*.py"))
     files.append(root / "maintenance" / "scripts" / "worker_watcher_templates.py")
-    files.append(root / "hooks" / "lightweight-codex-hook.ps1")
+    files.append(root / "hooks" / "compact-codex-hook.ps1")
     files.extend(sorted((root / "hooks" / "lib").glob("*.ps1")))
     files = [path for path in files if path.exists()]
     counts = []
@@ -143,7 +143,7 @@ def app_runtime_state_writable_status(root: Path) -> dict[str, Any]:
     runtime_only = {"config.toml", ".codex-global-state.json"}
     items = []
     failures = []
-    for name in ["config.toml", ".codex-global-state.json", "hooks.json"]:
+    for name in ["config.toml", ".codex-global-state.json", "config.d/20-hooks.toml"]:
         path = root / name
         source = "managed_root"
         if not path.exists() and name in runtime_only:
@@ -193,54 +193,29 @@ def generated_output_tracking_status(root: Path) -> dict[str, Any]:
     return {"status": "pass" if not unexpected else "fail", "tracked": unexpected, "patterns": patterns}
 
 
-def hook_subagent_vowline_status(root: Path) -> dict[str, Any]:
-    hook_path = root / "hooks" / "lightweight-codex-hook.ps1"
-    policy_path = root / "hooks" / "lightweight-codex-policy.json"
+def compact_hook_contract_status(root: Path) -> dict[str, Any]:
+    hook_path = root / "hooks" / "compact-codex-hook.ps1"
+    config_path = root / "config.d" / "20-hooks.toml"
     missing = []
     if not hook_path.exists():
-        return {"status": "fail", "missing": ["hooks/lightweight-codex-hook.ps1"]}
-    hook_parts = [read_text(hook_path).lower()]
-    if "lightweight-codex-core.ps1" in hook_parts[0]:
-        for relative_path in [
-            "hooks/lib/lightweight-codex-core.ps1",
-            "hooks/lib/lightweight-codex-workflow.ps1",
-            "hooks/lib/lightweight-codex-guards.ps1",
-        ]:
-            path = root / relative_path
-            if path.exists():
-                hook_parts.append(read_text(path).lower())
-            else:
-                missing.append(relative_path)
-    hook_text = "\n".join(hook_parts)
+        return {"status": "fail", "missing": ["hooks/compact-codex-hook.ps1"]}
+    hook_text = read_text(hook_path).lower()
+    config_text = read_text(config_path).lower() if config_path.exists() else ""
     for term in [
-        "test-subagentsessionstart",
-        "get-vowlinesubagentcontext",
-        "vowline",
-        "required operating skill",
-        "subagent startup requirement",
-        "agents.md",
-        "agent_tool_requirements.md",
-        "define -> plan -> build -> verify -> review -> ship",
-        "memento and serena are retired",
-        "subagent_delegation_charter.md",
+        "runner = \"compact-codex-hook\"",
+        "hook-ledger.jsonl",
+        "compact hook active",
+        "treat claims as candidate until direct evidence supports them",
+        "ensure-runtimecleanupwatch",
     ]:
         if term not in hook_text:
             missing.append(term)
-    if not policy_path.exists():
-        missing.append("hooks/lightweight-codex-policy.json")
-    else:
-        try:
-            policy = json.loads(read_text(policy_path))
-        except json.JSONDecodeError:
-            policy = {}
-            missing.append("valid hook policy json")
-        subagents = policy.get("subagents", {}) if isinstance(policy, dict) else {}
-        if subagents.get("required_start_skill") != "vowline":
-            missing.append("subagents.required_start_skill=vowline")
-        if "vowline" not in str(subagents.get("required_start_skill_path", "")).lower():
-            missing.append("subagents.required_start_skill_path")
-        if subagents.get("start_hook_behavior") != "inject_vowline_context_for_subagent_session_start":
-            missing.append("subagents.start_hook_behavior")
+    if "compact-codex-hook.ps1" not in config_text:
+        missing.append("config.d/20-hooks.toml routes compact hook")
+    legacy_hook = "lightweight" + "-codex"
+    legacy_config = "hooks" + ".json"
+    if legacy_hook in config_text or legacy_config in config_text:
+        missing.append("config.d/20-hooks.toml must not route legacy hook wiring")
     return {"status": "pass" if not missing else "fail", "missing": missing}
 
 

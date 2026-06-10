@@ -7,7 +7,7 @@
     "Non-trivial worker dispatch requires an independent watcher by default",
     "Worker output must be normalized before PM merge",
     "Watcher omission requires WATCHER_NOT_USED",
-    "Observer role and result-normalizer skill exist"
+    "Observer role and normalization templates exist"
   ],
   "task": "Verify worker output normalization, watcher coverage, and PM merge evidence artifacts exist.",
   "timeout_seconds": 30

@@ -19,10 +19,6 @@ name = "goal-decision"
 enabled = true
 
 [[skills.config]]
-name = "keep-codex-fast"
-enabled = true
-
-[[skills.config]]
 name = "clean-all-slop"
 enabled = true
 

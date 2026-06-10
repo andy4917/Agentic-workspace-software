@@ -8,9 +8,9 @@ hook and not completion authority.
 The gate prevents goal drift, fake success, hidden fallback, skipped checks, and
 raw worker reports from becoming PM completion claims.
 
-## dont-even-try Mapping
+## Adversarial Review Mapping
 
-| dont-even-try result | Contamination score | Required action |
+| read-only review result | Contamination score | Required action |
 |---|---:|---|
 | CLEAN with adequate checked evidence | C0 | Continue. |
 | Only P3 findings | C1 | Correct wording, ledger, or minor cleanup before continuing. |
@@ -26,7 +26,7 @@ If checked evidence is too narrow, downgrade to C1 or C2.
 PM-only long-running work does not bypass midpoint audit.
 
 1. Create `MIDPOINT_AUDIT_CONTEXT`.
-2. Apply `dont-even-try` to the immediately previous relevant turn.
+2. Apply `clean-all-slop` read-only audit to the immediately previous relevant turn.
 3. Map the verdict to C0-C4.
 4. Decide continue, correct-plan, redo-from-checkpoint, quarantine-and-restart,
    or stop-for-user.
@@ -36,7 +36,7 @@ PM-only long-running work does not bypass midpoint audit.
 Before final completion, commit, PR, publish, merge, or terminal handoff:
 
 1. Create `PRE_SHIP_AUDIT_CONTEXT`.
-2. Apply `dont-even-try` to the immediately previous completion claim.
+2. Apply `clean-all-slop` read-only audit to the immediately previous completion claim.
 3. Map the verdict to C0-C4.
 4. Block completion unless evidence, not-run reasons, residual risks, and PM
    independent verification are adequate.

@@ -30,8 +30,9 @@ is left enabled during non-frontend work.
   --no-usage-statistics --no-performance-crux`
 - `default_env`: `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1`,
   `CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1`, `SystemRoot`, `PROGRAMFILES`
-- `rollback`: run the OFF command; pre-change config backups are written under
-  ignored local state at `%USERPROFILE%\.codex\state\mcp-toggle-backups`
+- `rollback`: run the OFF command; any pre-change config copies are transient
+  files under `%TEMP%\codex-transient-backups\mcp-toggle`, not retained runtime
+  fallback state
 
 ## Commands
 
@@ -119,5 +120,5 @@ Rollback:
 
 - To remove the settings entry completely, run
   `codex mcp remove chrome-devtools`.
-- Pre-change config backups are under
-  `%USERPROFILE%\.codex\state\mcp-toggle-backups`.
+- Pre-change config copies, when created by the toggle script, are transient
+  files under `%TEMP%\codex-transient-backups\mcp-toggle`.

@@ -82,8 +82,7 @@ request, or the user explicitly asks for expansion.
 Add only the domain pieces relevant to the requested work:
 
 - Frontend/UI: follow `docs/codex_frontend_quality_directive.md`, including
-  the official Product Design workflow when exposed, optional Impeccable
-  compatibility only when installed, `PRODUCT.md`, `DESIGN.md`, component
+  the official Product Design workflow when exposed, `PRODUCT.md`, `DESIGN.md`, component
   contract, shadcn/components checks when applicable, Storybook or equivalent
   rendered state coverage, and browser/runtime observation when practical.
 - Backend/API: identify API contracts, request/response schemas, validation

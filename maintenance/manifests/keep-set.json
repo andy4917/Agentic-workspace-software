@@ -1,6 +1,6 @@
 {
   "generated_utc": "2026-06-09T19:33:27.7470424Z",
-  "principle": "Keep one canonical runtime config and reduce active maintenance surfaces. Archive or regenerate everything else.",
+  "principle": "Keep one canonical runtime config and reduce active maintenance surfaces. Delete or regenerate retired residue after path-boundary verification; do not preserve legacy archives as active fallback.",
   "runtime_keep_set": {
     "policy": [
       "%USERPROFILE%/.codex/AGENTS.md"
@@ -28,7 +28,6 @@
       "frontend-visual-debug",
       "git-easy-korean",
       "goal-decision",
-      "keep-codex-fast",
       "migration-plan",
       "modern-web-guidance",
       "p0-integrity-cleanup",
@@ -117,13 +116,14 @@
       "yarnpkg.cmd",
       "zx.cmd"
     ],
-    "archive_only": [
-      "old sessions",
-      "logs",
-      "SQLite snapshots",
+    "delete_when_retired": [
+      "old archived sessions",
+      "archived logs",
+      "SQLite snapshots that are not active WAL/SHM companions",
       "legacy hook snapshots",
-      "unused shim archive",
-      "project-excluded tree snapshot"
+      "unused shim archives",
+      "project-excluded tree snapshots",
+      "disabled or retired skill folders"
     ],
     "never_restore_hot": [
       "old session history into fresh runtime",

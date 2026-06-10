@@ -334,7 +334,7 @@ function ConvertTo-StableManagedRootSignature {
 $repoRootResolved = (Resolve-Path -LiteralPath $RepoRoot).Path
 $codexHomeResolved = (Resolve-Path -LiteralPath $CodexHome).Path
 $manifestDir = Join-Path $codexHomeResolved "maintenance\manifests"
-$reportsDir = Join-Path $repoRootResolved "maintenance\reports"
+$reportsDir = Join-Path $repoRootResolved "reports"
 $pwsh = Get-PowerShellPath
 $checks = New-Object System.Collections.Generic.List[object]
 $generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -694,10 +694,29 @@ $overallStatus = if ($failedChecks.Count -gt 0) {
 } else {
     "pass"
 }
+$userPerspectiveClean = (
+    $overallStatus -eq "pass" -and
+    -not [bool]$ReportOnly -and
+    -not [bool]$SkipScoop -and
+    $failedChecks.Count -eq 0 -and
+    $notRunChecks.Count -eq 0
+)
+$userPerspectiveCleanContract = [ordered]@{
+    definition = "User-perspective clean means the workstation control plane has no failed or skipped integrity checks, no report-only evidence gaps, no dirty managed-source baseline, current live scaffold validation, current Codex doctor, healthy toolchain/Scoop checks, no retired runtime/process/config residue accepted as active, and fresh evidence rather than stale manifests."
+    clean = [bool]$userPerspectiveClean
+    status = $(if ($userPerspectiveClean) { "clean" } else { "not_clean" })
+    report_only_allowed = $false
+    skip_scoop_allowed = $false
+    failed_checks_allowed = $false
+    not_run_checks_allowed = $false
+    evidence = "overall_status=$overallStatus; fail_count=$($failedChecks.Count); not_run_count=$($notRunChecks.Count); report_only=$([bool]$ReportOnly); skip_scoop=$([bool]$SkipScoop); dirty_paths=$($gitDirtyPaths.Count); scaffold_status=$($validation.overall_status); doctor_status=$($doctor.overallStatus)"
+}
 
 $loopResult = [ordered]@{
     generated_utc = $generatedUtc
     status = $overallStatus
+    user_perspective_clean = [bool]$userPerspectiveClean
+    user_perspective_clean_contract = $userPerspectiveCleanContract
     fail_count = $failedChecks.Count
     codex_home = $codexHomeResolved
     repo_root = $repoRootResolved
@@ -754,6 +773,8 @@ if (-not $ReportOnly -and $overallStatus -eq "pass") {
     $cleanManifest = [ordered]@{
         generated_utc = $generatedUtc
         status = "pass"
+        user_perspective_clean = [bool]$userPerspectiveClean
+        user_perspective_clean_contract = $userPerspectiveCleanContract
         reason = "Fresh closed-loop P0 validation snapshot after current file, runtime, diff, doctor, toolchain, Scoop, stale-manifest, reserved-PID, watcher, orphan, duplicate-root, and dead-app-server regression checks."
         validation_log = $validationLatestPath
         validation_log_sha256 = $validationHash
@@ -801,13 +822,14 @@ if (-not $ReportOnly -and $overallStatus -eq "pass") {
         "Codex doctor: $($doctor.overallStatus), version=$($doctor.codexVersion)",
         "Git: $($gitBranch.stdout.Trim())",
         "Stale manifest before refresh: $staleBeforeRefresh",
-        "Clean manifest: pass"
+        "Clean manifest: pass",
+        "User-perspective clean: $userPerspectiveClean"
     ) -join "`n"
     Write-Utf8File -Path $validationLogTextPath -Content ($validationText + "`n")
 }
 
 if ([string]::IsNullOrWhiteSpace($ReportPath)) {
-    $ReportPath = Join-Path $reportsDir "2026-05-31-codex-p0-integrity-loop.md"
+    $ReportPath = Join-Path $reportsDir "p0-integrity-loop.latest.md"
 }
 
 $watcherPidText = if ($currentWatcherPids.Count -gt 0) { $currentWatcherPids -join ", " } else { "none" }
@@ -865,6 +887,8 @@ $checkEvidenceRows
 ## Closure
 
 - Overall status: $overallStatus
+- User-perspective clean: $userPerspectiveClean
+- User-perspective clean definition: $($userPerspectiveCleanContract.definition)
 - Manifest stale before refresh: $staleBeforeRefresh
 - Stale reasons before refresh: $staleReasonText
 - Report-only mode: $([bool]$ReportOnly)

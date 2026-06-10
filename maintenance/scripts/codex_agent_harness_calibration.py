@@ -41,10 +41,10 @@ CALIBRATION_EVAL_TEMPLATE: dict[str, Any] = {
     "success_criteria": [
         "CALIBRATION.md exists and defines answer statuses, claim-level evidence, falsifier-first checks, and completion authority",
         "AGENTS.md points to CALIBRATION.md without duplicating it as a second source of truth",
-        "calibration source is wired through AGENTS.md, hook policy, and prompt reminders; private runtime config fallback is optional",
+        "calibration source is wired through AGENTS.md and compact hook prompt reminders; private runtime config fallback is optional",
         "calibration-verifier agent TOML parses",
         "calibration scoring manifest exists",
-        "lightweight policy and prompt reminder point to calibration without making hooks completion authority",
+        "compact hook prompt reminders keep claims candidate without making hooks completion authority",
     ],
     "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id calibration-policy-smoke",
     "timeout_seconds": 30,
@@ -68,8 +68,7 @@ def check_calibration_policy(root: Path, require_config: bool = True) -> dict[st
     calibration_path = root / "CALIBRATION.md"
     agents_path = root / "AGENTS.md"
     config_path = root / "config.toml"
-    policy_path = root / "hooks" / "lightweight-codex-policy.json"
-    workflow_path = root / "hooks" / "lib" / "lightweight-codex-workflow.ps1"
+    compact_hook_path = root / "hooks" / "compact-codex-hook.ps1"
     agent_path = root / "agents" / "calibration-verifier.toml"
     scoring_path = root / "evals" / "calibration-eval.yaml"
     eval_path = root / "evals" / "calibration-policy-smoke.json"
@@ -77,8 +76,7 @@ def check_calibration_policy(root: Path, require_config: bool = True) -> dict[st
     calibration_text = read_text(calibration_path) if calibration_path.exists() else ""
     agents_text = read_text(agents_path) if agents_path.exists() else ""
     config_text = read_text(config_path) if require_config and config_path.exists() else ""
-    policy_text = read_text(policy_path) if policy_path.exists() else ""
-    workflow_text = read_text(workflow_path) if workflow_path.exists() else ""
+    compact_hook_text = read_text(compact_hook_path) if compact_hook_path.exists() else ""
     scoring_text = read_text(scoring_path) if scoring_path.exists() else ""
 
     add_check("CALIBRATION.md exists", calibration_path.exists())
@@ -89,13 +87,12 @@ def check_calibration_policy(root: Path, require_config: bool = True) -> dict[st
     add_check("AGENTS references canonical calibration", "CALIBRATION.md" in agents_text and "Live Turn Calibration" in agents_text)
     if require_config:
         config_fallback = "project_doc_fallback_filenames" in config_text and "CALIBRATION.md" in config_text and "project_doc_max_bytes = 65536" in config_text
-        hook_policy_wiring = '"calibration"' in policy_text and '"source_path": "CALIBRATION.md"' in policy_text and "selected answers, diagnoses, plans, and patch rationales stay candidate" in workflow_text
-        add_check("calibration runtime wiring present", config_fallback or hook_policy_wiring)
+        compact_hook_wiring = "treat claims as candidate until direct evidence supports them" in compact_hook_text.lower()
+        add_check("calibration runtime wiring present", config_fallback or compact_hook_wiring)
     else:
         add_skip("config registers calibration fallback", "repo-safe mode excludes ignored private runtime config.toml")
-    add_check("policy references calibration source", '"calibration"' in policy_text and '"source_path": "CALIBRATION.md"' in policy_text)
-    add_check("prompt reminder references calibration", "selected answers, diagnoses, plans, and patch rationales stay candidate" in workflow_text)
-    add_check("read-only incident terms stay out of L4", "incident terms inside read-only inspection output" in workflow_text)
+    add_check("compact hook exists", compact_hook_path.exists())
+    add_check("compact prompt reminder references calibration behavior", "treat claims as candidate until direct evidence supports them" in compact_hook_text.lower())
     add_check("calibration verifier exists", agent_path.exists())
     add_check("calibration scoring manifest exists", scoring_path.exists() and "confident_wrong" in scoring_text and "unsupported_material_claim" in scoring_text)
     add_check("calibration eval definition exists", eval_path.exists())

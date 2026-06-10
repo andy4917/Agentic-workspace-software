@@ -42,8 +42,15 @@ function Ensure-RuntimeCleanupWatch {
     }
 }
 
-$stdinRaw = [Console]::In.ReadToEnd()
-if ([string]::IsNullOrWhiteSpace($stdinRaw) -and $MyInvocation.ExpectingInput) {
+$stdinRaw = ""
+try {
+    $stdinStream = [Console]::OpenStandardInput()
+    $stdinReader = [System.IO.StreamReader]::new($stdinStream, [System.Text.Encoding]::UTF8)
+    $stdinRaw = $stdinReader.ReadToEnd()
+} catch {
+    $stdinRaw = ""
+}
+if ([string]::IsNullOrWhiteSpace($stdinRaw)) {
     $stdinRaw = ($input | Out-String)
 }
 
@@ -92,12 +99,12 @@ if ($event -eq "PreToolUse") {
 } elseif ($event -eq "SessionStart") {
     $out["hookSpecificOutput"] = [ordered]@{
         hookEventName = "SessionStart"
-        additionalContext = "Minimal scaffold active: use current evidence, keep runtime cleanup watcher active, avoid stale runtime state, and verify before completion."
+        additionalContext = "Minimal scaffold active: use current evidence, keep runtime cleanup watcher active, treat claims as candidate until direct evidence supports them, avoid stale runtime state, and verify before completion."
     }
 } elseif ($event -eq "UserPromptSubmit") {
     $out["hookSpecificOutput"] = [ordered]@{
         hookEventName = "UserPromptSubmit"
-        additionalContext = "Compact hook active: keep workflow compact, use matching skills, verify from current files and commands, and report not-run checks."
+        additionalContext = "Compact hook active: keep workflow compact, use matching skills, treat claims as candidate until direct evidence supports them, verify from current files and commands, and report not-run checks."
     }
 }
 

@@ -24,8 +24,8 @@ Current cache classes:
   state.
 - `external-package-cache`: package-manager caches outside `CODEX_HOME`, such as
   npm, uv, pip, pnpm, Scoop, Cargo, Rustup, and VS Code CLI caches.
-- `quarantine-archive`: reversible compressed archives and Recycle Bin staging
-  for deprecated or suspicious surfaces.
+- `retired-residue`: deprecated, disabled, archived, or backup surfaces that are
+  not active runtime truth.
 
 Handling rules:
 
@@ -36,8 +36,10 @@ Handling rules:
   category. Remove only when a live process is not using the path.
 - Clean package-manager caches through their owning package manager or an
   explicit maintenance script, not by ad hoc recursive deletion.
-- Move risky or uncertain surfaces to Recycle Bin first. Permanent deletion
-  requires a separate explicit instruction.
+- Do not create persistent archive or backup roots for retired residue. When
+  removal is explicitly authorized, verify the path boundary and delete the
+  residue directly. If ownership is uncertain, stop at classification instead
+  of preserving another fallback copy.
 
 ## Log Management
 
@@ -47,7 +49,7 @@ Current log classes:
   `memories_*.sqlite`, plus their WAL/SHM files.
 - Hook or maintenance ledgers under `.codex\state` and
   `.codex\maintenance\manifests`.
-- Human-readable reports under `maintenance\reports`.
+- Human-readable current reports under ignored `reports\*.latest.*` outputs.
 - Raw app logs, when present, remain local runtime state.
 
 Handling rules:
@@ -57,8 +59,9 @@ Handling rules:
 - Do not store raw secrets, full prompts, or full tool payloads by default.
 - Never delete SQLite WAL/SHM files directly. Use app shutdown, checkpoint, or
   owning maintenance commands.
-- Before removing old raw logs, create a manifest, verify the archive, then move
-  originals to Recycle Bin.
+- Before removing old raw logs, create a manifest or structured summary when
+  needed for audit, then delete only after path-boundary verification. Do not
+  create new retained archives as cleanup output.
 
 ## Memory Management
 
@@ -97,10 +100,13 @@ Active file classes:
   `config.toml`; it is not active by itself.
 - `maintenance\scripts`: public-safe maintenance scripts.
 - `maintenance\manifests`: generated live evidence under `CODEX_HOME`.
-- `maintenance\reports`: reviewable evidence packets under managed source.
+- `reports\*.latest.*`: current local evidence packets; rerun the responsible
+  command before treating them as validation.
 - `skills`, `toolchains\shims`, `hooks`: active control-plane surfaces governed
   by config and validation.
-- `skills-disabled` and compressed archives: quarantine state.
+- `skills-disabled`, `archive`, `archived_*`, compressed backups, and retired
+  snapshots: contamination candidates unless a current config, process, or
+  user instruction proves active use.
 
 Handling rules:
 
@@ -155,7 +161,7 @@ Codex checks its own environment through these layers:
      roots, and close-lifecycle cleanup readiness.
 3. `codex-home-maintenance.ps1`
    - inventories active references, native hosts, sentinel blockers,
-     toolchain/cache roots, transient roots, and Recycle Bin cleanup outcomes.
+     toolchain/cache roots, transient roots, and direct-delete cleanup outcomes.
 4. `check-toolchain-sources.ps1`
    - verifies official-bundle and local-chain command resolution.
 5. `codex doctor --json`

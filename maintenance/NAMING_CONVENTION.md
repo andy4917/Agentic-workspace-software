@@ -8,7 +8,7 @@ It is not app configuration and it is not a completion gate.
 Use these names only for live, intentionally managed surfaces:
 
 - `maintenance\scripts`
-- `maintenance\reports`
+- `reports\*.latest.*`
 - `toolchains\shims`
 - `config.toml`
 - `.codex-global-state.json`
@@ -35,8 +35,8 @@ Use these terms in maintenance docs, reports, and review notes:
   SDK, or MCP server used because Codex does not bundle that capability.
 - `runtime-cache`: app-generated cache that may be active but must not become a
   configured source of truth.
-- `quarantine-archive`: reversible archive or Recycle Bin staging area for
-  deprecated local tools, duplicate wrappers, and stale caches.
+- `retired-residue`: deprecated, disabled, archived, or backup surfaces that are
+  not active runtime truth and should not be restored without current evidence.
 - `managed-install-record`: a durable maintenance note that names the exact
   active path, source class, owner, dependency chain, verification, rollback, and
   handoff update for a workstation-level install or configuration change.
@@ -64,14 +64,15 @@ Use these metaphor names narrowly:
 - `heartbeat`, `canary`: active liveness or regression signal only.
 - `breadcrumb`: intentional trace evidence left for later audit only.
 - `sandbox`: isolated work that cannot mutate the active runtime by accident.
-- `quarantine`: reversible isolation for suspicious or deprecated surfaces.
+- `retired-residue`: explicit classification for suspicious or deprecated
+  surfaces after they are proven inactive.
 - `cache`: generated data that must not become the configured source of truth.
 
 Avoid clever names for operational surfaces. Terms such as `magic`, `god`,
 `spaghetti`, `slop`, or joke names may appear in review prose or external skill
 names, but active files and directories should use the concrete failure class:
 `stale-state`, `unsupported-success`, `hidden-fallback`, `duplicate-root`,
-`orphan-process`, `runtime-cache`, or `quarantine-archive`.
+`orphan-process`, `runtime-cache`, or `retired-residue`.
 
 ## Encoding Rule
 
@@ -104,7 +105,7 @@ These names must not be active marketplace, plugin, toolchain, or config sources
 Tool, package, plugin, cache, skill, agent, and local-environment surfaces must
 not be hidden by `.gitignore` purely because they are noisy. If they are active,
 they should be visible during audit. If they are transient, they should be absent
-or moved to the Recycle Bin.
+or removed after classification.
 
 Keep secrets, sessions, logs, SQLite databases, browser state, and hook state
 ignored because they contain private or live app state.
@@ -139,17 +140,20 @@ If the app rewrites global runtime flags that control bundled auto-install or WS
 usage, `.codex-global-state.json` may also be kept read-only after verified edits.
 This is a guard state, not a normal app preference editing mode.
 
-## Archive Rule
+## Retired Residue Rule
 
-Archives must use explicit archive names and must not be referenced as active
-sources:
+Archived, disabled, backup, or retired roots must not be referenced as active
+sources and should not remain as fallback state after the user authorizes
+cleanup:
 
 - `archived_*`
 - `runtime-repair-*`
 - `codex-logs-*`
-- `keep-codex-fast-*`
+- `retired-tool-*`
 
-## Recycle Rule
+## Delete Rule
 
-Deprecated tool, package, plugin, or cache directories should be moved to the
-Recycle Bin first. Permanent deletion requires an explicit user instruction.
+Deprecated tool, package, plugin, or cache directories may be deleted directly
+after explicit user authorization and path-boundary verification. If active
+ownership is unclear, stop at classification instead of creating another
+archive.

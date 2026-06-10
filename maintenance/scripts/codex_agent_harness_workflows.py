@@ -14,7 +14,7 @@ from codex_agent_harness_base import *
 from codex_agent_harness_calibration import check_calibration_policy
 from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, doctor_data, load_trajectory_records, trajectory_records_valid
 from codex_agent_harness_smoke import (
-    check_dont_even_try_integration_smoke,
+    check_adversarial_review_integration_smoke,
     check_goal_integrity_gate_smoke,
     check_hook_policy_smoke,
     check_orchestration_governance_smoke,
@@ -139,7 +139,8 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
     )
     checks.append({"name": "json_eval_definitions", **run_command([sys.executable, "-c", "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('evals').glob('*.json')]"], root)})
     checks.append({"name": "agent_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('agents').glob('*.toml')]"], root)})
-    checks.append({"name": "hook_policy_json", **run_command([sys.executable, "-m", "json.tool", "hooks/lightweight-codex-policy.json"], root)})
+    checks.append({"name": "hook_config_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; tomllib.loads(pathlib.Path('config.d/20-hooks.toml').read_text(encoding='utf-8'))"], root)})
+    checks.append({"name": "compact_hook_route_scan", **run_command(["rg", "-n", "compact-codex-hook.ps1", "config.d/20-hooks.toml", "hooks/compact-codex-hook.ps1"], root)})
     calibration = check_calibration_policy(root, require_config=False)
     checks.append(
         {
@@ -188,7 +189,7 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
         )
     else:
         checks.append({"name": "powershell_parser", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "powershell.exe not found", "duration_seconds": 0})
-    checks.append({"name": "generated_outputs_untracked", **run_command(["git", "ls-files", "--", "reports/*.latest.json", "reports/*.latest.md", "maintenance/reports/*.latest.json", "maintenance/reports/*.latest.md", "reports/*results.jsonl", "trajectories/runs.jsonl", "artifacts/tool-results/*.txt"], root, include_stdout=True)})
+    checks.append({"name": "generated_outputs_untracked", **run_command(["git", "ls-files", "--", "reports/*.latest.json", "reports/*.latest.md", "reports/*results.jsonl", "trajectories/runs.jsonl", "artifacts/tool-results/*.txt"], root, include_stdout=True)})
     if checks[-1].get("status") == "pass" and str(checks[-1].get("stdout", "")).strip():
         checks[-1]["status"] = "fail"
         checks[-1]["stderr_preview"] = "mutable generated output is tracked"
@@ -237,8 +238,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
             passed = check_orchestration_governance_smoke(root).get("status") == "pass"
         elif eval_id == "hook-policy-smoke":
             passed = check_hook_policy_smoke(root).get("status") == "pass"
-        elif eval_id == "dont-even-try-integration-smoke":
-            passed = check_dont_even_try_integration_smoke(root).get("status") == "pass"
+        elif eval_id == "adversarial-review-integration-smoke":
+            passed = check_adversarial_review_integration_smoke(root).get("status") == "pass"
         elif eval_id == "worker-watcher-normalized-handoff-smoke":
             passed = check_worker_watcher_normalized_handoff_smoke(root).get("status") == "pass"
         elif eval_id == "goal-integrity-gate-smoke":
@@ -527,8 +528,6 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         "--glob",
         "!node_repl/**",
         "--glob",
-        "!maintenance/reports/**",
-        "--glob",
         "!maintenance/scripts/codex_agent_harness.py",
         "--glob",
         "!**/node_modules/**",
@@ -575,7 +574,7 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         matches.append({"pattern": "<all>", "path": "<not-run>", "line": "", "error": "rg not available"})
 
     scan_errors = [match for match in matches if match["path"] in {"<scan-error>", "<not-run>"}]
-    active_roots = [str(root / "config.toml"), str(root / ".codex-global-state.json"), str(root / "hooks.json"), str(root / "AGENTS.md")]
+    active_roots = [str(root / "config.toml"), str(root / ".codex-global-state.json"), str(root / "config.d" / "20-hooks.toml"), str(root / "AGENTS.md")]
     active_hits = []
     for match in matches:
         if match["path"] in {"<scan-error>", "<not-run>"}:

@@ -41,7 +41,7 @@ $CodexHome = Resolve-CodexHome
 $ShimDir = Join-PathStrict $CodexHome "toolchains\shims"
 $NpxWrapper = Join-PathStrict $ShimDir "npx.cmd"
 $ConfigPath = Join-PathStrict $CodexHome "config.toml"
-$BackupRoot = Join-PathStrict $CodexHome "state\mcp-toggle-backups"
+$BackupRoot = Join-PathStrict ([System.IO.Path]::GetTempPath()) "codex-transient-backups\mcp-toggle"
 $CodexExe = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin\codex.exe"
 
 if (-not (Test-Path -LiteralPath $CodexExe)) {

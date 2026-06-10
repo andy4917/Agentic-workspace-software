@@ -9,7 +9,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName Microsoft.VisualBasic
 
 function New-Directory {
     param([string]$Path)
@@ -63,7 +62,7 @@ function Get-ActiveReferenceMatches {
 
     $activeFiles = @(
         (Join-Path $Root 'config.toml'),
-        (Join-Path $Root 'hooks.json'),
+        (Join-Path $Root 'config.d\20-hooks.toml'),
         (Join-Path $Root 'AGENTS.md')
     ) | Where-Object { Test-Path -LiteralPath $_ }
 
@@ -106,41 +105,15 @@ function Get-AppToolCacheSummary {
     return $summaries
 }
 
-function Send-ToRecycleBin {
+function Remove-PathDirectly {
     param([string]$Path)
 
-    $item = Get-Item -LiteralPath $Path -Force
-    if ($item.PSIsContainer) {
-        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory(
-            $Path,
-            [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
-            [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin
-        )
-    } else {
-        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(
-            $Path,
-            [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
-            [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin
-        )
+    $resolvedTarget = (Resolve-Path -LiteralPath $Path).Path
+    $resolvedRoot = (Resolve-Path -LiteralPath $CodexHome).Path.TrimEnd('\')
+    if ($resolvedTarget -ne $resolvedRoot -and -not $resolvedTarget.StartsWith("$resolvedRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to delete outside CodexHome: $resolvedTarget"
     }
-}
-
-function Compress-DirectoryIfNeeded {
-    param(
-        [string]$Path,
-        [string]$ArchiveRoot
-    )
-
-    if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    $item = Get-Item -LiteralPath $Path -Force
-    if (-not $item.PSIsContainer) { return $null }
-
-    New-Directory -Path $ArchiveRoot
-    $leaf = Split-Path -Leaf $Path
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $zip = Join-Path $ArchiveRoot "$leaf-$stamp.zip"
-    Compress-Archive -LiteralPath $Path -DestinationPath $zip -Force
-    return $zip
+    Remove-Item -LiteralPath $Path -Recurse -Force
 }
 
 function Stop-GitFsmonitorUnderRoot {
@@ -198,8 +171,7 @@ function Stop-GitFsmonitorUnderRoot {
 
 function Remove-TransientRoot {
     param(
-        [string]$Source,
-        [string]$ArchiveRoot
+        [string]$Source
     )
 
     if (-not (Test-Path -LiteralPath $Source)) {
@@ -211,17 +183,14 @@ function Remove-TransientRoot {
         }
     }
 
-    if ($PSCmdlet.ShouldProcess($Source, 'Send transient root to Recycle Bin')) {
+    if ($PSCmdlet.ShouldProcess($Source, 'Delete transient root')) {
         $fsmonitorStops = @(Stop-GitFsmonitorUnderRoot -Source $Source)
-        $zip = $null
         try {
-            $zip = Compress-DirectoryIfNeeded -Path $Source -ArchiveRoot $ArchiveRoot
-            Send-ToRecycleBin -Path $Source
+            Remove-PathDirectly -Path $Source
             return [ordered]@{
                 source = $Source
-                action = if ($zip) { 'compressed_then_recycled' } else { 'recycled' }
-                archive = $zip
-                destination = 'Recycle Bin'
+                action = 'deleted'
+                destination = 'deleted'
                 git_fsmonitor = $fsmonitorStops
                 error = $null
             }
@@ -229,9 +198,8 @@ function Remove-TransientRoot {
         catch {
             return [ordered]@{
                 source = $Source
-                action = 'recycle_failed'
-                archive = $zip
-                destination = 'Recycle Bin'
+                action = 'delete_failed'
+                destination = 'deleted'
                 git_fsmonitor = $fsmonitorStops
                 error = $_.Exception.Message
             }
@@ -240,9 +208,8 @@ function Remove-TransientRoot {
 
     return [ordered]@{
         source = $Source
-        action = 'would_recycle'
-        archive = $null
-        destination = 'Recycle Bin'
+        action = 'would_delete'
+        destination = 'deleted'
         git_fsmonitor = @()
         error = $null
     }
@@ -521,7 +488,6 @@ function Get-ToolchainInventory {
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $maintenanceRoot = Join-Path $CodexHome 'maintenance'
 $reportsRoot = Join-Path $maintenanceRoot 'reports'
-$compressedRoot = Join-Path $maintenanceRoot 'compressed'
 New-Directory -Path $reportsRoot
 
 $transientRoots = @()
@@ -537,7 +503,7 @@ foreach ($root in $transientRoots) {
 $moves = @()
 if ($Mode -eq 'Clean') {
     foreach ($root in $transientRoots) {
-        $moves += Remove-TransientRoot -Source $root -ArchiveRoot $compressedRoot
+        $moves += Remove-TransientRoot -Source $root
     }
 }
 
@@ -553,7 +519,7 @@ $report = [ordered]@{
     generated_at = (Get-Date).ToString('o')
     mode = $Mode
     codex_home = $CodexHome
-    cleanup_target = if ($Mode -eq 'Clean') { 'Recycle Bin' } else { $null }
+    cleanup_target = if ($Mode -eq 'Clean') { 'direct delete' } else { $null }
     active_reference_matches = $activeReferenceMatches
     runtime_guards = Get-RuntimeGuardSummary -Root $CodexHome
     native_messaging_hosts = Get-NativeMessagingHostSummary -Root $CodexHome
@@ -577,7 +543,7 @@ $report = [ordered]@{
         remove_native_messaging_hosts_that_point_to_runtime_cache = $true
         temp_roots_are_not_blocked_by_sentinel = $true
         plugin_cache_roots_are_blocked_by_sentinel_until_runtime_fix = $false
-        legacy_cleanup_target = 'Recycle Bin'
+        legacy_cleanup_target = 'direct delete'
     }
 }
 

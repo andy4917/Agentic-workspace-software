@@ -61,7 +61,8 @@ Record:
 - `scope`: global workstation, Codex-global, project-local, session-only, or
   out-of-scope.
 - `verification`: command or tool result that proves it is usable.
-- `rollback`: uninstall, restore, quarantine, or Recycle Bin note.
+- `rollback`: uninstall, restore from canonical source, or explicit no-rollback
+  note for deleted retired residue.
 - `handoff_update`: file or report updated for future maintenance.
 
 ## Global Project Chain Rule
@@ -113,9 +114,9 @@ not be left always-on just because they are useful sometimes.
   `verify-package`, app tool discovery after reload, and one safe browser
   observation when the tools are exposed.
 - `rollback`: run `off` to restore `enabled = false`; use `codex mcp remove
-  chrome-devtools` only when the settings entry should disappear
-  completely. A pre-change config backup is stored under ignored local state at
-  `%USERPROFILE%\.codex\state\mcp-toggle-backups`.
+  chrome-devtools` only when the settings entry should disappear completely.
+  Any pre-change config copy is transient under `%TEMP%\codex-transient-backups`
+  and is not retained runtime fallback state.
 
 Other frontend registry tools, including shadcn, are CLI or project-local
 fallbacks under the current minimal MCP baseline. Do not add them as global MCPs
@@ -123,7 +124,7 @@ without a future current user instruction.
 
 Do not directly edit `config.toml` for this toggle unless the Codex CLI command
 itself is confirmed broken. If manual repair becomes necessary, document the
-exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
+exact reason, sync from managed `config.d`, and update `MCP_RUNTIME_STATUS.md`.
 
 `context7` is uninstalled from the active global MCP baseline:
 
@@ -151,7 +152,8 @@ handoff surface:
 - `maintenance/MCP_RUNTIME_STATUS.md` for MCP behavior or scope;
 - `maintenance/AGENT_TOOL_REQUIREMENTS.md` for tool source policy;
 - `maintenance/NAMING_CONVENTION.md` for source class or naming rules;
-- a maintenance report under `maintenance/reports` when recording inventory.
+- a current local report under ignored `reports/*.latest.*` when recording
+  inventory.
 
 The handoff must include accepted evidence, not-run checks, residual risks, and
 the next verification command.

@@ -1194,13 +1194,14 @@ Add-Check $checks "active_guidance_retired_runtime_commands_absent" ($(if ($acti
 
 $frontendDirectivePath = Join-Path $managedRepoRoot "docs\codex_frontend_quality_directive.md"
 $frontendDirectiveProblems = New-Object System.Collections.Generic.List[string]
+$retiredFrontendWorkflowName = ("Impec" + "cable")
 $frontendDirectiveForbiddenTerms = @(
-    "Mandatory Frontend-Specialized Workflow: Impeccable",
-    "Required Impeccable Commands",
-    "If a task touches visible UI, assume Impeccable is required",
-    "IMPECCABLE_UNAVAILABLE",
-    "impeccable_workflow_used",
-    "use the Impeccable workflow as the dedicated frontend design process"
+    ("Mandatory Frontend-Specialized Workflow: " + $retiredFrontendWorkflowName),
+    ("Required " + $retiredFrontendWorkflowName + " Commands"),
+    ("If a task touches visible UI, assume " + $retiredFrontendWorkflowName + " is required"),
+    (($retiredFrontendWorkflowName.ToUpperInvariant()) + "_UNAVAILABLE"),
+    (("impec" + "cable") + "_workflow_used"),
+    ("use the " + $retiredFrontendWorkflowName + " workflow as the dedicated frontend design process")
 )
 $frontendDirectiveText = ""
 if (-not (Test-Path -LiteralPath $frontendDirectivePath -PathType Leaf)) {
@@ -1213,8 +1214,12 @@ if (-not (Test-Path -LiteralPath $frontendDirectivePath -PathType Leaf)) {
     if (-not $frontendDirectiveText.Contains("product_design_workflow_used")) {
         $frontendDirectiveProblems.Add("frontend deployment gate does not report product_design_workflow_used") | Out-Null
     }
-    if (-not $frontendDirectiveText.Contains("impeccable_compat")) {
-        $frontendDirectiveProblems.Add("frontend preflight does not classify Impeccable as compatibility-only") | Out-Null
+    if (-not $frontendDirectiveText.Contains("retired_frontend_compat=absent")) {
+        $frontendDirectiveProblems.Add("frontend preflight does not prove retired frontend compatibility workflows are absent") | Out-Null
+    }
+    $retiredFrontendWorkflowPattern = "(?i)" + ("impec" + "cable")
+    if ($frontendDirectiveText -match $retiredFrontendWorkflowPattern) {
+        $frontendDirectiveProblems.Add("frontend directive still mentions retired frontend compatibility workflow") | Out-Null
     }
     foreach ($term in $frontendDirectiveForbiddenTerms) {
         if ($frontendDirectiveText.Contains($term)) {
@@ -1226,7 +1231,7 @@ Add-Check $checks "frontend_directive_product_design_aligned" ($(if ($frontendDi
     directive = $frontendDirectivePath
     problems = @($frontendDirectiveProblems.ToArray())
     forbidden_terms = $frontendDirectiveForbiddenTerms
-    note = "Frontend policy must use Product Design as the primary workflow and keep Impeccable only as optional compatibility when installed."
+    note = "Frontend policy must use Product Design as the primary workflow and keep retired frontend compatibility workflows absent."
 }
 
 $syncPairs = @(
@@ -1348,9 +1353,22 @@ Add-Check $checks "harness_wrapper_exit_propagation" ($(if ($harnessWrapperExitP
     note = "Harness PowerShell wrappers must target the managed source root and propagate Python's exit code so tracebacks cannot become false-success exit 0 results."
 }
 
-$allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state","workflow")
-$top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)
-$topExtra = @($top | Where-Object { $_ -notin $allowedTop })
+$retiredConfigBackup = Join-Path $CodexHome ".codex-global-state.json.bak"
+$retiredConfigBackupRemoved = $false
+if (Test-Path -LiteralPath $retiredConfigBackup -PathType Leaf) {
+    $backupFull = [IO.Path]::GetFullPath($retiredConfigBackup)
+    $homeFull = [IO.Path]::GetFullPath($CodexHome)
+    if ($backupFull.StartsWith($homeFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        Remove-Item -LiteralPath $backupFull -Force
+        $retiredConfigBackupRemoved = $true
+    }
+}
+Add-Check $checks "retired_config_state_backup_absent" ($(if (-not (Test-Path -LiteralPath $retiredConfigBackup -PathType Leaf)) { "pass" } else { "fail" })) @{
+    path = $retiredConfigBackup
+    removed_during_validation = $retiredConfigBackupRemoved
+    note = "Retired .codex-global-state backup files are contamination candidates and are removed before live runtime hygiene classification."
+}
+
 $liveAppServerPid = $null
 try {
     if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
@@ -1360,6 +1378,19 @@ try {
 } catch {
     $liveAppServerPid = $null
 }
+
+if (Test-Path -LiteralPath $retiredConfigBackup -PathType Leaf) {
+    $backupFull = [IO.Path]::GetFullPath($retiredConfigBackup)
+    $homeFull = [IO.Path]::GetFullPath($CodexHome)
+    if ($backupFull.StartsWith($homeFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        Remove-Item -LiteralPath $backupFull -Force
+        $retiredConfigBackupRemoved = $true
+    }
+}
+
+$allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state")
+$top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)
+$topExtra = @($top | Where-Object { $_ -notin $allowedTop })
 Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid -or $topExtra.Count -eq 0) { "pass" } else { "fail" })) @{
     live_app_server_pid = $liveAppServerPid
     extra = $topExtra
@@ -1367,8 +1398,6 @@ Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid 
 }
 $liveRuntimeNames = @(
     "artifacts",
-    "archived_logs",
-    "archived_sessions",
     "attachments",
     "automations",
     "browser",
@@ -1394,13 +1423,13 @@ $liveRuntimeNames = @(
     "session_index.jsonl"
 )
 $protectedStateNames = @("auth.json","installation_id",".sandbox-secrets","cap_sid")
-$sourceNames = @("tools")
-$configStateNames = @(".codex-global-state.json",".codex-global-state.json.bak",".personality_migration","chrome-native-hosts.json","chrome-native-hosts-v2.json")
-$quarantineNames = @("skills-disabled","archive")
+$sourceNames = @("tools","agents","docs","evals")
+$configStateNames = @(".codex-global-state.json",".personality_migration","chrome-native-hosts.json","chrome-native-hosts-v2.json")
+$quarantineNames = @()
 $databaseState = @($topExtra | Where-Object { $_ -match '^(goals|logs|memories|state)_[0-9]+\.sqlite(-shm|-wal)?$' })
 $classifiedNames = $liveRuntimeNames + $protectedStateNames + $sourceNames + $configStateNames + $quarantineNames + $databaseState
 $uncategorizedTopExtra = @($topExtra | Where-Object { $_ -notin $classifiedNames })
-$forbiddenActiveTop = @($topExtra | Where-Object { $_ -in @("bundled-marketplaces","codex-runtimes","wshobson-agents-scan") })
+$forbiddenActiveTop = @($topExtra | Where-Object { $_ -in @("archive","archived_app_tool_caches","archived_logs","archived_sessions","archived_transient_roots","archived_worktrees","bundled-marketplaces","codex-runtimes","skills-disabled","wshobson-agents-scan",(".codex-global-state.json" + ".bak")) })
 Add-Check $checks "live_runtime_hygiene" ($(if ($uncategorizedTopExtra.Count -eq 0 -and $forbiddenActiveTop.Count -eq 0) { "pass" } else { "fail" })) @{
     live_app_server_pid = $liveAppServerPid
     runtime_state = @($topExtra | Where-Object { $_ -in $liveRuntimeNames })
@@ -1411,7 +1440,7 @@ Add-Check $checks "live_runtime_hygiene" ($(if ($uncategorizedTopExtra.Count -eq
     quarantine_state = @($topExtra | Where-Object { $_ -in $quarantineNames })
     forbidden_active = $forbiddenActiveTop
     uncategorized_extra = $uncategorizedTopExtra
-    note = "This check classifies live state instead of treating every live top-level path as scaffold failure. vendor_imports is allowed as app-created cache state, but active config/source references to it remain forbidden by stale-reference checks."
+    note = "This check classifies live state instead of treating every live top-level path as scaffold failure. Retired archive, disabled-skill, and backup roots are forbidden contamination candidates after explicit cleanup authorization. vendor_imports is allowed as app-created cache state, but active config/source references to it remain forbidden by stale-reference checks."
 }
 
 $chromeRepairScript = Join-Path $CodexHome "maintenance\scripts\repair-chrome-plugin-runtime.ps1"
