@@ -451,6 +451,17 @@ function Test-HighRiskDestructiveCommand {
             continue
         }
 
+        if ($commandLeaf -match '(?i)^(Invoke-Expression|iex)$') {
+            $expressionCommand = ($segment -join " ").Trim()
+            if (
+                $expressionCommand -and
+                (Test-HighRiskDestructiveCommand -CommandText $expressionCommand -BroadTargetPattern $BroadTargetPattern -RecursiveFlagPattern $RecursiveFlagPattern)
+            ) {
+                return $true
+            }
+            continue
+        }
+
         if ($commandLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
                 if ($segment[$segmentIndex] -notmatch '(?i)^-(Command|c)$') { continue }

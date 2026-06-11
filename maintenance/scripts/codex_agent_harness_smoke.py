@@ -398,6 +398,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         start_process_git_positional_force_stdout = start_process_git_positional_force_probe.get("stdout_preview", "").lower()
         start_process_git_windowstyle_force_probe = run_hook_sample(root, "Start-Process git -WindowStyle Hidden 'push origin --force'")
         start_process_git_windowstyle_force_stdout = start_process_git_windowstyle_force_probe.get("stdout_preview", "").lower()
+        invoke_expression_git_force_probe = run_hook_sample(root, "Invoke-Expression 'git push origin --force'")
+        invoke_expression_git_force_stdout = invoke_expression_git_force_probe.get("stdout_preview", "").lower()
         start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
         start_process_destructive_stdout = start_process_destructive_probe.get("stdout_preview", "").lower()
         git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
@@ -457,6 +459,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in start_process_git_positional_force_stdout
             and start_process_git_windowstyle_force_probe.get("status") == "pass"
             and "deny" in start_process_git_windowstyle_force_stdout
+            and invoke_expression_git_force_probe.get("status") == "pass"
+            and "deny" in invoke_expression_git_force_stdout
             and start_process_destructive_probe.get("status") == "pass"
             and "deny" in start_process_destructive_stdout
             and git_regular_push_probe.get("status") == "pass"
@@ -752,6 +756,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         relative_recurse_abbrev_stdout = relative_recurse_abbrev_probe.get("stdout_preview", "").lower()
         relative_recurse_partial_probe = run_hook_sample(root, "Remove-Item . -recu -Force")
         relative_recurse_partial_stdout = relative_recurse_partial_probe.get("stdout_preview", "").lower()
+        invoke_expression_relative_probe = run_hook_sample(root, "iex 'Remove-Item . -Recurse -Force'")
+        invoke_expression_relative_stdout = invoke_expression_relative_probe.get("stdout_preview", "").lower()
         rm_relative_probe = run_hook_sample(root, "rm -rf .")
         rm_relative_stdout = rm_relative_probe.get("stdout_preview", "").lower()
         ri_relative_probe = run_hook_sample(root, "ri . -r -Force")
@@ -768,6 +774,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in relative_recurse_abbrev_stdout
             and relative_recurse_partial_probe.get("status") == "pass"
             and "deny" in relative_recurse_partial_stdout
+            and invoke_expression_relative_probe.get("status") == "pass"
+            and "deny" in invoke_expression_relative_stdout
             and rm_relative_probe.get("status") == "pass"
             and "deny" in rm_relative_stdout
             and ri_relative_probe.get("status") == "pass"

@@ -338,6 +338,17 @@ keeping ordinary inspected tool use allowed.
   recursive delete abbreviations, and positional `Start-Process` force-push
   launchers including `-WindowStyle Hidden`; it also preserves a positive
   allow oracle for Git clean dry-runs.
+- no-mistakes follow-up on `c21d95d`: run `01KTTJBJ9CY38X39VJCVJ9AY6H`
+  returned two auto-fix findings. Scaffold validation now probes `.ps1` shims
+  through a child `pwsh -File` process instead of invoking exit-propagating
+  shim scripts with `&` in the validator session, and the compact hook recurses
+  `Invoke-Expression` / `iex` expression strings into the destructive-command
+  checker.
+- New or updated oracle evidence: validator shim passthrough checks now run
+  `rg.ps1`, `git.ps1`, `pwsh.ps1`, and `no-mistakes.ps1` through the child
+  `pwsh -File` helper; `hook-policy-smoke` now denies
+  `Invoke-Expression 'git push origin --force'` and
+  `iex 'Remove-Item . -Recurse -Force'`.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until

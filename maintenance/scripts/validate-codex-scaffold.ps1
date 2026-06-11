@@ -22,6 +22,7 @@ $script:KeepSetManifestStatus = [ordered]@{
     fallback_used = $true
     error = $null
 }
+$script:PwshShimProbeExecutable = $null
 
 function Add-Check($items, $name, $status, $details) {
     $items.Add([ordered]@{ name = $name; status = $status; details = $details }) | Out-Null
@@ -42,6 +43,51 @@ function Get-NonNullCount {
     param([AllowNull()][object]$Value)
 
     return (Get-NonNullArray -Value $Value).Count
+}
+
+function Resolve-PwshExecutable {
+    if (
+        -not [string]::IsNullOrWhiteSpace([string]$script:PwshShimProbeExecutable) -and
+        (Test-Path -LiteralPath $script:PwshShimProbeExecutable -PathType Leaf)
+    ) {
+        return $script:PwshShimProbeExecutable
+    }
+
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"),
+        (Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe")
+    )
+    $command = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        $candidates += [string]$command.Source
+    }
+    $selected = @($candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1)
+    if ($selected.Count -gt 0) {
+        $script:PwshShimProbeExecutable = [string]$selected[0]
+        return $script:PwshShimProbeExecutable
+    }
+    return $null
+}
+
+function Invoke-Ps1ShimFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [string[]]$Arguments = @()
+    )
+
+    $pwshExe = @(Resolve-PwshExecutable | Select-Object -First 1)
+    if ($pwshExe.Count -eq 0) {
+        return [pscustomobject]@{
+            output = @("pwsh.exe not found")
+            exit_code = 127
+        }
+    }
+    $output = @(& $pwshExe[0] -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1)
+    $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    return [pscustomobject]@{
+        output = $output
+        exit_code = $exitCode
+    }
 }
 
 function Get-RuntimeStatusView {
@@ -945,16 +991,13 @@ try {
     } else {
         "running inside no-mistakes gate worktree; recursive CLI/daemon calls are forbidden"
     }
-    $noMistakesVersionOutput = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
-        (& $noMistakesShim --version 2>&1 | Out-String).Trim()
-    } else {
-        ""
-    }
-    $noMistakesVersionExit = if ($noMistakesRealCliProbeAllowed) {
-        if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    $noMistakesVersionProbe = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
+        Invoke-Ps1ShimFile -ScriptPath $noMistakesShim -Arguments @("--version")
     } else {
         $null
     }
+    $noMistakesVersionOutput = if ($null -ne $noMistakesVersionProbe) { (($noMistakesVersionProbe.output | Out-String).Trim()) } else { "" }
+    $noMistakesVersionExit = if ($noMistakesRealCliProbeAllowed) { if ($null -ne $noMistakesVersionProbe) { [int]$noMistakesVersionProbe.exit_code } else { $null } } else { $null }
     $noMistakesDoctorOutput = ""
     $noMistakesDoctorExit = $null
     $noMistakesDoctorSkippedReason = if ($noMistakesRealCliProbeAllowed) {
@@ -999,8 +1042,9 @@ try {
             }
             $env:LOCALAPPDATA = $noMistakesWrapperProbeRoot
             $env:PATH = $pathProbeInputs -join ";"
-            $noMistakesWrapperPathProbeOutput = (& $noMistakesShim /d /s /c "set PATH" 2>&1 | Out-String).Trim()
-            $noMistakesWrapperPathProbeExit = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+            $noMistakesWrapperPathProbe = Invoke-Ps1ShimFile -ScriptPath $noMistakesShim -Arguments @("/d", "/s", "/c", "set PATH")
+            $noMistakesWrapperPathProbeOutput = (($noMistakesWrapperPathProbe.output | Out-String).Trim())
+            $noMistakesWrapperPathProbeExit = [int]$noMistakesWrapperPathProbe.exit_code
             $pathProbeLine = @($noMistakesWrapperPathProbeOutput -split "\r?\n" | Where-Object { $_ -match "(?i)^path=" } | Select-Object -First 1)
             $pathProbeValue = if ($pathProbeLine.Count -gt 0) { ($pathProbeLine[0] -replace "(?i)^path=", "") } else { "" }
             $normalizedShimRoot = ($shimRoot -replace "/", "\").TrimEnd("\")
@@ -1018,8 +1062,9 @@ try {
             )
 
             $env:NO_MISTAKES_PROBE_ARG = "CORRUPTED"
-            $noMistakesWrapperBangProbeOutput = (& $noMistakesShim /d /s /c "echo !NO_MISTAKES_PROBE_ARG!" 2>&1 | Out-String).Trim()
-            $noMistakesWrapperBangProbeExit = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+            $noMistakesWrapperBangProbe = Invoke-Ps1ShimFile -ScriptPath $noMistakesShim -Arguments @("/d", "/s", "/c", "echo !NO_MISTAKES_PROBE_ARG!")
+            $noMistakesWrapperBangProbeOutput = (($noMistakesWrapperBangProbe.output | Out-String).Trim())
+            $noMistakesWrapperBangProbeExit = [int]$noMistakesWrapperBangProbe.exit_code
             $noMistakesWrapperPreservesBangArgs = (
                 $noMistakesWrapperBangProbeExit -eq 0 -and
                 $noMistakesWrapperBangProbeOutput -eq "!NO_MISTAKES_PROBE_ARG!"
@@ -1199,8 +1244,9 @@ if (Test-Path -LiteralPath $rgPs1 -PathType Leaf) {
     $rgTemp = Join-Path ([IO.Path]::GetTempPath()) ("codex-rg-shim-" + [guid]::NewGuid().ToString("N") + ".txt")
     try {
         [IO.File]::WriteAllText($rgTemp, "ABC", [Text.Encoding]::ASCII)
-        $rgShimOutput = @(& $rgPs1 -i "abc" $rgTemp 2>&1)
-        $rgShimExit = $LASTEXITCODE
+        $rgShimProbe = Invoke-Ps1ShimFile -ScriptPath $rgPs1 -Arguments @("-i", "abc", $rgTemp)
+        $rgShimOutput = @($rgShimProbe.output)
+        $rgShimExit = [int]$rgShimProbe.exit_code
     } finally {
         Remove-Item -LiteralPath $rgTemp -Force -ErrorAction SilentlyContinue
     }
@@ -1215,8 +1261,9 @@ $gitPs1 = Join-Path $shimRoot "git.ps1"
 $gitShimOutput = @()
 $gitShimExit = $null
 if (Test-Path -LiteralPath $gitPs1 -PathType Leaf) {
-    $gitShimOutput = @(& $gitPs1 --version 2>&1)
-    $gitShimExit = $LASTEXITCODE
+    $gitShimProbe = Invoke-Ps1ShimFile -ScriptPath $gitPs1 -Arguments @("--version")
+    $gitShimOutput = @($gitShimProbe.output)
+    $gitShimExit = [int]$gitShimProbe.exit_code
 }
 Add-Check $checks "git_ps1_argument_passthrough" ($(if ($gitShimExit -eq 0 -and (($gitShimOutput | Out-String) -match "git version")) { "pass" } else { "fail" })) @{
     shim = $gitPs1
@@ -1228,8 +1275,9 @@ $pwshPs1 = Join-Path $shimRoot "pwsh.ps1"
 $pwshShimOutput = @()
 $pwshShimExit = $null
 if (Test-Path -LiteralPath $pwshPs1 -PathType Leaf) {
-    $pwshShimOutput = @(& $pwshPs1 -NoProfile -NonInteractive -Command '$PSVersionTable.PSEdition' 2>&1)
-    $pwshShimExit = $LASTEXITCODE
+    $pwshShimProbe = Invoke-Ps1ShimFile -ScriptPath $pwshPs1 -Arguments @("-NoProfile", "-NonInteractive", "-Command", '$PSVersionTable.PSEdition')
+    $pwshShimOutput = @($pwshShimProbe.output)
+    $pwshShimExit = [int]$pwshShimProbe.exit_code
 }
 Add-Check $checks "pwsh_ps1_argument_passthrough" ($(if ($pwshShimExit -eq 0 -and (($pwshShimOutput | Out-String) -match "Core")) { "pass" } else { "fail" })) @{
     shim = $pwshPs1
