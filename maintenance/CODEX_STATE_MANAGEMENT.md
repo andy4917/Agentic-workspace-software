@@ -179,10 +179,10 @@ failures, and not-run checks as evidence gaps rather than success.
 ## Standard Commands
 
 ```powershell
-C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json
-C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode status -CodexHome C:\Users\anise\.codex
-C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -CodexHome C:\Users\anise\.codex
-C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode status -CodexHome C:\Users\anise\.codex
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -CodexHome C:\Users\anise\.codex
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
 ```
 
 Use `-ReportOnly` only for read-only inspection or intentionally dirty review

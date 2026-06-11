@@ -56,6 +56,19 @@ def resolve_pwsh_for_hook() -> Path:
     return alias_stub
 
 
+def hidden_compact_hook_command() -> str:
+    hook_runner = Path.home() / ".codex" / "hooks" / "compact-codex-hook.ps1"
+    if os.name == "nt":
+        launcher = Path(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
+        shim = Path.home() / ".codex" / "toolchains" / "shims" / "pwsh.ps1"
+        return (
+            f'"{launcher}" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass '
+            f'-File "{shim}" -NoProfile -NonInteractive -File "{hook_runner}"'
+        )
+    hook_pwsh = resolve_pwsh_for_hook()
+    return f"{hook_pwsh} -NoProfile -NonInteractive -File {hook_runner}"
+
+
 def cmd_merge_config(args: argparse.Namespace) -> int:
     root = root_path(args)
     source = Path(args.source).resolve()
@@ -288,9 +301,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         )
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n.codex-global-state.json.bak\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})
-        hook_pwsh = resolve_pwsh_for_hook()
-        hook_runner = Path.home() / ".codex" / "hooks" / "compact-codex-hook.ps1"
-        hidden_hook_command = f"{hook_pwsh} -NoProfile -NonInteractive -WindowStyle Hidden -File {hook_runner}"
+        hidden_hook_command = hidden_compact_hook_command()
         hook_fragment = compact_hook_fragment(hidden_hook_command)
         write_text(root / "config.d" / "20-hooks.toml", hook_fragment)
         write_text(root / "config.toml", read_text(root / "config.toml") + "\n" + hook_fragment)

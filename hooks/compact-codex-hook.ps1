@@ -503,13 +503,7 @@ function Test-HighRiskDestructiveCommand {
         }
 
         if ($commandLeaf -match '(?i)^(Invoke-Expression|iex)$') {
-            $expressionCommand = ($segment -join " ").Trim()
-            if (
-                $expressionCommand -and
-                (Test-HighRiskDestructiveCommand -CommandText $expressionCommand -BroadTargetPattern $BroadTargetPattern -RecursiveFlagPattern $RecursiveFlagPattern)
-            ) {
-                return $true
-            }
+            return $true
             continue
         }
 

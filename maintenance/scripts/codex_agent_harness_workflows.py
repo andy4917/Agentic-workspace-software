@@ -77,11 +77,23 @@ def normalize_p0_report_only_check(check: dict[str, Any]) -> dict[str, Any]:
         result = json.loads(output)
     except json.JSONDecodeError:
         return check
-    if result.get("status") == "report_only_with_evidence_gaps" and int(result.get("fail_count") or 0) == 0:
+    summary_present = isinstance(result.get("summary"), dict)
+    summary = result.get("summary") if summary_present else {}
+    not_run_count = int(summary.get("not_run_count") or 0)
+    evidence_gap_count = int(summary.get("evidence_gap_count") or 0)
+    not_run_checks = summary.get("not_run_checks") or []
+    if (
+        result.get("status") == "report_only_with_evidence_gaps"
+        and summary_present
+        and int(result.get("fail_count") or 0) == 0
+        and not_run_count == 0
+        and evidence_gap_count == 0
+        and not not_run_checks
+    ):
         check["status"] = "pass"
         check["exit_code"] = 0
         check["report_only_status"] = result.get("status")
-        check["report_only_note"] = "ReportOnly is accepted here only as a midpoint check with fail_count=0; full P0 remains the final clean evidence."
+        check["report_only_note"] = "ReportOnly is accepted here only when it has no failures, no evidence gaps, and no not-run checks; full P0 remains the final clean evidence."
     return check
 
 
@@ -141,13 +153,15 @@ def compact_hook_route_scan(root: Path) -> dict[str, Any]:
                     command = str(hook_entry.get("command", ""))
                     command_windows = str(hook_entry.get("commandWindows", ""))
                     route_text = f"{command}\n{command_windows}"
-                    route_terms = ["pwsh.exe", "WindowStyle Hidden", "compact-codex-hook.ps1"]
+                    route_terms = ["powershell.exe", "WindowStyle Hidden", "pwsh.ps1", "compact-codex-hook.ps1"]
                     route_ok = (
                         bool(command)
                         and bool(command_windows)
                         and all(term in command and term in command_windows for term in route_terms)
                         and "pwsh.cmd" not in route_text.lower()
                         and not re.search(r"(?i)\bcmd(?:\.exe)?\s*/c\b", route_text)
+                        and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in route_text.lower()
+                        and "\\program files\\windowsapps\\microsoft.powershell_" not in route_text.lower()
                     )
                     if route_ok:
                         event_has_valid_route = True

@@ -520,6 +520,7 @@ function Test-FirstCommandSource {
 $checks = New-Object System.Collections.Generic.List[object]
 $configPath = Join-Path $CodexHome "config.toml"
 $hookPath = Join-Path $CodexHome "hooks\compact-codex-hook.ps1"
+$pwshShimPath = Join-Path $CodexHome "toolchains\shims\pwsh.ps1"
 $manifestDir = Join-Path $CodexHome "maintenance\manifests"
 
 Add-Check $checks "required_files" ($(if ((Test-Path $configPath) -and (Test-Path $hookPath) -and (Test-Path (Join-Path $CodexHome "AGENTS.md"))) { "pass" } else { "fail" })) @{
@@ -784,14 +785,17 @@ if ($LASTEXITCODE -eq 0) {
         $usesForegroundCmd = $commandText -match "(?i)\bcmd(?:\.exe)?\s*/c\b"
         $usesCmdShim = $commandText -match "(?i)\bpwsh\.cmd\b"
         $usesAliasStub = $expandedCommand -match "(?i)\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh\.exe\b"
+        $usesVersionPinnedPwsh = $expandedCommand -match "(?i)\\Program Files\\WindowsApps\\Microsoft\.PowerShell_[^\\]+\\pwsh\.exe\b"
         $usesHiddenWrapper = $commandText -match "(?i)WindowStyle\s+Hidden"
-        $usesDirectPwsh = $commandText -match "(?i)\bpwsh\.exe\b"
-        $pwshPath = $null
-        if ($expandedCommand -match '^\s*"?([^"]*pwsh\.exe)"?(\s|$)') {
-            $pwshPath = $Matches[1]
-        }
-        $usesExistingPwsh = -not [string]::IsNullOrWhiteSpace($pwshPath) -and (Test-Path -LiteralPath $pwshPath -PathType Leaf)
-        return ($referencesCompactHook -and -not $usesLegacyHook -and -not $usesForegroundCmd -and -not $usesCmdShim -and -not $usesAliasStub -and $usesHiddenWrapper -and $usesDirectPwsh -and $usesExistingPwsh)
+        $referencesPwshShim = $expandedCommand -match [regex]::Escape($pwshShimPath)
+        $startsWithStableWindowsPowerShell = $expandedCommand -match '^\s*"C:\\Windows\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe"(?=\s|$)'
+        $quotesFileTargets = ([regex]::Matches($expandedCommand, '(?i)-File\s+"[^"]+"')).Count -ge 2
+        $usesExistingRoute = (
+            (Test-Path -LiteralPath "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PathType Leaf) -and
+            (Test-Path -LiteralPath $pwshShimPath -PathType Leaf) -and
+            (Test-Path -LiteralPath $hookPath -PathType Leaf)
+        )
+        return ($referencesCompactHook -and $referencesPwshShim -and -not $usesLegacyHook -and -not $usesForegroundCmd -and -not $usesCmdShim -and -not $usesAliasStub -and -not $usesVersionPinnedPwsh -and $usesHiddenWrapper -and $startsWithStableWindowsPowerShell -and $quotesFileTargets -and $usesExistingRoute)
     }
     foreach ($commandItem in $hookCommands) {
         if (-not (& $testHookCommand $commandItem)) { $hookCommandProblems += $commandItem }
@@ -805,9 +809,9 @@ if ($LASTEXITCODE -eq 0) {
         command_bad = $hookCommandProblems
         command_windows_bad = $hookCommandWindowsProblems
         events = $hookEventDetails
-        note = "All hook events must route both command and commandWindows to the compact hook through a verified real hidden pwsh.exe, without foreground cmd.exe, .cmd shim nesting, WindowsApps alias stubs, or retired hook names."
+        note = "All hook events must route both command and commandWindows through a stable hidden Windows PowerShell launcher into pwsh.ps1 and the compact hook, without foreground cmd.exe, .cmd shim nesting, WindowsApps alias stubs, version-pinned WindowsApps pwsh.exe paths, or retired hook names."
     }
-    $toolRoutingRequired = @("functions\..*", "multi_tool_use\..*", "tool_search\..*", "web\..*", "image_gen\..*", "mcp__.*")
+    $toolRoutingRequired = @("functions\..*", "multi_tool_use\..*", "multi_agent.*", "tool_search\..*", "web\..*", "image_gen\..*", "codex_app\..*", "mcp__.*")
     $toolRoutingByEvent = [ordered]@{}
     $toolRoutingMissing = @()
     foreach ($eventName in @("PreToolUse", "PostToolUse")) {

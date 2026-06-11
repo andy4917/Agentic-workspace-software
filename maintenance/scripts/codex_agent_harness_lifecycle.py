@@ -418,9 +418,11 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
         "mcp__.*",
         "functions\\..*",
         "multi_tool_use\\..*",
+        "multi_agent.*",
         "tool_search\\..*",
         "web\\..*",
         "image_gen\\..*",
+        "codex_app\\..*",
     ]
     try:
         data = tomllib.loads(text)

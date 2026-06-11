@@ -103,6 +103,8 @@ def configured_hook_command(root: Path, event_name: str) -> str:
 def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
     command = configured_hook_command(root, event_name)
     argv = shlex.split(command, posix=(os.name != "nt"))
+    if os.name == "nt":
+        argv = [arg[1:-1] if len(arg) >= 2 and arg[0] == '"' and arg[-1] == '"' else arg for arg in argv]
     candidate_hook = str(root / "hooks" / "compact-codex-hook.ps1")
     rewrote_file = False
     for index, arg in enumerate(argv[:-1]):
@@ -233,7 +235,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and ("hooks" + ".json") not in config_text,
             "Active hook fragment should route only to compact-codex-hook.ps1.",
         )
-        required_matcher_terms = ["functions\\\\..*", "multi_tool_use\\\\..*", "tool_search\\\\..*", "web\\\\..*", "image_gen\\\\..*", "mcp__.*"]
+        required_matcher_terms = ["functions\\\\..*", "multi_tool_use\\\\..*", "multi_agent.*", "tool_search\\\\..*", "web\\\\..*", "image_gen\\\\..*", "codex_app\\\\..*", "mcp__.*"]
         hook_matchers: dict[str, str] = {}
         current_hook_event = ""
         for raw_line in config_text.splitlines():
@@ -256,8 +258,9 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "WindowStyle Hidden" in config_text
             and "cmd /c" not in config_text
             and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in config_text.lower()
+            and "\\program files\\windowsapps\\microsoft.powershell_" not in config_text.lower()
             and config_text.count("commandWindows") >= 5,
-            "Active hook fragment should define hidden commandWindows overrides for every hook through a real pwsh.exe while preserving stdout.",
+            "Active hook fragment should define hidden commandWindows overrides for every hook through the stable pwsh.ps1 route while preserving stdout.",
         )
         route_errors: list[str] = []
         route_hits: list[str] = []
@@ -280,7 +283,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                         continue
                     command = str(hook_entry.get("command", ""))
                     command_windows = str(hook_entry.get("commandWindows", ""))
-                    route_terms = ["pwsh.exe", "WindowStyle Hidden", "compact-codex-hook.ps1"]
+                    route_terms = ["powershell.exe", "WindowStyle Hidden", "pwsh.ps1", "compact-codex-hook.ps1"]
                     if (
                         command
                         and command_windows
@@ -289,6 +292,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                         and "cmd /c" not in f"{command}\n{command_windows}".lower()
                         and "cmd.exe /c" not in f"{command}\n{command_windows}".lower()
                         and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in f"{command}\n{command_windows}".lower()
+                        and "\\program files\\windowsapps\\microsoft.powershell_" not in f"{command}\n{command_windows}".lower()
                     ):
                         event_ok = True
                         route_hits.append(event)
@@ -297,7 +301,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         add_check(
             "hook_config_uses_configured_hidden_wrapper_routes",
             not route_errors and len(set(route_hits)) == 5,
-            "; ".join(route_errors[:5]) if route_errors else "All hook events route through command and commandWindows hidden compact runner definitions without cmd shim nesting or WindowsApps alias stubs.",
+            "; ".join(route_errors[:5]) if route_errors else "All hook events route through command and commandWindows hidden compact runner definitions without cmd shim nesting, WindowsApps alias stubs, or version-pinned WindowsApps pwsh paths.",
         )
         add_check(
             "compact_hook_contains_current_contract",
@@ -412,6 +416,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         start_process_git_wi_force_stdout = start_process_git_wi_force_probe.get("stdout_preview", "").lower()
         invoke_expression_git_force_probe = run_hook_sample(root, "Invoke-Expression 'git push origin --force'")
         invoke_expression_git_force_stdout = invoke_expression_git_force_probe.get("stdout_preview", "").lower()
+        invoke_expression_variable_git_force_probe = run_hook_sample(root, "$x='git push origin --force'; Invoke-Expression $x")
+        invoke_expression_variable_git_force_stdout = invoke_expression_variable_git_force_probe.get("stdout_preview", "").lower()
         pwsh_colon_command_force_probe = run_hook_sample(root, "pwsh -Command:'git push origin --force'")
         pwsh_colon_command_force_stdout = pwsh_colon_command_force_probe.get("stdout_preview", "").lower()
         start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
@@ -489,6 +495,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in start_process_git_wi_force_stdout
             and invoke_expression_git_force_probe.get("status") == "pass"
             and "deny" in invoke_expression_git_force_stdout
+            and invoke_expression_variable_git_force_probe.get("status") == "pass"
+            and "deny" in invoke_expression_variable_git_force_stdout
             and pwsh_colon_command_force_probe.get("status") == "pass"
             and "deny" in pwsh_colon_command_force_stdout
             and start_process_destructive_probe.get("status") == "pass"
@@ -788,6 +796,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         relative_recurse_partial_stdout = relative_recurse_partial_probe.get("stdout_preview", "").lower()
         invoke_expression_relative_probe = run_hook_sample(root, "iex 'Remove-Item . -Recurse -Force'")
         invoke_expression_relative_stdout = invoke_expression_relative_probe.get("stdout_preview", "").lower()
+        invoke_expression_variable_relative_probe = run_hook_sample(root, "$x='Remove-Item . -Recurse -Force'; Invoke-Expression $x")
+        invoke_expression_variable_relative_stdout = invoke_expression_variable_relative_probe.get("stdout_preview", "").lower()
         rm_relative_probe = run_hook_sample(root, "rm -rf .")
         rm_relative_stdout = rm_relative_probe.get("stdout_preview", "").lower()
         ri_relative_probe = run_hook_sample(root, "ri . -r -Force")
@@ -806,6 +816,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in relative_recurse_partial_stdout
             and invoke_expression_relative_probe.get("status") == "pass"
             and "deny" in invoke_expression_relative_stdout
+            and invoke_expression_variable_relative_probe.get("status") == "pass"
+            and "deny" in invoke_expression_variable_relative_stdout
             and rm_relative_probe.get("status") == "pass"
             and "deny" in rm_relative_stdout
             and ri_relative_probe.get("status") == "pass"
