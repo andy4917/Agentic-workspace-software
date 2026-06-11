@@ -6,9 +6,8 @@ if exist "%PWSH_EXE%" (
   exit /b %ERRORLEVEL%
 )
 for /f "delims=" %%P in ('dir /b /ad "%ProgramFiles%\WindowsApps\Microsoft.PowerShell_*__8wekyb3d8bbwe" 2^>nul') do (
-  set "PWSH_EXE=%ProgramFiles%\WindowsApps\%%P\pwsh.exe"
-  if exist "%PWSH_EXE%" (
-    "%PWSH_EXE%" %*
+  if exist "%ProgramFiles%\WindowsApps\%%P\pwsh.exe" (
+    "%ProgramFiles%\WindowsApps\%%P\pwsh.exe" %*
     exit /b %ERRORLEVEL%
   )
 )
