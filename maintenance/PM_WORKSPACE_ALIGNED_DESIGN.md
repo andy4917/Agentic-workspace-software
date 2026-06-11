@@ -26,8 +26,8 @@ This design reconciles the PM-aligned plan with the local managed source:
 - user-provided `PM_WORKSPACE_REVIEW_FINDINGS.md`;
 - `AGENTS.md`;
 - `README.md`;
-- `CODEX_WORKFLOW_APPLIED_REVIEW.md`;
-- `hooks/lightweight-codex-policy.json`;
+- `config.d/20-hooks.toml`;
+- `hooks/compact-codex-hook.ps1`;
 - `maintenance/WORKSTATION_CONTROL_RUNBOOK.md`;
 - `maintenance/WORKSTATION_MAINTENANCE.md`;
 - `maintenance/PROJECT_WORKFLOW_CHAIN.md`;
@@ -77,7 +77,8 @@ System, developer, tool, and current user instructions
 
 Safety, security, release, and external-publish boundaries are not optional
 style preferences. They remain enforced through the higher-priority current
-instructions, scoped `AGENTS.md`, active hook policy, and specific runbooks.
+instructions, scoped `AGENTS.md`, active compact hook routing, and specific
+runbooks.
 
 ### Goal Status Vocabulary
 
@@ -92,16 +93,18 @@ residual risks, and rollback notes.
 
 ### Subagents And Role System
 
-Current runtime policy requires explicit user authorization before calling
-subagents. Capability flags and large task size are not authorization by
-themselves.
+Current runtime policy carries standing user authorization for bounded
+subagent calls on repo, workstation, workflow, toolchain, review, remediation,
+and verification goals through `AGENTS.md` and mirrored `config.toml`
+developer instructions. Capability flags and large task size are still not
+completion authority.
 
-When authorization exists, use the active local limits from
-`hooks/lightweight-codex-policy.json` and the dispatch shape in
-`maintenance/SUBAGENT_DELEGATION_CHARTER.md`. Logical functions such as worker,
-auditor, verifier, explorer, reviewer, security, and observer are PM work
-functions; they do not override runtime role availability or completion
-authority.
+When authorization applies, use the dispatch shape in
+`maintenance/SUBAGENT_DELEGATION_CHARTER.md` and the active compact hook routing
+from `config.d/20-hooks.toml` and `hooks/compact-codex-hook.ps1`. Logical
+functions such as worker, auditor, verifier, explorer, reviewer, security, and
+observer are PM work functions; they do not override runtime role availability
+or completion authority.
 
 When a non-trivial worker is used, apply
 `maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md`. If a watcher is omitted,
@@ -176,8 +179,8 @@ implicitly.
 Use this document as the compact design record for PM workspace alignment:
 
 1. Keep `AGENTS.md` high-level and avoid copying this full design into it.
-2. Keep active behavior changes in the correct active surface: hook policy,
-   hook script, config, toolchain wrapper, or runbook.
+2. Keep active behavior changes in the correct active surface: config fragment,
+   compact hook script, toolchain wrapper, or runbook.
 3. Keep generated runtime files generated-only unless the user explicitly
    targets the generator or authoritative source.
 4. Keep public GitHub commits free of secrets, raw logs, private runtime state,
@@ -198,7 +201,7 @@ A future change to this design passes only when all applicable items are true:
 - current instruction priority is not weakened;
 - Goal remains a tracking marker, not completion authority;
 - Memory/RAG remains support-only;
-- subagent use remains explicit-authorization-bound and evidence-only;
+- subagent use remains authorization-bound and evidence-only;
 - worker-watcher and goal-integrity gates remain candidate evidence, not final
   authority;
 - score/reward language penalizes fake success and hidden fallback;

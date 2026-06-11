@@ -1,4 +1,0 @@
-interface:
-  display_name: "Load Design"
-  short_description: "Create and refresh repo design contracts"
-  default_prompt: "Use $load-design to create or refresh DESIGN.md before frontend or product UI work."

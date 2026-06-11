@@ -38,4 +38,4 @@ completion claim | merge claim | validation claim
 
 ## Required Review Lens
 
-Use dont-even-try read-only adversarial review.
+Use clean-all-slop read-only adversarial review.

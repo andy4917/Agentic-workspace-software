@@ -30,8 +30,10 @@ is left enabled during non-frontend work.
   --no-usage-statistics --no-performance-crux`
 - `default_env`: `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1`,
   `CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1`, `SystemRoot`, `PROGRAMFILES`
-- `rollback`: run the OFF command; pre-change config backups are written under
-  ignored local state at `%USERPROFILE%\.codex\state\mcp-toggle-backups`
+- `rollback`: run the OFF command; any pre-change config copy made by the
+  toggle script is a transient `%TEMP%\codex-mcp-config-{guid}.toml` file that
+  is deleted after success or rollback handling, not retained runtime fallback
+  state
 
 ## Commands
 
@@ -72,6 +74,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
 7. Run the OFF command.
 8. Confirm `status` reports `state=off` and that the server remains registered
    with `enabled = false`.
+
+Observation success must include target identity. A successful DevTools command
+against `about:blank`, a diagnostic helper page, an extension URL page, or the
+wrong browser context is not proof of the user's intended UI. Record the
+observed URL/title/root and keep `ERR_BLOCKED_BY_CLIENT`, missing side-panel targets,
+profile/session gaps, or data-auth gaps as blockers instead of downgrading them
+to plugin health warnings.
 
 ## Options
 
@@ -119,5 +128,6 @@ Rollback:
 
 - To remove the settings entry completely, run
   `codex mcp remove chrome-devtools`.
-- Pre-change config backups are under
-  `%USERPROFILE%\.codex\state\mcp-toggle-backups`.
+- Pre-change config copies, when created by the toggle script, are transient
+  `%TEMP%\codex-mcp-config-{guid}.toml` files and are deleted after success or
+  rollback handling.

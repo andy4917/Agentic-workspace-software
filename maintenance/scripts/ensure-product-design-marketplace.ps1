@@ -99,7 +99,7 @@ function Test-ConfigRegistration {
 }
 
 function Invoke-CodexPluginListProbe {
-    $codexShim = Join-PathStrict $CodexHome "toolchains\shims\codex.cmd"
+    $codexShim = Join-PathStrict $CodexHome "toolchains\shims\codex.ps1"
     if (-not (Test-Path -LiteralPath $codexShim -PathType Leaf)) {
         return [ordered]@{ ok = $false; command = $codexShim; exit_code = $null; output = "missing codex shim" }
     }

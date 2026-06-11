@@ -31,7 +31,7 @@ COMMAND_ARTIFACT_THRESHOLD_CHARS = 12000
 TRAJECTORY_VERSION = "codex-trajectory-v1"
 DOCTOR_TIERS = {
     "core": ["config", "harness_engine_modules", "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter", "harness_file_size", "stale_active_references", "sentinel_blockers"],
-    "extended": ["config", "pm_subagent_protocol", "harness_engine_modules", "app_runtime_state_writable", "generated_outputs_untracked", "hook_subagent_vowline", "subagent_nickname_policy", "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter", "harness_file_size", "workspace_script_file_size", "stale_active_references", "sentinel_blockers"],
+    "extended": ["config", "pm_subagent_protocol", "harness_engine_modules", "app_runtime_state_writable", "generated_outputs_untracked", "compact_hook_contract", "subagent_nickname_policy", "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter", "harness_file_size", "workspace_script_file_size", "stale_active_references", "sentinel_blockers"],
     "stress": ["config", "harness_engine_modules", "generated_outputs_untracked", "calibration_policy", "managed_files", "harness_file_size", "stale_active_references", "sentinel_blockers"],
 }
 DOCTOR_TIERS["full"] = list(dict.fromkeys(DOCTOR_TIERS["extended"] + DOCTOR_TIERS["stress"]))
@@ -157,53 +157,7 @@ that agent, start a replacement with a handoff that names the failure mode, and
 independently verify the affected surface.
 """
 
-SKILL_TEMPLATES = {
-    "skills/_drafts/README.md": """# Draft Skills
-
-Draft skills live here until explicitly approved. Do not auto-install or load
-draft skills as active instructions.
-""",
-    "skills/agent-harness-construction/SKILL.md": """---
-name: agent-harness-construction
-description: Build or repair the local Codex harness with reversible, deterministic changes.
-version: 0.1.0
-tags: [codex, harness, verification, maintenance]
-required_tools: [python, powershell]
----
-
-# Agent Harness Construction
-
-Use this when changing the local Codex harness. Work in small phases:
-discover, plan, apply, doctor, verify, audit, then report evidence and risks.
-Do not clone external harnesses, store secrets, or mutate external services.
-""",
-    "skills/verification-loop/SKILL.md": """---
-name: verification-loop
-description: Repeat deterministic checks until the local harness has no known failing checks.
-version: 0.1.0
-tags: [verification, audit, repair]
-required_tools: [python]
----
-
-# Verification Loop
-
-Run doctor, verify, eval, and audit. Fix confirmed failures only, then rerun
-the same checks. Record checks not run with reasons.
-""",
-    "skills/iterative-retrieval/SKILL.md": """---
-name: iterative-retrieval
-description: Retrieve focused context for subagents without dumping the whole tree.
-version: 0.1.0
-tags: [subagents, retrieval, context]
-required_tools: [rg]
----
-
-# Iterative Retrieval
-
-Use up to three cycles: broad search, score files, refine query, select context,
-and record the stop reason.
-""",
-}
+SKILL_TEMPLATES: dict[str, str] = {}
 
 EVAL_TEMPLATES = {
     "evals/config-parse.json": {
@@ -259,7 +213,7 @@ EVAL_TEMPLATES = {
             "AGENTS.md records Goal as a tracking marker and PM-owned completion audit",
             "Subagent delegation charter states evidence-only authority",
             "Goal templates require checked, not-run, risks, and PM independent verification",
-            "Stop hook synthetic input blocks missing audit and allows audit-present final text",
+            "Stop hook runtime sample is record-only and does not claim audit-blocking completion authority",
         ],
         "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id orchestration-governance-smoke",
         "timeout_seconds": 30,
@@ -283,7 +237,7 @@ EVAL_TEMPLATES = {
     },
     "evals/doctor-tier-smoke.json": {
         "eval_id": "doctor-tier-smoke",
-        "task": "Verify doctor tiering keeps core managed-source checks separate from heavier stress/full checks.",
+        "task": "Verify doctor tiering separates core managed-source checks from optional runtime checks.",
         "setup": "Run from CODEX_HOME after doctor tier or runtime-health changes.",
         "success_criteria": [
             "core doctor excludes generated_outputs_untracked",
@@ -300,7 +254,9 @@ EVAL_TEMPLATES = {
         "setup": "Run from CODEX_HOME or a Windows CI checkout.",
         "success_criteria": [
             "tracked Python harness files compile",
-            "tracked JSON eval and hook policy files parse",
+            "tracked JSON evals parse",
+            "config.d/20-hooks.toml parses",
+            "compact_hook_route_scan runs",
             "PowerShell managed scripts parse",
             "repo-safe calibration smoke does not require ignored private config.toml",
             "mutable generated outputs are not tracked"
@@ -383,8 +339,9 @@ def harness_source_files(root: Path) -> list[Path]:
     files = list((root / "maintenance" / "scripts").glob("codex_agent_harness*.py"))
     extra = [
         "AGENTS.md", "CALIBRATION.md", "config.toml",
-        "hooks/lightweight-codex-hook.ps1", "hooks/lightweight-codex-policy.json",
-        "hooks/lib/lightweight-codex-workflow.ps1", "agents/calibration-verifier.toml",
+        "config.d/20-hooks.toml", "hooks/compact-codex-hook.ps1",
+        "maintenance/scripts/worker_watcher_templates.py",
+        "agents/calibration-verifier.toml",
         "evals/calibration-eval.yaml", "evals/calibration-policy-smoke.json",
     ]
     files.extend(root / item for item in extra if (root / item).exists())
@@ -399,15 +356,6 @@ def harness_source_digest(root: Path) -> str:
         h.update(sha256_file(path).encode("ascii"))
         h.update(b"\0")
     return h.hexdigest()
-
-
-def backup_file(path: Path, root: Path) -> Path:
-    backup_root = root / "maintenance" / "backups" / f"codex-harness-{local_stamp()}"
-    ensure_dir(backup_root)
-    destination = backup_root / rel(path, root)
-    ensure_dir(destination.parent)
-    shutil.copy2(path, destination)
-    return destination
 
 
 def load_json(path: Path, default: Any) -> Any:
@@ -476,7 +424,7 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
     if "codex-baseline" in modules or "orchestration" in modules:
         templates.update(ROLE_CONFIGS)
 
-    if "skills-core" in modules:
+    if "skills-core" in modules and SKILL_TEMPLATES:
         templates.update(SKILL_TEMPLATES)
         templates["skills/SKILL_INDEX.md"] = skill_index_content(SKILL_TEMPLATES)
 
@@ -486,12 +434,12 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
         templates["reports/README.md"] = (
             "# Codex Harness Reports\n\n"
             "Harness reports and templates for repo verification, context inspection,\n"
-            "retrieval, eval, benchmark, and audit work live here. `README.md`,\n"
+            "retrieval, eval, benchmark, P0 integrity, and audit work live here. `README.md`,\n"
             "templates, and seed discovery files are active managed source.\n\n"
             "`*.latest.json`, `*.latest.md`, and `*results.jsonl` are ignored\n"
             "runtime outputs. Use them for triage only; rerun the responsible\n"
             "command before treating a check as current validation. Keep not-run and\n"
-            "failed checks explicit, and use `maintenance/reports` for dated evidence.\n"
+            "failed checks explicit. Do not recreate retained dated evidence archives by default.\n"
         )
         templates["artifacts/tool-results/README.md"] = (
             "# Tool Result Artifacts\n\n"
@@ -501,8 +449,8 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
             "current run names the file and timestamp.\n\n"
             "Do not copy live runtime logs, secrets, sessions, SQLite state, browser\n"
             "state, or raw prompt payloads here. Prefer current command reruns, keep\n"
-            "artifact references in reports or trajectories, and handle deletion or\n"
-            "archiving in a separate bounded cleanup pass.\n"
+            "artifact references in reports or trajectories, and delete retired\n"
+            "generated artifacts in a separate bounded cleanup pass.\n"
         )
         templates["artifacts/compact-summaries/README.md"] = "# Compact Summaries\n\nStructured phase-boundary summaries live here.\n"
         templates["trajectories/README.md"] = "# Trajectories\n\nJSONL run records for successes and failures live here.\n"
@@ -600,6 +548,10 @@ def command_exists(command: str) -> bool:
     return shutil.which(command) is not None
 
 
+def no_window_creationflags() -> int:
+    return int(getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
 def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_stdout: bool = False) -> dict[str, Any]:
     started = dt.datetime.now()
     try:
@@ -611,6 +563,7 @@ def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_std
             errors="replace",
             capture_output=True,
             timeout=timeout,
+            creationflags=no_window_creationflags(),
         )
         status = "pass" if completed.returncode == 0 else "fail"
         result = {
@@ -692,7 +645,7 @@ def discovery_data(root: Path) -> dict[str, Any]:
         "implementation_assumptions": [
             "CODEX_HOME resolves to the user profile .codex directory and is the GlobalSSOT root.",
             "Desktop is user-facing and must not be mutated by harness commands.",
-            "Global config mutation requires backup and explicit apply path.",
+            "Global config mutation requires an explicit apply path and any safety copy must be transient, not retained runtime fallback.",
             "Secrets and credential contents are not read.",
         ],
         "risks": [
@@ -706,7 +659,6 @@ def discovery_data(root: Path) -> dict[str, Any]:
 def iter_files(root: Path, max_files: int = 100000) -> list[Path]:
     ignored = {
         ".git",
-        "archived_sessions",
         "artifacts",
         "cache",
         "generated_images",
@@ -768,7 +720,16 @@ def store_tool_artifact(root: Path, name: str, content: str) -> dict[str, Any]:
 def current_git_state(root: Path) -> dict[str, Any]:
     def run_git(args: list[str]) -> str:
         try:
-            completed = subprocess.run(["git", *args], cwd=str(root), text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=15)
+            completed = subprocess.run(
+                ["git", *args],
+                cwd=str(root),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=15,
+                creationflags=no_window_creationflags(),
+            )
         except Exception:  # noqa: BLE001 - best-effort metadata
             return ""
         return completed.stdout.strip() if completed.returncode == 0 else ""

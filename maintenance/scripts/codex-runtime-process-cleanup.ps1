@@ -20,9 +20,47 @@ $ErrorActionPreference = "Stop"
 $RetiredRootKeys = @("context7", "memento", "serena")
 $OptionalMcpRootKeys = @("chrome-devtools")
 
+function Invoke-WindowsPowerShellProcessTable {
+    $script = @'
+$ErrorActionPreference = "Stop"
+Get-CimInstance Win32_Process -ErrorAction Stop |
+    Select-Object ProcessId, ParentProcessId, Name, CreationDate, CommandLine |
+    ConvertTo-Json -Depth 4
+'@
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.FileName = "powershell.exe"
+    $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.RedirectStandardOutput = $true
+    $process.StartInfo.RedirectStandardError = $true
+    $process.StartInfo.CreateNoWindow = $true
+    $process.StartInfo.Arguments = "-NoProfile -NonInteractive -EncodedCommand $encoded"
+    if (-not $process.Start()) {
+        return @()
+    }
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) {
+        throw "Windows PowerShell process snapshot failed: $stderr"
+    }
+    if ([string]::IsNullOrWhiteSpace($stdout)) {
+        return @()
+    }
+    return @($stdout | ConvertFrom-Json)
+}
+
 function Get-ProcessTable {
-    @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-        Select-Object ProcessId, ParentProcessId, Name, CreationDate, CommandLine)
+    try {
+        return @(Get-CimInstance Win32_Process -ErrorAction Stop |
+            Select-Object ProcessId, ParentProcessId, Name, CreationDate, CommandLine)
+    } catch {
+        try {
+            return @(Invoke-WindowsPowerShellProcessTable)
+        } catch {
+            throw "Unable to capture Win32_Process table with command-line and parent metadata."
+        }
+    }
 }
 
 function Get-CodexAppServer {

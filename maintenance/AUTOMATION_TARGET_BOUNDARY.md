@@ -48,6 +48,26 @@ For `protected-codex-control-plane`, stop GUI automation and switch to
 structured routes. For `unclear-target`, gather metadata first and do not click
 or type until the target is known.
 
+## Capability Versus Target Proof
+
+A plugin, MCP server, or browser automation tool being installed, listed, or
+callable is only capability evidence. It does not prove that Codex is observing
+the user's intended page, extension side panel, Chrome profile, logged-in tab,
+or desktop surface.
+
+Before using automation output as completion evidence, record:
+
+- the target URL, window title, extension id, process, or DOM root observed;
+- whether the target is the user's real surface, an isolated helper browser, an
+  extension URL page, or a diagnostic substitute;
+- any tool blocker such as `ERR_BLOCKED_BY_CLIENT`, empty target list,
+  `Transport closed`, auth/session missing, or rate limit;
+- whether the blocker is fixed, still open, or intentionally outside scope.
+
+If the target proof is missing, report the exact blocker and keep the work in
+`continue` or `blocked` status. Do not replace it with a weaker plugin-health
+check, generated image, static DOM scan, or screenshot from the wrong target.
+
 ## Tool-Specific Rules
 
 Computer Use:
@@ -78,6 +98,9 @@ Chrome DevTools MCP:
 - Keep it optional and OFF by default.
 - Enable only for bounded browser-observation tasks, then turn it OFF and
   confirm the disabled state.
+- Treat `evaluate`, `screenshot`, or `navigate` success on `about:blank`,
+  diagnostic pages, or extension URLs as tool-call evidence only until the
+  actual intended browser target is identified and reachable.
 
 ## Overblock Diagnosis
 

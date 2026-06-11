@@ -1,0 +1,14 @@
+{
+  "eval_id": "adversarial-review-integration-smoke",
+  "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id adversarial-review-integration-smoke",
+  "risk_notes": "Structural smoke test only; it does not prove live subagent behavior.",
+  "setup": "Run from CODEX_HOME after worker-watcher managed-source changes.",
+  "success_criteria": [
+    "clean-all-slop remains available as the read-only adversarial audit lens",
+    "CLEAN/P0-P3 verdicts map to C0-C4 contamination scores",
+    "CLEAN is not completion authority",
+    "watcher and pre-ship templates require the active clean-all-slop lens"
+  ],
+  "task": "Verify clean-all-slop read-only audit mode is the active adversarial review lens inside Goal Integrity Gates.",
+  "timeout_seconds": 30
+}

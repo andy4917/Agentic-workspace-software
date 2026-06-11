@@ -22,7 +22,7 @@ Use the smallest layer that proves the current task.
 outer repository validation gate for handoff work that needs non-self-certified
 evidence, such as test/TDD changes, safe push, PR, CI, release, or merge
 handoff. Run it through
-`%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` after the relevant
+`%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` after the relevant
 local layer is coherent, but do not invoke it from inside a
 no-mistakes-spawned gate worktree or agent step.
 

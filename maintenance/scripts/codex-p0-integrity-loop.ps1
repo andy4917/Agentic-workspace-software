@@ -165,6 +165,43 @@ function Invoke-ProcessCapture {
     }
 }
 
+function Resolve-RealPwshExecutable {
+    $aliasStub = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"
+    $candidates = @()
+    $windowsAppsRoot = Join-Path $env:ProgramFiles "WindowsApps"
+    if (Test-Path -LiteralPath $windowsAppsRoot) {
+        $candidates += @(Get-ChildItem -LiteralPath $windowsAppsRoot -Directory -Filter "Microsoft.PowerShell_*__8wekyb3d8bbwe" -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName "pwsh.exe" })
+    }
+    $command = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source) -and [string]$command.Source -ne $aliasStub) {
+        $candidates += [string]$command.Source
+    }
+    $candidates += (Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe")
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        $candidates += [string]$command.Source
+    }
+    $candidates += $aliasStub
+    $selected = @($candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1)
+    if ($selected.Count -gt 0) {
+        return [string]$selected[0]
+    }
+    return $null
+}
+
+function Resolve-ScoopScript {
+    $command = Get-Command scoop.ps1 -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        return [string]$command.Source
+    }
+    $candidate = Join-Path $env:USERPROFILE "scoop\shims\scoop.ps1"
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        return $candidate
+    }
+    return $null
+}
+
 function ConvertFrom-JsonOutput {
     param([string]$Text)
 
@@ -176,25 +213,21 @@ function ConvertFrom-JsonOutput {
 }
 
 function Get-PowerShellPath {
-    $candidates = @(
-        (Join-Path $CodexHome "toolchains\shims\pwsh.cmd"),
-        "powershell.exe"
-    )
-    foreach ($candidate in $candidates) {
-        try {
-            $command = Get-Command $candidate -ErrorAction Stop
-            if ($command.Source) { return $command.Source }
-            return $candidate
-        } catch {
-        }
-    }
+    $pwsh = Resolve-RealPwshExecutable
+    if (-not [string]::IsNullOrWhiteSpace($pwsh)) { return $pwsh }
     return "powershell.exe"
 }
 
 function Get-MissingPid {
     $existing = @{}
-    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
-        $existing[[int]$_.ProcessId] = $true
+    try {
+        Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object {
+            $existing[[int]$_.ProcessId] = $true
+        }
+    } catch {
+        Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+            $existing[[int]$_.Id] = $true
+        }
     }
     $candidate = 65000
     while ($existing.ContainsKey($candidate)) {
@@ -334,7 +367,7 @@ function ConvertTo-StableManagedRootSignature {
 $repoRootResolved = (Resolve-Path -LiteralPath $RepoRoot).Path
 $codexHomeResolved = (Resolve-Path -LiteralPath $CodexHome).Path
 $manifestDir = Join-Path $codexHomeResolved "maintenance\manifests"
-$reportsDir = Join-Path $repoRootResolved "maintenance\reports"
+$reportsDir = Join-Path $repoRootResolved "reports"
 $pwsh = Get-PowerShellPath
 $checks = New-Object System.Collections.Generic.List[object]
 $generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -491,7 +524,8 @@ if ($ReportOnly) {
     }
 }
 
-$validationRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $validateScript, "-CodexHome", $codexHomeResolved, "-Json")
+$validationArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $validateScript, "-CodexHome", $codexHomeResolved, "-Json")
+$validationRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments $validationArguments
 $validation = ConvertFrom-JsonOutput -Text $validationRun.stdout
 Add-Check $checks "scaffold_validation_current" ($(if ($validationRun.exit_code -eq 0 -and $null -ne $validation -and $validation.overall_status -eq "pass") { "pass" } else { "fail" })) @{
     command = $validationRun.command_line
@@ -520,7 +554,24 @@ Add-Check $checks "toolchain_sources_current" ($(if ($toolchainRun.exit_code -eq
 }
 
 $doctorEnv = @{ PATH = "$shimRoot;$env:PATH" }
-$doctorRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", (Join-Path $shimRoot "codex.cmd"), "doctor", "--json") -WorkingDirectory $repoRootResolved -Environment $doctorEnv
+$codexPs1 = Join-Path $shimRoot "codex.ps1"
+$doctorRun = if (Test-Path -LiteralPath $codexPs1 -PathType Leaf) {
+    Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $codexPs1, "doctor", "--json") -WorkingDirectory $repoRootResolved -Environment $doctorEnv
+} else {
+    [ordered]@{
+        file = $codexPs1
+        arguments = @("doctor", "--json")
+        command_line = "$codexPs1 doctor --json"
+        working_directory = $repoRootResolved
+        started_utc = (Get-Date).ToUniversalTime().ToString("o")
+        ended_utc = (Get-Date).ToUniversalTime().ToString("o")
+        exit_code = 1
+        timed_out = $false
+        timeout_seconds = 0
+        stdout = ""
+        stderr = "missing codex.ps1; refusing cmd.exe fallback for foreground-window hygiene"
+    }
+}
 $doctor = ConvertFrom-JsonOutput -Text $doctorRun.stdout
 Add-Check $checks "codex_doctor_current" ($(if ($doctorRun.exit_code -eq 0 -and $null -ne $doctor -and $doctor.overallStatus -eq "ok") { "pass" } else { "fail" })) @{
     command = $doctorRun.command_line
@@ -544,8 +595,28 @@ if ($SkipScoop) {
         reason = "SkipScoop was set. Run without -SkipScoop to close P0 integrity."
     }
 } else {
-    $scoopStatusRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", "scoop", "status") -WorkingDirectory $repoRootResolved
-    $scoopCheckupRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", "scoop", "checkup") -WorkingDirectory $repoRootResolved
+    $scoopScript = Resolve-ScoopScript
+    $pwshForScoop = Resolve-RealPwshExecutable
+    if ([string]::IsNullOrWhiteSpace($scoopScript) -or [string]::IsNullOrWhiteSpace($pwshForScoop)) {
+        $scoopStatusRun = [pscustomobject]@{
+            stdout = ""
+            stderr = "scoop.ps1 or pwsh.exe not found"
+            exit_code = 127
+            command_line = "pwsh -File scoop.ps1 status"
+            started_utc = (Get-Date).ToUniversalTime().ToString("o")
+        }
+        $scoopCheckupRun = [pscustomobject]@{
+            stdout = ""
+            stderr = "scoop.ps1 or pwsh.exe not found"
+            exit_code = 127
+            command_line = "pwsh -File scoop.ps1 checkup"
+            started_utc = $scoopStatusRun.started_utc
+        }
+    } else {
+        $scoopCommonArgs = @("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $scoopScript)
+        $scoopStatusRun = Invoke-ProcessCapture -FilePath $pwshForScoop -Arguments ($scoopCommonArgs + @("status")) -WorkingDirectory $repoRootResolved
+        $scoopCheckupRun = Invoke-ProcessCapture -FilePath $pwshForScoop -Arguments ($scoopCommonArgs + @("checkup")) -WorkingDirectory $repoRootResolved
+    }
     $scoopStatusOutput = ($scoopStatusRun.stdout + $scoopStatusRun.stderr).Trim()
     $scoopCheckupOutput = ($scoopCheckupRun.stdout + $scoopCheckupRun.stderr).Trim()
     $scoopWarningPattern = "(?im)(^\s*WARN\b|bucket\(s\) out of date|run 'scoop update'|no shim found)"
@@ -694,10 +765,29 @@ $overallStatus = if ($failedChecks.Count -gt 0) {
 } else {
     "pass"
 }
+$userPerspectiveClean = (
+    $overallStatus -eq "pass" -and
+    -not [bool]$ReportOnly -and
+    -not [bool]$SkipScoop -and
+    $failedChecks.Count -eq 0 -and
+    $notRunChecks.Count -eq 0
+)
+$userPerspectiveCleanContract = [ordered]@{
+    definition = "User-perspective clean means the workstation control plane has no failed or skipped integrity checks, no report-only evidence gaps, no dirty managed-source baseline, current live scaffold validation, current Codex doctor, healthy toolchain/Scoop checks, no retired runtime/process/config residue accepted as active, and fresh evidence rather than stale manifests."
+    clean = [bool]$userPerspectiveClean
+    status = $(if ($userPerspectiveClean) { "clean" } else { "not_clean" })
+    report_only_allowed = $false
+    skip_scoop_allowed = $false
+    failed_checks_allowed = $false
+    not_run_checks_allowed = $false
+    evidence = "overall_status=$overallStatus; fail_count=$($failedChecks.Count); not_run_count=$($notRunChecks.Count); report_only=$([bool]$ReportOnly); skip_scoop=$([bool]$SkipScoop); dirty_paths=$($gitDirtyPaths.Count); scaffold_status=$($validation.overall_status); doctor_status=$($doctor.overallStatus)"
+}
 
 $loopResult = [ordered]@{
     generated_utc = $generatedUtc
     status = $overallStatus
+    user_perspective_clean = [bool]$userPerspectiveClean
+    user_perspective_clean_contract = $userPerspectiveCleanContract
     fail_count = $failedChecks.Count
     codex_home = $codexHomeResolved
     repo_root = $repoRootResolved
@@ -754,6 +844,8 @@ if (-not $ReportOnly -and $overallStatus -eq "pass") {
     $cleanManifest = [ordered]@{
         generated_utc = $generatedUtc
         status = "pass"
+        user_perspective_clean = [bool]$userPerspectiveClean
+        user_perspective_clean_contract = $userPerspectiveCleanContract
         reason = "Fresh closed-loop P0 validation snapshot after current file, runtime, diff, doctor, toolchain, Scoop, stale-manifest, reserved-PID, watcher, orphan, duplicate-root, and dead-app-server regression checks."
         validation_log = $validationLatestPath
         validation_log_sha256 = $validationHash
@@ -801,13 +893,14 @@ if (-not $ReportOnly -and $overallStatus -eq "pass") {
         "Codex doctor: $($doctor.overallStatus), version=$($doctor.codexVersion)",
         "Git: $($gitBranch.stdout.Trim())",
         "Stale manifest before refresh: $staleBeforeRefresh",
-        "Clean manifest: pass"
+        "Clean manifest: pass",
+        "User-perspective clean: $userPerspectiveClean"
     ) -join "`n"
     Write-Utf8File -Path $validationLogTextPath -Content ($validationText + "`n")
 }
 
 if ([string]::IsNullOrWhiteSpace($ReportPath)) {
-    $ReportPath = Join-Path $reportsDir "2026-05-31-codex-p0-integrity-loop.md"
+    $ReportPath = Join-Path $reportsDir "p0-integrity-loop.latest.md"
 }
 
 $watcherPidText = if ($currentWatcherPids.Count -gt 0) { $currentWatcherPids -join ", " } else { "none" }
@@ -865,6 +958,8 @@ $checkEvidenceRows
 ## Closure
 
 - Overall status: $overallStatus
+- User-perspective clean: $userPerspectiveClean
+- User-perspective clean definition: $($userPerspectiveCleanContract.definition)
 - Manifest stale before refresh: $staleBeforeRefresh
 - Stale reasons before refresh: $staleReasonText
 - Report-only mode: $([bool]$ReportOnly)

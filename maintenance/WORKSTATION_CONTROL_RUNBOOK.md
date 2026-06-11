@@ -29,8 +29,9 @@ Use these surface names in plans, handoffs, review reports, and final audits:
   state, MCP stdio packages, and version selectors.
 - `runtime-version`: specific Node, Python, Rust, package-manager, browser, or
   SDK versions that affect reproducibility.
-- `logs-records`: SQLite logs, raw logs, archived logs, manifests, reports, and
-  diagnostic traces.
+- `logs-records`: SQLite logs, raw logs, manifests, reports, and diagnostic
+  traces. Archived log roots are retired residue unless current runtime evidence
+  proves active use.
 - `secrets-credentials`: tokens, auth files, keys, private config, credential
   stores, and secret-adjacent metadata.
 - `project-repository`: product repositories and project-specific configs
@@ -146,6 +147,26 @@ Classify failures with the smallest accurate set from: `claim failure`,
 Do not claim root cause until the mechanism level is evidenced:
 reproduce, boundary, mechanism, masking, prevention.
 
+### Cross-Session Failure Pattern Controls
+
+When a user points to repeated failures across sessions, classify the pattern
+before adding new workflow:
+
+- `oracle-echo`: tests, smokes, screenshots, or docs assert current
+  implementation details, generated-image candidates, text markers, or viewport
+  visibility instead of user behavior.
+- `target-proof-gap`: a plugin, MCP, browser, or desktop tool is callable, but
+  the actual user target is not reachable or not the surface being inspected.
+- `owner-duplication`: product IDs, surface lists, filters, or external-data
+  requirements are duplicated in UI code, tests, smoke scripts, and docs.
+- `blocker-laundering`: missing external data, auth/session state, plugin
+  transport, or real-browser proof is converted into success language.
+
+For these classes, the smallest useful fix is usually to restore one source of
+truth, make the same failed proof fail clearly, and record the plugin or runtime
+target blocker as a blocker. Do not create broad new gates, accepted-image
+authority, or test-only success markers to compensate for missing runtime proof.
+
 ### Same-Proof Rerun And Goal Bridge
 
 If a change fixes a confirmed failure, rerun the exact proof that failed before
@@ -188,7 +209,8 @@ output must be converted to `NORMALIZED_WORKER_PACKET`, and an independent
 watcher must return `WATCHER_REPORT` or the PM must record `WATCHER_NOT_USED`.
 
 For long-running goals, use `maintenance/GOAL_INTEGRITY_GATE.md` at midpoint and
-pre-ship. The gate maps `dont-even-try` `CLEAN`/`P0-P3` outcomes to `C0-C4`;
+pre-ship. The gate maps `clean-all-slop` read-only audit `CLEAN`/`P0-P3`
+outcomes to `C0-C4`;
 `CLEAN` is still only evidence, not completion authority.
 
 ## Delegation Prompt Shape
@@ -219,12 +241,14 @@ Use these as compact prompt recipes:
 
 - Workstation check: classify surfaces, inspect read-only, report unmanaged
   drift, high-risk areas, and next safe actions.
-- Cleanup: do not delete or move first; classify candidates by reversibility,
-  retention value, sensitivity, and Recycle Bin suitability.
+- Cleanup: do not delete or move first; classify candidates by active ownership,
+  retention value, sensitivity, and path-boundary safety. After explicit user
+  authorization, delete retired residue directly instead of creating another
+  archive.
 - Codex setup: distinguish active runtime, managed source, hook wiring, runtime
   state, and versioned policy before edits.
 - Logs: classify by source, age, size, sensitivity, duplicate likelihood, and
-  recovery value; never permanently delete directly.
+  recovery value; never delete active SQLite WAL/SHM companions directly.
 - Tool install/update: first identify need, existing coverage, affected
   surface, dependency chain, verification, and rollback.
 - Broken workstation behavior: state the failure, form hypotheses, inspect

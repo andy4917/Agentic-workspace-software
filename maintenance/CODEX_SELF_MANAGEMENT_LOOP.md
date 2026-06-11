@@ -92,9 +92,9 @@ speculative guesses as verified memory.
 ## Standard Validation
 
 ```powershell
-C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json
-C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
-C:\Users\anise\.codex\toolchains\shims\codex.cmd doctor --json
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
+C:\Users\anise\.codex\toolchains\shims\codex.ps1 doctor --json
 ```
 
 Report-only P0 is acceptable for read-only review passes. Final publication
@@ -110,8 +110,11 @@ Rollback is path-specific:
 
 - Config policy: restore the previous `config.d\00-policy.toml`, copy it to
   `.codex\config.d`, regenerate `.codex\config.toml`, then run validator and
-  `codex doctor`.
+  Codex doctor through `toolchains\shims\codex.ps1` or the bundled `codex.exe`.
 - Hook behavior: restore `hooks\compact-codex-hook.ps1`, copy it to
   `.codex\hooks`, then run hook smoke plus runtime validation.
 - Runtime cleanup: use `codex-runtime-process-cleanup.ps1 -Mode status` before
-  any cleanup and prefer report-only or Recycle Bin paths when available.
+  any cleanup. Use report-only for uncertain ownership; after explicit cleanup
+  authorization, follow `CODEX_STATE_MANAGEMENT.md`: path boundary plus
+  reparse-point descendant scan; fail closed on top-level or descendant
+  reparse points or scan errors.

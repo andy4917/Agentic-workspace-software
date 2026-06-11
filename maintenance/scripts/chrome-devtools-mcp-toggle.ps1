@@ -41,7 +41,6 @@ $CodexHome = Resolve-CodexHome
 $ShimDir = Join-PathStrict $CodexHome "toolchains\shims"
 $NpxWrapper = Join-PathStrict $ShimDir "npx.cmd"
 $ConfigPath = Join-PathStrict $CodexHome "config.toml"
-$BackupRoot = Join-PathStrict $CodexHome "state\mcp-toggle-backups"
 $CodexExe = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin\codex.exe"
 
 if (-not (Test-Path -LiteralPath $CodexExe)) {
@@ -98,20 +97,6 @@ function Test-McpServerPresent {
     return ($null -ne (Get-McpServerInfo))
 }
 
-function Save-ConfigBackup {
-    param([Parameter(Mandatory = $true)][string] $Reason)
-
-    if (-not (Test-Path -LiteralPath $ConfigPath)) {
-        return
-    }
-
-    New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
-    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $destination = Join-PathStrict $BackupRoot "config.$Reason.$stamp.toml"
-    Copy-Item -LiteralPath $ConfigPath -Destination $destination -Force
-    Write-Host "backup=$destination"
-}
-
 function Write-Utf8NoBomLines {
     param(
         [Parameter(Mandatory = $true)][string] $Path,
@@ -148,6 +133,31 @@ function Invoke-WithWritableConfig {
         if ($null -ne $originalAttributes -and (Test-Path -LiteralPath $ConfigPath)) {
             $item = Get-Item -LiteralPath $ConfigPath
             $item.Attributes = $originalAttributes
+        }
+    }
+}
+
+function Invoke-WithConfigRollback {
+    param([Parameter(Mandatory = $true)][scriptblock] $Body)
+
+    $backupPath = $null
+    if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
+        $backupPath = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-mcp-config-{0}.toml" -f ([System.Guid]::NewGuid().ToString("N")))
+        Copy-Item -LiteralPath $ConfigPath -Destination $backupPath -Force
+    }
+
+    try {
+        & $Body
+    }
+    catch {
+        if ($null -ne $backupPath -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+            Copy-Item -LiteralPath $backupPath -Destination $ConfigPath -Force
+        }
+        throw
+    }
+    finally {
+        if ($null -ne $backupPath -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+            Remove-Item -LiteralPath $backupPath -Force
         }
     }
 }
@@ -301,15 +311,15 @@ if ($Action -eq "on") {
         throw "npx wrapper not found: $NpxWrapper"
     }
 
-    Save-ConfigBackup -Reason "before-chrome-devtools-on"
-
     Invoke-WithWritableConfig {
-        if (Test-McpServerPresent) {
-            Invoke-CodexCli -Arguments @("mcp", "remove", $ServerName)
-        }
+        Invoke-WithConfigRollback {
+            if (Test-McpServerPresent) {
+                Invoke-CodexCli -Arguments @("mcp", "remove", $ServerName)
+            }
 
-        Add-McpServerConfig
-        Set-McpServerEnabledInConfig -Enabled $true
+            Add-McpServerConfig
+            Set-McpServerEnabledInConfig -Enabled $true
+        }
     }
 
     Write-Host "state=on"
@@ -319,14 +329,14 @@ if ($Action -eq "on") {
 }
 
 if ($Action -eq "off") {
-    Save-ConfigBackup -Reason "before-chrome-devtools-off"
-
     Invoke-WithWritableConfig {
-        if (-not (Test-McpServerPresent)) {
-            Add-McpServerConfig
-        }
+        Invoke-WithConfigRollback {
+            if (-not (Test-McpServerPresent)) {
+                Add-McpServerConfig
+            }
 
-        Set-McpServerEnabledInConfig -Enabled $false
+            Set-McpServerEnabledInConfig -Enabled $false
+        }
     }
 
     Write-Host "state=off"

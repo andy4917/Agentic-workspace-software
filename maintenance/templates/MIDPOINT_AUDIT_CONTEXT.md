@@ -30,7 +30,7 @@ PM turn | worker report | validation claim | merge claim
 
 ## Required Review Lens
 
-Use dont-even-try read-only adversarial review.
+Use clean-all-slop read-only adversarial review.
 
 ## Extra Goal Integrity Questions
 

@@ -24,7 +24,7 @@
   "implementation_assumptions": [
     "C:/Users/anise/.codex is CODEX_HOME and GlobalSSOT root.",
     "Desktop is user-facing and must not be mutated by harness commands.",
-    "Global config mutation requires backup and explicit apply path.",
+    "Global config mutation requires explicit apply path and direct validation.",
     "Secrets and credential contents are not read."
   ],
   "language_runtime": [

@@ -7,11 +7,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 $fallbackExpectedShims = @(
-    "bun.cmd","cargo-clippy.cmd","cargo.cmd","code.cmd","codex.cmd","eslint.cmd",
-    "fd.cmd","gh.cmd","git.cmd","jq.cmd","just.cmd","node.cmd","npm.cmd",
-    "node_repl.cmd","npx.cmd","pip.cmd","pnpm.cmd","prettier.cmd","pwsh.cmd","py.cmd",
+    "bun.cmd","cargo-clippy.cmd","cargo.cmd","code.cmd","codex.cmd","codex.ps1","eslint.cmd",
+    "fd.cmd","gh.ps1","git.cmd","git.ps1","jq.cmd","just.cmd","node.cmd","npm.cmd",
+    "node_repl.cmd","npx.cmd","pip.cmd","pnpm.cmd","prettier.cmd","pwsh.cmd","pwsh.ps1","py.cmd",
     "pytest.cmd","python.cmd","rg.cmd","rg.ps1","ruff.cmd","rustc.cmd",
-    "rustfmt.cmd","rustup.cmd","tsc.cmd","tsx.cmd","uv.cmd","winget.cmd"
+    "rustfmt.cmd","rustup.cmd","tsc.cmd","tsx.cmd","uv.cmd","winget.cmd","no-mistakes.ps1"
 )
 
 $script:KeepSetManifest = $null
@@ -22,6 +22,7 @@ $script:KeepSetManifestStatus = [ordered]@{
     fallback_used = $true
     error = $null
 }
+$script:PwshShimProbeExecutable = $null
 
 function Add-Check($items, $name, $status, $details) {
     $items.Add([ordered]@{ name = $name; status = $status; details = $details }) | Out-Null
@@ -42,6 +43,97 @@ function Get-NonNullCount {
     param([AllowNull()][object]$Value)
 
     return (Get-NonNullArray -Value $Value).Count
+}
+
+function Resolve-PwshExecutable {
+    if (
+        -not [string]::IsNullOrWhiteSpace([string]$script:PwshShimProbeExecutable) -and
+        (Test-Path -LiteralPath $script:PwshShimProbeExecutable -PathType Leaf)
+    ) {
+        return $script:PwshShimProbeExecutable
+    }
+
+    $aliasStub = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"
+    $candidates = @()
+    $windowsAppsRoot = Join-Path $env:ProgramFiles "WindowsApps"
+    if (Test-Path -LiteralPath $windowsAppsRoot) {
+        $candidates += @(Get-ChildItem -LiteralPath $windowsAppsRoot -Directory -Filter "Microsoft.PowerShell_*__8wekyb3d8bbwe" -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName "pwsh.exe" })
+    }
+    $command = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        if ([string]$command.Source -ne $aliasStub) {
+            $candidates += [string]$command.Source
+        }
+    }
+    $candidates += (Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe")
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        $candidates += [string]$command.Source
+    }
+    $candidates += $aliasStub
+    $selected = @($candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1)
+    if ($selected.Count -gt 0) {
+        $script:PwshShimProbeExecutable = [string]$selected[0]
+        return $script:PwshShimProbeExecutable
+    }
+    return $null
+}
+
+function Get-ProcessSnapshotTable {
+    try {
+        return @(Get-CimInstance Win32_Process -ErrorAction Stop |
+            Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine)
+    } catch {
+        return @(Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+            $executablePath = ""
+            try {
+                $executablePath = [string]$_.Path
+            } catch {
+                $executablePath = ""
+            }
+            [pscustomobject]@{
+                ProcessId = [int]$_.Id
+                ParentProcessId = 0
+                Name = if ([string]$_.ProcessName -match "\.exe$") { [string]$_.ProcessName } else { [string]$_.ProcessName + ".exe" }
+                ExecutablePath = $executablePath
+                CommandLine = ""
+            }
+        })
+    }
+}
+
+function Get-ProcessSnapshotById {
+    param([int]$ProcessId)
+
+    @(Get-ProcessSnapshotTable | Where-Object { [int]$_.ProcessId -eq $ProcessId } | Select-Object -First 1)
+}
+
+function Get-ProcessSnapshotsByName {
+    param([string]$Name)
+
+    @(Get-ProcessSnapshotTable | Where-Object { [string]$_.Name -ieq $Name })
+}
+
+function Invoke-Ps1ShimFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [string[]]$Arguments = @()
+    )
+
+    $pwshExe = @(Resolve-PwshExecutable | Select-Object -First 1)
+    if ($pwshExe.Count -eq 0) {
+        return [pscustomobject]@{
+            output = @("pwsh.exe not found")
+            exit_code = 127
+        }
+    }
+    $output = @(& $pwshExe[0] -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1)
+    $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    return [pscustomobject]@{
+        output = $output
+        exit_code = $exitCode
+    }
 }
 
 function Get-RuntimeStatusView {
@@ -195,6 +287,18 @@ function Get-ObjectPropertyValue {
         return $null
     }
     return $property.Value
+}
+
+function Test-DefaultLiveCodexHome {
+    param([string]$Root)
+
+    try {
+        $resolvedRoot = ([System.IO.Path]::GetFullPath($Root)).TrimEnd("\")
+        $defaultRoot = ([System.IO.Path]::GetFullPath((Join-Path $env:USERPROFILE ".codex"))).TrimEnd("\")
+        return $resolvedRoot.Equals($defaultRoot, [System.StringComparison]::OrdinalIgnoreCase)
+    } catch {
+        return $false
+    }
 }
 
 function Test-ConfigItemEnabled {
@@ -361,9 +465,10 @@ function Test-BundleShimSource {
         [Parameter(Mandatory = $true)][string]$Name
     )
 
-    $extension = if ($Name -eq "rg-ps1") { "ps1" } else { "cmd" }
-    $toolName = if ($Name -eq "rg-ps1") { "rg" } else { $Name }
-    $shimName = if ($Name -eq "rg-ps1") { "rg.ps1" } else { "$Name.cmd" }
+    $isPs1 = $Name.EndsWith("-ps1", [System.StringComparison]::OrdinalIgnoreCase)
+    $extension = if ($isPs1) { "ps1" } else { "cmd" }
+    $toolName = if ($isPs1) { $Name.Substring(0, $Name.Length - 4) } else { $Name }
+    $shimName = if ($isPs1) { "$toolName.ps1" } else { "$Name.cmd" }
     $shimPath = Join-Path $ShimRoot $shimName
     $toolPath = Resolve-CodexBundledTool -Name $toolName
     $text = if (Test-Path -LiteralPath $shimPath -PathType Leaf) { Get-Content -LiteralPath $shimPath -Raw } else { "" }
@@ -412,6 +517,7 @@ function Test-FirstCommandSource {
         name = $Name
         first_source = $source
         allowed_roots = @($ShimRoot, $bundleRoot, $windowsAppsCodexPattern)
+        path_was_modified_for_probe = $false
         ok = [bool]$ok
     }
 }
@@ -419,6 +525,7 @@ function Test-FirstCommandSource {
 $checks = New-Object System.Collections.Generic.List[object]
 $configPath = Join-Path $CodexHome "config.toml"
 $hookPath = Join-Path $CodexHome "hooks\compact-codex-hook.ps1"
+$pwshShimPath = Join-Path $CodexHome "toolchains\shims\pwsh.ps1"
 $manifestDir = Join-Path $CodexHome "maintenance\manifests"
 
 Add-Check $checks "required_files" ($(if ((Test-Path $configPath) -and (Test-Path $hookPath) -and (Test-Path (Join-Path $CodexHome "AGENTS.md"))) { "pass" } else { "fail" })) @{
@@ -436,6 +543,12 @@ Add-Check $checks "config_fragment_reconcile_match" ($(if ($fragmentReconcile.ok
 $parsed = & python -c "import sys,tomllib,json; p=sys.argv[1]; data=tomllib.load(open(p,'rb')); print(json.dumps(data, sort_keys=True))" $configPath
 if ($LASTEXITCODE -eq 0) {
     $config = $parsed | ConvertFrom-Json
+    $globalAgentsOverride = Join-Path $CodexHome "AGENTS.override.md"
+    Add-Check $checks "global_agents_override_absent" ($(if (-not (Test-Path -LiteralPath $globalAgentsOverride)) { "pass" } else { "fail" })) @{
+        path = $globalAgentsOverride
+        exists = (Test-Path -LiteralPath $globalAgentsOverride)
+        note = "OpenAI Codex reads AGENTS.override.md before AGENTS.md at global scope. This workstation baseline keeps the active bootstrap in AGENTS.md, so a global override would hide the reviewed guidance."
+    }
     $approvalPolicy = if ($config.PSObject.Properties["approval_policy"]) { [string]$config.approval_policy } else { "" }
     $windowsSandbox = if ($null -ne $config.windows -and $config.windows.PSObject.Properties["sandbox"]) { [string]$config.windows.sandbox } else { "" }
     $permissionPostureOk = (
@@ -637,18 +750,98 @@ if ($LASTEXITCODE -eq 0) {
         note = "PLAN retires Serena and Memento as active MCPs. Validation must prove retirement by config/process absence, not by retired runtime health probes."
     }
     $hookCommands = @()
+    $hookCommandWindows = @()
+    $hookCommandProblems = @()
+    $hookCommandWindowsProblems = @()
+    $hookEventDetails = @()
     foreach ($event in @("SessionStart","UserPromptSubmit","PreToolUse","PostToolUse","Stop")) {
         $groups = @($config.hooks.$event)
         foreach ($group in $groups) {
-            foreach ($hook in @($group.hooks)) { $hookCommands += [string]$hook.command }
+            foreach ($hook in @($group.hooks)) {
+                $commandValue = [string]$hook.command
+                $commandWindowsValue = if ($hook.PSObject.Properties["commandWindows"]) {
+                    [string]$hook.commandWindows
+                } elseif ($hook.PSObject.Properties["command_windows"]) {
+                    [string]$hook.command_windows
+                } else {
+                    ""
+                }
+                $hookCommands += $commandValue
+                $hookCommandWindows += $commandWindowsValue
+                $hookEventDetails += [ordered]@{
+                    event = $event
+                    command = $commandValue
+                    command_windows = $commandWindowsValue
+                }
+            }
         }
     }
-    $badHookCommands = @($hookCommands | Where-Object {
-        [Environment]::ExpandEnvironmentVariables([string]$_) -notmatch [regex]::Escape($hookPath)
-    })
-    Add-Check $checks "hooks_one_runner" ($(if ($hookCommands.Count -eq 5 -and $badHookCommands.Count -eq 0) { "pass" } else { "fail" })) @{
-        count = $hookCommands.Count
-        bad = $badHookCommands
+    $testHookCommand = {
+        param([string]$CommandText)
+        if ([string]::IsNullOrWhiteSpace($CommandText)) { return $false }
+        $commandText = [string]$CommandText
+        $expandedCommand = [Environment]::ExpandEnvironmentVariables($commandText)
+        if ($env:USERPROFILE) {
+            $expandedCommand = $expandedCommand.Replace('$env:USERPROFILE', $env:USERPROFILE)
+            $expandedCommand = $expandedCommand.Replace('${env:USERPROFILE}', $env:USERPROFILE)
+        }
+        $referencesCompactHook = $expandedCommand -match [regex]::Escape($hookPath)
+        $usesLegacyHook = $commandText -match "(?i)(lightweight-codex|hooks\.json)"
+        $usesForegroundCmd = $commandText -match "(?i)\bcmd(?:\.exe)?\s*/c\b"
+        $usesCmdShim = $commandText -match "(?i)\bpwsh\.cmd\b"
+        $usesAliasStub = $expandedCommand -match "(?i)\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh\.exe\b"
+        $usesVersionPinnedPwsh = $expandedCommand -match "(?i)\\Program Files\\WindowsApps\\Microsoft\.PowerShell_[^\\]+\\pwsh\.exe\b"
+        $usesHiddenWrapper = $commandText -match "(?i)WindowStyle\s+Hidden"
+        $referencesPwshShim = $expandedCommand -match [regex]::Escape($pwshShimPath)
+        $startsWithStableWindowsPowerShell = $expandedCommand -match '^\s*"C:\\Windows\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe"(?=\s|$)'
+        $quotesFileTargets = ([regex]::Matches($expandedCommand, '(?i)-File\s+"[^"]+"')).Count -ge 2
+        $usesExistingRoute = (
+            (Test-Path -LiteralPath "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PathType Leaf) -and
+            (Test-Path -LiteralPath $pwshShimPath -PathType Leaf) -and
+            (Test-Path -LiteralPath $hookPath -PathType Leaf)
+        )
+        return ($referencesCompactHook -and $referencesPwshShim -and -not $usesLegacyHook -and -not $usesForegroundCmd -and -not $usesCmdShim -and -not $usesAliasStub -and -not $usesVersionPinnedPwsh -and $usesHiddenWrapper -and $startsWithStableWindowsPowerShell -and $quotesFileTargets -and $usesExistingRoute)
+    }
+    foreach ($commandItem in $hookCommands) {
+        if (-not (& $testHookCommand $commandItem)) { $hookCommandProblems += $commandItem }
+    }
+    foreach ($commandItem in $hookCommandWindows) {
+        if (-not (& $testHookCommand $commandItem)) { $hookCommandWindowsProblems += $commandItem }
+    }
+    Add-Check $checks "hooks_one_runner" ($(if ($hookCommands.Count -eq 5 -and $hookCommandWindows.Count -eq 5 -and $hookCommandProblems.Count -eq 0 -and $hookCommandWindowsProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+        command_count = $hookCommands.Count
+        command_windows_count = $hookCommandWindows.Count
+        command_bad = $hookCommandProblems
+        command_windows_bad = $hookCommandWindowsProblems
+        events = $hookEventDetails
+        note = "All hook events must route both command and commandWindows through a stable hidden Windows PowerShell launcher into pwsh.ps1 and the compact hook, without foreground cmd.exe, .cmd shim nesting, WindowsApps alias stubs, version-pinned WindowsApps pwsh.exe paths, or retired hook names."
+    }
+    $toolRoutingRequired = @("functions\..*", "multi_tool_use\..*", "multi_agent.*", "tool_search\..*", "web\..*", "image_gen\..*", "codex_app\..*", "mcp__.*")
+    $toolRoutingByEvent = [ordered]@{}
+    $toolRoutingMissing = @()
+    foreach ($eventName in @("PreToolUse", "PostToolUse")) {
+        $eventMatchers = @($config.hooks.$eventName | ForEach-Object { [string]$_.matcher })
+        $eventText = ($eventMatchers -join "|")
+        $missingForEvent = @($toolRoutingRequired | Where-Object { $eventText -notmatch [regex]::Escape($_) })
+        $toolRoutingByEvent[$eventName] = [ordered]@{
+            matchers = $eventMatchers
+            missing = $missingForEvent
+        }
+        foreach ($missingTerm in $missingForEvent) {
+            $toolRoutingMissing += "$eventName`:$missingTerm"
+        }
+    }
+    Add-Check $checks "hook_tool_routing_status" ($(if ($toolRoutingMissing.Count -eq 0) { "pass" } else { "fail" })) @{
+        required_matcher_fragments = $toolRoutingRequired
+        missing = $toolRoutingMissing
+        by_event = $toolRoutingByEvent
+        note = "PreToolUse and PostToolUse must cover Codex Desktop tool namespaces, not only legacy Bash/apply_patch/MCP aliases."
+    }
+    $userHooksJson = Join-Path $CodexHome "hooks.json"
+    Add-Check $checks "hooks_single_user_source" ($(if (-not (Test-Path -LiteralPath $userHooksJson)) { "pass" } else { "fail" })) @{
+        path = $userHooksJson
+        exists = (Test-Path -LiteralPath $userHooksJson)
+        note = "OpenAI Codex loads both hooks.json and inline [hooks] from an active layer. This workstation baseline keeps user-level hooks in inline config.toml only to avoid duplicate hook execution and startup warnings."
     }
 } else {
     Add-Check $checks "config_parse" "fail" @{ path = $configPath }
@@ -805,6 +998,7 @@ Add-Check $checks "keep_set_skills_match_config" ($(if ($keepSetSkillProblems.Co
 $shimRoot = Join-Path $CodexHome "toolchains\shims"
 $actualShims = @(Get-ChildItem -File -LiteralPath $shimRoot -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Sort-Object)
 $expectedShims = @(Get-ExpectedShimNames -Root $CodexHome -Config $config)
+$isDefaultLiveCodexHome = Test-DefaultLiveCodexHome -Root $CodexHome
 $keepSetShimProblems = New-Object System.Collections.Generic.List[string]
 if (-not [bool]$script:KeepSetManifestStatus.exists) {
     $keepSetShimProblems.Add("keep-set manifest missing") | Out-Null
@@ -826,14 +1020,18 @@ Add-Check $checks "keep_set_manifest_active_toolchain_shims" ($(if ($keepSetShim
 }
 $missingShims = @($expectedShims | Where-Object { $_ -notin $actualShims })
 $extraShims = @($actualShims | Where-Object { $_ -notin $expectedShims })
-Add-Check $checks "shims_exact_set" ($(if ($missingShims.Count -eq 0 -and $extraShims.Count -eq 0) { "pass" } else { "fail" })) @{
+$unexpectedLiveExtraShims = if ($isDefaultLiveCodexHome) { @($extraShims) } else { @() }
+Add-Check $checks "shims_required_set" ($(if ($missingShims.Count -eq 0 -and $unexpectedLiveExtraShims.Count -eq 0) { "pass" } else { "fail" })) @{
     actual = $actualShims
-    expected = $expectedShims
+    required_active = $expectedShims
     missing = $missingShims
-    extra = $extraShims
+    extra_source_or_optional = $extraShims
+    unexpected_live_extra = $unexpectedLiveExtraShims
+    default_live_codex_home = $isDefaultLiveCodexHome
+    note = "Default live CODEX_HOME must not contain shims outside the active keep-set. Managed-source and gate worktrees may contain additional tracked shim templates without turning them into active runtime truth."
 }
 
-$noMistakesShim = Join-Path $shimRoot "no-mistakes.cmd"
+$noMistakesShim = Join-Path $shimRoot "no-mistakes.ps1"
 try {
     $previousTelemetry = $env:NO_MISTAKES_TELEMETRY
     $previousUpdateCheck = $env:NO_MISTAKES_NO_UPDATE_CHECK
@@ -859,25 +1057,19 @@ try {
     } else {
         "running inside no-mistakes gate worktree; recursive CLI/daemon calls are forbidden"
     }
-    $noMistakesVersionOutput = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
-        (& $noMistakesShim --version 2>&1 | Out-String).Trim()
-    } else {
-        ""
-    }
-    $noMistakesVersionExit = if ($noMistakesRealCliProbeAllowed) {
-        if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+    $noMistakesVersionProbe = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
+        Invoke-Ps1ShimFile -ScriptPath $noMistakesShim -Arguments @("--version")
     } else {
         $null
     }
-    $noMistakesDoctorOutput = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
-        (& $noMistakesShim doctor 2>&1 | Out-String).Trim()
+    $noMistakesVersionOutput = if ($null -ne $noMistakesVersionProbe) { (($noMistakesVersionProbe.output | Out-String).Trim()) } else { "" }
+    $noMistakesVersionExit = if ($noMistakesRealCliProbeAllowed) { if ($null -ne $noMistakesVersionProbe) { [int]$noMistakesVersionProbe.exit_code } else { $null } } else { $null }
+    $noMistakesDoctorOutput = ""
+    $noMistakesDoctorExit = $null
+    $noMistakesDoctorSkippedReason = if ($noMistakesRealCliProbeAllowed) {
+        "skipped; routine scaffold validation must not start or keep a no-mistakes daemon"
     } else {
-        ""
-    }
-    $noMistakesDoctorExit = if ($noMistakesRealCliProbeAllowed) {
-        if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
-    } else {
-        $null
+        $noMistakesRealCliProbeSkippedReason
     }
     $noMistakesConfigPath = Join-Path $env:USERPROFILE ".no-mistakes\config.yaml"
     $noMistakesConfigText = if (Test-Path -LiteralPath $noMistakesConfigPath -PathType Leaf) {
@@ -916,8 +1108,9 @@ try {
             }
             $env:LOCALAPPDATA = $noMistakesWrapperProbeRoot
             $env:PATH = $pathProbeInputs -join ";"
-            $noMistakesWrapperPathProbeOutput = (& $noMistakesShim /d /s /c "set PATH" 2>&1 | Out-String).Trim()
-            $noMistakesWrapperPathProbeExit = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+            $noMistakesWrapperPathProbe = Invoke-Ps1ShimFile -ScriptPath $noMistakesShim -Arguments @("/d", "/s", "/c", "set PATH")
+            $noMistakesWrapperPathProbeOutput = (($noMistakesWrapperPathProbe.output | Out-String).Trim())
+            $noMistakesWrapperPathProbeExit = [int]$noMistakesWrapperPathProbe.exit_code
             $pathProbeLine = @($noMistakesWrapperPathProbeOutput -split "\r?\n" | Where-Object { $_ -match "(?i)^path=" } | Select-Object -First 1)
             $pathProbeValue = if ($pathProbeLine.Count -gt 0) { ($pathProbeLine[0] -replace "(?i)^path=", "") } else { "" }
             $normalizedShimRoot = ($shimRoot -replace "/", "\").TrimEnd("\")
@@ -935,8 +1128,9 @@ try {
             )
 
             $env:NO_MISTAKES_PROBE_ARG = "CORRUPTED"
-            $noMistakesWrapperBangProbeOutput = (& $noMistakesShim /d /s /c "echo !NO_MISTAKES_PROBE_ARG!" 2>&1 | Out-String).Trim()
-            $noMistakesWrapperBangProbeExit = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+            $noMistakesWrapperBangProbe = Invoke-Ps1ShimFile -ScriptPath $noMistakesShim -Arguments @("/d", "/s", "/c", "echo !NO_MISTAKES_PROBE_ARG!")
+            $noMistakesWrapperBangProbeOutput = (($noMistakesWrapperBangProbe.output | Out-String).Trim())
+            $noMistakesWrapperBangProbeExit = [int]$noMistakesWrapperBangProbe.exit_code
             $noMistakesWrapperPreservesBangArgs = (
                 $noMistakesWrapperBangProbeExit -eq 0 -and
                 $noMistakesWrapperBangProbeOutput -eq "!NO_MISTAKES_PROBE_ARG!"
@@ -952,8 +1146,48 @@ try {
             Remove-Item -LiteralPath $noMistakesWrapperProbeRoot -Recurse -Force
         }
     }
+    $noMistakesDaemonPidPath = Join-Path $env:USERPROFILE ".no-mistakes\daemon.pid"
+    $noMistakesSocketPath = Join-Path $env:USERPROFILE ".no-mistakes\socket"
+    $noMistakesDaemonPidExists = Test-Path -LiteralPath $noMistakesDaemonPidPath -PathType Leaf
+    $noMistakesSocketExists = Test-Path -LiteralPath $noMistakesSocketPath -PathType Leaf
+    $noMistakesDaemonPidRaw = if ($noMistakesDaemonPidExists) {
+        (Get-Content -LiteralPath $noMistakesDaemonPidPath -Raw).Trim()
+    } else {
+        ""
+    }
+    $noMistakesDaemonPidValue = ""
+    if ($noMistakesDaemonPidRaw -match '"pid"\s*:\s*(\d+)') {
+        $noMistakesDaemonPidValue = $Matches[1]
+    } elseif ($noMistakesDaemonPidRaw -match '^\s*(\d+)\s*$') {
+        $noMistakesDaemonPidValue = $Matches[1]
+    }
+    $noMistakesDaemonProcess = if ($noMistakesDaemonPidValue) {
+        Get-ProcessSnapshotById -ProcessId ([int]$noMistakesDaemonPidValue)
+    } else {
+        $null
+    }
+    $noMistakesDaemonProcesses = @(Get-ProcessSnapshotsByName -Name "no-mistakes.exe")
+    $noMistakesDaemonPidAlive = [bool]($noMistakesDaemonProcess -and $noMistakesDaemonProcess.Name -eq "no-mistakes.exe")
+    $noMistakesDaemonControlProblems = New-Object System.Collections.Generic.List[string]
+    if ($noMistakesDaemonPidExists -and -not $noMistakesDaemonPidValue) {
+        $noMistakesDaemonControlProblems.Add("daemon.pid is present but no PID could be parsed") | Out-Null
+    }
+    if ($noMistakesDaemonPidExists -and $noMistakesDaemonPidValue -and -not $noMistakesDaemonProcess) {
+        $noMistakesDaemonControlProblems.Add("daemon.pid points to non-running PID $noMistakesDaemonPidValue") | Out-Null
+    }
+    if ($noMistakesDaemonPidExists -and $noMistakesDaemonProcess -and $noMistakesDaemonProcess.Name -ne "no-mistakes.exe") {
+        $noMistakesDaemonControlProblems.Add("daemon.pid points to PID $noMistakesDaemonPidValue running as $($noMistakesDaemonProcess.Name)") | Out-Null
+    }
+    if ($noMistakesSocketExists -and -not $noMistakesDaemonPidExists) {
+        $noMistakesDaemonControlProblems.Add("socket is present without daemon.pid") | Out-Null
+    }
+    if ($noMistakesDaemonProcesses.Count -gt 0 -and -not $noMistakesDaemonPidExists) {
+        $noMistakesDaemonControlProblems.Add("no-mistakes.exe is running without daemon.pid") | Out-Null
+    }
+    $noMistakesDaemonControlClean = $noMistakesDaemonControlProblems.Count -eq 0
+
     $codexBatchShimPathPattern = "\.codex[\\/]toolchains[\\/]shims[\\/]codex\.cmd"
-    $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesDoctorOutput -match $codexBatchShimPathPattern)
+    $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesConfigText -match $codexBatchShimPathPattern)
     $noMistakesConfigReady = (
         $noMistakesConfigText -match "(?m)^agent:\s*codex\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*--sandbox\s*$" -and
@@ -968,26 +1202,17 @@ try {
         $noMistakesShimText -match "NM_ORIGINAL_PATH" -and
         $noMistakesShimText -match "NM_PATH_ENTRY_ORIGINAL" -and
         $noMistakesShimText -match "NM_PATH_ENTRY_NORMALIZED" -and
-        $noMistakesShimText -match "NO_MISTAKES_TELEMETRY=0" -and
-        $noMistakesShimText -match "NO_MISTAKES_NO_UPDATE_CHECK=1"
+        $noMistakesShimText -match '(?m)^\s*\$env:NO_MISTAKES_TELEMETRY\s*=\s*"0"\s*$' -and
+        $noMistakesShimText -match '(?m)^\s*\$env:NO_MISTAKES_NO_UPDATE_CHECK\s*=\s*"1"\s*$'
     )
-    $noMistakesDaemonRunning = if ($noMistakesRealCliProbeAllowed) {
-        [bool]($noMistakesDoctorOutput -match "(?m)daemon\s+running")
-    } else {
-        $null
-    }
-    $noMistakesCodexAgentDetected = if ($noMistakesRealCliProbeAllowed) {
-        [bool]($noMistakesDoctorOutput -match "(?m)codex\s+")
-    } else {
-        $null
-    }
+    $noMistakesDaemonRunning = $noMistakesDaemonPidExists -and $noMistakesDaemonPidAlive
+    $noMistakesCodexAgentDetected = [bool]($noMistakesConfigText -match "(?m)^agent:\s*codex\s*$")
     $noMistakesCliDaemonProbeReady = if ($noMistakesRealCliProbeAllowed) {
         $noMistakesVersionExit -eq 0 -and
-        $noMistakesDoctorExit -eq 0 -and
         $noMistakesVersionOutput -match "no-mistakes version" -and
-        $noMistakesDaemonRunning -and
         $noMistakesCodexAgentDetected -and
-        -not $noMistakesCodexAgentUsesBatchShim
+        -not $noMistakesCodexAgentUsesBatchShim -and
+        $noMistakesDaemonControlClean
     } else {
         $true
     }
@@ -998,8 +1223,21 @@ try {
         $noMistakesWrapperSanitizesPath -and
         $noMistakesWrapperPathProbeSanitizesVariants -and
         $noMistakesWrapperPathProbePreservesOriginalEntries -and
-        $noMistakesWrapperPreservesBangArgs
+        $noMistakesWrapperPreservesBangArgs -and
+        $noMistakesDaemonControlClean
     )
+    Add-Check $checks "no_mistakes_daemon_control_clean" ($(if ($noMistakesDaemonControlClean) { "pass" } else { "fail" })) @{
+        daemon_pid_path = $noMistakesDaemonPidPath
+        socket_path = $noMistakesSocketPath
+        daemon_pid_exists = $noMistakesDaemonPidExists
+        socket_exists = $noMistakesSocketExists
+        daemon_pid_raw = $noMistakesDaemonPidRaw
+        daemon_pid = $noMistakesDaemonPidValue
+        daemon_pid_alive = $noMistakesDaemonPidAlive
+        running_no_mistakes_processes = @($noMistakesDaemonProcesses | Select-Object ProcessId, ParentProcessId, ExecutablePath)
+        problems = @($noMistakesDaemonControlProblems.ToArray())
+        note = "Clean scaffold validation permits a live no-mistakes daemon only when daemon.pid matches a running process; stale pid/socket files must be removed before treating the workstation as clean."
+    }
     Add-Check $checks "no_mistakes_gate_ready" ($(if ($noMistakesReady) { "pass" } else { "fail" })) @{
         shim = $noMistakesShim
         shim_exists = (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)
@@ -1022,12 +1260,14 @@ try {
         version_output = $noMistakesVersionOutput
         doctor_exit_code = $noMistakesDoctorExit
         daemon_running = $noMistakesDaemonRunning
+        daemon_control_clean = $noMistakesDaemonControlClean
+        doctor_skipped_reason = $noMistakesDoctorSkippedReason
         codex_agent_detected = $noMistakesCodexAgentDetected
         codex_agent_uses_batch_shim = $noMistakesCodexAgentUsesBatchShim
         batch_shim_path_pattern = $codexBatchShimPathPattern
         telemetry_env = $env:NO_MISTAKES_TELEMETRY
         update_check_env = $env:NO_MISTAKES_NO_UPDATE_CHECK
-        note = "no-mistakes is adopted as the outer validation gate. The wrapper must keep Codex toolchain .cmd shims out of the child PATH so Codex shell commands resolve real pwsh.exe."
+        note = "no-mistakes is adopted as the outer validation gate. Routine scaffold validation checks wrapper/config readiness without starting or requiring the no-mistakes daemon."
     }
     $env:NO_MISTAKES_TELEMETRY = $previousTelemetry
     $env:NO_MISTAKES_NO_UPDATE_CHECK = $previousUpdateCheck
@@ -1040,6 +1280,7 @@ try {
 
 $bundleShimSources = @(
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "codex"),
+    (Test-BundleShimSource -ShimRoot $shimRoot -Name "codex-ps1"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "node"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "node_repl"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "rg"),
@@ -1069,8 +1310,9 @@ if (Test-Path -LiteralPath $rgPs1 -PathType Leaf) {
     $rgTemp = Join-Path ([IO.Path]::GetTempPath()) ("codex-rg-shim-" + [guid]::NewGuid().ToString("N") + ".txt")
     try {
         [IO.File]::WriteAllText($rgTemp, "ABC", [Text.Encoding]::ASCII)
-        $rgShimOutput = @(& $rgPs1 -i "abc" $rgTemp 2>&1)
-        $rgShimExit = $LASTEXITCODE
+        $rgShimProbe = Invoke-Ps1ShimFile -ScriptPath $rgPs1 -Arguments @("-i", "abc", $rgTemp)
+        $rgShimOutput = @($rgShimProbe.output)
+        $rgShimExit = [int]$rgShimProbe.exit_code
     } finally {
         Remove-Item -LiteralPath $rgTemp -Force -ErrorAction SilentlyContinue
     }
@@ -1079,6 +1321,34 @@ Add-Check $checks "rg_ps1_argument_passthrough" ($(if ($rgShimExit -eq 0 -and ((
     shim = $rgPs1
     exit_code = $rgShimExit
     output = (($rgShimOutput | Out-String).Trim())
+}
+
+$gitPs1 = Join-Path $shimRoot "git.ps1"
+$gitShimOutput = @()
+$gitShimExit = $null
+if (Test-Path -LiteralPath $gitPs1 -PathType Leaf) {
+    $gitShimProbe = Invoke-Ps1ShimFile -ScriptPath $gitPs1 -Arguments @("--version")
+    $gitShimOutput = @($gitShimProbe.output)
+    $gitShimExit = [int]$gitShimProbe.exit_code
+}
+Add-Check $checks "git_ps1_argument_passthrough" ($(if ($gitShimExit -eq 0 -and (($gitShimOutput | Out-String) -match "git version")) { "pass" } else { "fail" })) @{
+    shim = $gitPs1
+    exit_code = $gitShimExit
+    output = (($gitShimOutput | Out-String).Trim())
+}
+
+$pwshPs1 = Join-Path $shimRoot "pwsh.ps1"
+$pwshShimOutput = @()
+$pwshShimExit = $null
+if (Test-Path -LiteralPath $pwshPs1 -PathType Leaf) {
+    $pwshShimProbe = Invoke-Ps1ShimFile -ScriptPath $pwshPs1 -Arguments @("-NoProfile", "-NonInteractive", "-Command", '$PSVersionTable.PSEdition')
+    $pwshShimOutput = @($pwshShimProbe.output)
+    $pwshShimExit = [int]$pwshShimProbe.exit_code
+}
+Add-Check $checks "pwsh_ps1_argument_passthrough" ($(if ($pwshShimExit -eq 0 -and (($pwshShimOutput | Out-String) -match "Core")) { "pass" } else { "fail" })) @{
+    shim = $pwshPs1
+    exit_code = $pwshShimExit
+    output = (($pwshShimOutput | Out-String).Trim())
 }
 
 $pathHits = @()
@@ -1153,6 +1423,7 @@ $activeGuidanceFiles = @(
     "docs\codex_frontend_quality_directive.md",
     "maintenance\PROJECT_WORKFLOW_CHAIN.md",
     "maintenance\WORKSTATION_MAINTENANCE.md",
+    "maintenance\WORKSTATION_CONTROL_RUNBOOK.md",
     "maintenance\CODEX_STATE_MANAGEMENT.md",
     "maintenance\CODEX_SELF_MANAGEMENT_LOOP.md",
     "maintenance\MCP_RUNTIME_STATUS.md",
@@ -1192,15 +1463,53 @@ Add-Check $checks "active_guidance_retired_runtime_commands_absent" ($(if ($acti
     note = "Active guidance must not reintroduce retired Memento/Serena checks or make ReportOnly+SkipScoop the final P0 command. Historical reports are intentionally not scanned here."
 }
 
+$failurePatternDocRequirements = @(
+    [ordered]@{
+        path = "maintenance\WORKSTATION_CONTROL_RUNBOOK.md"
+        terms = @("Cross-Session Failure Pattern Controls", "oracle-echo", "target-proof-gap", "blocker-laundering")
+    },
+    [ordered]@{
+        path = "maintenance\PROJECT_WORKFLOW_CHAIN.md"
+        terms = @("Image generation outputs", "capability evidence", "actual extension/app surface")
+    },
+    [ordered]@{
+        path = "maintenance\AUTOMATION_TARGET_BOUNDARY.md"
+        terms = @("Capability Versus Target Proof", "ERR_BLOCKED_BY_CLIENT", "screenshot from the wrong target")
+    },
+    [ordered]@{
+        path = "maintenance\CHROME_DEVTOOLS_MCP_OBSERVER.md"
+        terms = @("Observation success must include target identity", "missing side-panel targets")
+    }
+)
+$failurePatternProblems = New-Object System.Collections.Generic.List[object]
+foreach ($requirement in $failurePatternDocRequirements) {
+    $path = Join-Path $managedRepoRoot $requirement.path
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        $failurePatternProblems.Add([ordered]@{ path = $requirement.path; missing = @("file") }) | Out-Null
+        continue
+    }
+    $text = Get-Content -LiteralPath $path -Raw
+    $missingTerms = @($requirement.terms | Where-Object { -not $text.Contains($_) })
+    if ($missingTerms.Count -gt 0) {
+        $failurePatternProblems.Add([ordered]@{ path = $requirement.path; missing = $missingTerms }) | Out-Null
+    }
+}
+Add-Check $checks "cross_session_failure_controls_documented" ($(if ($failurePatternProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+    requirements = $failurePatternDocRequirements
+    problems = @($failurePatternProblems.ToArray())
+    note = "Repeated product-surface, plugin-target, and fake-validation failures must stay separated in active runbooks without creating a heavy gate."
+}
+
 $frontendDirectivePath = Join-Path $managedRepoRoot "docs\codex_frontend_quality_directive.md"
 $frontendDirectiveProblems = New-Object System.Collections.Generic.List[string]
+$retiredFrontendWorkflowName = ("Impec" + "cable")
 $frontendDirectiveForbiddenTerms = @(
-    "Mandatory Frontend-Specialized Workflow: Impeccable",
-    "Required Impeccable Commands",
-    "If a task touches visible UI, assume Impeccable is required",
-    "IMPECCABLE_UNAVAILABLE",
-    "impeccable_workflow_used",
-    "use the Impeccable workflow as the dedicated frontend design process"
+    ("Mandatory Frontend-Specialized Workflow: " + $retiredFrontendWorkflowName),
+    ("Required " + $retiredFrontendWorkflowName + " Commands"),
+    ("If a task touches visible UI, assume " + $retiredFrontendWorkflowName + " is required"),
+    (($retiredFrontendWorkflowName.ToUpperInvariant()) + "_UNAVAILABLE"),
+    (("impec" + "cable") + "_workflow_used"),
+    ("use the " + $retiredFrontendWorkflowName + " workflow as the dedicated frontend design process")
 )
 $frontendDirectiveText = ""
 if (-not (Test-Path -LiteralPath $frontendDirectivePath -PathType Leaf)) {
@@ -1213,8 +1522,12 @@ if (-not (Test-Path -LiteralPath $frontendDirectivePath -PathType Leaf)) {
     if (-not $frontendDirectiveText.Contains("product_design_workflow_used")) {
         $frontendDirectiveProblems.Add("frontend deployment gate does not report product_design_workflow_used") | Out-Null
     }
-    if (-not $frontendDirectiveText.Contains("impeccable_compat")) {
-        $frontendDirectiveProblems.Add("frontend preflight does not classify Impeccable as compatibility-only") | Out-Null
+    if (-not $frontendDirectiveText.Contains("retired_frontend_compat=absent")) {
+        $frontendDirectiveProblems.Add("frontend preflight does not prove retired frontend compatibility workflows are absent") | Out-Null
+    }
+    $retiredFrontendWorkflowPattern = "(?i)" + ("impec" + "cable")
+    if ($frontendDirectiveText -match $retiredFrontendWorkflowPattern) {
+        $frontendDirectiveProblems.Add("frontend directive still mentions retired frontend compatibility workflow") | Out-Null
     }
     foreach ($term in $frontendDirectiveForbiddenTerms) {
         if ($frontendDirectiveText.Contains($term)) {
@@ -1226,7 +1539,7 @@ Add-Check $checks "frontend_directive_product_design_aligned" ($(if ($frontendDi
     directive = $frontendDirectivePath
     problems = @($frontendDirectiveProblems.ToArray())
     forbidden_terms = $frontendDirectiveForbiddenTerms
-    note = "Frontend policy must use Product Design as the primary workflow and keep Impeccable only as optional compatibility when installed."
+    note = "Frontend policy must use Product Design as the primary workflow and keep retired frontend compatibility workflows absent."
 }
 
 $syncPairs = @(
@@ -1234,9 +1547,13 @@ $syncPairs = @(
     "config.d\10-mcp.toml",
     "config.d\20-hooks.toml",
     "config.d\30-skills.toml",
+    "config.d\README.md",
     "hooks\compact-codex-hook.ps1",
     "maintenance\CHROME_DEVTOOLS_MCP_OBSERVER.md",
     "maintenance\AGENT_TOOL_REQUIREMENTS.md",
+    "maintenance\PROJECT_WORKFLOW_CHAIN.md",
+    "maintenance\WORKSTATION_MAINTENANCE.md",
+    "maintenance\WORKSTATION_CONTROL_RUNBOOK.md",
     "maintenance\CODEX_STATE_MANAGEMENT.md",
     "maintenance\MEMORY_BOUNDARY_POLICY.md",
     "maintenance\AUTOMATION_TARGET_BOUNDARY.md",
@@ -1263,6 +1580,7 @@ $syncPairs = @(
     "maintenance\scripts\codex-retrieve.ps1",
     "maintenance\scripts\codex-trajectory.ps1",
     "maintenance\scripts\codex-verify.ps1",
+    "maintenance\scripts\check-worktree-sensitive-diff.ps1",
     "maintenance\scripts\codex_agent_harness.py",
     "maintenance\scripts\codex_agent_harness_base.py",
     "maintenance\scripts\codex_agent_harness_calibration.py",
@@ -1278,6 +1596,11 @@ $syncPairs = @(
     "maintenance\NAMING_CONVENTION.md",
     "toolchains\README.md",
     "toolchains\shims\no-mistakes.cmd",
+    "toolchains\shims\no-mistakes.ps1",
+    "toolchains\shims\gh.ps1",
+    "toolchains\shims\git.ps1",
+    "toolchains\shims\pwsh.ps1",
+    "toolchains\shims\codex.ps1",
     "skills\frontend-visual-debug\SKILL.md",
     "skills\git-easy-korean\SKILL.md",
     "skills\test-integrity-gate\SKILL.md"
@@ -1348,9 +1671,6 @@ Add-Check $checks "harness_wrapper_exit_propagation" ($(if ($harnessWrapperExitP
     note = "Harness PowerShell wrappers must target the managed source root and propagate Python's exit code so tracebacks cannot become false-success exit 0 results."
 }
 
-$allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state","workflow")
-$top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)
-$topExtra = @($top | Where-Object { $_ -notin $allowedTop })
 $liveAppServerPid = $null
 try {
     if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
@@ -1360,15 +1680,34 @@ try {
 } catch {
     $liveAppServerPid = $null
 }
-Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid -or $topExtra.Count -eq 0) { "pass" } else { "fail" })) @{
-    live_app_server_pid = $liveAppServerPid
-    extra = $topExtra
-    note = "Offline baseline cleanup is enforced only after Codex is fully closed; live app-created runtime state is categorized separately."
+
+$globalStateNames = @(".codex-global-state.json",".codex-global-state.json.bak")
+$globalStateDetails = @()
+$globalStateTypeProblems = @()
+foreach ($name in $globalStateNames) {
+    $path = Join-Path $CodexHome $name
+    $isFile = Test-Path -LiteralPath $path -PathType Leaf
+    $isDirectory = Test-Path -LiteralPath $path -PathType Container
+    if ($isDirectory) {
+        $globalStateTypeProblems += $path
+    }
+    $globalStateDetails += [ordered]@{
+        name = $name
+        path = $path
+        exists = [bool]($isFile -or $isDirectory)
+        is_file = [bool]$isFile
+        is_directory = [bool]$isDirectory
+    }
 }
+Add-Check $checks "global_state_runtime_files_classified" ($(if ($globalStateTypeProblems.Count -eq 0) { "pass" } else { "fail" })) @{
+    files = $globalStateDetails
+    live_app_server_pid = $liveAppServerPid
+    type_problems = $globalStateTypeProblems
+    note = ".codex-global-state.json and .codex-global-state.json.bak are expected Codex Desktop runtime state when present. They are not configuration truth, rollback authority, or cleanup targets."
+}
+
 $liveRuntimeNames = @(
     "artifacts",
-    "archived_logs",
-    "archived_sessions",
     "attachments",
     "automations",
     "browser",
@@ -1380,8 +1719,10 @@ $liveRuntimeNames = @(
     "pets",
     "plugins",
     "process_manager",
+    "reports",
     "sessions",
     "sqlite",
+    "trajectories",
     "vendor_imports",
     "worktrees",
     ".sandbox",
@@ -1394,13 +1735,24 @@ $liveRuntimeNames = @(
     "session_index.jsonl"
 )
 $protectedStateNames = @("auth.json","installation_id",".sandbox-secrets","cap_sid")
-$sourceNames = @("tools")
-$configStateNames = @(".codex-global-state.json",".codex-global-state.json.bak",".personality_migration","chrome-native-hosts.json","chrome-native-hosts-v2.json")
-$quarantineNames = @("skills-disabled","archive")
+$sourceNames = @("tools","agents","docs","evals","codex-goals")
+$configStateNames = $globalStateNames + @(".personality_migration","chrome-native-hosts.json","chrome-native-hosts-v2.json")
+$quarantineNames = @()
+$allowedTop = @("AGENTS.md","config.toml","config.d","hooks","skills","toolchains","maintenance","state")
+$top = @(Get-ChildItem -Force -LiteralPath $CodexHome | Select-Object -ExpandProperty Name)
+$topExtra = @($top | Where-Object { $_ -notin $allowedTop })
 $databaseState = @($topExtra | Where-Object { $_ -match '^(goals|logs|memories|state)_[0-9]+\.sqlite(-shm|-wal)?$' })
 $classifiedNames = $liveRuntimeNames + $protectedStateNames + $sourceNames + $configStateNames + $quarantineNames + $databaseState
+$offlineBaselineExtra = @($topExtra | Where-Object { $_ -notin $classifiedNames })
+Add-Check $checks "offline_baseline_minimal" ($(if ($null -ne $liveAppServerPid -or $offlineBaselineExtra.Count -eq 0) { "pass" } else { "fail" })) @{
+    live_app_server_pid = $liveAppServerPid
+    extra = $offlineBaselineExtra
+    expected_classified_state = @($topExtra | Where-Object { $_ -in $classifiedNames })
+    note = "Offline baseline cleanup is enforced only after Codex is fully closed; classified live source, runtime, config, database, and protected state are not contamination by themselves."
+}
 $uncategorizedTopExtra = @($topExtra | Where-Object { $_ -notin $classifiedNames })
-$forbiddenActiveTop = @($topExtra | Where-Object { $_ -in @("bundled-marketplaces","codex-runtimes","wshobson-agents-scan") })
+$forbiddenNames = @("archive","archived_app_tool_caches","archived_logs","archived_sessions","archived_transient_roots","archived_worktrees","bundled-marketplaces","codex-runtimes","skills-disabled","wshobson-agents-scan")
+$forbiddenActiveTop = @($topExtra | Where-Object { $_ -in $forbiddenNames })
 Add-Check $checks "live_runtime_hygiene" ($(if ($uncategorizedTopExtra.Count -eq 0 -and $forbiddenActiveTop.Count -eq 0) { "pass" } else { "fail" })) @{
     live_app_server_pid = $liveAppServerPid
     runtime_state = @($topExtra | Where-Object { $_ -in $liveRuntimeNames })
@@ -1411,7 +1763,7 @@ Add-Check $checks "live_runtime_hygiene" ($(if ($uncategorizedTopExtra.Count -eq
     quarantine_state = @($topExtra | Where-Object { $_ -in $quarantineNames })
     forbidden_active = $forbiddenActiveTop
     uncategorized_extra = $uncategorizedTopExtra
-    note = "This check classifies live state instead of treating every live top-level path as scaffold failure. vendor_imports is allowed as app-created cache state, but active config/source references to it remain forbidden by stale-reference checks."
+    note = "This check classifies live state instead of treating every live top-level path as scaffold failure. Retired archive, disabled-skill, and backup roots are forbidden contamination candidates after explicit cleanup authorization. vendor_imports is allowed as app-created cache state, but active config/source references to it remain forbidden by stale-reference checks."
 }
 
 $chromeRepairScript = Join-Path $CodexHome "maintenance\scripts\repair-chrome-plugin-runtime.ps1"

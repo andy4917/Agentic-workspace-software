@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import stat
 import sys
 import tomllib
@@ -15,10 +14,10 @@ from codex_agent_harness_base import *
 from codex_agent_harness_calibration import check_calibration_policy
 from codex_agent_harness_status import (
     app_runtime_state_writable_status,
+    compact_hook_contract_status,
     generated_output_tracking_status,
     harness_engine_module_status,
     harness_line_count_status,
-    hook_subagent_vowline_status,
     pm_subagent_protocol_status,
     subagent_nickname_policy_status,
     workspace_script_line_count_status,
@@ -80,6 +79,52 @@ def cmd_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def resolve_state_child_path(root: Path, path: str) -> tuple[Path | None, str | None]:
+    candidate = Path(path)
+    if candidate.is_absolute() or candidate.drive or ".." in candidate.parts:
+        return None, "invalid_path"
+    root_resolved = root.resolve()
+    full = (root / candidate).resolve()
+    if full == root_resolved or root_resolved not in full.parents:
+        return None, "outside_root"
+    return full, None
+
+
+def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
+    try:
+        skills_root = (root / "skills").resolve()
+        parent = removed_file.parent.resolve()
+        if parent.parent != skills_root:
+            return None
+        if any(parent.iterdir()):
+            return None
+        parent.rmdir()
+        return rel(parent, root)
+    except OSError:
+        return None
+
+
+def previous_operation_is_managed(previous: dict[str, Any]) -> bool:
+    return bool(previous.get("managed") is True or (previous.get("owner") == OWNER and previous.get("remove_on_uninstall") is True))
+
+
+def managed_template_drift_blockers(root: Path, templates: dict[str, str], previous_ops: dict[str, dict[str, Any]]) -> list[str]:
+    blocked: list[str] = []
+    for path, content in sorted(templates.items()):
+        full = root / path
+        if not full.exists():
+            continue
+        desired_digest = sha256_text(content)
+        current_digest = sha256_file(full)
+        if current_digest == desired_digest:
+            continue
+        previous = previous_ops.get(path, {})
+        previous_digest = previous.get("digest")
+        if previous_operation_is_managed(previous) and previous_digest and current_digest != previous_digest:
+            blocked.append(path)
+    return blocked
+
+
 def cmd_apply(args: argparse.Namespace) -> int:
     root = root_path(args)
     modules = selected_modules(args.profile, args.module)
@@ -90,29 +135,98 @@ def cmd_apply(args: argparse.Namespace) -> int:
         for op in previous_state.get("applied_operations", [])
         if isinstance(op, dict) and op.get("path")
     }
+    blocked_updates = managed_template_drift_blockers(root, templates, previous_ops)
+    if blocked_updates:
+        print(json.dumps({"blocked_updates": blocked_updates, "reason": "managed files changed since the last recorded digest; refusing silent overwrite"}, ensure_ascii=False, sort_keys=True))
+        return 1
+
     operations = []
+    for path, previous in sorted(previous_ops.items()):
+        if path in templates:
+            continue
+        previous_digest = previous.get("digest")
+        full, path_error = resolve_state_child_path(root, path)
+        if path_error == "invalid_path":
+            operations.append(
+                {
+                    "path": path,
+                    "action": "stale_preserved_invalid_path",
+                    "digest": previous_digest,
+                    "owner": OWNER,
+                    "managed": False,
+                    "remove_on_uninstall": False,
+                }
+            )
+            continue
+        if path_error == "outside_root":
+            operations.append(
+                {
+                    "path": path,
+                    "action": "stale_preserved_outside_root",
+                    "digest": previous_digest,
+                    "owner": OWNER,
+                    "managed": False,
+                    "remove_on_uninstall": False,
+                }
+            )
+            continue
+        assert full is not None
+        if not previous_operation_is_managed(previous):
+            continue
+        if not full.is_file():
+            continue
+        if previous_digest and sha256_file(full) == previous_digest:
+            full.unlink()
+            pruned_empty_dir = prune_empty_skill_dir(root, full)
+            operations.append(
+                {
+                    "path": path,
+                    "action": "removed_stale",
+                    "digest": previous_digest,
+                    "owner": OWNER,
+                    "managed": False,
+                    "remove_on_uninstall": False,
+                    "pruned_empty_dir": pruned_empty_dir,
+                }
+            )
+            continue
+        operations.append(
+            {
+                "path": path,
+                "action": "stale_preserved_modified",
+                "digest": previous_digest,
+                "current_digest": sha256_file(full),
+                "owner": OWNER,
+                "managed": True,
+                "remove_on_uninstall": True,
+            }
+        )
     for path, content in sorted(templates.items()):
         full = root / path
         digest = sha256_text(content)
         previous = previous_ops.get(path, {})
-        was_managed = previous.get("managed") is True or previous.get("action") in {"created", "updated", "unchanged"}
-        remove_on_uninstall = bool(previous.get("remove_on_uninstall", was_managed))
+        was_managed = previous_operation_is_managed(previous)
         if full.exists():
             current = sha256_file(full)
             if current == digest:
+                managed_now = bool(was_managed)
+                remove_on_uninstall = bool(previous.get("remove_on_uninstall", was_managed))
                 operations.append(
                     {
                         "path": path,
                         "action": "unchanged",
                         "digest": digest,
                         "owner": OWNER,
-                        "managed": was_managed,
+                        "managed": managed_now,
                         "remove_on_uninstall": remove_on_uninstall,
                     }
                 )
                 continue
             if was_managed:
-                backup = backup_file(full, root)
+                remove_on_uninstall = bool(previous.get("remove_on_uninstall", True))
+                previous_digest = previous.get("digest")
+                if previous_digest and current != previous_digest:
+                    raise RuntimeError(f"managed file drift changed during apply after preflight: {path}")
                 write_text(full, content)
                 operations.append(
                     {
@@ -122,7 +236,6 @@ def cmd_apply(args: argparse.Namespace) -> int:
                         "owner": OWNER,
                         "managed": True,
                         "remove_on_uninstall": remove_on_uninstall,
-                        "backup": str(backup),
                     }
                 )
                 continue
@@ -175,8 +288,11 @@ def load_state(root: Path) -> dict[str, Any]:
 
 def stale_active_references(root: Path) -> list[dict[str, Any]]:
     # Global state can contain prompt history; stale source checks should inspect policy/config surfaces only.
-    active = [root / "config.toml", root / "hooks.json", root / "AGENTS.md", root / "agent.md"]
-    pattern = re.compile(r"(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\cache|plugins\\plugins)", re.I)
+    active = [root / "config.toml", root / "AGENTS.md", root / "agent.md"]
+    config_dir = root / "config.d"
+    if config_dir.exists():
+        active.extend(sorted(config_dir.glob("*.toml")))
+    pattern = re.compile(r"(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|codex-runtimes|plugins\\cache|plugins\\plugins)", re.I)
     matches = []
     for path in active:
         if not path.exists() or path.name in {"auth.json", ".credentials.json"}:
@@ -308,31 +424,68 @@ def check_skill_frontmatter(root: Path) -> dict[str, Any]:
 
 
 def hook_tool_routing_status(root: Path) -> dict[str, Any]:
-    path = root / "hooks.json"
+    fragment_path = root / "config.d" / "20-hooks.toml"
+    if not fragment_path.exists():
+        return {"status": "fail", "error": "config.d/20-hooks.toml missing"}
+    fragment_text = read_text(fragment_path)
+    path = root / "config.toml"
+    source = "managed_root"
     if not path.exists():
-        return {"status": "fail", "error": "hooks.json missing"}
-    try:
-        data = json.loads(read_text(path))
-    except json.JSONDecodeError as exc:
-        return {"status": "fail", "error": str(exc)}
-    hooks = data.get("hooks", {})
-    events = ["PreToolUse", "PermissionRequest", "PostToolUse"]
+        live_path = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex")) / "config.toml"
+        if live_path.exists():
+            path = live_path
+            source = "codex_home"
+    if not path.exists():
+        return {"status": "fail", "error": "config.toml missing", "checked_path": str(path), "source": source}
+    text = read_text(path)
+    lowered = text.lower()
     required_fragments = [
+        "compact-codex-hook.ps1",
+        "Bash",
         "apply_patch",
-        "functions\\..*",
         "mcp__.*",
+        "functions\\..*",
         "multi_tool_use\\..*",
+        "multi_agent.*",
         "tool_search\\..*",
         "web\\..*",
         "image_gen\\..*",
+        "codex_app\\..*",
     ]
+    try:
+        data = tomllib.loads(text)
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "fail", "error": f"config.toml parse failed: {exc}", "checked_path": str(path), "source": source}
+    try:
+        fragment_data = tomllib.loads(fragment_text)
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "fail", "error": f"config.d/20-hooks.toml parse failed: {exc}"}
+    hooks = data.get("hooks", {}) if isinstance(data, dict) else {}
+    fragment_hooks = fragment_data.get("hooks", {}) if isinstance(fragment_data, dict) else {}
     missing: dict[str, list[str]] = {}
-    for event in events:
-        matcher_text = " ".join(str(item.get("matcher", "")) for item in hooks.get(event, []) if isinstance(item, dict))
-        absent = [fragment for fragment in required_fragments if fragment not in matcher_text]
+    event_matchers: dict[str, list[str]] = {}
+    for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]:
+        groups = hooks.get(event, []) if isinstance(hooks, dict) else []
+        if not groups:
+            missing[event] = ["event"]
+            continue
+        if hooks.get(event) != fragment_hooks.get(event):
+            missing[f"{event}_reconcile"] = ["runtime config.toml differs from config.d/20-hooks.toml"]
+        if event not in ["PreToolUse", "PostToolUse"]:
+            continue
+        matchers = [str(group.get("matcher", "")) for group in groups if isinstance(group, dict)]
+        event_matchers[event] = matchers
+        matcher_text = "|".join(matchers)
+        absent = [fragment for fragment in required_fragments if fragment != "compact-codex-hook.ps1" and fragment not in matcher_text]
         if absent:
             missing[event] = absent
-    return {"status": "pass" if not missing else "fail", "missing": missing}
+    if "compact-codex-hook.ps1" not in lowered:
+        missing["runner"] = ["compact-codex-hook.ps1"]
+    legacy_hook = "lightweight" + "-codex"
+    legacy_config = "hooks" + ".json"
+    if legacy_hook in lowered or legacy_config in lowered:
+        missing["legacy"] = ["legacy hook reference"]
+    return {"status": "pass" if not missing else "fail", "missing": missing, "matchers": event_matchers, "checked_path": str(path), "source": source}
 
 
 def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
@@ -343,7 +496,7 @@ def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
         "harness_engine_modules": lambda: harness_engine_module_status(root),
         "app_runtime_state_writable": lambda: app_runtime_state_writable_status(root),
         "generated_outputs_untracked": lambda: generated_output_tracking_status(root),
-        "hook_subagent_vowline": lambda: hook_subagent_vowline_status(root),
+        "compact_hook_contract": lambda: compact_hook_contract_status(root),
         "subagent_nickname_policy": lambda: subagent_nickname_policy_status(root),
         "calibration_policy": lambda: check_calibration_policy(root),
         "hook_tool_routing": lambda: hook_tool_routing_status(root),
@@ -393,8 +546,6 @@ def cmd_repair(args: argparse.Namespace) -> int:
         if full.exists() and sha256_file(full) == sha256_text(desired):
             continue
         if args.apply:
-            if full.exists():
-                backup_file(full, root)
             write_text(full, desired)
             repaired.append(path)
         else:
@@ -410,19 +561,27 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         print("install-state missing; nothing to uninstall")
         return 0
     targets = []
+    refused = []
     for op in state.get("applied_operations", []):
         if op.get("remove_on_uninstall") is True:
-            path = root / op["path"]
+            raw_path = str(op.get("path", ""))
+            path, path_error = resolve_state_child_path(root, raw_path)
+            if path_error:
+                refused.append({"path": raw_path, "reason": path_error})
+                continue
+            assert path is not None
             if path.exists() and sha256_file(path) == op.get("digest"):
-                targets.append(op["path"])
+                targets.append(rel(path, root))
     if install_state_path(root).exists():
         targets.append(rel(install_state_path(root), root))
+    if refused:
+        print(json.dumps({"dry_run": not args.apply, "would_remove": targets, "refused": refused}, ensure_ascii=False, indent=2))
+        return 1
     if not args.apply:
         print(json.dumps({"dry_run": True, "would_remove": targets}, ensure_ascii=False, indent=2))
         return 0
     for item in sorted(targets, reverse=True):
         path = root / item
-        backup_file(path, root)
         path.unlink()
     print(json.dumps({"dry_run": False, "removed": targets}, ensure_ascii=False, indent=2))
     return 0
@@ -464,10 +623,10 @@ def audit_data(root: Path) -> dict[str, Any]:
             ("harness python files stay under line limit", harness_line_count_status(root).get("status") == "pass"),
             ("active app runtime state files are writable", app_runtime_state_writable_status(root).get("status") == "pass"),
             ("mutable generated outputs are not git-tracked", generated_output_tracking_status(root).get("status") == "pass"),
-            ("subagent session start injects Vowline context", hook_subagent_vowline_status(root).get("status") == "pass"),
+            ("compact hook contract is current", compact_hook_contract_status(root).get("status") == "pass"),
             ("subagent nicknames are role-prefixed", subagent_nickname_policy_status(root).get("status") == "pass"),
-            ("hook tool routing covers active namespaces", hook_tool_routing_status(root).get("status") == "pass"),
-            ("hook script parses by existence", (root / "hooks" / "lightweight-codex-hook.ps1").exists()),
+            ("hook tool routing uses compact config fragment", hook_tool_routing_status(root).get("status") == "pass"),
+            ("hook script parses by existence", (root / "hooks" / "compact-codex-hook.ps1").exists()),
             ("core doctor currently passes", doctor.get("status") == "pass"),
             ("latest verification report exists", bool(verification)),
             ("latest verification matches current harness source", verification_fresh),

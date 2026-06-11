@@ -3,19 +3,116 @@ param(
     [ValidateSet('Report', 'Clean')]
     [string]$Mode = 'Report',
     [string]$CodexHome = "$env:USERPROFILE\.codex",
+    [string]$ReportRoot = "",
     [switch]$IncludeTmp,
     [switch]$IncludeVendorImports,
     [switch]$IncludeDotTmp
 )
 
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName Microsoft.VisualBasic
 
 function New-Directory {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) {
         New-Item -ItemType Directory -Force -Path $Path | Out-Null
     }
+}
+
+function Resolve-NormalizedPath {
+    param([string]$Path)
+    return ([IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))).TrimEnd('\')
+}
+
+function Test-PathUnderRoot {
+    param(
+        [string]$Path,
+        [string]$Root
+    )
+    return (
+        $Path.Equals($Root, [System.StringComparison]::OrdinalIgnoreCase) -or
+        $Path.StartsWith("$Root\", [System.StringComparison]::OrdinalIgnoreCase)
+    )
+}
+
+function Test-ReparsePoint {
+    param([System.IO.FileSystemInfo]$Item)
+
+    return (
+        $null -ne $Item -and
+        (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq [IO.FileAttributes]::ReparsePoint)
+    )
+}
+
+function Get-ChildItemsWithoutReparseTraversal {
+    param([string]$Path)
+
+    $items = New-Object System.Collections.Generic.List[System.IO.FileSystemInfo]
+    $pending = New-Object System.Collections.Generic.Stack[string]
+    $pending.Push($Path)
+
+    while ($pending.Count -gt 0) {
+        $current = $pending.Pop()
+        foreach ($child in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction Stop)) {
+            $items.Add($child) | Out-Null
+            if ($child.PSIsContainer -and -not (Test-ReparsePoint -Item $child)) {
+                $pending.Push($child.FullName)
+            }
+        }
+    }
+
+    return @($items.ToArray())
+}
+
+function Get-ReparsePointDescendants {
+    param([string]$Path)
+
+    return @(
+        Get-ChildItemsWithoutReparseTraversal -Path $Path |
+            Where-Object { Test-ReparsePoint -Item $_ } |
+            Select-Object -ExpandProperty FullName
+    )
+}
+
+function Resolve-ExpectedCodexHome {
+    if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        throw "USERPROFILE is required to validate the default CodexHome runtime root"
+    }
+    return (Resolve-Path -LiteralPath (Join-Path $env:USERPROFILE '.codex')).Path.TrimEnd('\')
+}
+
+function Assert-DefaultCodexHome {
+    param([string]$Root)
+
+    $resolvedRoot = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\')
+    $expectedRoot = Resolve-ExpectedCodexHome
+    if (-not $resolvedRoot.Equals($expectedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing direct cleanup for non-default CodexHome: $resolvedRoot"
+    }
+    return $resolvedRoot
+}
+
+function Resolve-ReportRoot {
+    param(
+        [string]$Path,
+        [string]$CodexHome
+    )
+
+    $candidate = Resolve-NormalizedPath -Path $Path
+    $approvedRoots = @(
+        (Resolve-NormalizedPath -Path (Join-Path $CodexHome 'state')),
+        (Resolve-NormalizedPath -Path (Join-Path $CodexHome 'reports'))
+    )
+    if ($env:USERPROFILE) {
+        $approvedRoots += Resolve-NormalizedPath -Path (Join-Path $env:USERPROFILE 'Documents\Codex\reports')
+    }
+
+    foreach ($root in $approvedRoots) {
+        if (Test-PathUnderRoot -Path $candidate -Root $root) {
+            return $candidate
+        }
+    }
+
+    throw "ReportRoot must stay under an approved report root: $candidate"
 }
 
 function Get-DirectorySummary {
@@ -32,6 +129,17 @@ function Get-DirectorySummary {
     }
 
     $item = Get-Item -LiteralPath $Path -Force
+    if (Test-ReparsePoint -Item $item) {
+        return [ordered]@{
+            path = $Path
+            exists = $true
+            item_type = 'reparse_point'
+            item_count = 0
+            bytes = 0
+            last_write_time = $item.LastWriteTime.ToString('o')
+        }
+    }
+
     if (-not $item.PSIsContainer) {
         return [ordered]@{
             path = $Path
@@ -43,7 +151,20 @@ function Get-DirectorySummary {
         }
     }
 
-    $children = @(Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue)
+    try {
+        $children = @(Get-ChildItemsWithoutReparseTraversal -Path $Path)
+    }
+    catch {
+        return [ordered]@{
+            path = $Path
+            exists = $true
+            item_type = 'directory'
+            item_count = $null
+            bytes = $null
+            last_write_time = $item.LastWriteTime.ToString('o')
+            scan_error = $_.Exception.Message
+        }
+    }
     $files = @($children | Where-Object { -not $_.PSIsContainer })
     $sum = ($files | Measure-Object -Property Length -Sum).Sum
     if ($null -eq $sum) { $sum = 0 }
@@ -63,11 +184,14 @@ function Get-ActiveReferenceMatches {
 
     $activeFiles = @(
         (Join-Path $Root 'config.toml'),
-        (Join-Path $Root 'hooks.json'),
         (Join-Path $Root 'AGENTS.md')
     ) | Where-Object { Test-Path -LiteralPath $_ }
+    $configDir = Join-Path $Root 'config.d'
+    if (Test-Path -LiteralPath $configDir -PathType Container) {
+        $activeFiles += @(Get-ChildItem -LiteralPath $configDir -Filter '*.toml' -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+    }
 
-    $pattern = '\\.tmp|\\tmp\\|vendor_imports|bundled-marketplaces|plugins\\plugins|wshobson-agents-scan|cache\\codex_apps_tools|plugins\\cache'
+    $pattern = '\\.tmp|\\tmp\\|vendor_imports|bundled-marketplaces|codex-runtimes|plugins\\plugins|wshobson-agents-scan|cache\\codex_apps_tools|plugins\\cache'
     $matches = @()
     foreach ($file in $activeFiles) {
         $hits = @(Select-String -LiteralPath $file -Pattern $pattern -AllMatches -ErrorAction SilentlyContinue)
@@ -106,41 +230,35 @@ function Get-AppToolCacheSummary {
     return $summaries
 }
 
-function Send-ToRecycleBin {
+function Remove-PathDirectly {
     param([string]$Path)
 
-    $item = Get-Item -LiteralPath $Path -Force
-    if ($item.PSIsContainer) {
-        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory(
-            $Path,
-            [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
-            [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin
-        )
-    } else {
-        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(
-            $Path,
-            [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
-            [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin
-        )
+    $resolvedTarget = (Resolve-Path -LiteralPath $Path).Path
+    $resolvedRoot = Assert-DefaultCodexHome -Root $CodexHome
+    if ($resolvedTarget.Equals($resolvedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to delete CodexHome root: $resolvedTarget"
     }
-}
-
-function Compress-DirectoryIfNeeded {
-    param(
-        [string]$Path,
-        [string]$ArchiveRoot
-    )
-
-    if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    $item = Get-Item -LiteralPath $Path -Force
-    if (-not $item.PSIsContainer) { return $null }
-
-    New-Directory -Path $ArchiveRoot
-    $leaf = Split-Path -Leaf $Path
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $zip = Join-Path $ArchiveRoot "$leaf-$stamp.zip"
-    Compress-Archive -LiteralPath $Path -DestinationPath $zip -Force
-    return $zip
+    if (-not $resolvedTarget.StartsWith("$resolvedRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to delete outside CodexHome: $resolvedTarget"
+    }
+    $targetItem = Get-Item -LiteralPath $resolvedTarget -Force
+    if (Test-ReparsePoint -Item $targetItem) {
+        throw "Refusing to recursively delete reparse point: $resolvedTarget"
+    }
+    $descendantReparsePoints = @()
+    if ($targetItem.PSIsContainer) {
+        try {
+            $descendantReparsePoints = @(Get-ReparsePointDescendants -Path $resolvedTarget)
+        }
+        catch {
+            throw "Refusing to recursively delete path because descendant scan failed: $resolvedTarget; error=$($_.Exception.Message)"
+        }
+    }
+    if ($descendantReparsePoints.Count -gt 0) {
+        $sample = (($descendantReparsePoints | Select-Object -First 10) -join '; ')
+        throw "Refusing to recursively delete path with reparse point descendants: $resolvedTarget; descendants=$sample"
+    }
+    Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
 }
 
 function Stop-GitFsmonitorUnderRoot {
@@ -150,12 +268,37 @@ function Stop-GitFsmonitorUnderRoot {
         return @()
     }
 
+    $sourceItem = Get-Item -LiteralPath $Source -Force
+    if (Test-ReparsePoint -Item $sourceItem) {
+        return @([ordered]@{
+            repo_root = $Source
+            status_exit_code = $null
+            status = 'skipped_reparse_point'
+            stop_exit_code = $null
+            stop = $null
+        })
+    }
+
     $repoRoots = New-Object System.Collections.Generic.List[string]
     if (Test-Path -LiteralPath (Join-Path $Source '.git')) {
         $repoRoots.Add($Source) | Out-Null
     }
 
-    foreach ($gitDir in @(Get-ChildItem -LiteralPath $Source -Recurse -Force -Directory -Filter '.git' -ErrorAction SilentlyContinue)) {
+    $gitDirs = @()
+    try {
+        $gitDirs = @(Get-ChildItemsWithoutReparseTraversal -Path $Source | Where-Object { $_.PSIsContainer -and $_.Name -eq '.git' -and -not (Test-ReparsePoint -Item $_) })
+    }
+    catch {
+        return @([ordered]@{
+            repo_root = $Source
+            status_exit_code = $null
+            status = "scan_failed: $($_.Exception.Message)"
+            stop_exit_code = $null
+            stop = $null
+        })
+    }
+
+    foreach ($gitDir in $gitDirs) {
         $repoRoot = Split-Path -Parent $gitDir.FullName
         if (-not [string]::IsNullOrWhiteSpace($repoRoot) -and $repoRoot -notin $repoRoots) {
             $repoRoots.Add($repoRoot) | Out-Null
@@ -198,8 +341,7 @@ function Stop-GitFsmonitorUnderRoot {
 
 function Remove-TransientRoot {
     param(
-        [string]$Source,
-        [string]$ArchiveRoot
+        [string]$Source
     )
 
     if (-not (Test-Path -LiteralPath $Source)) {
@@ -211,17 +353,50 @@ function Remove-TransientRoot {
         }
     }
 
-    if ($PSCmdlet.ShouldProcess($Source, 'Send transient root to Recycle Bin')) {
-        $fsmonitorStops = @(Stop-GitFsmonitorUnderRoot -Source $Source)
-        $zip = $null
+    $sourceItem = Get-Item -LiteralPath $Source -Force
+    if (Test-ReparsePoint -Item $sourceItem) {
+        return [ordered]@{
+            source = $Source
+            action = 'delete_refused_reparse_point'
+            destination = $null
+            git_fsmonitor = @()
+            error = "Refusing to recursively delete reparse point: $Source"
+        }
+    }
+    $descendantReparsePoints = @()
+    if ($sourceItem.PSIsContainer) {
         try {
-            $zip = Compress-DirectoryIfNeeded -Path $Source -ArchiveRoot $ArchiveRoot
-            Send-ToRecycleBin -Path $Source
+            $descendantReparsePoints = @(Get-ReparsePointDescendants -Path $Source)
+        }
+        catch {
             return [ordered]@{
                 source = $Source
-                action = if ($zip) { 'compressed_then_recycled' } else { 'recycled' }
-                archive = $zip
-                destination = 'Recycle Bin'
+                action = 'delete_refused_reparse_scan_failed'
+                destination = $null
+                git_fsmonitor = @()
+                error = "Refusing to recursively delete path because descendant scan failed: $Source; error=$($_.Exception.Message)"
+            }
+        }
+    }
+    if ($descendantReparsePoints.Count -gt 0) {
+        $sample = (($descendantReparsePoints | Select-Object -First 10) -join '; ')
+        return [ordered]@{
+            source = $Source
+            action = 'delete_refused_reparse_descendant'
+            destination = $null
+            git_fsmonitor = @()
+            error = "Refusing to recursively delete path with reparse point descendants: $Source; descendants=$sample"
+        }
+    }
+
+    if ($PSCmdlet.ShouldProcess($Source, 'Delete transient root')) {
+        $fsmonitorStops = @(Stop-GitFsmonitorUnderRoot -Source $Source)
+        try {
+            Remove-PathDirectly -Path $Source
+            return [ordered]@{
+                source = $Source
+                action = 'deleted'
+                destination = 'deleted'
                 git_fsmonitor = $fsmonitorStops
                 error = $null
             }
@@ -229,9 +404,8 @@ function Remove-TransientRoot {
         catch {
             return [ordered]@{
                 source = $Source
-                action = 'recycle_failed'
-                archive = $zip
-                destination = 'Recycle Bin'
+                action = 'delete_failed'
+                destination = 'deleted'
                 git_fsmonitor = $fsmonitorStops
                 error = $_.Exception.Message
             }
@@ -240,9 +414,8 @@ function Remove-TransientRoot {
 
     return [ordered]@{
         source = $Source
-        action = 'would_recycle'
-        archive = $null
-        destination = 'Recycle Bin'
+        action = 'would_delete'
+        destination = 'deleted'
         git_fsmonitor = @()
         error = $null
     }
@@ -377,18 +550,29 @@ function Get-CommandResolutionSummary {
     if ($ShimRoot) {
         $env:Path = "$ShimRoot;$userPath;$machinePath"
     }
-    foreach ($command in $Commands) {
-        $hits = @(where.exe $command 2>$null)
-        $first = if ($hits.Count -gt 0) { $hits[0] } else { $null }
-        $summaries += [ordered]@{
-            command = $command
-            count = $hits.Count
-            first = $first
-            uses_codex_shim = ($null -ne $first -and $first.StartsWith($ShimRoot, [System.StringComparison]::OrdinalIgnoreCase))
-            all = $hits
+    try {
+        foreach ($command in $Commands) {
+            $hits = @()
+            try {
+                $whereOutput = @(where.exe $command 2>&1)
+                if ($LASTEXITCODE -eq 0) {
+                    $hits = @($whereOutput | Where-Object { $_ -and ($_ -notmatch '^INFO:') })
+                }
+            } catch {
+                $hits = @()
+            }
+            $first = if ($hits.Count -gt 0) { $hits[0] } else { $null }
+            $summaries += [ordered]@{
+                command = $command
+                count = $hits.Count
+                first = $first
+                uses_codex_shim = ([bool]$ShimRoot -and $null -ne $first -and $first.StartsWith($ShimRoot, [System.StringComparison]::OrdinalIgnoreCase))
+                all = $hits
+            }
         }
+    } finally {
+        $env:Path = $oldPath
     }
-    $env:Path = $oldPath
     return $summaries
 }
 
@@ -519,10 +703,17 @@ function Get-ToolchainInventory {
 }
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+if ($Mode -eq 'Clean') {
+    $CodexHome = Assert-DefaultCodexHome -Root $CodexHome
+}
+
 $maintenanceRoot = Join-Path $CodexHome 'maintenance'
-$reportsRoot = Join-Path $maintenanceRoot 'reports'
-$compressedRoot = Join-Path $maintenanceRoot 'compressed'
-New-Directory -Path $reportsRoot
+$resolvedReportRoot = if (-not [string]::IsNullOrWhiteSpace($ReportRoot)) {
+    Resolve-ReportRoot -Path $ReportRoot -CodexHome $CodexHome
+} else {
+    Resolve-ReportRoot -Path (Join-Path $CodexHome 'state') -CodexHome $CodexHome
+}
+New-Directory -Path $resolvedReportRoot
 
 $transientRoots = @()
 if ($IncludeDotTmp -or $Mode -eq 'Report') { $transientRoots += Join-Path $CodexHome '.tmp' }
@@ -537,7 +728,7 @@ foreach ($root in $transientRoots) {
 $moves = @()
 if ($Mode -eq 'Clean') {
     foreach ($root in $transientRoots) {
-        $moves += Remove-TransientRoot -Source $root -ArchiveRoot $compressedRoot
+        $moves += Remove-TransientRoot -Source $root
     }
 }
 
@@ -553,7 +744,8 @@ $report = [ordered]@{
     generated_at = (Get-Date).ToString('o')
     mode = $Mode
     codex_home = $CodexHome
-    cleanup_target = if ($Mode -eq 'Clean') { 'Recycle Bin' } else { $null }
+    cleanup_target = if ($Mode -eq 'Clean') { 'direct delete' } else { $null }
+    report_root = $resolvedReportRoot
     active_reference_matches = $activeReferenceMatches
     runtime_guards = Get-RuntimeGuardSummary -Root $CodexHome
     native_messaging_hosts = Get-NativeMessagingHostSummary -Root $CodexHome
@@ -577,10 +769,10 @@ $report = [ordered]@{
         remove_native_messaging_hosts_that_point_to_runtime_cache = $true
         temp_roots_are_not_blocked_by_sentinel = $true
         plugin_cache_roots_are_blocked_by_sentinel_until_runtime_fix = $false
-        legacy_cleanup_target = 'Recycle Bin'
+        legacy_cleanup_target = 'direct delete'
     }
 }
 
-$reportPath = Join-Path $reportsRoot 'codex-home-maintenance.latest.json'
+$reportPath = Join-Path $resolvedReportRoot 'codex-home-maintenance.latest.json'
 $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8
 $report

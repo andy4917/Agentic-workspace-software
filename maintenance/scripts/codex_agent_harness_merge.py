@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
-import tempfile
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -11,6 +11,63 @@ from typing import Any
 from codex_agent_harness_base import *
 from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, cmd_apply, doctor_data, load_state
 from codex_agent_harness_workflows import cmd_compact_summary, cmd_context, cmd_retrieve, write_verification_report
+
+
+HOOK_MATCHER = "Bash|functions\\..*|multi_tool_use\\..*|multi_agent.*|tool_search\\..*|web\\..*|image_gen\\..*|codex_app\\..*|apply_patch|mcp__.*"
+
+
+def compact_hook_fragment(hidden_hook_command: str) -> str:
+    parts: list[str] = ["# Hook fragment. All enabled events call one deterministic runner.\n"]
+    event_specs = [
+        ("SessionStart", "startup|resume", 30),
+        ("UserPromptSubmit", "", 30),
+        ("PreToolUse", HOOK_MATCHER, 30),
+        ("PostToolUse", HOOK_MATCHER, 30),
+        ("Stop", "", 10),
+    ]
+    for event_name, matcher, timeout in event_specs:
+        parts.append(f"[[hooks.{event_name}]]\n")
+        if matcher:
+            parts.append(f"matcher = {json.dumps(matcher)}\n")
+        parts.append(f"[[hooks.{event_name}.hooks]]\n")
+        parts.append('type = "command"\n')
+        parts.append(f"command = '{hidden_hook_command}'\n")
+        parts.append(f"commandWindows = '{hidden_hook_command}'\n")
+        parts.append(f"timeout = {timeout}\n")
+        parts.append('statusMessage = "compact scaffold hook"\n\n')
+    return "".join(parts)
+
+
+def resolve_pwsh_for_hook() -> Path:
+    alias_stub = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+    program_files = Path(os.environ.get("ProgramFiles") or r"C:\Program Files")
+    candidates: list[Path] = []
+    windows_apps = program_files / "WindowsApps"
+    if windows_apps.exists():
+        candidates.extend(sorted(windows_apps.glob("Microsoft.PowerShell_*__8wekyb3d8bbwe/pwsh.exe"), reverse=True))
+    candidates.append(program_files / "PowerShell" / "7" / "pwsh.exe")
+    candidates.append(alias_stub)
+    for candidate in candidates:
+        if candidate.exists() and candidate != alias_stub:
+            return candidate
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return alias_stub
+
+
+def hidden_compact_hook_command() -> str:
+    hook_runner = Path.home() / ".codex" / "hooks" / "compact-codex-hook.ps1"
+    if os.name == "nt":
+        launcher = Path(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
+        shim = Path.home() / ".codex" / "toolchains" / "shims" / "pwsh.ps1"
+        return (
+            f'"{launcher}" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass '
+            f'-File "{shim}" -NoProfile -NonInteractive -File "{hook_runner}"'
+        )
+    hook_pwsh = resolve_pwsh_for_hook()
+    return f"{hook_pwsh} -NoProfile -NonInteractive -File {hook_runner}"
+
 
 def cmd_merge_config(args: argparse.Namespace) -> int:
     root = root_path(args)
@@ -35,10 +92,8 @@ def cmd_merge_config(args: argparse.Namespace) -> int:
         "additions": [{"table": ".".join(item["table"]), "key": item["key"]} for item in additions],
     }
     if args.apply and addition_text:
-        backup = backup_file(target, root)
         merged_text = apply_toml_additions(read_text(target), additions, target_data)
         write_text(target, merged_text)
-        result["backup"] = str(backup)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
@@ -190,6 +245,8 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "[features]\n"
             "plugins = true\n"
             "hooks = true\n"
+            "goals = true\n"
+            "memories = true\n"
             "multi_agent = true\n"
             "child_agents_md = true\n"
             "tool_search = true\n"
@@ -242,45 +299,21 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "## Falsifier-First\n\nCheck the strongest contradiction before accepting.\n"
             "## Completion Authority\n\nTests, tools, and reports are evidence only.\n",
         )
-        write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n__pycache__/\n*.pyc\n")
+        write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n.codex-global-state.json.bak\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})
-        hook_matcher = "Bash|apply_patch|Edit|Write|functions\\..*|mcp__.*|multi_tool_use\\..*|tool_search\\..*|web\\..*|image_gen\\..*"
-        write_json(
-            root / "hooks.json",
-            {
-                "hooks": {
-                    "PreToolUse": [{"matcher": hook_matcher, "hooks": []}],
-                    "PermissionRequest": [{"matcher": hook_matcher, "hooks": []}],
-                    "PostToolUse": [{"matcher": hook_matcher, "hooks": []}],
-                }
-            },
-        )
+        hidden_hook_command = hidden_compact_hook_command()
+        hook_fragment = compact_hook_fragment(hidden_hook_command)
+        write_text(root / "config.d" / "20-hooks.toml", hook_fragment)
+        write_text(root / "config.toml", read_text(root / "config.toml") + "\n" + hook_fragment)
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
         write_text(
-            root / "hooks" / "lightweight-codex-hook.ps1",
+            root / "hooks" / "compact-codex-hook.ps1",
             "$ErrorActionPreference = 'Stop'\n"
-            "function Test-SubagentSessionStart { return $true }\n"
-            "function Get-VowlineSubagentContext { 'Subagent startup requirement: apply Vowline as a required operating skill. Follow AGENTS.md, AGENT_TOOL_REQUIREMENTS.md, DEFINE -> PLAN -> BUILD -> VERIFY -> REVIEW -> SHIP, Memento and Serena are retired, and SUBAGENT_DELEGATION_CHARTER.md.' }\n"
-            "# required operating skill: vowline\n",
-        )
-        write_json(
-            root / "hooks" / "lightweight-codex-policy.json",
-            {
-                "calibration": {
-                    "source_path": "CALIBRATION.md",
-                    "hook_boundary": "thin reminder only; not completion authority",
-                },
-                "subagents": {
-                    "required_start_skill": "vowline",
-                    "required_start_skill_path": str(Path.home() / ".agents" / "skills" / "vowline" / "SKILL.md"),
-                    "start_hook_behavior": "inject_vowline_context_for_subagent_session_start",
-                }
-            },
-        )
-        write_text(
-            root / "hooks" / "lib" / "lightweight-codex-workflow.ps1",
-            "# selected answers, diagnoses, plans, and patch rationales stay candidate until direct evidence\n"
-            "# incident terms inside read-only inspection output stay L3 compatibility evidence\n",
+            "$ledger = 'hook-ledger.jsonl'\n"
+            "$runner = \"compact-codex-hook\"\n"
+            "# compact hook active\n"
+            "function Ensure-RuntimeCleanupWatch { return $true }\n"
+            "# UserPromptSubmit PreToolUse treat claims as candidate until direct evidence supports them\n",
         )
         write_text(root / "evals" / "calibration-eval.yaml", "checks:\n  - confident_wrong\n  - unsupported_material_claim\n")
         for name in [
@@ -312,8 +345,39 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         if not any(op.get("remove_on_uninstall") is True for op in state.get("applied_operations", [])):
             print("uninstall ownership missing in self-test", file=sys.stderr)
             return 1
+        stale_skill = root / "skills" / "dont-even-try" / "SKILL.md"
+        write_text(stale_skill, "# Retired skill\n")
+        stale_digest = sha256_file(stale_skill)
+        state["applied_operations"].append(
+            {
+                "path": "skills/dont-even-try/SKILL.md",
+                "action": "unchanged",
+                "digest": stale_digest,
+                "owner": OWNER,
+                "managed": True,
+                "remove_on_uninstall": False,
+            }
+        )
+        write_json(install_state_path(root), state)
+        if cmd_apply(ns) != 0:
+            print("stale managed skill cleanup failed in self-test", file=sys.stderr)
+            return 1
+        if stale_skill.exists() or stale_skill.parent.exists():
+            print("retired managed skill residue was not removed in self-test", file=sys.stderr)
+            return 1
+        state_before_drift = read_text(install_state_path(root))
         write_text(root / "agents" / "explorer.toml", "drifted = true\n")
-        cmd_apply(ns)
+        if cmd_apply(ns) != 1:
+            print("managed drift preflight did not block in self-test", file=sys.stderr)
+            return 1
+        if read_text(install_state_path(root)) != state_before_drift:
+            print("managed drift preflight mutated install state in self-test", file=sys.stderr)
+            return 1
+        restored_templates = managed_templates(root, selected_modules("developer", None))
+        write_text(root / "agents" / "explorer.toml", restored_templates["agents/explorer.toml"])
+        if cmd_apply(ns) != 0:
+            print("managed drift restoration failed in self-test", file=sys.stderr)
+            return 1
         write_json(
             root / "reports" / "global-scan.latest.json",
             {

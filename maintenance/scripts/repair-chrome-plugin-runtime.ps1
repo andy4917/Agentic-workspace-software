@@ -139,10 +139,14 @@ function Set-LatestJunction {
 function Get-ExtensionHostProcesses {
     param([string]$CacheRoot)
 
-    @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        [string]$_.Name -ieq "extension-host.exe" -or
-            ([string]$_.CommandLine -match "extension-host" -and [string]$_.CommandLine -match [regex]::Escape($CacheRoot))
-    } | Select-Object ProcessId, ParentProcessId, Name, CommandLine)
+    try {
+        return @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            [string]$_.Name -ieq "extension-host.exe" -or
+                ([string]$_.CommandLine -match "extension-host" -and [string]$_.CommandLine -match [regex]::Escape($CacheRoot))
+        } | Select-Object ProcessId, ParentProcessId, Name, CommandLine)
+    } catch {
+        return @(Get-Process -Name "extension-host" -ErrorAction SilentlyContinue | Select-Object @{Name = "ProcessId"; Expression = { $_.Id } }, @{Name = "ParentProcessId"; Expression = { $null } }, @{Name = "Name"; Expression = { $_.ProcessName + ".exe" } }, @{Name = "CommandLine"; Expression = { "" } })
+    }
 }
 
 function Get-NativeManifestPath {

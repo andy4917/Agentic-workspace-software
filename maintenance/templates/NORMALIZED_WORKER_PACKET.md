@@ -16,6 +16,10 @@ complete | partial | blocked | suspect
 
 yes | no | needs-pm-review | reject
 
+## Authority
+
+This packet is candidate evidence, not completion authority.
+
 ## Claims Accepted For PM Review
 
 1. ...

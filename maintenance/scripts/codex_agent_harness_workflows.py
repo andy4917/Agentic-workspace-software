@@ -5,8 +5,10 @@ import datetime as dt
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -14,12 +16,85 @@ from codex_agent_harness_base import *
 from codex_agent_harness_calibration import check_calibration_policy
 from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, doctor_data, load_trajectory_records, trajectory_records_valid
 from codex_agent_harness_smoke import (
-    check_dont_even_try_integration_smoke,
+    check_adversarial_review_integration_smoke,
     check_goal_integrity_gate_smoke,
     check_hook_policy_smoke,
     check_orchestration_governance_smoke,
     check_worker_watcher_normalized_handoff_smoke,
 )
+
+
+def resolve_codex_bundled_tool(name: str) -> str:
+    bin_root = Path.home() / "AppData" / "Local" / "OpenAI" / "Codex" / "bin"
+    direct = bin_root / f"{name}.exe"
+    if direct.exists():
+        return str(direct)
+    if bin_root.exists():
+        matches = sorted(
+            (candidate / f"{name}.exe" for candidate in bin_root.iterdir() if candidate.is_dir()),
+            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+            reverse=True,
+        )
+        for match in matches:
+            if match.exists():
+                return str(match)
+    return ""
+
+
+def resolve_powershell_exe(codex_home: Path) -> str:
+    shim_root = codex_home / "toolchains" / "shims"
+    alias_stub = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+    program_files = Path(os.environ.get("ProgramFiles") or r"C:\Program Files")
+    candidates: list[Path] = []
+    windows_apps = program_files / "WindowsApps"
+    if windows_apps.exists():
+        candidates.extend(sorted(windows_apps.glob("Microsoft.PowerShell_*__8wekyb3d8bbwe/pwsh.exe"), reverse=True))
+    candidates.append(program_files / "PowerShell" / "7" / "pwsh.exe")
+    which_pwsh = shutil.which("pwsh.exe")
+    if which_pwsh:
+        candidates.append(Path(which_pwsh))
+    candidates.append(alias_stub)
+    candidates.append(Path("powershell.exe"))
+    alias_stub_text = str(alias_stub).lower()
+    for candidate in candidates:
+        if not str(candidate):
+            continue
+        if candidate.name == "powershell.exe":
+            return str(candidate)
+        candidate_text = str(candidate).lower()
+        if candidate.exists() and candidate_text != alias_stub_text and not candidate_text.startswith(str(shim_root).lower()):
+            return str(candidate)
+    if alias_stub.exists():
+        return str(alias_stub)
+    return "powershell.exe"
+
+
+def normalize_p0_report_only_check(check: dict[str, Any]) -> dict[str, Any]:
+    if check.get("status") == "pass":
+        return check
+    output = str(check.get("stdout") or check.get("stdout_preview") or "").strip()
+    try:
+        result = json.loads(output)
+    except json.JSONDecodeError:
+        return check
+    summary_present = isinstance(result.get("summary"), dict)
+    summary = result.get("summary") if summary_present else {}
+    not_run_count = int(summary.get("not_run_count") or 0)
+    evidence_gap_count = int(summary.get("evidence_gap_count") or 0)
+    not_run_checks = summary.get("not_run_checks") or []
+    if (
+        result.get("status") == "report_only_with_evidence_gaps"
+        and summary_present
+        and int(result.get("fail_count") or 0) == 0
+        and not_run_count == 0
+        and evidence_gap_count == 0
+        and not not_run_checks
+    ):
+        check["status"] = "pass"
+        check["exit_code"] = 0
+        check["report_only_status"] = result.get("status")
+        check["report_only_note"] = "ReportOnly is accepted here only when it has no failures, no evidence gaps, and no not-run checks; full P0 remains the final clean evidence."
+    return check
 
 
 def load_eval_definition(root: Path, eval_id: str) -> tuple[dict[str, Any], list[str]]:
@@ -41,6 +116,69 @@ def load_eval_definition(root: Path, eval_id: str) -> tuple[dict[str, Any], list
     if not isinstance(data.get("grader"), str) or not data.get("grader"):
         errors.append("grader must be a non-empty string")
     return data, errors
+
+
+def compact_hook_route_scan(root: Path) -> dict[str, Any]:
+    targets = ["config.d/20-hooks.toml", "hooks/compact-codex-hook.ps1"]
+    missing = []
+    hits = []
+    failures = []
+    for relative in targets:
+        path = root / relative
+        if not path.exists():
+            missing.append(relative)
+    if not missing:
+        try:
+            config = tomllib.loads(read_text(root / "config.d" / "20-hooks.toml"))
+        except tomllib.TOMLDecodeError as exc:
+            config = {}
+            failures.append(f"config.d/20-hooks.toml: invalid TOML: {exc}")
+        expected_events = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]
+        hook_section = config.get("hooks", {}) if isinstance(config, dict) else {}
+        for event in expected_events:
+            event_entries = hook_section.get(event, [])
+            if not isinstance(event_entries, list) or not event_entries:
+                failures.append(f"{event}: missing hook event table")
+                continue
+            event_has_valid_route = False
+            for entry_index, event_entry in enumerate(event_entries):
+                hook_entries = event_entry.get("hooks", []) if isinstance(event_entry, dict) else []
+                if not isinstance(hook_entries, list) or not hook_entries:
+                    failures.append(f"{event}[{entry_index}]: missing command hook")
+                    continue
+                for hook_index, hook_entry in enumerate(hook_entries):
+                    if not isinstance(hook_entry, dict):
+                        failures.append(f"{event}[{entry_index}].hooks[{hook_index}]: invalid command hook")
+                        continue
+                    command = str(hook_entry.get("command", ""))
+                    command_windows = str(hook_entry.get("commandWindows", ""))
+                    route_text = f"{command}\n{command_windows}"
+                    route_terms = ["powershell.exe", "WindowStyle Hidden", "pwsh.ps1", "compact-codex-hook.ps1"]
+                    route_ok = (
+                        bool(command)
+                        and bool(command_windows)
+                        and all(term in command and term in command_windows for term in route_terms)
+                        and "pwsh.cmd" not in route_text.lower()
+                        and not re.search(r"(?i)\bcmd(?:\.exe)?\s*/c\b", route_text)
+                        and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in route_text.lower()
+                        and "\\program files\\windowsapps\\microsoft.powershell_" not in route_text.lower()
+                    )
+                    if route_ok:
+                        event_has_valid_route = True
+                        hits.append(f"{event}[{entry_index}].hooks[{hook_index}]: hidden compact runner route")
+                    else:
+                        failures.append(f"{event}[{entry_index}].hooks[{hook_index}]: command/commandWindows route mismatch")
+            if not event_has_valid_route:
+                failures.append(f"{event}: no valid commandWindows compact hook route")
+    ok = bool(hits) and not missing and not failures
+    return {
+        "status": "pass" if ok else "fail",
+        "exit_code": 0 if ok else 1,
+        "stdout_preview": "\n".join(hits[:5]),
+        "stderr_preview": "; ".join([*(f"missing {item}" for item in missing), *failures[:10]]),
+        "duration_seconds": 0,
+    }
+
 
 def cmd_context(args: argparse.Namespace) -> int:
     root = root_path(args)
@@ -77,10 +215,10 @@ def cmd_context(args: argparse.Namespace) -> int:
 def cmd_verify(args: argparse.Namespace) -> int:
     root = root_path(args)
     codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser().resolve()
-    powershell = str(codex_home / "toolchains" / "shims" / "pwsh.cmd")
-    if not Path(powershell).exists():
-        powershell = "powershell.exe"
-    codex_shim = codex_home / "toolchains" / "shims" / "codex.cmd"
+    powershell = resolve_powershell_exe(codex_home)
+    shim_root = codex_home / "toolchains" / "shims"
+    codex_ps1 = shim_root / "codex.ps1"
+    codex_exe = resolve_codex_bundled_tool("codex")
     validate_script = codex_home / "maintenance" / "scripts" / "validate-codex-scaffold.ps1"
     p0_script = codex_home / "maintenance" / "scripts" / "codex-p0-integrity-loop.ps1"
     checks = []
@@ -93,15 +231,19 @@ def cmd_verify(args: argparse.Namespace) -> int:
     else:
         checks.append({"name": "scaffold_validation", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {validate_script}", "duration_seconds": 0})
     if p0_script.exists():
-        checks.append({"name": "p0_integrity_report_only", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(p0_script), "-ReportOnly", "-Json", "-ProcessTimeoutSeconds", "180"], root, timeout=300)})
+        p0_check = run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(p0_script), "-ReportOnly", "-Json", "-ProcessTimeoutSeconds", "180"], root, timeout=300, include_stdout=True)
+        checks.append({"name": "p0_integrity_report_only", **normalize_p0_report_only_check(p0_check)})
     else:
         checks.append({"name": "p0_integrity_report_only", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {p0_script}", "duration_seconds": 0})
-    if codex_shim.exists():
-        checks.append({"name": "codex_mcp_list", **run_command(["cmd.exe", "/c", str(codex_shim), "mcp", "list", "--json"], root, timeout=120)})
-        checks.append({"name": "codex_doctor", **run_command(["cmd.exe", "/c", str(codex_shim), "doctor", "--json"], root, timeout=180)})
+    if codex_exe:
+        checks.append({"name": "codex_mcp_list", **run_command([codex_exe, "mcp", "list", "--json"], root, timeout=120)})
+        checks.append({"name": "codex_doctor", **run_command([codex_exe, "doctor", "--json"], root, timeout=180)})
+    elif codex_ps1.exists():
+        checks.append({"name": "codex_mcp_list", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(codex_ps1), "mcp", "list", "--json"], root, timeout=120)})
+        checks.append({"name": "codex_doctor", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(codex_ps1), "doctor", "--json"], root, timeout=180)})
     else:
-        checks.append({"name": "codex_mcp_list", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {codex_shim}", "duration_seconds": 0})
-        checks.append({"name": "codex_doctor", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {codex_shim}", "duration_seconds": 0})
+        checks.append({"name": "codex_mcp_list", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "missing bundled codex.exe and codex.ps1", "duration_seconds": 0})
+        checks.append({"name": "codex_doctor", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "missing bundled codex.exe and codex.ps1", "duration_seconds": 0})
 
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
@@ -139,7 +281,8 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
     )
     checks.append({"name": "json_eval_definitions", **run_command([sys.executable, "-c", "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('evals').glob('*.json')]"], root)})
     checks.append({"name": "agent_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('agents').glob('*.toml')]"], root)})
-    checks.append({"name": "hook_policy_json", **run_command([sys.executable, "-m", "json.tool", "hooks/lightweight-codex-policy.json"], root)})
+    checks.append({"name": "hook_config_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; tomllib.loads(pathlib.Path('config.d/20-hooks.toml').read_text(encoding='utf-8'))"], root)})
+    checks.append({"name": "compact_hook_route_scan", **compact_hook_route_scan(root)})
     calibration = check_calibration_policy(root, require_config=False)
     checks.append(
         {
@@ -188,7 +331,7 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
         )
     else:
         checks.append({"name": "powershell_parser", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "powershell.exe not found", "duration_seconds": 0})
-    checks.append({"name": "generated_outputs_untracked", **run_command(["git", "ls-files", "--", "reports/*.latest.json", "reports/*.latest.md", "maintenance/reports/*.latest.json", "maintenance/reports/*.latest.md", "reports/*results.jsonl", "trajectories/runs.jsonl", "artifacts/tool-results/*.txt"], root, include_stdout=True)})
+    checks.append({"name": "generated_outputs_untracked", **run_command(["git", "ls-files", "--", "reports/*.latest.json", "reports/*.latest.md", "reports/*results.jsonl", "trajectories/runs.jsonl", "artifacts/tool-results/*.txt"], root, include_stdout=True)})
     if checks[-1].get("status") == "pass" and str(checks[-1].get("stdout", "")).strip():
         checks[-1]["status"] = "fail"
         checks[-1]["stderr_preview"] = "mutable generated output is tracked"
@@ -237,8 +380,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
             passed = check_orchestration_governance_smoke(root).get("status") == "pass"
         elif eval_id == "hook-policy-smoke":
             passed = check_hook_policy_smoke(root).get("status") == "pass"
-        elif eval_id == "dont-even-try-integration-smoke":
-            passed = check_dont_even_try_integration_smoke(root).get("status") == "pass"
+        elif eval_id == "adversarial-review-integration-smoke":
+            passed = check_adversarial_review_integration_smoke(root).get("status") == "pass"
         elif eval_id == "worker-watcher-normalized-handoff-smoke":
             passed = check_worker_watcher_normalized_handoff_smoke(root).get("status") == "pass"
         elif eval_id == "goal-integrity-gate-smoke":
@@ -527,8 +670,6 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         "--glob",
         "!node_repl/**",
         "--glob",
-        "!maintenance/reports/**",
-        "--glob",
         "!maintenance/scripts/codex_agent_harness.py",
         "--glob",
         "!**/node_modules/**",
@@ -575,7 +716,15 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         matches.append({"pattern": "<all>", "path": "<not-run>", "line": "", "error": "rg not available"})
 
     scan_errors = [match for match in matches if match["path"] in {"<scan-error>", "<not-run>"}]
-    active_roots = [str(root / "config.toml"), str(root / ".codex-global-state.json"), str(root / "hooks.json"), str(root / "AGENTS.md")]
+    active_roots = [
+        str(root / "config.toml"),
+        str(root / "config.d" / "20-hooks.toml"),
+        str(root / "AGENTS.md"),
+    ]
+    runtime_only_roots = [
+        str(root / ".codex-global-state.json"),
+        str(root / ".codex-global-state.json.bak"),
+    ]
     active_hits = []
     for match in matches:
         if match["path"] in {"<scan-error>", "<not-run>"}:
@@ -589,6 +738,7 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
     report = {
         "generated_at": utc_now(),
         "scan_roots": [str(path) for path in scan_roots],
+        "runtime_only_roots": runtime_only_roots,
         "desktop_excluded": True,
         "content_redacted": True,
         "harness_digest": harness_source_digest(root),
@@ -614,6 +764,8 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
         "## Scan Roots",
     ]
     lines.extend(f"- {path}" for path in report["scan_roots"])
+    lines.extend(["", "## Runtime-Only Roots"])
+    lines.extend(f"- {path}" for path in runtime_only_roots)
     lines.extend(["", "## Active Hits"])
     lines.extend(f"- {hit['path']}:{hit['line']} pattern={hit['pattern']}" for hit in active_hits or [])
     if not active_hits:

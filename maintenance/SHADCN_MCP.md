@@ -14,7 +14,7 @@ This is the managed record for the global shadcn/ui MCP server.
 - `default_args`: `-y shadcn@latest mcp`
 - `default_status`: enabled in global Codex config; active tool exposure still
   depends on app/session reload and tool injection
-- `rollback`: `codex mcp remove shadcn`
+- `rollback`: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\toolchains\shims\codex.ps1 mcp remove shadcn`
 
 ## Use Policy
 
@@ -45,6 +45,9 @@ Last checked on 2026-05-15:
 - `codex mcp list` through
   `%USERPROFILE%\.codex\toolchains\shims\codex.cmd` succeeded after the change
   and showed `shadcn` with `Status enabled`.
+  Current PowerShell-managed checks should use `codex.ps1` or the bundled
+  `codex.exe`; `codex.cmd` remains historical evidence and a cmd.exe
+  compatibility route.
 - `codex mcp get shadcn --json` returned `enabled=true`.
 - `shadcn@latest mcp --help` succeeded through the `.codex` `npx.cmd` wrapper.
 - CLI fallback `shadcn@latest docs button` succeeded and returned the button

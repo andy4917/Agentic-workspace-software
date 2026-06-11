@@ -41,7 +41,7 @@ For this workstation repository, use:
 
 - `maintenance\CODEX_SELF_MANAGEMENT_LOOP.md` for Codex operations intent;
 - `maintenance\CODEX_STATE_MANAGEMENT.md` for live/runtime state;
-- `maintenance\reports\*.md` for evidence packets;
+- `reports\*.latest.md` for current local evidence packets;
 - `maintenance\templates\specops\*.md` as product-repo templates.
 
 ## Skill Mapping
@@ -90,4 +90,3 @@ target repository.
 Scheduled SpecOps audits should start as report-only. They may write drift
 reports and update open loops, but should not push, publish, deploy, or broaden
 permissions without explicit user intent.
-
