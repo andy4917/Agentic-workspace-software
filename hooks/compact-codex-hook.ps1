@@ -101,7 +101,7 @@ function Get-NestedToolCalls {
             if ($null -eq $container -or -not ($container.PSObject.Properties.Name -contains $listName)) { continue }
             foreach ($call in @($container.$listName)) {
                 $recipient = ""
-                foreach ($toolProperty in @("recipient_name", "tool_name", "name")) {
+                foreach ($toolProperty in @("recipient_name", "tool_name", "toolName", "name")) {
                     if ($call.PSObject.Properties.Name -contains $toolProperty) {
                         $recipient = [string]$call.$toolProperty
                         break
@@ -160,10 +160,15 @@ function Get-StartProcessNestedCommandText {
     $target = ""
     $arguments = New-Object System.Collections.Generic.List[string]
     $expectFilePath = $false
+    $expectStartProcessParameterValue = $false
     $collectArgumentList = $false
     foreach ($segmentValue in $Segment) {
         $value = [string]$segmentValue
         if ([string]::IsNullOrWhiteSpace($value) -or $value -eq ",") { continue }
+        if ($expectStartProcessParameterValue) {
+            $expectStartProcessParameterValue = $false
+            continue
+        }
         if ($expectFilePath) {
             $target = $value
             $expectFilePath = $false
@@ -178,12 +183,25 @@ function Get-StartProcessNestedCommandText {
             $collectArgumentList = $true
             continue
         }
+        if ($value -match '(?i)^-(WorkingDirectory|WindowStyle|Verb|Credential|RedirectStandardInput|RedirectStandardOutput|RedirectStandardError|Environment)$') {
+            $expectStartProcessParameterValue = $true
+            $collectArgumentList = $false
+            continue
+        }
+        if ($value -match '(?i)^-(NoNewWindow|PassThru|Wait|LoadUserProfile|UseNewEnvironment)$') {
+            $collectArgumentList = $false
+            continue
+        }
         if ($collectArgumentList) {
             $arguments.Add($value) | Out-Null
             continue
         }
         if (-not $target -and $value -notmatch '^-') {
             $target = $value
+            continue
+        }
+        if ($target -and $value -notmatch '^-') {
+            $arguments.Add($value) | Out-Null
         }
     }
     if ([string]::IsNullOrWhiteSpace($target)) { return "" }
@@ -322,7 +340,11 @@ function Test-HighRiskDestructiveCommand {
         if ($parsedItems.Count -eq 0) {
         return (
             ($CommandText -match '(?i)\bgit\s+reset\s+--hard\b') -or
-            ($CommandText -match '(?i)\bgit\s+clean\s+-[^\r\n]*[fd]') -or
+            (
+                ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd)?\b[^\r\n]*\bclean\b') -and
+                ($CommandText -notmatch '(?i)(^|[\s"''`])(--dry-run|-n[A-Za-z]*)(?=$|[\s"''`])') -and
+                ($CommandText -match '(?i)(^|[\s"''`])(--force(?:=\S*)?|-[A-Za-z]*f[A-Za-z]*)(?=$|[\s"''`])')
+            ) -or
             ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd)?\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|--delete(?:=|$)|--mirror(?:=|$)|--prune(?:=|$)|-[A-Za-z]*f[A-Za-z]*|(^|[\s"''`])-d(?=$|[\s"''`])|(^|[\s"''`])\+[^"''`\s]+|(^|[\s"''`]):[^"''`\s]+)') -or
             (
                 ($CommandText -match '(?i)\b(Remove-Item|ri|rm|rd|rmdir|del)\b') -and
@@ -376,6 +398,19 @@ function Test-HighRiskDestructiveCommand {
                 return $true
             }
             if ($gitSubcommand -match '(?i)^clean$') {
+                $gitCleanIsDryRun = $false
+                foreach ($gitRemainingPart in $gitRemaining) {
+                    if (
+                        ([string]$gitRemainingPart -match '(?i)^--dry-run(?:=|$)') -or
+                        ([string]$gitRemainingPart -match '(?i)^-[A-Za-z]*n[A-Za-z]*')
+                    ) {
+                        $gitCleanIsDryRun = $true
+                        break
+                    }
+                }
+                if ($gitCleanIsDryRun) {
+                    continue
+                }
                 foreach ($gitRemainingPart in $gitRemaining) {
                     if (
                         ([string]$gitRemainingPart -match '(?i)^--force(?:=|$)') -or
@@ -464,9 +499,9 @@ function Get-PreToolUseDecision {
     $safeReferenceSearchPattern = '(?i)((^|[\r\n])\s*(rg|grep)\b(?:\s+-[^\r\n\s]+)*\s+["'']?(auth\.json|\.env|credentials?\.json|api[-_]?key|credential|password|passwd|secret|token|cookie|session)["'']?\s+["'']?(docs?|maintenance|AGENTS\.md|README(\.md)?)["'']?\s*$|\bSelect-String\b[^\r\n]*-Pattern\s+["'']?(auth\.json|\.env|credentials?\.json|api[-_]?key|credential|password|passwd|secret|token|cookie|session)["'']?[^\r\n]*(?:-Path|-LiteralPath)\s+["'']?(docs?|maintenance|AGENTS\.md|README(\.md)?)["'']?\s*$)'
     $selectStringExplicitPathPattern = '(?i)\bSelect-String\b[^\r\n]*(?:-Path|-LiteralPath)\s+["'']?[^"''\s]*(\.env(\.[\w.-]+)?|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
     $selectStringPositionalPathPattern = '(?i)\bSelect-String\b(?:[^\r\n]*\s-Pattern\s+\S+|\s+(?!-)\S+)\s+["'']?[^"''\s]*(\.env(\.[\w.-]+)?|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
-    $fileReadMcpPattern = '(?i)^mcp__(?:[^_\s]*(?:fs|file|filesystem)[^_\s]*__|.*__(?:read[_-]?file|get[_-]?file|download[_-]?file|read[_-]?path|cat[_-]?file)\b)'
+    $fileReadMcpPattern = '(?i)^mcp__(?:[^_\s]*(?:fs|file|filesystem)[^_\s]*__|.*(?:__|[._-])(?:read|get|fetch|download|cat)[_-]?file\b|.*(?:__|[._-])read[_-]?path\b)'
     $broadTargetPattern = '(?i)([A-Z]:[\\/]|%USERPROFILE%|\$env:USERPROFILE|\$\{env:USERPROFILE\}|\$HOME|\$\{HOME\}|\$PWD|\$\{PWD\}|(^|[\s"''`])(HOME|PWD)(?=$|[\s"''`])|~|\*|(^|[\s"''`])(\.|\.\.|[\\/])([\\/\s"''`]|$))'
-    $recursiveFlagPattern = '(?i)(^|[\s"''`])(-Recurse(?::\s*\$?true)?|-r(?::\s*\$?true)?|-rf|-fr|/s)(?=$|[\s"''`])'
+    $recursiveFlagPattern = '(?i)(^|[\s"''`])(-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?(?::\s*\$?true)?|-rf|-fr|/s)(?=$|[\s"''`])'
     $isFileReadMcp = $toolText -match $fileReadMcpPattern
     if ($isFileReadMcp -and $combined -match $sensitivePathPattern) {
         return [ordered]@{ decision = "deny"; reason = "direct credential or secret-file reads require explicit user approval and a narrower non-secret metadata route" }
@@ -555,7 +590,7 @@ if ([string]::IsNullOrWhiteSpace($stdinRaw)) {
 
 $payload = Read-HookPayload -Raw $stdinRaw
 $event = if ($payload.hook_event_name) { [string]$payload.hook_event_name } elseif ($payload.hookEventName) { [string]$payload.hookEventName } else { "unknown" }
-$tool = if ($payload.tool_name) { [string]$payload.tool_name } else { $null }
+$tool = if ($payload.tool_name) { [string]$payload.tool_name } elseif ($payload.toolName) { [string]$payload.toolName } else { $null }
 $codexHome = Get-CodexHome
 $stateDir = Join-Path $codexHome "state"
 $ledger = Join-Path $stateDir "hook-ledger.jsonl"

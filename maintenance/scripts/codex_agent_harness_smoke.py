@@ -119,7 +119,7 @@ def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, An
     env = os.environ.copy()
     env["CODEX_HOOK_SMOKE"] = "1"
     env["CODEX_HOME"] = str(root)
-    event_name = str(payload.get("hook_event_name") or "")
+    event_name = str(payload.get("hook_event_name") or payload.get("hookEventName") or "")
     try:
         argv = configured_hook_argv_for_smoke(root, event_name)
         completed = subprocess.run(
@@ -148,6 +148,13 @@ def run_hook_sample(root: Path, command: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
         {"hook_event_name": "PreToolUse", "tool_name": "functions.shell_command", "tool_input": {"command": command}},
+    )
+
+
+def run_camel_hook_sample(root: Path, command: str) -> dict[str, Any]:
+    return run_compact_hook_sample(
+        root,
+        {"hookEventName": "PreToolUse", "toolName": "functions.shell_command", "toolInput": {"command": command}},
     )
 
 
@@ -361,6 +368,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_clean_long_force_stdout = git_clean_long_force_probe.get("stdout_preview", "").lower()
         git_scoped_clean_long_force_probe = run_hook_sample(root, "git -C . clean --force -d")
         git_scoped_clean_long_force_stdout = git_scoped_clean_long_force_probe.get("stdout_preview", "").lower()
+        git_clean_dry_run_probe = run_hook_sample(root, "git clean -nfd")
+        git_clean_dry_run_stdout = git_clean_dry_run_probe.get("stdout_preview", "").lower()
+        git_clean_long_dry_run_probe = run_hook_sample(root, "git clean --dry-run -fd")
+        git_clean_long_dry_run_stdout = git_clean_long_dry_run_probe.get("stdout_preview", "").lower()
         git_force_push_probe = run_hook_sample(root, "git push origin HEAD --force")
         git_force_push_stdout = git_force_push_probe.get("stdout_preview", "").lower()
         git_force_with_lease_push_probe = run_hook_sample(root, "git push --force-with-lease origin HEAD")
@@ -383,6 +394,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         start_process_git_force_stdout = start_process_git_force_probe.get("stdout_preview", "").lower()
         start_process_git_arg_force_probe = run_hook_sample(root, "Start-Process git -Arg 'push','origin','--force'")
         start_process_git_arg_force_stdout = start_process_git_arg_force_probe.get("stdout_preview", "").lower()
+        start_process_git_positional_force_probe = run_hook_sample(root, "Start-Process git 'push origin --force'")
+        start_process_git_positional_force_stdout = start_process_git_positional_force_probe.get("stdout_preview", "").lower()
+        start_process_git_windowstyle_force_probe = run_hook_sample(root, "Start-Process git -WindowStyle Hidden 'push origin --force'")
+        start_process_git_windowstyle_force_stdout = start_process_git_windowstyle_force_probe.get("stdout_preview", "").lower()
         start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
         start_process_destructive_stdout = start_process_destructive_probe.get("stdout_preview", "").lower()
         git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
@@ -404,6 +419,15 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and git_scoped_clean_long_force_probe.get("status") == "pass"
             and "deny" in git_scoped_clean_long_force_stdout,
             "PreToolUse should deny git clean --force forms, including when git -C is used before the clean subcommand.",
+        )
+        add_check(
+            "pretooluse_allows_git_clean_dry_run",
+            git_clean_dry_run_probe.get("status") == "pass"
+            and "permissiondecision" in git_clean_dry_run_stdout
+            and "allow" in git_clean_dry_run_stdout
+            and git_clean_long_dry_run_probe.get("status") == "pass"
+            and "allow" in git_clean_long_dry_run_stdout,
+            "PreToolUse should allow git clean dry-run forms because they inspect rather than delete.",
         )
         add_check(
             "pretooluse_blocks_git_force_push",
@@ -429,6 +453,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in start_process_git_force_stdout
             and start_process_git_arg_force_probe.get("status") == "pass"
             and "deny" in start_process_git_arg_force_stdout
+            and start_process_git_positional_force_probe.get("status") == "pass"
+            and "deny" in start_process_git_positional_force_stdout
+            and start_process_git_windowstyle_force_probe.get("status") == "pass"
+            and "deny" in start_process_git_windowstyle_force_stdout
             and start_process_destructive_probe.get("status") == "pass"
             and "deny" in start_process_destructive_stdout
             and git_regular_push_probe.get("status") == "pass"
@@ -500,6 +528,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         )
         blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
         blocked_stdout = blocked_probe.get("stdout_preview", "").lower()
+        camel_blocked_probe = run_camel_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
+        camel_blocked_stdout = camel_blocked_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_direct_secret_reads",
             blocked_probe.get("status") == "pass"
@@ -507,6 +537,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in blocked_stdout
             and "credential" in blocked_stdout,
             "PreToolUse should deny direct credential-file read probes instead of unconditionally allowing them.",
+        )
+        add_check(
+            "pretooluse_inspects_camel_case_tool_payloads",
+            camel_blocked_probe.get("status") == "pass"
+            and "permissiondecision" in camel_blocked_stdout
+            and "deny" in camel_blocked_stdout,
+            "PreToolUse should inspect hookEventName/toolName/toolInput payloads as well as snake_case payloads.",
         )
         mcp_blocked_probe = run_compact_hook_sample(
             root,
@@ -517,6 +554,15 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             },
         )
         mcp_blocked_stdout = mcp_blocked_probe.get("stdout_preview", "").lower()
+        mcp_fetch_blocked_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "mcp__codex_apps__github._fetch_file",
+                "tool_input": {"path": str(Path.home() / ".codex" / "auth.json")},
+            },
+        )
+        mcp_fetch_blocked_stdout = mcp_fetch_blocked_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_mcp_secret_reads",
             mcp_blocked_probe.get("status") == "pass"
@@ -524,6 +570,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in mcp_blocked_stdout
             and "credential" in mcp_blocked_stdout,
             "PreToolUse should deny MCP credential-file read probes as well as shell probes.",
+        )
+        add_check(
+            "pretooluse_blocks_mcp_fetch_file_secret_reads",
+            mcp_fetch_blocked_probe.get("status") == "pass"
+            and "permissiondecision" in mcp_fetch_blocked_stdout
+            and "deny" in mcp_fetch_blocked_stdout,
+            "PreToolUse should deny MCP fetch_file-style credential reads, including connector tool names that use dots.",
         )
         mcp_non_file_get_probe = run_compact_hook_sample(
             root,
@@ -695,6 +748,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         )
         relative_destructive_probe = run_hook_sample(root, "Remove-Item . -Recurse -Force")
         relative_destructive_stdout = relative_destructive_probe.get("stdout_preview", "").lower()
+        relative_recurse_abbrev_probe = run_hook_sample(root, "Remove-Item . -rec -Force")
+        relative_recurse_abbrev_stdout = relative_recurse_abbrev_probe.get("stdout_preview", "").lower()
+        relative_recurse_partial_probe = run_hook_sample(root, "Remove-Item . -recu -Force")
+        relative_recurse_partial_stdout = relative_recurse_partial_probe.get("stdout_preview", "").lower()
         rm_relative_probe = run_hook_sample(root, "rm -rf .")
         rm_relative_stdout = rm_relative_probe.get("stdout_preview", "").lower()
         ri_relative_probe = run_hook_sample(root, "ri . -r -Force")
@@ -707,6 +764,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "pretooluse_blocks_relative_recursive_delete",
             relative_destructive_probe.get("status") == "pass"
             and "deny" in relative_destructive_stdout
+            and relative_recurse_abbrev_probe.get("status") == "pass"
+            and "deny" in relative_recurse_abbrev_stdout
+            and relative_recurse_partial_probe.get("status") == "pass"
+            and "deny" in relative_recurse_partial_stdout
             and rm_relative_probe.get("status") == "pass"
             and "deny" in rm_relative_stdout
             and ri_relative_probe.get("status") == "pass"

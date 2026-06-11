@@ -323,6 +323,21 @@ keeping ordinary inspected tool use allowed.
   resolved to `.cmd` shims in PowerShell/Codex-managed runs. The adopted oracle
   is that PowerShell resolves these frequent PM workflow commands to `.ps1`
   shims first, while `.cmd` remains only for cmd.exe compatibility.
+- no-mistakes follow-up on `4b804e8`: run `01KTTGYVE5YHD1Z251Q5ZGRXBD`
+  returned five auto-fix findings. The hook now inspects camelCase
+  `toolName` payloads, treats MCP `fetch_file` connector names as file-read
+  tools, denies PowerShell recursive flag abbreviations such as `-rec` and
+  `-recu`, recurses `Start-Process git 'push origin --force'` positional
+  argument forms into the destructive-command checker, skips non-argument
+  Start-Process option values such as `-WindowStyle Hidden`, and allows
+  `git clean -nfd` / `git clean --dry-run -fd` while continuing to block
+  non-dry-run force clean forms. The smoke runner now uses `hookEventName`
+  as well as `hook_event_name` when selecting the configured hook route.
+- New or updated oracle evidence: `hook-policy-smoke` now denies camelCase
+  shell secret reads, `mcp__codex_apps__github._fetch_file` secret reads,
+  recursive delete abbreviations, and positional `Start-Process` force-push
+  launchers including `-WindowStyle Hidden`; it also preserves a positive
+  allow oracle for Git clean dry-runs.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
@@ -377,7 +392,7 @@ keeping ordinary inspected tool use allowed.
 
 ## Outer Gate
 
-- Command: `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi run --intent ...`
+- Command: `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1 axi run --intent ...`
 - Outcome: pending fresh run after this fix is committed and the current
   foreground-window loop is confirmed stable.
 - Not-run reason: no-mistakes requires committed work, and the user observed a
