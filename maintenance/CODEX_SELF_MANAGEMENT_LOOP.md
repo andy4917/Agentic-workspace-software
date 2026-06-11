@@ -115,4 +115,6 @@ Rollback is path-specific:
   `.codex\hooks`, then run hook smoke plus runtime validation.
 - Runtime cleanup: use `codex-runtime-process-cleanup.ps1 -Mode status` before
   any cleanup. Use report-only for uncertain ownership; after explicit cleanup
-  authorization, delete retired residue directly after path-boundary checks.
+  authorization, follow `CODEX_STATE_MANAGEMENT.md`: path boundary plus
+  reparse-point descendant scan; fail closed on top-level or descendant
+  reparse points or scan errors.

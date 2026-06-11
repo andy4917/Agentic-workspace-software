@@ -839,8 +839,8 @@ Hooks support the PM workflow; they do not replace PM judgment or user review.
   authority; `config.toml` remains the runtime configuration truth.
 - Retired, archived, disabled, or backup roots are not active runtime truth. When
   the user explicitly authorizes removal, delete those contamination candidates
-  directly after path-boundary verification instead of creating another retained
-  archive.
+  directly after path-boundary verification and reparse-point descendant
+  scanning instead of creating another retained archive.
 - Never delete SQLite WAL/SHM files directly; use checkpoint/maintenance commands.
 
 ## Ask Or Stop Conditions

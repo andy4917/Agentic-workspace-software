@@ -38,8 +38,10 @@ Handling rules:
   explicit maintenance script, not by ad hoc recursive deletion.
 - Do not create persistent archive or backup roots for retired residue. When
   removal is explicitly authorized, verify the path boundary and delete the
-  residue directly. If ownership is uncertain, stop at classification instead
-  of preserving another fallback copy.
+  residue directly. Recursive cleanup must fail closed for top-level or
+  descendant reparse points, junctions, symlinks, or descendant scan failures.
+  If ownership is uncertain, stop at classification instead of preserving
+  another fallback copy.
 
 ## Log Management
 
@@ -163,7 +165,8 @@ Codex checks its own environment through these layers:
      roots, and close-lifecycle cleanup readiness.
 3. `codex-home-maintenance.ps1`
    - inventories active references, native hosts, sentinel blockers,
-     toolchain/cache roots, transient roots, and direct-delete cleanup outcomes.
+     toolchain/cache roots, transient roots, approved report roots, and
+     direct-delete cleanup outcomes including reparse-point refusal results.
 4. `check-toolchain-sources.ps1`
    - verifies official-bundle and local-chain command resolution.
 5. Codex CLI doctor through `toolchains\shims\codex.ps1` or the bundled
@@ -184,7 +187,7 @@ failures, and not-run checks as evidence gaps rather than success.
 ```powershell
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode status -CodexHome C:\Users\anise\.codex
-C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -CodexHome C:\Users\anise\.codex
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -CodexHome C:\Users\anise\.codex -ReportRoot C:\Users\anise\Documents\Codex\reports
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
 ```
 

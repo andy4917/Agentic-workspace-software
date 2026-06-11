@@ -62,7 +62,7 @@ that a reviewer reading only the diff would not know.
 Run the pipeline and decide on its findings as they come up:
 
 1. Start the run. It blocks until the first decision point or the end:
-   ```sh
+   ```powershell
    & "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi run --intent "<what the user set out to accomplish>"
    ```
 2. If the output contains a `gate:` object, the pipeline is waiting on you.
@@ -76,7 +76,7 @@ Run the pipeline and decide on its findings as they come up:
      [Escalate `ask-user` findings](#escalate-ask-user-findings) below.
 
    Choose one response:
-   ```sh
+   ```powershell
    # accept the step as-is and continue
    & "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi respond --action approve
 
@@ -126,7 +126,7 @@ surface `ask-user` findings to the user and wait for their decision.
 
 ## Inspecting state
 
-```sh
+```powershell
 & "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi               # home view: active run, recent runs, next steps
 & "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi status        # full detail of the active (or most recent) run
 & "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi logs --step <name> --full   # full log output of one step

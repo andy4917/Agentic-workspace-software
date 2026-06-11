@@ -154,6 +154,7 @@ cleanup:
 ## Delete Rule
 
 Deprecated tool, package, plugin, or cache directories may be deleted directly
-after explicit user authorization and path-boundary verification. If active
-ownership is unclear, stop at classification instead of creating another
-archive.
+after explicit user authorization, path-boundary verification, and reparse-point
+descendant scanning. If the target or any descendant is a junction, symlink, or
+other reparse point, or if the descendant scan fails, stop at classification
+instead of deleting or creating another archive.

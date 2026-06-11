@@ -207,8 +207,9 @@ Hook route reload boundary:
   potentially stale until direct process evidence or an app-server restart shows
   it is no longer launching the previous hook command.
 - Do not run no-mistakes, broad Git publishing, or other hook-heavy workflows
-  while current process evidence shows
-  direct hidden `pwsh.exe` route launching `compact-codex-hook.ps1`.
+  while current process evidence still shows the previous hook command, visible
+  `cmd.exe`, `pwsh.cmd`, WindowsApps alias, or any route other than the hidden
+  Windows PowerShell -> `pwsh.ps1` -> `compact-codex-hook.ps1` route.
   This is a session-cache/runtime-reload issue, not a source-file pass.
 - Before resuming a hook-heavy workflow after a hook route change, check for
   stale route processes and visible terminal windows. If stale route processes

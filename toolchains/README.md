@@ -111,11 +111,12 @@ Last verification:
 - Tool invocations in Codex workstation maintenance used explicit shim paths
   under `%USERPROFILE%\.codex\toolchains\shims` for package-manager and local
   toolchain commands.
-- 2026-06-11 KST: PowerShell-native `git.ps1`, `pwsh.ps1`, `codex.ps1`, and
-  `no-mistakes.ps1` were added so Git/no-mistakes/Codex-maintenance commands
-  do not repeatedly open foreground `cmd.exe` windows from Codex-managed
-  PowerShell runs. The `.cmd` wrappers remain compatibility entry points for
-  cmd.exe callers, not the preferred PM workflow route.
+- 2026-06-11 KST: PowerShell-native `git.ps1`, `gh.ps1`, `pwsh.ps1`,
+  `codex.ps1`, and `no-mistakes.ps1` were added so
+  Git/GitHub/no-mistakes/Codex-maintenance commands do not repeatedly open
+  foreground `cmd.exe` windows from Codex-managed PowerShell runs. The `.cmd`
+  wrappers remain compatibility entry points for cmd.exe callers, not the
+  preferred PM workflow route.
 - 2026-06-10 KST: `no-mistakes` adopted as the outer repository validation
   gate. The active wrapper is
   `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1`, which invokes the
