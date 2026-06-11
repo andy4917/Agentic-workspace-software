@@ -251,6 +251,17 @@ keeping ordinary inspected tool use allowed.
   longer be hidden by the smoke runner. `self-test` now includes
   `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop`
   in the fixture contract before doctor validation.
+- no-mistakes fix-review follow-up on `502edaa`: the active run
+  `01KTT7FN36HTVFKRT801NBVHDP` then returned
+  `encoded-powershell-start-process-bypass`. The compact hook now checks
+  `Start-Process`, `saps`, and `start` argument segments for a PowerShell
+  executable plus encoded-command flags, while keeping the broader raw text scan
+  scoped to encoded PowerShell invocation text instead of all read-only command
+  strings.
+- New or updated oracle evidence: `hook-policy-smoke` now denies
+  `Start-Process pwsh -ArgumentList '-EncodedCommand', ...` and
+  `saps pwsh -ArgumentList '-enc', ...` in addition to direct, `cmd /c`, and
+  path-qualified encoded PowerShell calls.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
@@ -297,7 +308,8 @@ keeping ordinary inspected tool use allowed.
   validation no longer starts or requires a no-mistakes daemon, stale
   no-mistakes pid/socket residue is treated as a clean-state failure, and hook
   smoke samples exercise the configured hook route rather than a hand-built
-  command.
+  command. Encoded PowerShell remains denied through direct invocation,
+  `cmd /c`, path-qualified PowerShell, and `Start-Process` wrapper forms.
 
 ## Outer Gate
 

@@ -148,12 +148,18 @@ function Get-ExecutableLeaf {
     return $trimmed
 }
 
+function Test-TextContainsEncodedPowerShellInvocation {
+    param([string]$CommandText)
+
+    return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|enc|e)(?=$|[\s"''`:=,])')
+}
+
 function Test-EncodedPowerShellCommand {
     param([string]$CommandText)
 
     $parsedItems = @(Get-PowerShellCommandTokens -CommandText $CommandText)
     if ($parsedItems.Count -eq 0) {
-        return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe)?\b[^\r\n]*(^|[\s"''`])-(EncodedCommand|enc|e)(?=$|[\s"''`:=])')
+        return (Test-TextContainsEncodedPowerShellInvocation -CommandText $CommandText)
     }
 
     for ($index = 0; $index -lt $parsedItems.Count; $index++) {
@@ -180,6 +186,27 @@ function Test-EncodedPowerShellCommand {
                     return $true
                 }
                 break
+            }
+            continue
+        }
+
+        if ($commandLeaf -match '(?i)^(Start-Process|saps|start)$') {
+            if (Test-TextContainsEncodedPowerShellInvocation -CommandText $segmentText) {
+                return $true
+            }
+            $startsPowerShell = $false
+            foreach ($segmentValue in $segment) {
+                $segmentLeaf = Get-ExecutableLeaf -Command $segmentValue
+                if ($segmentLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
+                    $startsPowerShell = $true
+                    break
+                }
+            }
+            if (
+                $startsPowerShell -and
+                $segmentText -match '(?i)(^|[\s"'',`])-(EncodedCommand|enc|e)(?=$|[\s"''`:=,])'
+            ) {
+                return $true
             }
             continue
         }

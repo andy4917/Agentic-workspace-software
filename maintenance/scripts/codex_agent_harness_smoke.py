@@ -292,6 +292,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         nested_encoded_stdout = nested_encoded_probe.get("stdout_preview", "").lower()
         path_encoded_probe = run_hook_sample(root, f"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -EncodedCommand {encoded_payload}")
         path_encoded_stdout = path_encoded_probe.get("stdout_preview", "").lower()
+        start_process_encoded_probe = run_hook_sample(root, f"Start-Process pwsh -ArgumentList '-EncodedCommand', '{encoded_payload}'")
+        start_process_encoded_stdout = start_process_encoded_probe.get("stdout_preview", "").lower()
+        saps_encoded_probe = run_hook_sample(root, f"saps pwsh -ArgumentList '-enc', '{encoded_payload}'")
+        saps_encoded_stdout = saps_encoded_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_encoded_powershell",
             encoded_probe.get("status") == "pass"
@@ -300,8 +304,12 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and nested_encoded_probe.get("status") == "pass"
             and "deny" in nested_encoded_stdout
             and path_encoded_probe.get("status") == "pass"
-            and "deny" in path_encoded_stdout,
-            "PreToolUse should deny encoded PowerShell payloads instead of trusting plaintext path inspection.",
+            and "deny" in path_encoded_stdout
+            and start_process_encoded_probe.get("status") == "pass"
+            and "deny" in start_process_encoded_stdout
+            and saps_encoded_probe.get("status") == "pass"
+            and "deny" in saps_encoded_stdout,
+            "PreToolUse should deny encoded PowerShell payloads, including Start-Process wrappers, instead of trusting plaintext path inspection.",
         )
         readonly_destructive_search_probe = run_hook_sample(root, 'rg -n "Remove-Item|rm -rf" hooks\\*.ps1 maintenance\\*.py')
         readonly_destructive_search_stdout = readonly_destructive_search_probe.get("stdout_preview", "").lower()
