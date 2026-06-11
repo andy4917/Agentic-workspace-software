@@ -429,6 +429,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_ps1_force_push_stdout = git_ps1_force_push_probe.get("stdout_preview", "").lower()
         git_inline_option_force_push_probe = run_hook_sample(root, "git --git-dir=C:\\repo\\.git push origin HEAD --force")
         git_inline_option_force_push_stdout = git_inline_option_force_push_probe.get("stdout_preview", "").lower()
+        git_inline_option_clean_probe = run_hook_sample(root, "git --git-dir=.git clean -fd")
+        git_inline_option_clean_stdout = git_inline_option_clean_probe.get("stdout_preview", "").lower()
         git_force_with_lease_push_probe = run_hook_sample(root, "git push --force-with-lease origin HEAD")
         git_force_with_lease_push_stdout = git_force_with_lease_push_probe.get("stdout_preview", "").lower()
         git_plus_refspec_push_probe = run_hook_sample(root, "git push origin +HEAD:main")
@@ -520,6 +522,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in git_ps1_force_push_stdout
             and git_inline_option_force_push_probe.get("status") == "pass"
             and "deny" in git_inline_option_force_push_stdout
+            and git_inline_option_clean_probe.get("status") == "pass"
+            and "deny" in git_inline_option_clean_stdout
             and git_force_with_lease_push_probe.get("status") == "pass"
             and "deny" in git_force_with_lease_push_stdout
             and git_plus_refspec_push_probe.get("status") == "pass"

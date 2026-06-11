@@ -541,8 +541,15 @@ function Test-HighRiskDestructiveCommand {
             $gitRemaining = @()
             for ($gitIndex = 0; $gitIndex -lt $gitParts.Count; $gitIndex++) {
                 $gitPart = [string]$gitParts[$gitIndex]
-                if ($gitPart -match '(?i)^(-C|--git-dir|--work-tree|--namespace|--config-env|-c)[:=].+$') {
-                    $gitIndex++
+                if ($gitPart -match '(?i)^(-C|--git-dir|--work-tree|--namespace|--config-env|-c)[:=](.+)$') {
+                    $inlineOptionValue = ([string]$Matches[2]).Trim().Trim('"', "'")
+                    if (
+                        $gitIndex + 1 -lt $gitParts.Count -and
+                        -not [string]::IsNullOrWhiteSpace($inlineOptionValue) -and
+                        [string]$gitParts[$gitIndex + 1] -eq $inlineOptionValue
+                    ) {
+                        $gitIndex++
+                    }
                     continue
                 }
                 if ($gitPart -match '(?i)^(-C|--git-dir|--work-tree|--namespace|--config-env|-c)$') {

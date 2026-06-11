@@ -1597,6 +1597,7 @@ $syncPairs = @(
     "toolchains\README.md",
     "toolchains\shims\no-mistakes.cmd",
     "toolchains\shims\no-mistakes.ps1",
+    "toolchains\shims\gh.ps1",
     "toolchains\shims\git.ps1",
     "toolchains\shims\pwsh.ps1",
     "toolchains\shims\codex.ps1",
