@@ -43,6 +43,36 @@ function Test-ReparsePoint {
     )
 }
 
+function Get-ChildItemsWithoutReparseTraversal {
+    param([string]$Path)
+
+    $items = New-Object System.Collections.Generic.List[System.IO.FileSystemInfo]
+    $pending = New-Object System.Collections.Generic.Stack[string]
+    $pending.Push($Path)
+
+    while ($pending.Count -gt 0) {
+        $current = $pending.Pop()
+        foreach ($child in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)) {
+            $items.Add($child) | Out-Null
+            if ($child.PSIsContainer -and -not (Test-ReparsePoint -Item $child)) {
+                $pending.Push($child.FullName)
+            }
+        }
+    }
+
+    return @($items.ToArray())
+}
+
+function Get-ReparsePointDescendants {
+    param([string]$Path)
+
+    return @(
+        Get-ChildItemsWithoutReparseTraversal -Path $Path |
+            Where-Object { Test-ReparsePoint -Item $_ } |
+            Select-Object -ExpandProperty FullName
+    )
+}
+
 function Resolve-ExpectedCodexHome {
     if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
         throw "USERPROFILE is required to validate the default CodexHome runtime root"
@@ -121,7 +151,7 @@ function Get-DirectorySummary {
         }
     }
 
-    $children = @(Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue)
+    $children = @(Get-ChildItemsWithoutReparseTraversal -Path $Path)
     $files = @($children | Where-Object { -not $_.PSIsContainer })
     $sum = ($files | Measure-Object -Property Length -Sum).Sum
     if ($null -eq $sum) { $sum = 0 }
@@ -202,6 +232,14 @@ function Remove-PathDirectly {
     if (Test-ReparsePoint -Item $targetItem) {
         throw "Refusing to recursively delete reparse point: $resolvedTarget"
     }
+    $descendantReparsePoints = @()
+    if ($targetItem.PSIsContainer) {
+        $descendantReparsePoints = @(Get-ReparsePointDescendants -Path $resolvedTarget)
+    }
+    if ($descendantReparsePoints.Count -gt 0) {
+        $sample = (($descendantReparsePoints | Select-Object -First 10) -join '; ')
+        throw "Refusing to recursively delete path with reparse point descendants: $resolvedTarget; descendants=$sample"
+    }
     Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
 }
 
@@ -228,7 +266,7 @@ function Stop-GitFsmonitorUnderRoot {
         $repoRoots.Add($Source) | Out-Null
     }
 
-    foreach ($gitDir in @(Get-ChildItem -LiteralPath $Source -Recurse -Force -Directory -Filter '.git' -ErrorAction SilentlyContinue)) {
+    foreach ($gitDir in @(Get-ChildItemsWithoutReparseTraversal -Path $Source | Where-Object { $_.PSIsContainer -and $_.Name -eq '.git' -and -not (Test-ReparsePoint -Item $_) })) {
         $repoRoot = Split-Path -Parent $gitDir.FullName
         if (-not [string]::IsNullOrWhiteSpace($repoRoot) -and $repoRoot -notin $repoRoots) {
             $repoRoots.Add($repoRoot) | Out-Null
@@ -291,6 +329,20 @@ function Remove-TransientRoot {
             destination = $null
             git_fsmonitor = @()
             error = "Refusing to recursively delete reparse point: $Source"
+        }
+    }
+    $descendantReparsePoints = @()
+    if ($sourceItem.PSIsContainer) {
+        $descendantReparsePoints = @(Get-ReparsePointDescendants -Path $Source)
+    }
+    if ($descendantReparsePoints.Count -gt 0) {
+        $sample = (($descendantReparsePoints | Select-Object -First 10) -join '; ')
+        return [ordered]@{
+            source = $Source
+            action = 'delete_refused_reparse_descendant'
+            destination = $null
+            git_fsmonitor = @()
+            error = "Refusing to recursively delete path with reparse point descendants: $Source; descendants=$sample"
         }
     }
 
