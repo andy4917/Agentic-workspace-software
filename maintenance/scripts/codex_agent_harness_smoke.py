@@ -325,10 +325,22 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         )
         secret_prompt_probe = run_prompt_hook_sample(root, "Here is a fake token for smoke testing: sk-proj_FAKEFAKEFAKEFAKEFAKEFAKEFAKE")
         secret_prompt_stdout = secret_prompt_probe.get("stdout_preview", "").lower()
+        structured_prompt_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": [{"type": "text", "text": "fake smoke token sk-proj_FAKEFAKEFAKEFAKEFAKEFAKEFAKE"}],
+                "cwd": str(root),
+                "permission_mode": "default",
+            },
+        )
+        structured_prompt_stdout = structured_prompt_probe.get("stdout_preview", "").lower()
         add_check(
             "user_prompt_submit_blocks_secret_like_values",
             secret_prompt_probe.get("status") == "pass"
             and '"decision":"block"' in secret_prompt_stdout
+            and structured_prompt_probe.get("status") == "pass"
+            and '"decision":"block"' in structured_prompt_stdout
             and "secret-like value" in secret_prompt_stdout,
             "UserPromptSubmit should block high-confidence secret-like prompt values without storing the raw prompt.",
         )

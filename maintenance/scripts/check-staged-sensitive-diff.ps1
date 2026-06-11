@@ -3,6 +3,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 
 if ([string]::IsNullOrWhiteSpace($Root)) {
     $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)

@@ -262,6 +262,35 @@ The compatibility wrapper must run the current control-plane stack
 and Codex doctor). Use the full P0 loop separately from a clean tree before
 publishing.
 
+## Repository Handoff Conditions
+
+Before committing, pushing, opening a PR, merging, or declaring a workstation
+control-plane pass ready for handoff, regenerate the handoff condition set from
+the current goal and direct evidence. Treat the set as a checklist for the
+current pass, not as a new permanent gate.
+
+For Codex global/workstation control-plane work, the condition set must include:
+
+- `scope_clean`: `git status --short` is understood, and only in-scope managed
+  source changes are staged.
+- `live_scaffold_clean`: live `.codex` copies that are part of the change are
+  synchronized, and `validate-codex-scaffold.ps1 -Json` passes.
+- `harness_clean`: `codex_agent_harness.py verify` passes, or the exact
+  not-run reason is recorded before handoff stops.
+- `p0_user_clean`: the full `codex-p0-integrity-loop.ps1 -Json` passes with a
+  user-perspective clean result before external publishing.
+- `terminal_route_clean`: GitHub, Git, hook, and no-mistakes routes used for
+  the handoff do not spawn new visible `cmd.exe` windows; known unrelated native
+  host processes are recorded separately.
+- `review_gate_clean`: `code-review-and-quality` and `no-mistakes` have no
+  unresolved blocker, `ask-user`, stale-run, or hidden-fallback finding.
+- `publish_state_clean`: after push/PR/merge, local HEAD, remote branch/PR head,
+  and GitHub check state match the reported result.
+
+If any condition fails, stop the publish path and either fix the smallest
+confirmed blocker or report the precise blocker, closest checks run, rollback
+path, and residual risk.
+
 ## Completion Rule
 
 Do not claim a workstation maintenance request is complete until inspected and

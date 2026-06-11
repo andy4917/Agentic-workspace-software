@@ -77,7 +77,7 @@ function Get-PromptText {
 
     foreach ($name in @("prompt", "user_prompt", "userPrompt", "message", "text")) {
         if ($Payload.PSObject.Properties.Name -contains $name -and $null -ne $Payload.$name) {
-            return [string]$Payload.$name
+            return (ConvertTo-HookText -Value $Payload.$name)
         }
     }
     return ""
@@ -235,6 +235,23 @@ function Test-NamedParameter {
     return ($Names -contains $name)
 }
 
+function Expand-CommandSegment {
+    param([object[]]$Segment)
+
+    $expanded = New-Object System.Collections.Generic.List[string]
+    foreach ($segmentValue in $Segment) {
+        $value = [string]$segmentValue
+        $expanded.Add($value) | Out-Null
+        if ($value -match '^(-{1,2}[^:=\s]+)[:=](.+)$') {
+            $inlineValue = ([string]$Matches[2]).Trim().Trim('"', "'")
+            if (-not [string]::IsNullOrWhiteSpace($inlineValue)) {
+                $expanded.Add($inlineValue) | Out-Null
+            }
+        }
+    }
+    return $expanded.ToArray()
+}
+
 function Get-StartProcessNestedCommandText {
     param([object[]]$Segment)
 
@@ -271,6 +288,24 @@ function Get-StartProcessNestedCommandText {
     foreach ($segmentValue in $Segment) {
         $value = [string]$segmentValue
         if ([string]::IsNullOrWhiteSpace($value) -or $value -eq ",") { continue }
+        if ($value -match '^(-{1,2}[^:=\s]+)[:=](.+)$') {
+            $parameterName = [string]$Matches[1]
+            $inlineValue = ([string]$Matches[2]).Trim().Trim('"', "'")
+            if (Test-NamedParameter -Value $parameterName -Names $filePathParameters) {
+                $target = $inlineValue
+                $expectFilePath = $false
+                $collectArgumentList = $false
+                continue
+            }
+            if (Test-NamedParameter -Value $parameterName -Names $argumentListParameters) {
+                if (-not [string]::IsNullOrWhiteSpace($inlineValue)) {
+                    $arguments.Add($inlineValue) | Out-Null
+                }
+                $collectArgumentList = $true
+                continue
+            }
+            $value = $parameterName
+        }
         if ($expectStartProcessParameterValue) {
             $expectStartProcessParameterValue = $false
             continue
@@ -376,6 +411,7 @@ function Test-EncodedPowerShellCommand {
             if (Test-ExecutableTokenStart -ParsedItems $parsedItems -Index $cursor) { break }
             $segment.Add([string]$parsedItems[$cursor].Content) | Out-Null
         }
+        $segment = @(Expand-CommandSegment -Segment $segment.ToArray())
         $segmentText = ($segment -join " ")
 
         if ($commandLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
@@ -471,6 +507,7 @@ function Test-HighRiskDestructiveCommand {
             if (Test-ExecutableTokenStart -ParsedItems $parsedItems -Index $cursor) { break }
             $segment.Add([string]$parsedItems[$cursor].Content) | Out-Null
         }
+        $segment = @(Expand-CommandSegment -Segment $segment.ToArray())
         $segmentText = ($segment -join " ")
 
         if ($commandLeaf -match '(?i)^(Remove-Item|ri|rm|rd|rmdir|del)$') {
@@ -709,7 +746,12 @@ $codexHome = Get-CodexHome
 $stateDir = Join-Path $codexHome "state"
 $ledger = Join-Path $stateDir "hook-ledger.jsonl"
 
-New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+$ledgerReady = $true
+try {
+    New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+} catch {
+    $ledgerReady = $false
+}
 
 $runtimeCleanupWatch = $null
 if ($event -eq "SessionStart" -or $event -eq "UserPromptSubmit") {
@@ -757,7 +799,13 @@ $record = [ordered]@{
     decision_reason = if ($preToolUseDecision) { [string]$preToolUseDecision.reason } elseif ($userPromptDecision) { [string]$userPromptDecision.reason } else { $null }
     runtime_cleanup_watch = $runtimeCleanupWatch
 }
-($record | ConvertTo-Json -Compress -Depth 8) | Add-Content -LiteralPath $ledger -Encoding UTF8
+if ($ledgerReady) {
+    try {
+        ($record | ConvertTo-Json -Compress -Depth 8) | Add-Content -LiteralPath $ledger -Encoding UTF8
+    } catch {
+        $ledgerReady = $false
+    }
+}
 
 $out = [ordered]@{}
 

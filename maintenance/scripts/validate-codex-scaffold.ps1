@@ -494,15 +494,7 @@ function Test-FirstCommandSource {
 
     $bundleRoot = Join-Path $env:LOCALAPPDATA "OpenAI\Codex\bin"
     $windowsAppsCodexPattern = "*\WindowsApps\OpenAI.Codex_*\app\resources*"
-    $previousPath = $env:PATH
-    try {
-        if (-not [string]::IsNullOrWhiteSpace($ShimRoot)) {
-            $env:PATH = "$ShimRoot;$previousPath"
-        }
-        $command = @(Get-Command $Name -All -ErrorAction SilentlyContinue | Select-Object -First 1)
-    } finally {
-        $env:PATH = $previousPath
-    }
+    $command = @(Get-Command $Name -All -ErrorAction SilentlyContinue | Select-Object -First 1)
     $source = if ($command.Count -gt 0) {
         if (-not [string]::IsNullOrWhiteSpace([string]$command[0].Source)) {
             [string]$command[0].Source
@@ -525,6 +517,7 @@ function Test-FirstCommandSource {
         name = $Name
         first_source = $source
         allowed_roots = @($ShimRoot, $bundleRoot, $windowsAppsCodexPattern)
+        path_was_modified_for_probe = $false
         ok = [bool]$ok
     }
 }

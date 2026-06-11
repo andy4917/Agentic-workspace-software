@@ -252,11 +252,11 @@ def cmd_apply(args: argparse.Namespace) -> int:
         "source": source_plan_metadata(),
         "applied_operations": operations,
     }
-    write_json(install_state_path(root), state)
-    print(f"Applied harness state: {install_state_path(root)}")
     if blocked_updates:
         print(json.dumps({"blocked_updates": blocked_updates, "reason": "managed files changed since the last recorded digest; refusing silent overwrite"}, ensure_ascii=False, sort_keys=True))
         return 1
+    write_json(install_state_path(root), state)
+    print(f"Applied harness state: {install_state_path(root)}")
     return 0
 
 
