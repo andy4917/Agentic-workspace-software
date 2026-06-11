@@ -328,6 +328,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         nested_encoded_stdout = nested_encoded_probe.get("stdout_preview", "").lower()
         path_encoded_probe = run_hook_sample(root, f"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -EncodedCommand {encoded_payload}")
         path_encoded_stdout = path_encoded_probe.get("stdout_preview", "").lower()
+        ec_encoded_probe = run_hook_sample(root, f"powershell -ec {encoded_payload}")
+        ec_encoded_stdout = ec_encoded_probe.get("stdout_preview", "").lower()
         start_process_encoded_probe = run_hook_sample(root, f"Start-Process pwsh -ArgumentList '-EncodedCommand', '{encoded_payload}'")
         start_process_encoded_stdout = start_process_encoded_probe.get("stdout_preview", "").lower()
         saps_encoded_probe = run_hook_sample(root, f"saps pwsh -ArgumentList '-enc', '{encoded_payload}'")
@@ -341,6 +343,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in nested_encoded_stdout
             and path_encoded_probe.get("status") == "pass"
             and "deny" in path_encoded_stdout
+            and ec_encoded_probe.get("status") == "pass"
+            and "deny" in ec_encoded_stdout
             and start_process_encoded_probe.get("status") == "pass"
             and "deny" in start_process_encoded_stdout
             and saps_encoded_probe.get("status") == "pass"
@@ -369,6 +373,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_push_delete_stdout = git_push_delete_probe.get("stdout_preview", "").lower()
         git_push_colon_delete_probe = run_hook_sample(root, "git push origin :old-branch")
         git_push_colon_delete_stdout = git_push_colon_delete_probe.get("stdout_preview", "").lower()
+        git_array_force_probe = run_hook_sample(root, "git @('push','origin','--force')")
+        git_array_force_stdout = git_array_force_probe.get("stdout_preview", "").lower()
         start_process_git_force_probe = run_hook_sample(root, "Start-Process git -ArgumentList 'push','origin','--force'")
         start_process_git_force_stdout = start_process_git_force_probe.get("stdout_preview", "").lower()
         start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
@@ -407,6 +413,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in git_push_delete_stdout
             and git_push_colon_delete_probe.get("status") == "pass"
             and "deny" in git_push_colon_delete_stdout
+            and git_array_force_probe.get("status") == "pass"
+            and "deny" in git_array_force_stdout
             and start_process_git_force_probe.get("status") == "pass"
             and "deny" in start_process_git_force_stdout
             and start_process_destructive_probe.get("status") == "pass"
@@ -429,10 +437,28 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
 +new
 *** End Patch
 """
+        parent_apply_patch = """*** Begin Patch
+*** Update File: ..\\config.toml
+@@
+-old
++new
+*** End Patch
+"""
+        rooted_apply_patch = """*** Begin Patch
+*** Update File: C:\\Users\\anise\\.codex\\config.toml
+@@
+-old
++new
+*** End Patch
+"""
         sensitive_apply_patch_probe = run_apply_patch_sample(root, sensitive_apply_patch)
         sensitive_apply_patch_stdout = sensitive_apply_patch_probe.get("stdout_preview", "").lower()
         nested_sensitive_apply_patch_probe = run_nested_apply_patch_sample(root, sensitive_apply_patch)
         nested_sensitive_apply_patch_stdout = nested_sensitive_apply_patch_probe.get("stdout_preview", "").lower()
+        parent_apply_patch_probe = run_apply_patch_sample(root, parent_apply_patch)
+        parent_apply_patch_stdout = parent_apply_patch_probe.get("stdout_preview", "").lower()
+        rooted_apply_patch_probe = run_apply_patch_sample(root, rooted_apply_patch)
+        rooted_apply_patch_stdout = rooted_apply_patch_probe.get("stdout_preview", "").lower()
         ordinary_apply_patch_probe = run_apply_patch_sample(root, ordinary_apply_patch)
         ordinary_apply_patch_stdout = ordinary_apply_patch_probe.get("stdout_preview", "").lower()
         add_check(
@@ -441,9 +467,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in sensitive_apply_patch_stdout
             and nested_sensitive_apply_patch_probe.get("status") == "pass"
             and "deny" in nested_sensitive_apply_patch_stdout
+            and parent_apply_patch_probe.get("status") == "pass"
+            and "deny" in parent_apply_patch_stdout
+            and rooted_apply_patch_probe.get("status") == "pass"
+            and "deny" in rooted_apply_patch_stdout
             and ordinary_apply_patch_probe.get("status") == "pass"
             and "allow" in ordinary_apply_patch_stdout,
-            "PreToolUse should deny direct and nested apply_patch targeting sensitive runtime files while preserving ordinary patch targets.",
+            "PreToolUse should deny direct and nested apply_patch targeting sensitive, rooted, or parent-traversal files while preserving ordinary patch targets.",
         )
         blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
         blocked_stdout = blocked_probe.get("stdout_preview", "").lower()

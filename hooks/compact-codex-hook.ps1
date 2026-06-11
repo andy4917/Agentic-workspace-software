@@ -151,7 +151,7 @@ function Get-ExecutableLeaf {
 function Test-TextContainsEncodedPowerShellInvocation {
     param([string]$CommandText)
 
-    return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|enc|e)(?=$|[\s"''`:=,])')
+    return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=,])')
 }
 
 function Get-StartProcessNestedCommandText {
@@ -224,7 +224,7 @@ function Test-ApplyPatchTargetRisk {
         if ($normalized -match $SensitivePathPattern) {
             return "sensitive target $clean"
         }
-        if ($normalized -match '(?i)^([A-Z]:\\?|\\+|/+|\.{1,2}|~|\*)$') {
+        if ($normalized -match '(?i)^([A-Z]:\\|\\+|/+)' -or $normalized -match '(^|\\)\.\.(\\|$)' -or $normalized -match '(?i)^([A-Z]:\\?|\\+|/+|\.{1,2}|~|\*)$') {
             return "broad target $clean"
         }
     }
@@ -252,7 +252,7 @@ function Test-EncodedPowerShellCommand {
         $segmentText = ($segment -join " ")
 
         if ($commandLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
-            if ($segmentText -match '(?i)(^|[\s"''`])-(EncodedCommand|enc|e)(?=$|[\s"''`:=])') {
+            if ($segmentText -match '(?i)(^|[\s"''`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=])') {
                 return $true
             }
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
@@ -285,7 +285,7 @@ function Test-EncodedPowerShellCommand {
             }
             if (
                 $startsPowerShell -and
-                $segmentText -match '(?i)(^|[\s"'',`])-(EncodedCommand|enc|e)(?=$|[\s"''`:=,])'
+                $segmentText -match '(?i)(^|[\s"'',`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=,])'
             ) {
                 return $true
             }
@@ -349,7 +349,10 @@ function Test-HighRiskDestructiveCommand {
         }
 
         if ($commandLeaf -match '(?i)^git(\.exe|\.cmd)?$') {
-            $gitParts = @($segment | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            $gitParts = @($segment | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                $_ -notin @("@(", "@{", "(", ")", "{", "}", "[", "]", ",")
+            })
             $gitSubcommand = ""
             $gitRemaining = @()
             for ($gitIndex = 0; $gitIndex -lt $gitParts.Count; $gitIndex++) {

@@ -285,6 +285,15 @@ keeping ordinary inspected tool use allowed.
 - New or updated oracle evidence: `hook-policy-smoke` now denies both direct
   and nested `functions.apply_patch` targeting `.codex\auth.json`, while still
   allowing an ordinary patch target.
+- no-mistakes follow-up on `13ff9c5`: run `01KTTCKWFQ2HEN2ZPAHJ5WMM7J`
+  returned three auto-fix findings and one ask-user finding. The auto-fix items
+  are addressed by treating PowerShell `-ec` as an encoded-command abbreviation,
+  filtering PowerShell array punctuation before parsing Git subcommands, and
+  denying apply_patch targets that are rooted paths or contain parent traversal.
+- New or updated oracle evidence: `hook-policy-smoke` now denies
+  `powershell -ec <payload>`, `git @('push','origin','--force')`,
+  apply_patch targeting `..\config.toml`, and apply_patch targeting an absolute
+  `.codex\config.toml` path.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
