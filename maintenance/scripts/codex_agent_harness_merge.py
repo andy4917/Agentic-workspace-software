@@ -359,10 +359,24 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             }
         )
         write_json(install_state_path(root), state)
-        write_text(root / "agents" / "explorer.toml", "drifted = true\n")
-        cmd_apply(ns)
+        if cmd_apply(ns) != 0:
+            print("stale managed skill cleanup failed in self-test", file=sys.stderr)
+            return 1
         if stale_skill.exists() or stale_skill.parent.exists():
             print("retired managed skill residue was not removed in self-test", file=sys.stderr)
+            return 1
+        state_before_drift = read_text(install_state_path(root))
+        write_text(root / "agents" / "explorer.toml", "drifted = true\n")
+        if cmd_apply(ns) != 1:
+            print("managed drift preflight did not block in self-test", file=sys.stderr)
+            return 1
+        if read_text(install_state_path(root)) != state_before_drift:
+            print("managed drift preflight mutated install state in self-test", file=sys.stderr)
+            return 1
+        restored_templates = managed_templates(root, selected_modules("developer", None))
+        write_text(root / "agents" / "explorer.toml", restored_templates["agents/explorer.toml"])
+        if cmd_apply(ns) != 0:
+            print("managed drift restoration failed in self-test", file=sys.stderr)
             return 1
         write_json(
             root / "reports" / "global-scan.latest.json",

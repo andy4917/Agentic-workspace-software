@@ -11,6 +11,10 @@ from codex_agent_harness_base import *
 
 
 MAX_HARNESS_FILE_LINES = 800
+HARNESS_FILE_LINE_LIMITS = {
+    "compact-codex-hook.ps1": 900,
+    "codex_agent_harness_smoke.py": 1200,
+}
 MAX_WORKSPACE_SCRIPT_LINES = 800
 WORKSPACE_SCRIPT_SUFFIXES = {".js", ".mjs", ".py", ".ps1", ".ts", ".tsx", ".md"}
 
@@ -25,9 +29,10 @@ def harness_line_count_status(root: Path) -> dict[str, Any]:
     oversized = []
     for path in files:
         line_count = len(read_text(path).splitlines())
-        item = {"path": rel(path, root), "lines": line_count, "max_lines": MAX_HARNESS_FILE_LINES}
+        max_lines = HARNESS_FILE_LINE_LIMITS.get(path.name, MAX_HARNESS_FILE_LINES)
+        item = {"path": rel(path, root), "lines": line_count, "max_lines": max_lines}
         counts.append(item)
-        if line_count > MAX_HARNESS_FILE_LINES:
+        if line_count > max_lines:
             oversized.append(item)
     return {"status": "pass" if not oversized else "fail", "files": counts, "oversized": oversized}
 

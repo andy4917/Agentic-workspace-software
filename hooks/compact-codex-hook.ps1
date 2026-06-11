@@ -541,6 +541,10 @@ function Test-HighRiskDestructiveCommand {
             $gitRemaining = @()
             for ($gitIndex = 0; $gitIndex -lt $gitParts.Count; $gitIndex++) {
                 $gitPart = [string]$gitParts[$gitIndex]
+                if ($gitPart -match '(?i)^(-C|--git-dir|--work-tree|--namespace|--config-env|-c)[:=].+$') {
+                    $gitIndex++
+                    continue
+                }
                 if ($gitPart -match '(?i)^(-C|--git-dir|--work-tree|--namespace|--config-env|-c)$') {
                     $gitIndex++
                     continue
