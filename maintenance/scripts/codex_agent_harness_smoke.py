@@ -373,6 +373,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_push_delete_stdout = git_push_delete_probe.get("stdout_preview", "").lower()
         git_push_colon_delete_probe = run_hook_sample(root, "git push origin :old-branch")
         git_push_colon_delete_stdout = git_push_colon_delete_probe.get("stdout_preview", "").lower()
+        git_push_mirror_probe = run_hook_sample(root, "git push --mirror origin")
+        git_push_mirror_stdout = git_push_mirror_probe.get("stdout_preview", "").lower()
+        git_push_prune_probe = run_hook_sample(root, "git push --prune origin")
+        git_push_prune_stdout = git_push_prune_probe.get("stdout_preview", "").lower()
         git_array_force_probe = run_hook_sample(root, "git @('push','origin','--force')")
         git_array_force_stdout = git_array_force_probe.get("stdout_preview", "").lower()
         start_process_git_force_probe = run_hook_sample(root, "Start-Process git -ArgumentList 'push','origin','--force'")
@@ -413,6 +417,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in git_push_delete_stdout
             and git_push_colon_delete_probe.get("status") == "pass"
             and "deny" in git_push_colon_delete_stdout
+            and git_push_mirror_probe.get("status") == "pass"
+            and "deny" in git_push_mirror_stdout
+            and git_push_prune_probe.get("status") == "pass"
+            and "deny" in git_push_prune_stdout
             and git_array_force_probe.get("status") == "pass"
             and "deny" in git_array_force_stdout
             and start_process_git_force_probe.get("status") == "pass"

@@ -294,6 +294,11 @@ keeping ordinary inspected tool use allowed.
   `powershell -ec <payload>`, `git @('push','origin','--force')`,
   apply_patch targeting `..\config.toml`, and apply_patch targeting an absolute
   `.codex\config.toml` path.
+- no-mistakes follow-up on `d717157`: run `01KTTDBKNWGZGKEJT693FZJ041`
+  returned `git-push-mirror-prune-bypass`. The Git push guard now denies
+  `--mirror` and `--prune` in both raw fallback and parsed-token paths.
+- New or updated oracle evidence: `hook-policy-smoke` now denies
+  `git push --mirror origin` and `git push --prune origin`.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
