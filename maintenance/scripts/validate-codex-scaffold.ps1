@@ -55,6 +55,12 @@ function Resolve-PwshExecutable {
 
     $aliasStub = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"
     $candidates = @()
+    $windowsAppsRoot = Join-Path $env:ProgramFiles "WindowsApps"
+    if (Test-Path -LiteralPath $windowsAppsRoot) {
+        $candidates += @(Get-ChildItem -LiteralPath $windowsAppsRoot -Directory -Filter "Microsoft.PowerShell_*__8wekyb3d8bbwe" -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName "pwsh.exe" })
+    }
     $command = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue
     if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
         if ([string]$command.Source -ne $aliasStub) {
@@ -72,6 +78,41 @@ function Resolve-PwshExecutable {
         return $script:PwshShimProbeExecutable
     }
     return $null
+}
+
+function Get-ProcessSnapshotTable {
+    try {
+        return @(Get-CimInstance Win32_Process -ErrorAction Stop |
+            Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine)
+    } catch {
+        return @(Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+            $executablePath = ""
+            try {
+                $executablePath = [string]$_.Path
+            } catch {
+                $executablePath = ""
+            }
+            [pscustomobject]@{
+                ProcessId = [int]$_.Id
+                ParentProcessId = 0
+                Name = if ([string]$_.ProcessName -match "\.exe$") { [string]$_.ProcessName } else { [string]$_.ProcessName + ".exe" }
+                ExecutablePath = $executablePath
+                CommandLine = ""
+            }
+        })
+    }
+}
+
+function Get-ProcessSnapshotById {
+    param([int]$ProcessId)
+
+    @(Get-ProcessSnapshotTable | Where-Object { [int]$_.ProcessId -eq $ProcessId } | Select-Object -First 1)
+}
+
+function Get-ProcessSnapshotsByName {
+    param([string]$Name)
+
+    @(Get-ProcessSnapshotTable | Where-Object { [string]$_.Name -ieq $Name })
 }
 
 function Invoke-Ps1ShimFile {
@@ -1107,11 +1148,11 @@ try {
         $noMistakesDaemonPidValue = $Matches[1]
     }
     $noMistakesDaemonProcess = if ($noMistakesDaemonPidValue) {
-        Get-CimInstance Win32_Process -Filter "ProcessId=$noMistakesDaemonPidValue" -ErrorAction SilentlyContinue
+        Get-ProcessSnapshotById -ProcessId ([int]$noMistakesDaemonPidValue)
     } else {
         $null
     }
-    $noMistakesDaemonProcesses = @(Get-CimInstance Win32_Process -Filter "Name='no-mistakes.exe'" -ErrorAction SilentlyContinue)
+    $noMistakesDaemonProcesses = @(Get-ProcessSnapshotsByName -Name "no-mistakes.exe")
     $noMistakesDaemonPidAlive = [bool]($noMistakesDaemonProcess -and $noMistakesDaemonProcess.Name -eq "no-mistakes.exe")
     $noMistakesDaemonControlProblems = New-Object System.Collections.Generic.List[string]
     if ($noMistakesDaemonPidExists -and -not $noMistakesDaemonPidValue) {

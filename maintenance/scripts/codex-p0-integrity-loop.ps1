@@ -168,6 +168,12 @@ function Invoke-ProcessCapture {
 function Resolve-RealPwshExecutable {
     $aliasStub = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"
     $candidates = @()
+    $windowsAppsRoot = Join-Path $env:ProgramFiles "WindowsApps"
+    if (Test-Path -LiteralPath $windowsAppsRoot) {
+        $candidates += @(Get-ChildItem -LiteralPath $windowsAppsRoot -Directory -Filter "Microsoft.PowerShell_*__8wekyb3d8bbwe" -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName "pwsh.exe" })
+    }
     $command = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue
     if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source) -and [string]$command.Source -ne $aliasStub) {
         $candidates += [string]$command.Source
@@ -207,27 +213,21 @@ function ConvertFrom-JsonOutput {
 }
 
 function Get-PowerShellPath {
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"),
-        (Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe"),
-        "pwsh.exe",
-        "powershell.exe"
-    )
-    foreach ($candidate in $candidates) {
-        try {
-            $command = Get-Command $candidate -ErrorAction Stop
-            if ($command.Source) { return $command.Source }
-            return $candidate
-        } catch {
-        }
-    }
+    $pwsh = Resolve-RealPwshExecutable
+    if (-not [string]::IsNullOrWhiteSpace($pwsh)) { return $pwsh }
     return "powershell.exe"
 }
 
 function Get-MissingPid {
     $existing = @{}
-    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
-        $existing[[int]$_.ProcessId] = $true
+    try {
+        Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object {
+            $existing[[int]$_.ProcessId] = $true
+        }
+    } catch {
+        Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+            $existing[[int]$_.Id] = $true
+        }
     }
     $candidate = 65000
     while ($existing.ContainsKey($candidate)) {

@@ -284,9 +284,14 @@ foreach ($tool in $jsLocalChainTools) {
 
 foreach ($shim in Get-ChildItem -LiteralPath $shimDir -Filter "*.cmd" -ErrorAction SilentlyContinue) {
     $text = Get-Content -LiteralPath $shim.FullName -Raw
-    foreach ($match in [regex]::Matches($text, '"([^"]+)"')) {
+    foreach ($line in ($text -split "\r?\n")) {
+        $conditionalCandidate = $line -match '^\s*if\s+exist\s+'
+        foreach ($match in [regex]::Matches($line, '"([^"]+)"')) {
         $target = [Environment]::ExpandEnvironmentVariables($match.Groups[1].Value)
         if ($target -notmatch "^[A-Za-z]:\\") {
+            continue
+        }
+        if ($conditionalCandidate -or $target -match '[*?]' -or $target -match '%%[A-Za-z]') {
             continue
         }
         if ($target -like "*\scoop\shims\*.exe") {
@@ -304,6 +309,7 @@ foreach ($shim in Get-ChildItem -LiteralPath $shimDir -Filter "*.cmd" -ErrorActi
             target = $target
             target_exists = [bool]$exists
         })
+    }
     }
 }
 
