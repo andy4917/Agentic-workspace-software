@@ -32,9 +32,10 @@ Windows `rg` note:
 - `rg.cmd` is a cmd.exe compatibility wrapper. Do not call it directly from
   PowerShell with unescaped cmd metacharacters; use bare `rg`, bundled `rg.exe`,
   or `rg.ps1`.
-- `git.ps1`, `pwsh.ps1`, `codex.ps1`, and `no-mistakes.ps1` are the
+- `git.ps1`, `gh.ps1`, `pwsh.ps1`, `codex.ps1`, and `no-mistakes.ps1` are the
   PowerShell-native entry points for Codex-managed runs. The corresponding
-  `.cmd` files remain compatibility wrappers for cmd.exe callers only.
+  `.cmd` files remain compatibility wrappers for cmd.exe callers only, except
+  retired GitHub CLI `.cmd` wrappers, which should not be restored.
 
 Current shim groups:
 

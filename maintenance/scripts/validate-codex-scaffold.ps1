@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $fallbackExpectedShims = @(
     "bun.cmd","cargo-clippy.cmd","cargo.cmd","code.cmd","codex.cmd","codex.ps1","eslint.cmd",
-    "fd.cmd","gh.cmd","git.cmd","git.ps1","jq.cmd","just.cmd","node.cmd","npm.cmd",
+    "fd.cmd","gh.ps1","git.cmd","git.ps1","jq.cmd","just.cmd","node.cmd","npm.cmd",
     "node_repl.cmd","npx.cmd","pip.cmd","pnpm.cmd","prettier.cmd","pwsh.cmd","pwsh.ps1","py.cmd",
     "pytest.cmd","python.cmd","rg.cmd","rg.ps1","ruff.cmd","rustc.cmd",
     "rustfmt.cmd","rustup.cmd","tsc.cmd","tsx.cmd","uv.cmd","winget.cmd","no-mistakes.ps1"

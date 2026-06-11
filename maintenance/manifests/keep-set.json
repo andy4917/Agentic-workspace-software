@@ -69,7 +69,7 @@
       "eslint.cmd",
       "express.cmd",
       "fd.cmd",
-      "gh.cmd",
+      "gh.ps1",
       "git.cmd",
       "git.ps1",
       "jq.cmd",
