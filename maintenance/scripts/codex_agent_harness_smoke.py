@@ -684,6 +684,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         npmrc_blocked_stdout = npmrc_blocked_probe.get("stdout_preview", "").lower()
         kube_blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.kube\\config")
         kube_blocked_stdout = kube_blocked_probe.get("stdout_preview", "").lower()
+        ordinary_config_probe = run_hook_sample(root, "Get-Content config.toml")
+        ordinary_config_stdout = ordinary_config_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_direct_secret_reads",
             blocked_probe.get("status") == "pass"
@@ -693,6 +695,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in npmrc_blocked_stdout
             and kube_blocked_probe.get("status") == "pass"
             and "deny" in kube_blocked_stdout
+            and ordinary_config_probe.get("status") == "pass"
+            and "allow" in ordinary_config_stdout
             and "credential" in blocked_stdout,
             "PreToolUse should deny direct credential-file read probes instead of unconditionally allowing them.",
         )

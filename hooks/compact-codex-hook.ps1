@@ -690,7 +690,7 @@ function Get-PreToolUseDecision {
     $inspectionText = "$toolText`n$commandText"
     $isShellLike = $toolText -match '(?i)(^|\.|_)(bash|shell|shell_command|powershell|pwsh|cmd)$'
     $contentReadCommandPattern = '(?i)\b(Get-Content|type|cat|gc|more)\b'
-    $sensitiveFileNamePattern = '(\.env(\.[\w.-]+)?|\.npmrc|\.netrc|\.pypirc|pip\.conf|kubeconfig|(?:\.kube[\\/])?config|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
+    $sensitiveFileNamePattern = '(\.env(\.[\w.-]+)?|\.npmrc|\.netrc|\.pypirc|pip\.conf|kubeconfig|\.kube[\\/]config|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
     $sensitivePathPattern = "(?i)$sensitiveFileNamePattern"
     $sensitivePathWithDirectoryPattern = "(?i)(\.codex[\\/]|C:\\|%USERPROFILE%|\`$env:USERPROFILE|~[\\/])[^`"'\s]*$sensitiveFileNamePattern"
     $safeReferenceSearchPattern = '(?i)((^|[\r\n])\s*(rg|grep)\b(?:\s+-[^\r\n\s]+)*\s+["'']?(auth\.json|\.env|credentials?\.json|api[-_]?key|credential|password|passwd|secret|token|cookie|session)["'']?\s+["'']?(docs?|maintenance|AGENTS\.md|README(\.md)?)["'']?\s*$|\bSelect-String\b[^\r\n]*-Pattern\s+["'']?(auth\.json|\.env|credentials?\.json|api[-_]?key|credential|password|passwd|secret|token|cookie|session)["'']?[^\r\n]*(?:-Path|-LiteralPath)\s+["'']?(docs?|maintenance|AGENTS\.md|README(\.md)?)["'']?\s*$)'
