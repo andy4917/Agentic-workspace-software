@@ -205,10 +205,22 @@ function Get-ExecutableLeaf {
     return $trimmed
 }
 
+function Test-PowerShellExecutableLeaf {
+    param([string]$Leaf)
+
+    return ([string]$Leaf -match '(?i)^(powershell|pwsh)(\.exe|\.ps1)?$')
+}
+
+function Test-GitExecutableLeaf {
+    param([string]$Leaf)
+
+    return ([string]$Leaf -match '(?i)^git(\.exe|\.cmd|\.ps1)?$')
+}
+
 function Test-TextContainsEncodedPowerShellInvocation {
     param([string]$CommandText)
 
-    return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=,])')
+    return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe|\.ps1)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=,])')
 }
 
 function Get-ParameterPrefixes {
@@ -414,7 +426,7 @@ function Test-EncodedPowerShellCommand {
         $segment = @(Expand-CommandSegment -Segment $segment.ToArray())
         $segmentText = ($segment -join " ")
 
-        if ($commandLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
+        if (Test-PowerShellExecutableLeaf -Leaf $commandLeaf) {
             $powerShellCommandParameters = @(Get-ParameterPrefixes -Name "Command" -MinLength 1)
             if ($segmentText -match '(?i)(^|[\s"''`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=])') {
                 return $true
@@ -442,7 +454,7 @@ function Test-EncodedPowerShellCommand {
             $startsPowerShell = $false
             foreach ($segmentValue in $segment) {
                 $segmentLeaf = Get-ExecutableLeaf -Command $segmentValue
-                if ($segmentLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
+                if (Test-PowerShellExecutableLeaf -Leaf $segmentLeaf) {
                     $startsPowerShell = $true
                     break
                 }
@@ -482,13 +494,13 @@ function Test-HighRiskDestructiveCommand {
     $parsedItems = @(Get-PowerShellCommandTokens -CommandText $CommandText)
         if ($parsedItems.Count -eq 0) {
         return (
-            ($CommandText -match '(?i)\bgit\s+reset\s+--hard\b') -or
+            ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd|\.ps1)?\s+reset\s+--hard\b') -or
             (
-                ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd)?\b[^\r\n]*\bclean\b') -and
+                ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd|\.ps1)?\b[^\r\n]*\bclean\b') -and
                 ($CommandText -notmatch '(?i)(^|[\s"''`])(--dry-run|-n[A-Za-z]*)(?=$|[\s"''`])') -and
                 ($CommandText -match '(?i)(^|[\s"''`])(--force(?:=\S*)?|--interactive(?:=\S*)?|-[A-Za-z]*[fi][A-Za-z]*)(?=$|[\s"''`])')
             ) -or
-            ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd)?\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|--delete(?:=|$)|--mirror(?:=|$)|--prune(?:=|$)|-[A-Za-z]*f[A-Za-z]*|(^|[\s"''`])-d(?=$|[\s"''`])|(^|[\s"''`])\+[^"''`\s]+|(^|[\s"''`]):[^"''`\s]+)') -or
+            ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd|\.ps1)?\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|--delete(?:=|$)|--mirror(?:=|$)|--prune(?:=|$)|-[A-Za-z]*f[A-Za-z]*|(^|[\s"''`])-d(?=$|[\s"''`])|(^|[\s"''`])\+[^"''`\s]+|(^|[\s"''`]):[^"''`\s]+)') -or
             (
                 ($CommandText -match '(?i)\b(Remove-Item|ri|rm|rd|rmdir|del)\b') -and
                 ($CommandText -match $RecursiveFlagPattern) -and
@@ -517,7 +529,7 @@ function Test-HighRiskDestructiveCommand {
             continue
         }
 
-        if ($commandLeaf -match '(?i)^git(\.exe|\.cmd)?$') {
+        if (Test-GitExecutableLeaf -Leaf $commandLeaf) {
             $gitParts = @($segment | Where-Object {
                 -not [string]::IsNullOrWhiteSpace($_) -and
                 $_ -notin @("@(", "@{", "(", ")", "{", "}", "[", "]", ",")
@@ -601,7 +613,7 @@ function Test-HighRiskDestructiveCommand {
             continue
         }
 
-        if ($commandLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
+        if (Test-PowerShellExecutableLeaf -Leaf $commandLeaf) {
             $powerShellCommandParameters = @(Get-ParameterPrefixes -Name "Command" -MinLength 1)
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
                 if (-not (Test-NamedParameter -Value $segment[$segmentIndex] -Names $powerShellCommandParameters)) { continue }

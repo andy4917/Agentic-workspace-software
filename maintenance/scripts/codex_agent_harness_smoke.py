@@ -374,6 +374,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         call_operator_encoded_stdout = call_operator_encoded_probe.get("stdout_preview", "").lower()
         start_process_encoded_probe = run_hook_sample(root, f"Start-Process pwsh -ArgumentList '-EncodedCommand', '{encoded_payload}'")
         start_process_encoded_stdout = start_process_encoded_probe.get("stdout_preview", "").lower()
+        pwsh_ps1_encoded_probe = run_hook_sample(root, f"pwsh.ps1 -EncodedCommand {encoded_payload}")
+        pwsh_ps1_encoded_stdout = pwsh_ps1_encoded_probe.get("stdout_preview", "").lower()
+        start_process_pwsh_ps1_encoded_probe = run_hook_sample(root, f"Start-Process pwsh.ps1 -ArgumentList '-EncodedCommand', '{encoded_payload}'")
+        start_process_pwsh_ps1_encoded_stdout = start_process_pwsh_ps1_encoded_probe.get("stdout_preview", "").lower()
         saps_encoded_probe = run_hook_sample(root, f"saps pwsh -ArgumentList '-enc', '{encoded_payload}'")
         saps_encoded_stdout = saps_encoded_probe.get("stdout_preview", "").lower()
         add_check(
@@ -391,6 +395,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in call_operator_encoded_stdout
             and start_process_encoded_probe.get("status") == "pass"
             and "deny" in start_process_encoded_stdout
+            and pwsh_ps1_encoded_probe.get("status") == "pass"
+            and "deny" in pwsh_ps1_encoded_stdout
+            and start_process_pwsh_ps1_encoded_probe.get("status") == "pass"
+            and "deny" in start_process_pwsh_ps1_encoded_stdout
             and saps_encoded_probe.get("status") == "pass"
             and "deny" in saps_encoded_stdout,
             "PreToolUse should deny encoded PowerShell payloads, including Start-Process wrappers, instead of trusting plaintext path inspection.",
@@ -403,6 +411,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         readonly_git_clean_name_stdout = readonly_git_clean_name_probe.get("stdout_preview", "").lower()
         git_clean_long_force_probe = run_hook_sample(root, "git clean --force -d")
         git_clean_long_force_stdout = git_clean_long_force_probe.get("stdout_preview", "").lower()
+        git_ps1_clean_force_probe = run_hook_sample(root, "git.ps1 clean -fd")
+        git_ps1_clean_force_stdout = git_ps1_clean_force_probe.get("stdout_preview", "").lower()
         git_scoped_clean_long_force_probe = run_hook_sample(root, "git -C . clean --force -d")
         git_scoped_clean_long_force_stdout = git_scoped_clean_long_force_probe.get("stdout_preview", "").lower()
         git_clean_interactive_probe = run_hook_sample(root, "git clean -i")
@@ -415,6 +425,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_clean_long_dry_run_stdout = git_clean_long_dry_run_probe.get("stdout_preview", "").lower()
         git_force_push_probe = run_hook_sample(root, "git push origin HEAD --force")
         git_force_push_stdout = git_force_push_probe.get("stdout_preview", "").lower()
+        git_ps1_force_push_probe = run_hook_sample(root, "git.ps1 push origin HEAD --force")
+        git_ps1_force_push_stdout = git_ps1_force_push_probe.get("stdout_preview", "").lower()
         git_force_with_lease_push_probe = run_hook_sample(root, "git push --force-with-lease origin HEAD")
         git_force_with_lease_push_stdout = git_force_with_lease_push_probe.get("stdout_preview", "").lower()
         git_plus_refspec_push_probe = run_hook_sample(root, "git push origin +HEAD:main")
@@ -435,6 +447,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         start_process_git_force_stdout = start_process_git_force_probe.get("stdout_preview", "").lower()
         start_process_git_colon_force_probe = run_hook_sample(root, "Start-Process -FilePath:git -ArgumentList:'push','origin','--force'")
         start_process_git_colon_force_stdout = start_process_git_colon_force_probe.get("stdout_preview", "").lower()
+        start_process_git_ps1_force_probe = run_hook_sample(root, "Start-Process git.ps1 -ArgumentList 'push','origin','--force'")
+        start_process_git_ps1_force_stdout = start_process_git_ps1_force_probe.get("stdout_preview", "").lower()
         start_process_git_arg_force_probe = run_hook_sample(root, "Start-Process git -Arg 'push','origin','--force'")
         start_process_git_arg_force_stdout = start_process_git_arg_force_probe.get("stdout_preview", "").lower()
         start_process_git_a_force_probe = run_hook_sample(root, "Start-Process git -A 'push','origin','--force'")
@@ -473,6 +487,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "pretooluse_blocks_git_clean_long_force",
             git_clean_long_force_probe.get("status") == "pass"
             and "deny" in git_clean_long_force_stdout
+            and git_ps1_clean_force_probe.get("status") == "pass"
+            and "deny" in git_ps1_clean_force_stdout
             and git_scoped_clean_long_force_probe.get("status") == "pass"
             and "deny" in git_scoped_clean_long_force_stdout,
             "PreToolUse should deny git clean --force forms, including when git -C is used before the clean subcommand.",
@@ -498,6 +514,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "pretooluse_blocks_git_force_push",
             git_force_push_probe.get("status") == "pass"
             and "deny" in git_force_push_stdout
+            and git_ps1_force_push_probe.get("status") == "pass"
+            and "deny" in git_ps1_force_push_stdout
             and git_force_with_lease_push_probe.get("status") == "pass"
             and "deny" in git_force_with_lease_push_stdout
             and git_plus_refspec_push_probe.get("status") == "pass"
@@ -518,6 +536,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in start_process_git_force_stdout
             and start_process_git_colon_force_probe.get("status") == "pass"
             and "deny" in start_process_git_colon_force_stdout
+            and start_process_git_ps1_force_probe.get("status") == "pass"
+            and "deny" in start_process_git_ps1_force_stdout
             and start_process_git_arg_force_probe.get("status") == "pass"
             and "deny" in start_process_git_arg_force_stdout
             and start_process_git_a_force_probe.get("status") == "pass"
