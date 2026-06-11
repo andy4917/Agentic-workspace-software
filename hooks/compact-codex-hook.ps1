@@ -154,6 +154,83 @@ function Test-TextContainsEncodedPowerShellInvocation {
     return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|enc|e)(?=$|[\s"''`:=,])')
 }
 
+function Get-StartProcessNestedCommandText {
+    param([object[]]$Segment)
+
+    $target = ""
+    $arguments = New-Object System.Collections.Generic.List[string]
+    $expectFilePath = $false
+    $collectArgumentList = $false
+    foreach ($segmentValue in $Segment) {
+        $value = [string]$segmentValue
+        if ([string]::IsNullOrWhiteSpace($value) -or $value -eq ",") { continue }
+        if ($expectFilePath) {
+            $target = $value
+            $expectFilePath = $false
+            continue
+        }
+        if ($value -match '(?i)^-FilePath$') {
+            $expectFilePath = $true
+            $collectArgumentList = $false
+            continue
+        }
+        if ($value -match '(?i)^-ArgumentList$') {
+            $collectArgumentList = $true
+            continue
+        }
+        if ($collectArgumentList) {
+            $arguments.Add($value) | Out-Null
+            continue
+        }
+        if (-not $target -and $value -notmatch '^-') {
+            $target = $value
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($target)) { return "" }
+    $argumentText = ($arguments -join " ")
+    return "$target $argumentText".Trim()
+}
+
+function Get-ApplyPatchTargetPaths {
+    param([string]$Text)
+
+    $targets = New-Object System.Collections.Generic.List[string]
+    $textVariants = @($Text, ($Text -replace '\\r\\n|\\n', "`n"))
+    foreach ($textVariant in $textVariants) {
+        foreach ($line in ($textVariant -split "\r?\n")) {
+            $cleanLine = $line.Trim().Trim('"')
+            if ($cleanLine -match '^\*\*\*\s+(Add|Update|Delete)\s+File:\s*(.+?)\s*$') {
+                $targets.Add($Matches[2]) | Out-Null
+                continue
+            }
+            if ($cleanLine -match '^\*\*\*\s+Move\s+to:\s*(.+?)\s*$') {
+                $targets.Add($Matches[1]) | Out-Null
+            }
+        }
+    }
+    return $targets.ToArray()
+}
+
+function Test-ApplyPatchTargetRisk {
+    param(
+        [string]$Text,
+        [string]$SensitivePathPattern
+    )
+
+    foreach ($target in (Get-ApplyPatchTargetPaths -Text $Text)) {
+        $clean = ([string]$target).Trim().Trim('"', "'")
+        $normalized = ($clean -replace '/', '\').Trim()
+        if ([string]::IsNullOrWhiteSpace($normalized)) { continue }
+        if ($normalized -match $SensitivePathPattern) {
+            return "sensitive target $clean"
+        }
+        if ($normalized -match '(?i)^([A-Z]:\\?|\\+|/+|\.{1,2}|~|\*)$') {
+            return "broad target $clean"
+        }
+    }
+    return ""
+}
+
 function Test-EncodedPowerShellCommand {
     param([string]$CommandText)
 
@@ -191,7 +268,11 @@ function Test-EncodedPowerShellCommand {
         }
 
         if ($commandLeaf -match '(?i)^(Start-Process|saps|start)$') {
-            if (Test-TextContainsEncodedPowerShellInvocation -CommandText $segmentText) {
+            $launcherCommand = Get-StartProcessNestedCommandText -Segment $segment
+            if (
+                (Test-TextContainsEncodedPowerShellInvocation -CommandText $segmentText) -or
+                (Test-TextContainsEncodedPowerShellInvocation -CommandText $launcherCommand)
+            ) {
                 return $true
             }
             $startsPowerShell = $false
@@ -235,11 +316,11 @@ function Test-HighRiskDestructiveCommand {
     )
 
     $parsedItems = @(Get-PowerShellCommandTokens -CommandText $CommandText)
-    if ($parsedItems.Count -eq 0) {
+        if ($parsedItems.Count -eq 0) {
         return (
             ($CommandText -match '(?i)\bgit\s+reset\s+--hard\b') -or
             ($CommandText -match '(?i)\bgit\s+clean\s+-[^\r\n]*[fd]') -or
-            ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd)?\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|-[A-Za-z]*f[A-Za-z]*|(^|[\s"''`])\+[^"''`\s]+)') -or
+            ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd)?\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|--delete(?:=|$)|-[A-Za-z]*f[A-Za-z]*|(^|[\s"''`])-d(?=$|[\s"''`])|(^|[\s"''`])\+[^"''`\s]+|(^|[\s"''`]):[^"''`\s]+)') -or
             (
                 ($CommandText -match '(?i)\b(Remove-Item|ri|rm|rd|rmdir|del)\b') -and
                 ($CommandText -match $RecursiveFlagPattern) -and
@@ -303,12 +384,26 @@ function Test-HighRiskDestructiveCommand {
                     if (
                         ([string]$gitRemainingPart -match '(?i)^--force(?:=|$)') -or
                         ([string]$gitRemainingPart -match '(?i)^--force-with-lease(?:=|$)') -or
+                        ([string]$gitRemainingPart -match '(?i)^--delete(?:=|$)') -or
                         ([string]$gitRemainingPart -match '(?i)^-[A-Za-z]*f[A-Za-z]*') -or
-                        ([string]$gitRemainingPart -match '^\+')
+                        ([string]$gitRemainingPart -match '(?i)^-d$') -or
+                        ([string]$gitRemainingPart -match '^\+') -or
+                        ([string]$gitRemainingPart -match '^:')
                     ) {
                         return $true
                     }
                 }
+            }
+            continue
+        }
+
+        if ($commandLeaf -match '(?i)^(Start-Process|saps|start)$') {
+            $launcherCommand = Get-StartProcessNestedCommandText -Segment $segment
+            if (
+                $launcherCommand -and
+                (Test-HighRiskDestructiveCommand -CommandText $launcherCommand -BroadTargetPattern $BroadTargetPattern -RecursiveFlagPattern $RecursiveFlagPattern)
+            ) {
+                return $true
             }
             continue
         }
@@ -392,9 +487,24 @@ function Get-PreToolUseDecision {
             if (($nestedInspection -match $sensitivePathPattern) -and -not (($nestedInspection -match $safeReferenceSearchPattern) -and ($nestedInspection -notmatch $sensitivePathWithDirectoryPattern))) {
                 return [ordered]@{ decision = "deny"; reason = "nested credential or secret-file reads require explicit user approval and a narrower non-secret metadata route" }
             }
+            $nestedIsApplyPatch = $nestedToolText -match '(?i)(^|[._-])apply_patch$'
+            if ($nestedIsApplyPatch) {
+                $nestedApplyPatchRisk = Test-ApplyPatchTargetRisk -Text $nestedCombined -SensitivePathPattern $sensitivePathPattern
+                if ($nestedApplyPatchRisk) {
+                    return [ordered]@{ decision = "deny"; reason = "nested apply_patch targets $nestedApplyPatchRisk and requires explicit approval" }
+                }
+            }
             if (Test-HighRiskDestructiveCommand -CommandText $nestedCall.command -BroadTargetPattern $broadTargetPattern -RecursiveFlagPattern $recursiveFlagPattern) {
                 return [ordered]@{ decision = "deny"; reason = "nested broad destructive operations must be scoped and explicitly approved before hook execution" }
             }
+        }
+    }
+
+    $isApplyPatch = $toolText -match '(?i)(^|[._-])apply_patch$'
+    if ($isApplyPatch) {
+        $applyPatchRisk = Test-ApplyPatchTargetRisk -Text $inputText -SensitivePathPattern $sensitivePathPattern
+        if ($applyPatchRisk) {
+            return [ordered]@{ decision = "deny"; reason = "apply_patch targets $applyPatchRisk and requires explicit approval" }
         }
     }
 

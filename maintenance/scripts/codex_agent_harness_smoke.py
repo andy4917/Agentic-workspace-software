@@ -100,14 +100,28 @@ def configured_hook_command(root: Path, event_name: str) -> str:
     raise RuntimeError(f"missing configured hook route for {event_name}")
 
 
+def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
+    command = configured_hook_command(root, event_name)
+    argv = shlex.split(command, posix=(os.name != "nt"))
+    candidate_hook = str(root / "hooks" / "compact-codex-hook.ps1")
+    rewrote_file = False
+    for index, arg in enumerate(argv[:-1]):
+        if arg.lower() == "-file" and Path(argv[index + 1]).name.lower() == "compact-codex-hook.ps1":
+            argv[index + 1] = candidate_hook
+            rewrote_file = True
+            break
+    if not rewrote_file:
+        raise RuntimeError("configured hook route does not expose a compact-codex-hook.ps1 -File target")
+    return argv
+
+
 def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     env = os.environ.copy()
     env["CODEX_HOOK_SMOKE"] = "1"
     env["CODEX_HOME"] = str(root)
     event_name = str(payload.get("hook_event_name") or "")
     try:
-        command = configured_hook_command(root, event_name)
-        argv = shlex.split(command, posix=(os.name != "nt"))
+        argv = configured_hook_argv_for_smoke(root, event_name)
         completed = subprocess.run(
             argv,
             cwd=root,
@@ -134,6 +148,13 @@ def run_hook_sample(root: Path, command: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
         {"hook_event_name": "PreToolUse", "tool_name": "functions.shell_command", "tool_input": {"command": command}},
+    )
+
+
+def run_apply_patch_sample(root: Path, patch: str) -> dict[str, Any]:
+    return run_compact_hook_sample(
+        root,
+        {"hook_event_name": "PreToolUse", "tool_name": "functions.apply_patch", "tool_input": {"patch": patch}},
     )
 
 
@@ -329,6 +350,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_plus_refspec_push_stdout = git_plus_refspec_push_probe.get("stdout_preview", "").lower()
         git_scoped_plus_refspec_push_probe = run_hook_sample(root, "git -C . push origin +HEAD:main")
         git_scoped_plus_refspec_push_stdout = git_scoped_plus_refspec_push_probe.get("stdout_preview", "").lower()
+        git_push_delete_probe = run_hook_sample(root, "git push origin --delete old-branch")
+        git_push_delete_stdout = git_push_delete_probe.get("stdout_preview", "").lower()
+        git_push_colon_delete_probe = run_hook_sample(root, "git push origin :old-branch")
+        git_push_colon_delete_stdout = git_push_colon_delete_probe.get("stdout_preview", "").lower()
+        start_process_git_force_probe = run_hook_sample(root, "Start-Process git -ArgumentList 'push','origin','--force'")
+        start_process_git_force_stdout = start_process_git_force_probe.get("stdout_preview", "").lower()
+        start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
+        start_process_destructive_stdout = start_process_destructive_probe.get("stdout_preview", "").lower()
         git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
         git_regular_push_stdout = git_regular_push_probe.get("stdout_preview", "").lower()
         add_check(
@@ -359,9 +388,43 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in git_plus_refspec_push_stdout
             and git_scoped_plus_refspec_push_probe.get("status") == "pass"
             and "deny" in git_scoped_plus_refspec_push_stdout
+            and git_push_delete_probe.get("status") == "pass"
+            and "deny" in git_push_delete_stdout
+            and git_push_colon_delete_probe.get("status") == "pass"
+            and "deny" in git_push_colon_delete_stdout
+            and start_process_git_force_probe.get("status") == "pass"
+            and "deny" in start_process_git_force_stdout
+            and start_process_destructive_probe.get("status") == "pass"
+            and "deny" in start_process_destructive_stdout
             and git_regular_push_probe.get("status") == "pass"
             and "allow" in git_regular_push_stdout,
-            "PreToolUse should deny git push force forms and plus-refspec forced updates while preserving ordinary push.",
+            "PreToolUse should deny git push force/delete forms, plus-refspec forced updates, and Start-Process destructive wrappers while preserving ordinary push.",
+        )
+        sensitive_apply_patch = """*** Begin Patch
+*** Update File: C:\\Users\\anise\\.codex\\auth.json
+@@
+-old
++new
+*** End Patch
+"""
+        ordinary_apply_patch = """*** Begin Patch
+*** Update File: docs\\note.md
+@@
+-old
++new
+*** End Patch
+"""
+        sensitive_apply_patch_probe = run_apply_patch_sample(root, sensitive_apply_patch)
+        sensitive_apply_patch_stdout = sensitive_apply_patch_probe.get("stdout_preview", "").lower()
+        ordinary_apply_patch_probe = run_apply_patch_sample(root, ordinary_apply_patch)
+        ordinary_apply_patch_stdout = ordinary_apply_patch_probe.get("stdout_preview", "").lower()
+        add_check(
+            "pretooluse_blocks_sensitive_apply_patch_targets",
+            sensitive_apply_patch_probe.get("status") == "pass"
+            and "deny" in sensitive_apply_patch_stdout
+            and ordinary_apply_patch_probe.get("status") == "pass"
+            and "allow" in ordinary_apply_patch_stdout,
+            "PreToolUse should deny apply_patch targeting sensitive runtime files while preserving ordinary patch targets.",
         )
         blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
         blocked_stdout = blocked_probe.get("stdout_preview", "").lower()

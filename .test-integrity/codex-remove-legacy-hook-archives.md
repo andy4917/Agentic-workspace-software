@@ -262,6 +262,21 @@ keeping ordinary inspected tool use allowed.
   `Start-Process pwsh -ArgumentList '-EncodedCommand', ...` and
   `saps pwsh -ArgumentList '-enc', ...` in addition to direct, `cmd /c`, and
   path-qualified encoded PowerShell calls.
+- no-mistakes fix-review follow-up on `84d363e`: the active run
+  `01KTT7FN36HTVFKRT801NBVHDP` returned four more auto-fix findings. The hook
+  smoke runner now reads the configured hook route but rewrites the `-File`
+  target to the candidate worktree's `hooks/compact-codex-hook.ps1`, preserving
+  route arguments without accidentally executing the live runtime hook. The
+  compact hook now recurses `Start-Process`/`saps`/`start` launchers into the
+  destructive-command checker, blocks `git push --delete`, `git push -d`, and
+  `git push origin :branch`, and inspects `apply_patch` targets for sensitive
+  or broad destinations before non-shell allow.
+- New or updated oracle evidence: `hook-policy-smoke` now denies
+  `Start-Process git -ArgumentList 'push','origin','--force'`,
+  `Start-Process pwsh -ArgumentList '-Command','Remove-Item ... -Recurse'`,
+  `git push origin --delete old-branch`, `git push origin :old-branch`, and
+  `apply_patch` targeting `.codex\auth.json`, while preserving ordinary
+  `git push origin HEAD` and ordinary `apply_patch` targets.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
@@ -310,6 +325,9 @@ keeping ordinary inspected tool use allowed.
   smoke samples exercise the configured hook route rather than a hand-built
   command. Encoded PowerShell remains denied through direct invocation,
   `cmd /c`, path-qualified PowerShell, and `Start-Process` wrapper forms.
+  Destructive commands remain denied through direct shell, nested shell, and
+  `Start-Process` launcher forms; remote branch deletion via `git push` is
+  treated as a protected destructive operation.
 
 ## Outer Gate
 
