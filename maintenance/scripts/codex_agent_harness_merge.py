@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import tomllib
 from pathlib import Path
@@ -35,6 +36,24 @@ def compact_hook_fragment(hidden_hook_command: str) -> str:
         parts.append(f"timeout = {timeout}\n")
         parts.append('statusMessage = "compact scaffold hook"\n\n')
     return "".join(parts)
+
+
+def resolve_pwsh_for_hook() -> Path:
+    alias_stub = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+    program_files = Path(os.environ.get("ProgramFiles") or r"C:\Program Files")
+    candidates: list[Path] = []
+    windows_apps = program_files / "WindowsApps"
+    if windows_apps.exists():
+        candidates.extend(sorted(windows_apps.glob("Microsoft.PowerShell_*__8wekyb3d8bbwe/pwsh.exe"), reverse=True))
+    candidates.append(program_files / "PowerShell" / "7" / "pwsh.exe")
+    candidates.append(alias_stub)
+    for candidate in candidates:
+        if candidate.exists() and candidate != alias_stub:
+            return candidate
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return alias_stub
 
 
 def cmd_merge_config(args: argparse.Namespace) -> int:
@@ -269,7 +288,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         )
         write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n.codex-global-state.json.bak\n__pycache__/\n*.pyc\n")
         write_json(root / ".codex-global-state.json", {})
-        hook_pwsh = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+        hook_pwsh = resolve_pwsh_for_hook()
         hook_runner = Path.home() / ".codex" / "hooks" / "compact-codex-hook.ps1"
         hidden_hook_command = f"{hook_pwsh} -NoProfile -NonInteractive -WindowStyle Hidden -File {hook_runner}"
         hook_fragment = compact_hook_fragment(hidden_hook_command)

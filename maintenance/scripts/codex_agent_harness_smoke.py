@@ -255,8 +255,9 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "hook_config_runs_hidden_on_windows",
             "WindowStyle Hidden" in config_text
             and "cmd /c" not in config_text
+            and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in config_text.lower()
             and config_text.count("commandWindows") >= 5,
-            "Active hook fragment should define hidden commandWindows overrides for every hook while preserving stdout.",
+            "Active hook fragment should define hidden commandWindows overrides for every hook through a real pwsh.exe while preserving stdout.",
         )
         route_errors: list[str] = []
         route_hits: list[str] = []
@@ -287,6 +288,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                         and "pwsh.cmd" not in f"{command}\n{command_windows}".lower()
                         and "cmd /c" not in f"{command}\n{command_windows}".lower()
                         and "cmd.exe /c" not in f"{command}\n{command_windows}".lower()
+                        and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in f"{command}\n{command_windows}".lower()
                     ):
                         event_ok = True
                         route_hits.append(event)
@@ -295,7 +297,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         add_check(
             "hook_config_uses_configured_hidden_wrapper_routes",
             not route_errors and len(set(route_hits)) == 5,
-            "; ".join(route_errors[:5]) if route_errors else "All hook events route through command and commandWindows hidden compact runner definitions without cmd shim nesting.",
+            "; ".join(route_errors[:5]) if route_errors else "All hook events route through command and commandWindows hidden compact runner definitions without cmd shim nesting or WindowsApps alias stubs.",
         )
         add_check(
             "compact_hook_contains_current_contract",
@@ -368,6 +370,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_clean_long_force_stdout = git_clean_long_force_probe.get("stdout_preview", "").lower()
         git_scoped_clean_long_force_probe = run_hook_sample(root, "git -C . clean --force -d")
         git_scoped_clean_long_force_stdout = git_scoped_clean_long_force_probe.get("stdout_preview", "").lower()
+        git_clean_interactive_probe = run_hook_sample(root, "git clean -i")
+        git_clean_interactive_stdout = git_clean_interactive_probe.get("stdout_preview", "").lower()
+        git_clean_long_interactive_probe = run_hook_sample(root, "git clean --interactive")
+        git_clean_long_interactive_stdout = git_clean_long_interactive_probe.get("stdout_preview", "").lower()
         git_clean_dry_run_probe = run_hook_sample(root, "git clean -nfd")
         git_clean_dry_run_stdout = git_clean_dry_run_probe.get("stdout_preview", "").lower()
         git_clean_long_dry_run_probe = run_hook_sample(root, "git clean --dry-run -fd")
@@ -392,6 +398,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_array_force_stdout = git_array_force_probe.get("stdout_preview", "").lower()
         start_process_git_force_probe = run_hook_sample(root, "Start-Process git -ArgumentList 'push','origin','--force'")
         start_process_git_force_stdout = start_process_git_force_probe.get("stdout_preview", "").lower()
+        start_process_git_colon_force_probe = run_hook_sample(root, "Start-Process -FilePath:git -ArgumentList:'push','origin','--force'")
+        start_process_git_colon_force_stdout = start_process_git_colon_force_probe.get("stdout_preview", "").lower()
         start_process_git_arg_force_probe = run_hook_sample(root, "Start-Process git -Arg 'push','origin','--force'")
         start_process_git_arg_force_stdout = start_process_git_arg_force_probe.get("stdout_preview", "").lower()
         start_process_git_a_force_probe = run_hook_sample(root, "Start-Process git -A 'push','origin','--force'")
@@ -404,6 +412,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         start_process_git_wi_force_stdout = start_process_git_wi_force_probe.get("stdout_preview", "").lower()
         invoke_expression_git_force_probe = run_hook_sample(root, "Invoke-Expression 'git push origin --force'")
         invoke_expression_git_force_stdout = invoke_expression_git_force_probe.get("stdout_preview", "").lower()
+        pwsh_colon_command_force_probe = run_hook_sample(root, "pwsh -Command:'git push origin --force'")
+        pwsh_colon_command_force_stdout = pwsh_colon_command_force_probe.get("stdout_preview", "").lower()
         start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
         start_process_destructive_stdout = start_process_destructive_probe.get("stdout_preview", "").lower()
         git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
@@ -425,6 +435,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and git_scoped_clean_long_force_probe.get("status") == "pass"
             and "deny" in git_scoped_clean_long_force_stdout,
             "PreToolUse should deny git clean --force forms, including when git -C is used before the clean subcommand.",
+        )
+        add_check(
+            "pretooluse_blocks_git_clean_interactive",
+            git_clean_interactive_probe.get("status") == "pass"
+            and "deny" in git_clean_interactive_stdout
+            and git_clean_long_interactive_probe.get("status") == "pass"
+            and "deny" in git_clean_long_interactive_stdout,
+            "PreToolUse should deny non-dry-run git clean interactive forms because they can still delete files.",
         )
         add_check(
             "pretooluse_allows_git_clean_dry_run",
@@ -457,6 +475,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in git_array_force_stdout
             and start_process_git_force_probe.get("status") == "pass"
             and "deny" in start_process_git_force_stdout
+            and start_process_git_colon_force_probe.get("status") == "pass"
+            and "deny" in start_process_git_colon_force_stdout
             and start_process_git_arg_force_probe.get("status") == "pass"
             and "deny" in start_process_git_arg_force_stdout
             and start_process_git_a_force_probe.get("status") == "pass"
@@ -469,6 +489,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in start_process_git_wi_force_stdout
             and invoke_expression_git_force_probe.get("status") == "pass"
             and "deny" in invoke_expression_git_force_stdout
+            and pwsh_colon_command_force_probe.get("status") == "pass"
+            and "deny" in pwsh_colon_command_force_stdout
             and start_process_destructive_probe.get("status") == "pass"
             and "deny" in start_process_destructive_stdout
             and git_regular_push_probe.get("status") == "pass"

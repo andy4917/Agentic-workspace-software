@@ -4,16 +4,16 @@
 matcher = "startup|resume"
 [[hooks.SessionStart.hooks]]
 type = "command"
-command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
-commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+command = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
-commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+command = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
@@ -21,8 +21,8 @@ statusMessage = "compact scaffold hook"
 matcher = "Bash|functions\\..*|multi_tool_use\\..*|multi_agent.*|tool_search\\..*|web\\..*|image_gen\\..*|codex_app\\..*|apply_patch|mcp__.*"
 [[hooks.PreToolUse.hooks]]
 type = "command"
-command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
-commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+command = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
@@ -30,16 +30,16 @@ statusMessage = "compact scaffold hook"
 matcher = "Bash|functions\\..*|multi_tool_use\\..*|multi_agent.*|tool_search\\..*|web\\..*|image_gen\\..*|codex_app\\..*|apply_patch|mcp__.*"
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
-commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+command = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 30
 statusMessage = "compact scaffold hook"
 
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
-commandWindows = 'C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+command = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
+commandWindows = 'C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe\pwsh.exe -NoProfile -NonInteractive -WindowStyle Hidden -File C:\Users\anise\.codex\hooks\compact-codex-hook.ps1'
 timeout = 10
 statusMessage = "compact scaffold hook"
 

@@ -357,6 +357,22 @@ keeping ordinary inspected tool use allowed.
 - New or updated oracle evidence: `hook-policy-smoke` now denies
   `Start-Process git -A 'push','origin','--force'` and
   `Start-Process git -Wi Hidden 'push origin --force'`.
+- no-mistakes follow-up on `cac8f01`: run `01KTTKV71E83HFA910AATM8B9X`
+  returned `HOOK-COLON-PARAM-BYPASS`, `GIT-CLEAN-INTERACTIVE-BYPASS`, and
+  `HOOK-PWSH-ALIAS-FRAGILE`. The compact hook now strips colon-bound parameter
+  values before matching PowerShell parameter names, denies non-dry-run
+  interactive `git clean`, and the hook route now uses the verified real
+  PowerShell 7 executable instead of the WindowsApps alias stub.
+- New or updated oracle evidence: `hook-policy-smoke` now denies
+  `Start-Process -FilePath:git -ArgumentList:'push','origin','--force'`,
+  `pwsh -Command:'git push origin --force'`, `git clean -i`, and
+  `git clean --interactive`, while validator/smoke fail if hook commands route
+  through `AppData\Local\Microsoft\WindowsApps\pwsh.exe`.
+- User-observed foreground command-loop follow-up: the P0 loop no longer runs
+  Scoop checks through `cmd.exe /c scoop`; it resolves `scoop.ps1` and a real
+  `pwsh.exe`, then captures `scoop status` and `scoop checkup` through the same
+  no-window process-capture helper. `scoop update` was run to close the current
+  bucket staleness warning before rechecking `scoop_health_current`.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until

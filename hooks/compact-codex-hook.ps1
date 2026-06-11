@@ -174,7 +174,7 @@ function Test-NamedParameter {
     )
 
     if ([string]::IsNullOrWhiteSpace($Value) -or $Value -notmatch '^-') { return $false }
-    $name = $Value.TrimStart("-")
+    $name = (($Value.TrimStart("-")) -replace ":.*$", "")
     return ($Names -contains $name)
 }
 
@@ -322,11 +322,12 @@ function Test-EncodedPowerShellCommand {
         $segmentText = ($segment -join " ")
 
         if ($commandLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
+            $powerShellCommandParameters = @(Get-ParameterPrefixes -Name "Command" -MinLength 1)
             if ($segmentText -match '(?i)(^|[\s"''`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=])') {
                 return $true
             }
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
-                if ($segment[$segmentIndex] -notmatch '(?i)^-(Command|c)$') { continue }
+                if (-not (Test-NamedParameter -Value $segment[$segmentIndex] -Names $powerShellCommandParameters)) { continue }
                 if ($segmentIndex + 1 -ge $segment.Count) { continue }
                 $nestedCommand = ($segment[($segmentIndex + 1)..($segment.Count - 1)] -join " ")
                 if (Test-EncodedPowerShellCommand -CommandText $nestedCommand) {
@@ -392,7 +393,7 @@ function Test-HighRiskDestructiveCommand {
             (
                 ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd)?\b[^\r\n]*\bclean\b') -and
                 ($CommandText -notmatch '(?i)(^|[\s"''`])(--dry-run|-n[A-Za-z]*)(?=$|[\s"''`])') -and
-                ($CommandText -match '(?i)(^|[\s"''`])(--force(?:=\S*)?|-[A-Za-z]*f[A-Za-z]*)(?=$|[\s"''`])')
+                ($CommandText -match '(?i)(^|[\s"''`])(--force(?:=\S*)?|--interactive(?:=\S*)?|-[A-Za-z]*[fi][A-Za-z]*)(?=$|[\s"''`])')
             ) -or
             ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd)?\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|--delete(?:=|$)|--mirror(?:=|$)|--prune(?:=|$)|-[A-Za-z]*f[A-Za-z]*|(^|[\s"''`])-d(?=$|[\s"''`])|(^|[\s"''`])\+[^"''`\s]+|(^|[\s"''`]):[^"''`\s]+)') -or
             (
@@ -463,7 +464,8 @@ function Test-HighRiskDestructiveCommand {
                 foreach ($gitRemainingPart in $gitRemaining) {
                     if (
                         ([string]$gitRemainingPart -match '(?i)^--force(?:=|$)') -or
-                        ([string]$gitRemainingPart -match '(?i)^-[A-Za-z]*f[A-Za-z]*')
+                        ([string]$gitRemainingPart -match '(?i)^--interactive(?:=|$)') -or
+                        ([string]$gitRemainingPart -match '(?i)^-[A-Za-z]*[fi][A-Za-z]*')
                     ) {
                         return $true
                     }
@@ -512,8 +514,9 @@ function Test-HighRiskDestructiveCommand {
         }
 
         if ($commandLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
+            $powerShellCommandParameters = @(Get-ParameterPrefixes -Name "Command" -MinLength 1)
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
-                if ($segment[$segmentIndex] -notmatch '(?i)^-(Command|c)$') { continue }
+                if (-not (Test-NamedParameter -Value $segment[$segmentIndex] -Names $powerShellCommandParameters)) { continue }
                 if ($segmentIndex + 1 -ge $segment.Count) { continue }
                 $nestedCommand = ($segment[($segmentIndex + 1)..($segment.Count - 1)] -join " ")
                 if (Test-HighRiskDestructiveCommand -CommandText $nestedCommand -BroadTargetPattern $BroadTargetPattern -RecursiveFlagPattern $RecursiveFlagPattern) {

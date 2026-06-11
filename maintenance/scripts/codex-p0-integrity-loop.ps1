@@ -165,6 +165,37 @@ function Invoke-ProcessCapture {
     }
 }
 
+function Resolve-RealPwshExecutable {
+    $aliasStub = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"
+    $candidates = @()
+    $command = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source) -and [string]$command.Source -ne $aliasStub) {
+        $candidates += [string]$command.Source
+    }
+    $candidates += (Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe")
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        $candidates += [string]$command.Source
+    }
+    $candidates += $aliasStub
+    $selected = @($candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1)
+    if ($selected.Count -gt 0) {
+        return [string]$selected[0]
+    }
+    return $null
+}
+
+function Resolve-ScoopScript {
+    $command = Get-Command scoop.ps1 -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        return [string]$command.Source
+    }
+    $candidate = Join-Path $env:USERPROFILE "scoop\shims\scoop.ps1"
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        return $candidate
+    }
+    return $null
+}
+
 function ConvertFrom-JsonOutput {
     param([string]$Text)
 
@@ -564,8 +595,28 @@ if ($SkipScoop) {
         reason = "SkipScoop was set. Run without -SkipScoop to close P0 integrity."
     }
 } else {
-    $scoopStatusRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", "scoop", "status") -WorkingDirectory $repoRootResolved
-    $scoopCheckupRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", "scoop", "checkup") -WorkingDirectory $repoRootResolved
+    $scoopScript = Resolve-ScoopScript
+    $pwshForScoop = Resolve-RealPwshExecutable
+    if ([string]::IsNullOrWhiteSpace($scoopScript) -or [string]::IsNullOrWhiteSpace($pwshForScoop)) {
+        $scoopStatusRun = [pscustomobject]@{
+            stdout = ""
+            stderr = "scoop.ps1 or pwsh.exe not found"
+            exit_code = 127
+            command_line = "pwsh -File scoop.ps1 status"
+            started_utc = (Get-Date).ToUniversalTime().ToString("o")
+        }
+        $scoopCheckupRun = [pscustomobject]@{
+            stdout = ""
+            stderr = "scoop.ps1 or pwsh.exe not found"
+            exit_code = 127
+            command_line = "pwsh -File scoop.ps1 checkup"
+            started_utc = $scoopStatusRun.started_utc
+        }
+    } else {
+        $scoopCommonArgs = @("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $scoopScript)
+        $scoopStatusRun = Invoke-ProcessCapture -FilePath $pwshForScoop -Arguments ($scoopCommonArgs + @("status")) -WorkingDirectory $repoRootResolved
+        $scoopCheckupRun = Invoke-ProcessCapture -FilePath $pwshForScoop -Arguments ($scoopCommonArgs + @("checkup")) -WorkingDirectory $repoRootResolved
+    }
     $scoopStatusOutput = ($scoopStatusRun.stdout + $scoopStatusRun.stderr).Trim()
     $scoopCheckupOutput = ($scoopCheckupRun.stdout + $scoopCheckupRun.stderr).Trim()
     $scoopWarningPattern = "(?im)(^\s*WARN\b|bucket\(s\) out of date|run 'scoop update'|no shim found)"

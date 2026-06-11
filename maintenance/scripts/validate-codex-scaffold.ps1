@@ -53,14 +53,19 @@ function Resolve-PwshExecutable {
         return $script:PwshShimProbeExecutable
     }
 
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"),
-        (Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe")
-    )
+    $aliasStub = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"
+    $candidates = @()
     $command = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        if ([string]$command.Source -ne $aliasStub) {
+            $candidates += [string]$command.Source
+        }
+    }
+    $candidates += (Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe")
     if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
         $candidates += [string]$command.Source
     }
+    $candidates += $aliasStub
     $selected = @($candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1)
     if ($selected.Count -gt 0) {
         $script:PwshShimProbeExecutable = [string]$selected[0]
@@ -737,9 +742,15 @@ if ($LASTEXITCODE -eq 0) {
         $usesLegacyHook = $commandText -match "(?i)(lightweight-codex|hooks\.json)"
         $usesForegroundCmd = $commandText -match "(?i)\bcmd(?:\.exe)?\s*/c\b"
         $usesCmdShim = $commandText -match "(?i)\bpwsh\.cmd\b"
+        $usesAliasStub = $expandedCommand -match "(?i)\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh\.exe\b"
         $usesHiddenWrapper = $commandText -match "(?i)WindowStyle\s+Hidden"
         $usesDirectPwsh = $commandText -match "(?i)\bpwsh\.exe\b"
-        return ($referencesCompactHook -and -not $usesLegacyHook -and -not $usesForegroundCmd -and -not $usesCmdShim -and $usesHiddenWrapper -and $usesDirectPwsh)
+        $pwshPath = $null
+        if ($expandedCommand -match '^\s*"?([^"]*pwsh\.exe)"?(\s|$)') {
+            $pwshPath = $Matches[1]
+        }
+        $usesExistingPwsh = -not [string]::IsNullOrWhiteSpace($pwshPath) -and (Test-Path -LiteralPath $pwshPath -PathType Leaf)
+        return ($referencesCompactHook -and -not $usesLegacyHook -and -not $usesForegroundCmd -and -not $usesCmdShim -and -not $usesAliasStub -and $usesHiddenWrapper -and $usesDirectPwsh -and $usesExistingPwsh)
     }
     foreach ($commandItem in $hookCommands) {
         if (-not (& $testHookCommand $commandItem)) { $hookCommandProblems += $commandItem }
@@ -753,7 +764,7 @@ if ($LASTEXITCODE -eq 0) {
         command_bad = $hookCommandProblems
         command_windows_bad = $hookCommandWindowsProblems
         events = $hookEventDetails
-        note = "All hook events must route both command and commandWindows to the compact hook through direct hidden pwsh.exe, without foreground cmd.exe, .cmd shim nesting, or retired hook names."
+        note = "All hook events must route both command and commandWindows to the compact hook through a verified real hidden pwsh.exe, without foreground cmd.exe, .cmd shim nesting, WindowsApps alias stubs, or retired hook names."
     }
     $toolRoutingRequired = @("functions\..*", "multi_tool_use\..*", "tool_search\..*", "web\..*", "image_gen\..*", "mcp__.*")
     $toolRoutingByEvent = [ordered]@{}
