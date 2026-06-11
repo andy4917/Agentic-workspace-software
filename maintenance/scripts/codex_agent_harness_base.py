@@ -254,7 +254,9 @@ EVAL_TEMPLATES = {
         "setup": "Run from CODEX_HOME or a Windows CI checkout.",
         "success_criteria": [
             "tracked Python harness files compile",
-            "tracked JSON eval and hook policy files parse",
+            "tracked JSON evals parse",
+            "config.d/20-hooks.toml parses",
+            "compact_hook_route_scan runs",
             "PowerShell managed scripts parse",
             "repo-safe calibration smoke does not require ignored private config.toml",
             "mutable generated outputs are not tracked"
