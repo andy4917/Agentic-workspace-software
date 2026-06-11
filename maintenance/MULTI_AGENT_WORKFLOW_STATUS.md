@@ -18,20 +18,27 @@ authority.
 
 ## Current Config
 
-`%USERPROFILE%\.codex\config.toml` now explicitly enables:
+The reviewed source for this worktree keeps the active managed config narrow:
 
-- `features.multi_agent = true`
-- `features.child_agents_md = true`
-- `features.tool_search = true`
-- `features.tool_suggest = true`
-- `features.skill_mcp_dependency_install = true`
+- `model_reasoning_effort = "xhigh"` in `config.d/00-policy.toml`;
+- `features.hooks = true`;
+- `features.goals = true`;
+- `features.memories = true`;
+- `features.js_repl = false`;
+- `config.d/20-hooks.toml` covers `multi_agent.*`, `tool_search.*`,
+  `multi_tool_use.*`, MCP, web, image, and Desktop tool namespaces for compact
+  hook routing.
 
-`enable_fanout` and `multi_agent_v2` are listed by the installed `codex features list` command as under development. The official Codex feature-maturity documentation says under-development features are not ready for use, so these stay disabled.
+Runtime feature flags and tool namespaces are capability only. Standing
+subagent authorization comes from `AGENTS.md` and mirrored developer
+instructions, not from a feature flag by itself. `enable_fanout` and
+`multi_agent_v2` remain disabled unless a future current instruction reopens
+that boundary.
 
 ## Root Cause
 
-1. `config.toml` has the stable `multi_agent` flag enabled; feature activation
-   is not a completion claim.
+1. Feature or namespace activation is capability only and not a completion
+   claim.
 2. `AGENTS.md` now carries the standing authorization and final-evidence rule.
 3. `config.d/20-hooks.toml` routes lifecycle events to the compact hook only.
 4. `openaiDeveloperDocs` remains the only always-on MCP; tool exposure must
@@ -44,10 +51,13 @@ authority.
 - `config.d/20-hooks.toml` routes hook events to `hooks\compact-codex-hook.ps1`.
 - `hooks\compact-codex-hook.ps1` injects compact workflow calibration reminders
   without becoming completion authority.
-- `config.toml` now explicitly enables the stable workflow-adjacent feature flags recognized by the installed CLI, while leaving under-development fanout/v2 flags disabled.
-- `config.toml` now carries a compact top-level `developer_instructions` loop overlay so the PM evidence loop is injected as a developer message instead of relying only on user-scoped `AGENTS.md`.
-- `config.toml` now defines the `worker` role with `agents/worker.toml`, matching the existing explorer, reviewer, docs-researcher, and observer role pattern.
-- `model_reasoning_effort` is reset to `medium` as the persistent default; individual tasks can still escalate reasoning effort when justified.
+- `config.d/00-policy.toml` carries a compact `developer_instructions` loop
+  overlay for the compiled runtime config so the PM evidence loop is injected
+  as a developer message instead of relying only on user-scoped `AGENTS.md`.
+- `agents/worker.toml` exists as the worker role definition, matching the
+  existing explorer, reviewer, docs-researcher, and observer role pattern.
+- `model_reasoning_effort` remains `xhigh` as the persistent workstation
+  default; individual tasks can still choose a lower-effort path when justified.
 
 ## 2026-05-26 Review Finding
 
@@ -74,5 +84,7 @@ When standing authorization does not apply and the prompt does not explicitly au
 ## Evidence Sources
 
 - `codex --help`: `--enable <FEATURE>` maps to `features.<name>=true`.
-- `codex features list`: confirms `multi_agent`, `child_agents_md`, `tool_search`, `tool_suggest`, `skill_mcp_dependency_install`, `enable_fanout`, and `multi_agent_v2` are recognized feature names.
-- Official Codex feature-maturity docs say under-development features are not ready for use, which is why `enable_fanout` and `multi_agent_v2` are intentionally left disabled.
+- `config.d/00-policy.toml`: records the managed public-safe feature baseline
+  and default reasoning effort.
+- `config.d/20-hooks.toml`: records current Desktop tool namespace matcher
+  coverage for compact hook routing.

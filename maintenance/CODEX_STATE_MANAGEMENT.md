@@ -139,7 +139,9 @@ Currently byte-synced live-copy files are the public-safe paths named by the
   `maintenance\manifests\keep-set.json`;
 - public-safe maintenance scripts used by the scaffold, harness, P0 loop,
   browser/MCP toggles, and runtime cleanup;
-- `toolchains\README.md` and `toolchains\shims\no-mistakes.ps1`;
+- `toolchains\README.md` and PowerShell-native shim entry points such as
+  `toolchains\shims\codex.ps1`, `toolchains\shims\git.ps1`,
+  `toolchains\shims\no-mistakes.ps1`, and `toolchains\shims\pwsh.ps1`;
 - active live-called skills such as `skills\frontend-visual-debug\SKILL.md`,
   `skills\git-easy-korean\SKILL.md`, and
   `skills\test-integrity-gate\SKILL.md`.
@@ -164,7 +166,8 @@ Codex checks its own environment through these layers:
      toolchain/cache roots, transient roots, and direct-delete cleanup outcomes.
 4. `check-toolchain-sources.ps1`
    - verifies official-bundle and local-chain command resolution.
-5. `codex doctor --json`
+5. Codex CLI doctor through `toolchains\shims\codex.ps1` or the bundled
+   `codex.exe`
    - checks Codex app/runtime, auth mode metadata, config, network, state DBs,
      thread inventory, and installation consistency.
 6. `codex-p0-integrity-loop.ps1`

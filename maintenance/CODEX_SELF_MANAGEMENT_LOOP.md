@@ -110,7 +110,7 @@ Rollback is path-specific:
 
 - Config policy: restore the previous `config.d\00-policy.toml`, copy it to
   `.codex\config.d`, regenerate `.codex\config.toml`, then run validator and
-  `codex doctor`.
+  Codex doctor through `toolchains\shims\codex.ps1` or the bundled `codex.exe`.
 - Hook behavior: restore `hooks\compact-codex-hook.ps1`, copy it to
   `.codex\hooks`, then run hook smoke plus runtime validation.
 - Runtime cleanup: use `codex-runtime-process-cleanup.ps1 -Mode status` before

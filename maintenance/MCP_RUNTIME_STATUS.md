@@ -1,6 +1,7 @@
 # MCP Runtime Status
 
-Updated for the 2026-06-10 context7 uninstall baseline.
+Updated for the 2026-06-11 PowerShell-native shim and context7 uninstall
+baseline.
 
 ## Current Finding
 
@@ -59,8 +60,8 @@ Use these checks after MCP baseline changes:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -Json
-codex mcp list --json
-codex doctor --json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\toolchains\shims\codex.ps1 mcp list --json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\toolchains\shims\codex.ps1 doctor --json
 ```
 
 Expected scaffold validation:

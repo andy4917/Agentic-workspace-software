@@ -20,8 +20,8 @@ Use the latest user plan and current files as authority. For the PLAN FOR WORK b
 1. Inspect managed source under `C:\Users\anise\Documents\Codex` and live state under `C:\Users\anise\.codex` without reading secrets.
 2. When changing config, edit the managed `config.d` fragment first, sync it to live `config.d`, and regenerate live `config.toml`.
 3. Run direct checks:
-   - `codex mcp list --json`
-   - `codex doctor --json`
+   - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\toolchains\shims\codex.ps1 mcp list --json`
+   - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\toolchains\shims\codex.ps1 doctor --json`
    - `maintenance/scripts/validate-codex-scaffold.ps1 -Json`
    - `maintenance/scripts/codex-p0-integrity-loop.ps1 -Json`
 4. Check managed/live sync for public-safe scripts and fragments named by the validator.

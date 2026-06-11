@@ -188,7 +188,7 @@ runtime substrates block unrelated managed-source checks.
   loop from a clean tree.
 - `compat`: `codex_agent_harness.py verify` runs the current compatibility
   wrapper across repo verification, tier smoke, live scaffold validation, P0
-  report-only, MCP list, and `codex doctor`.
+  report-only, MCP list, and Codex doctor.
 - `no-mistakes`: repository handoff outer gate for non-self-certified
   validation, safe push, PR, CI, release, merge handoff, and test/TDD handoff.
   Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` after the
@@ -241,7 +241,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -ReportRoot %USERPROFILE%\Documents\Codex\reports
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-staged-sensitive-diff.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-worktree-sensitive-diff.ps1
-git -C %USERPROFILE%\.codex status --short
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\toolchains\shims\git.ps1 -C %USERPROFILE%\.codex status --short
 ```
 
 Use report-only P0 runs only for read-only audits or while intentionally keeping
@@ -259,7 +259,7 @@ verify wrapper after the direct validator/P0 checks:
 
 The compatibility wrapper must run the current control-plane stack
 (`repo-verify`, tier smoke, live scaffold validation, P0 report-only, MCP list,
-and `codex doctor`). Use the full P0 loop separately from a clean tree before
+and Codex doctor). Use the full P0 loop separately from a clean tree before
 publishing.
 
 ## Completion Rule
