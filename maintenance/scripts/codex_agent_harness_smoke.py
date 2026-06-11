@@ -385,6 +385,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         pwsh_ps1_encoded_stdout = pwsh_ps1_encoded_probe.get("stdout_preview", "").lower()
         start_process_pwsh_ps1_encoded_probe = run_hook_sample(root, f"Start-Process pwsh.ps1 -ArgumentList '-EncodedCommand', '{encoded_payload}'")
         start_process_pwsh_ps1_encoded_stdout = start_process_pwsh_ps1_encoded_probe.get("stdout_preview", "").lower()
+        pwsh_cmd_encoded_probe = run_hook_sample(root, f"pwsh.cmd -Encoded {encoded_payload}")
+        pwsh_cmd_encoded_stdout = pwsh_cmd_encoded_probe.get("stdout_preview", "").lower()
+        cmd_pwsh_cmd_encoded_probe = run_hook_sample(root, f"cmd /c pwsh.cmd -Enco {encoded_payload}")
+        cmd_pwsh_cmd_encoded_stdout = cmd_pwsh_cmd_encoded_probe.get("stdout_preview", "").lower()
         saps_encoded_probe = run_hook_sample(root, f"saps pwsh -ArgumentList '-enc', '{encoded_payload}'")
         saps_encoded_stdout = saps_encoded_probe.get("stdout_preview", "").lower()
         add_check(
@@ -406,6 +410,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in pwsh_ps1_encoded_stdout
             and start_process_pwsh_ps1_encoded_probe.get("status") == "pass"
             and "deny" in start_process_pwsh_ps1_encoded_stdout
+            and pwsh_cmd_encoded_probe.get("status") == "pass"
+            and "deny" in pwsh_cmd_encoded_stdout
+            and cmd_pwsh_cmd_encoded_probe.get("status") == "pass"
+            and "deny" in cmd_pwsh_cmd_encoded_stdout
             and saps_encoded_probe.get("status") == "pass"
             and "deny" in saps_encoded_stdout,
             "PreToolUse should deny encoded PowerShell payloads, including Start-Process wrappers, instead of trusting plaintext path inspection.",
@@ -672,11 +680,19 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         blocked_stdout = blocked_probe.get("stdout_preview", "").lower()
         camel_blocked_probe = run_camel_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
         camel_blocked_stdout = camel_blocked_probe.get("stdout_preview", "").lower()
+        npmrc_blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.npmrc")
+        npmrc_blocked_stdout = npmrc_blocked_probe.get("stdout_preview", "").lower()
+        kube_blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.kube\\config")
+        kube_blocked_stdout = kube_blocked_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_direct_secret_reads",
             blocked_probe.get("status") == "pass"
             and "permissiondecision" in blocked_stdout
             and "deny" in blocked_stdout
+            and npmrc_blocked_probe.get("status") == "pass"
+            and "deny" in npmrc_blocked_stdout
+            and kube_blocked_probe.get("status") == "pass"
+            and "deny" in kube_blocked_stdout
             and "credential" in blocked_stdout,
             "PreToolUse should deny direct credential-file read probes instead of unconditionally allowing them.",
         )

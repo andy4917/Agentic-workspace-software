@@ -208,7 +208,7 @@ function Get-ExecutableLeaf {
 function Test-PowerShellExecutableLeaf {
     param([string]$Leaf)
 
-    return ([string]$Leaf -match '(?i)^(powershell|pwsh)(\.exe|\.ps1)?$')
+    return ([string]$Leaf -match '(?i)^(powershell|pwsh)(\.exe|\.ps1|\.cmd)?$')
 }
 
 function Test-GitExecutableLeaf {
@@ -226,7 +226,7 @@ function Test-PosixShellExecutableLeaf {
 function Test-TextContainsEncodedPowerShellInvocation {
     param([string]$CommandText)
 
-    return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe|\.ps1)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=,])')
+    return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe|\.ps1|\.cmd)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|Encoded|Encode|Enco|enc|ec|e)(?=$|[\s"''`:=,])')
 }
 
 function Get-ParameterPrefixes {
@@ -437,7 +437,7 @@ function Test-EncodedPowerShellCommand {
 
         if (Test-PowerShellExecutableLeaf -Leaf $commandLeaf) {
             $powerShellCommandParameters = @(Get-ParameterPrefixes -Name "Command" -MinLength 1)
-            if ($segmentText -match '(?i)(^|[\s"''`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=])') {
+            if ($segmentText -match '(?i)(^|[\s"''`])-(EncodedCommand|Encoded|Encode|Enco|enc|ec|e)(?=$|[\s"''`:=])') {
                 return $true
             }
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
@@ -470,7 +470,7 @@ function Test-EncodedPowerShellCommand {
             }
             if (
                 $startsPowerShell -and
-                $segmentText -match '(?i)(^|[\s"'',`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=,])'
+                $segmentText -match '(?i)(^|[\s"'',`])-(EncodedCommand|Encoded|Encode|Enco|enc|ec|e)(?=$|[\s"''`:=,])'
             ) {
                 return $true
             }
@@ -690,11 +690,12 @@ function Get-PreToolUseDecision {
     $inspectionText = "$toolText`n$commandText"
     $isShellLike = $toolText -match '(?i)(^|\.|_)(bash|shell|shell_command|powershell|pwsh|cmd)$'
     $contentReadCommandPattern = '(?i)\b(Get-Content|type|cat|gc|more)\b'
-    $sensitivePathPattern = '(?i)(\.env(\.[\w.-]+)?|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
-    $sensitivePathWithDirectoryPattern = '(?i)(\.codex[\\/]|C:\\|%USERPROFILE%|\$env:USERPROFILE|~[\\/])[^"''\s]*(\.env(\.[\w.-]+)?|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
+    $sensitiveFileNamePattern = '(\.env(\.[\w.-]+)?|\.npmrc|\.netrc|\.pypirc|pip\.conf|kubeconfig|(?:\.kube[\\/])?config|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
+    $sensitivePathPattern = "(?i)$sensitiveFileNamePattern"
+    $sensitivePathWithDirectoryPattern = "(?i)(\.codex[\\/]|C:\\|%USERPROFILE%|\`$env:USERPROFILE|~[\\/])[^`"'\s]*$sensitiveFileNamePattern"
     $safeReferenceSearchPattern = '(?i)((^|[\r\n])\s*(rg|grep)\b(?:\s+-[^\r\n\s]+)*\s+["'']?(auth\.json|\.env|credentials?\.json|api[-_]?key|credential|password|passwd|secret|token|cookie|session)["'']?\s+["'']?(docs?|maintenance|AGENTS\.md|README(\.md)?)["'']?\s*$|\bSelect-String\b[^\r\n]*-Pattern\s+["'']?(auth\.json|\.env|credentials?\.json|api[-_]?key|credential|password|passwd|secret|token|cookie|session)["'']?[^\r\n]*(?:-Path|-LiteralPath)\s+["'']?(docs?|maintenance|AGENTS\.md|README(\.md)?)["'']?\s*$)'
-    $selectStringExplicitPathPattern = '(?i)\bSelect-String\b[^\r\n]*(?:-Path|-LiteralPath)\s+["'']?[^"''\s]*(\.env(\.[\w.-]+)?|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
-    $selectStringPositionalPathPattern = '(?i)\bSelect-String\b(?:[^\r\n]*\s-Pattern\s+\S+|\s+(?!-)\S+)\s+["'']?[^"''\s]*(\.env(\.[\w.-]+)?|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
+    $selectStringExplicitPathPattern = "(?i)\bSelect-String\b[^\r\n]*(?:-Path|-LiteralPath)\s+[`"']?[^`"'\s]*$sensitiveFileNamePattern"
+    $selectStringPositionalPathPattern = "(?i)\bSelect-String\b(?:[^\r\n]*\s-Pattern\s+\S+|\s+(?!-)\S+)\s+[`"']?[^`"'\s]*$sensitiveFileNamePattern"
     $fileReadMcpPattern = '(?i)^mcp__(?:[^_\s]*(?:fs|file|filesystem)[^_\s]*__|.*(?:__|[._-])(?:read|get|fetch|download|cat)[_-]?file\b|.*(?:__|[._-])read[_-]?path\b)'
     $broadTargetPattern = '(?i)([A-Z]:[\\/]|%USERPROFILE%|\$env:USERPROFILE|\$\{env:USERPROFILE\}|\$HOME|\$\{HOME\}|\$PWD|\$\{PWD\}|(^|[\s"''`])(HOME|PWD)(?=$|[\s"''`])|~|\*|(^|[\s"''`])(\.|\.\.|[\\/])([\\/\s"''`]|$))'
     $recursiveFlagPattern = '(?i)(^|[\s"''`])(-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?(?::\s*\$?true)?|-rf|-fr|/s)(?=$|[\s"''`])'
