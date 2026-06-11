@@ -426,22 +426,54 @@ Add-Check $checks "git_diff_closure" ($(if ($gitCommandsOk -and $gitCleanEnough)
     diff_check_output = ($gitDiffCheck.stdout + $gitDiffCheck.stderr).Trim()
 }
 
+$ensureWatchRun = $null
+$ensureWatch = $null
+if (-not [bool]$ReportOnly) {
+    $ensureWatchRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $cleanupScript,
+        "-Mode", "ensure-watch",
+        "-CodexHome", $codexHomeResolved,
+        "-CleanupStaleOnEnsure",
+        "-CleanupDuplicateRootsOnWatch",
+        "-CleanupRetiredRootsOnWatch",
+        "-StopAppServerOnOwnerExit",
+        "-StopAppServerOnOwnerNoVisibleWindow"
+    )
+    $ensureWatch = ConvertFrom-JsonOutput -Text $ensureWatchRun.stdout
+    Start-Sleep -Seconds 1
+}
+$ensureWatchOk = [bool]$ReportOnly -or ($null -ne $ensureWatchRun -and $ensureWatchRun.exit_code -eq 0 -and $null -ne $ensureWatch)
 $cleanupStatusRun = Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $cleanupScript, "-Mode", "status", "-CodexHome", $codexHomeResolved)
 $cleanupStatus = ConvertFrom-JsonOutput -Text $cleanupStatusRun.stdout
 $cleanupOk = $cleanupStatusRun.exit_code -eq 0 -and $null -ne $cleanupStatus
 $managedOrphans = @(if ($cleanupOk -and $null -ne $cleanupStatus.managed_orphans) { @($cleanupStatus.managed_orphans) } else { @() })
 $duplicateKeys = @(if ($cleanupOk -and $null -ne $cleanupStatus.duplicate_keys) { @($cleanupStatus.duplicate_keys) } else { @() })
 $watchers = @(if ($cleanupOk -and $null -ne $cleanupStatus.watchers) { @($cleanupStatus.watchers) } else { @() })
-Add-Check $checks "runtime_cleanup_status" ($(if ($cleanupOk -and $managedOrphans.Count -eq 0 -and $duplicateKeys.Count -eq 0 -and (($null -eq $cleanupStatus.app_server_pid) -or $watchers.Count -gt 0)) { "pass" } else { "fail" })) @{
+$requiredWatchers = @(
+    if ($cleanupOk -and $null -ne $cleanupStatus.app_server_pid) {
+        $watchers | Where-Object { $_.WatchedAppServerPid -eq $cleanupStatus.app_server_pid -and [bool]$_.StopAppServerOnOwnerExit -and [bool]$_.StopAppServerOnOwnerNoVisibleWindow -and [bool]$_.CleanupDuplicateRootsOnWatch -and [bool]$_.CleanupRetiredRootsOnWatch }
+    }
+)
+$hasRequiredWatcher = $cleanupOk -and (($null -eq $cleanupStatus.app_server_pid) -or $requiredWatchers.Count -gt 0)
+Add-Check $checks "runtime_cleanup_status" ($(if ($ensureWatchOk -and $cleanupOk -and $managedOrphans.Count -eq 0 -and $duplicateKeys.Count -eq 0 -and $hasRequiredWatcher) { "pass" } else { "fail" })) @{
     command = $cleanupStatusRun.command_line
     cwd = $cleanupStatusRun.working_directory
     timestamp_utc = $cleanupStatusRun.started_utc
     exit_code = $cleanupStatusRun.exit_code
-    evidence = "app_server_pid=$($cleanupStatus.app_server_pid); watchers=$($watchers.Count); managed_orphans=$($managedOrphans.Count); duplicate_keys=$($duplicateKeys.Count)"
+    evidence = "app_server_pid=$($cleanupStatus.app_server_pid); watchers=$($watchers.Count); required_watchers=$($requiredWatchers.Count); managed_orphans=$($managedOrphans.Count); duplicate_keys=$($duplicateKeys.Count)"
     app_server_pid = $(if ($cleanupOk) { $cleanupStatus.app_server_pid } else { $null })
     watcher_pids = @($watchers | ForEach-Object { $_.ProcessId })
+    required_watcher_pids = @($requiredWatchers | ForEach-Object { $_.ProcessId })
+    required_watcher_present = $hasRequiredWatcher
     managed_orphan_count = $managedOrphans.Count
     duplicate_keys = @($duplicateKeys)
+    ensure_watch_ok = $ensureWatchOk
+    ensure_watch_exit_code = $(if ($null -ne $ensureWatchRun) { $ensureWatchRun.exit_code } else { $null })
+    ensure_watch_started = $(if ($null -ne $ensureWatch) { $ensureWatch.watcher_started } else { $null })
+    ensure_watch_effective_watcher_pids = $(if ($null -ne $ensureWatch) { @($ensureWatch.effective_watcher_pids) } else { @() })
+    ensure_watch_not_run_reason = $(if ([bool]$ReportOnly) { "ReportOnly keeps runtime watcher setup read-only." } else { $null })
     stderr = $cleanupStatusRun.stderr.Trim()
 }
 

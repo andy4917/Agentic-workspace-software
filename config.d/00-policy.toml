@@ -34,9 +34,9 @@ Passing tests is necessary but not sufficient. Prefer small, maintainable, revie
 Resolve ambiguity in favor of the user's intent, generalization, maintainability, and verification integrity. If a shortcut would make the user feel misled once disclosed, do not implement it; report the risk and propose a safer alternative.
 """
 
-notify = [ "C:\\Users\\anise\\.codex\\plugins\\cache\\openai-bundled\\computer-use\\26.602.71036\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
 [features]
 hooks = true
+code_mode = true
 js_repl = false
 goals = true
 memories = true

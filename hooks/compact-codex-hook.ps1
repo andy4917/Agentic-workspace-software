@@ -368,6 +368,42 @@ function Get-StartProcessNestedCommandText {
     return "$target $argumentText".Trim()
 }
 
+function Get-InvokeExpressionLiteralCommandText {
+    param([object[]]$Segment)
+
+    $commandParts = New-Object System.Collections.Generic.List[string]
+    $expectCommandValue = $false
+    foreach ($segmentValue in $Segment) {
+        $value = [string]$segmentValue
+        if ([string]::IsNullOrWhiteSpace($value) -or $value -eq ",") { continue }
+        if ($value -match '^(-{1,2}[^:=\s]+)[:=](.+)$') {
+            $parameterName = [string]$Matches[1]
+            $inlineValue = ([string]$Matches[2]).Trim().Trim('"', "'")
+            if (Test-NamedParameter -Value $parameterName -Names @(Get-ParameterPrefixes -Name "Command" -MinLength 1)) {
+                if (-not [string]::IsNullOrWhiteSpace($inlineValue)) {
+                    $commandParts.Add($inlineValue) | Out-Null
+                }
+                continue
+            }
+        }
+        if ($expectCommandValue) {
+            $commandParts.Add($value) | Out-Null
+            $expectCommandValue = $false
+            continue
+        }
+        if (Test-NamedParameter -Value $value -Names @(Get-ParameterPrefixes -Name "Command" -MinLength 1)) {
+            $expectCommandValue = $true
+            continue
+        }
+        $commandParts.Add($value) | Out-Null
+    }
+
+    $nestedCommand = (($commandParts.ToArray()) -join " ").Trim()
+    if ([string]::IsNullOrWhiteSpace($nestedCommand)) { return "" }
+    if ($nestedCommand -match '(^|[^`])\$' -or $nestedCommand -match '`') { return "" }
+    return $nestedCommand.Trim('"', "'")
+}
+
 function Get-ApplyPatchTargetPaths {
     param([string]$Text)
 
@@ -629,7 +665,11 @@ function Test-HighRiskDestructiveCommand {
         }
 
         if ($commandLeaf -match '(?i)^(Invoke-Expression|iex)$') {
-            return $true
+            $nestedCommand = Get-InvokeExpressionLiteralCommandText -Segment $segment
+            if ([string]::IsNullOrWhiteSpace($nestedCommand)) { return $true }
+            if (Test-HighRiskDestructiveCommand -CommandText $nestedCommand -BroadTargetPattern $BroadTargetPattern -RecursiveFlagPattern $RecursiveFlagPattern) {
+                return $true
+            }
             continue
         }
 
@@ -745,6 +785,44 @@ function Get-PreToolUseDecision {
         $applyPatchRisk = Test-ApplyPatchTargetRisk -Text $inputText -SensitivePathPattern $sensitivePathPattern
         if ($applyPatchRisk) {
             return [ordered]@{ decision = "deny"; reason = "apply_patch targets $applyPatchRisk and requires explicit approval" }
+        }
+    }
+
+    $isProgrammaticExec = $toolText -match '(?i)^functions\.exec$'
+    if ($isProgrammaticExec) {
+        $execInspection = "$toolText`n$inputText"
+        if ((Test-TextContainsEncodedPowerShellInvocation -CommandText $inputText) -or (Test-EncodedPowerShellCommand -CommandText $inputText)) {
+            return [ordered]@{ decision = "deny"; reason = "programmatic exec payload contains encoded PowerShell and must be inspected outside the hook boundary" }
+        }
+        if ($execInspection -match $contentReadCommandPattern -and $execInspection -match $sensitivePathPattern) {
+            return [ordered]@{ decision = "deny"; reason = "programmatic exec payload reads credential or secret files and requires explicit user approval" }
+        }
+        if ($execInspection -match $selectStringExplicitPathPattern -or $execInspection -match $selectStringPositionalPathPattern) {
+            return [ordered]@{ decision = "deny"; reason = "programmatic exec payload reads credential or secret files and requires explicit user approval" }
+        }
+        if (($execInspection -match $sensitivePathPattern) -and -not (($execInspection -match $safeReferenceSearchPattern) -and ($execInspection -notmatch $sensitivePathWithDirectoryPattern))) {
+            return [ordered]@{ decision = "deny"; reason = "programmatic exec payload references credential or secret files and requires explicit user approval" }
+        }
+        $execApplyPatchRisk = Test-ApplyPatchTargetRisk -Text $inputText -SensitivePathPattern $sensitivePathPattern
+        if ($execApplyPatchRisk) {
+            return [ordered]@{ decision = "deny"; reason = "programmatic exec payload applies patch to $execApplyPatchRisk and requires explicit approval" }
+        }
+        $execRawDestructive = (
+            ($inputText -match '(?i)\bgit(?:\.exe|\.cmd|\.ps1)?\s+reset\s+--hard\b') -or
+            (
+                ($inputText -match '(?i)\bgit(?:\.exe|\.cmd|\.ps1)?\b[^\r\n]*\bclean\b') -and
+                ($inputText -notmatch '(?i)(^|[\s"''`])(--dry-run|-n[A-Za-z]*)(?=$|[\s"''`])') -and
+                ($inputText -match '(?i)(^|[\s"''`])(--force(?:=\S*)?|--interactive(?:=\S*)?|-[A-Za-z]*[fi][A-Za-z]*)(?=$|[\s"''`])')
+            ) -or
+            ($inputText -match '(?i)\bgit(?:\.exe|\.cmd|\.ps1)?\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|--delete(?:=|$)|--mirror(?:=|$)|--prune(?:=|$)|-[A-Za-z]*f[A-Za-z]*|(^|[\s"''`])-d(?=$|[\s"''`])|(^|[\s"''`])\+[^"''`\s]+|(^|[\s"''`]):[^"''`\s]+)') -or
+            (
+                ($inputText -match '(?i)\b(Remove-Item|ri|rm|rd|rmdir|del)\b') -and
+                ($inputText -match $recursiveFlagPattern) -and
+                ($inputText -match $broadTargetPattern)
+            )
+        )
+        if ($execRawDestructive -or (Test-HighRiskDestructiveCommand -CommandText $inputText -BroadTargetPattern $broadTargetPattern -RecursiveFlagPattern $recursiveFlagPattern)) {
+            return [ordered]@{ decision = "deny"; reason = "programmatic exec payload contains broad destructive operations and requires explicit approval" }
         }
     }
 

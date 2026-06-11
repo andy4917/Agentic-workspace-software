@@ -115,6 +115,47 @@ function Get-ProcessSnapshotsByName {
     @(Get-ProcessSnapshotTable | Where-Object { [string]$_.Name -ieq $Name })
 }
 
+function Get-ManagedForegroundCmdWindows {
+    param([string]$CodexHome)
+
+    $managedRoots = @(
+        $CodexHome,
+        (Join-Path $env:USERPROFILE ".no-mistakes"),
+        (Join-Path $env:LOCALAPPDATA "OpenAI\Codex")
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+        ForEach-Object { ([string]$_).Replace("/", "\").TrimEnd("\") }
+    $managedRootPattern = if ($managedRoots.Count -gt 0) {
+        (($managedRoots | ForEach-Object { [regex]::Escape($_) }) -join "|")
+    } else {
+        "(?!)"
+    }
+    $managedTextPattern = "(?i)($managedRootPattern|chrome\.nativeMessaging|no-mistakes|OpenAI\\Codex)"
+
+    $visible = New-Object System.Collections.Generic.List[object]
+    foreach ($snapshot in @(Get-ProcessSnapshotsByName -Name "cmd.exe")) {
+        $commandLine = [string]$snapshot.CommandLine
+        if ($commandLine -notmatch $managedTextPattern) {
+            continue
+        }
+        $process = Get-Process -Id ([int]$snapshot.ProcessId) -ErrorAction SilentlyContinue
+        if ($null -eq $process) {
+            continue
+        }
+        $handle = [int64]$process.MainWindowHandle
+        if ($handle -eq 0) {
+            continue
+        }
+        $visible.Add([ordered]@{
+            process_id = [int]$snapshot.ProcessId
+            parent_process_id = [int]$snapshot.ParentProcessId
+            main_window_handle = $handle
+            main_window_title = [string]$process.MainWindowTitle
+            command_line = $commandLine
+        }) | Out-Null
+    }
+    return @($visible.ToArray())
+}
+
 function Invoke-Ps1ShimFile {
     param(
         [Parameter(Mandatory = $true)][string]$ScriptPath,
@@ -716,24 +757,46 @@ if ($LASTEXITCODE -eq 0) {
     $computerRoot = Get-PluginRoot -CacheRoot (Join-Path $CodexHome "plugins\cache\openai-bundled\computer-use") -RequiredRelativePaths @(
         ".codex-plugin\plugin.json",
         "scripts\computer-use-client.mjs",
-        "skills\computer-use\SKILL.md",
-        "node_modules\@oai\sky\bin\windows\codex-computer-use.exe"
+        "skills\computer-use\SKILL.md"
     )
     $selectedComputerHelper = if ($computerRoot) { Join-Path $computerRoot "node_modules\@oai\sky\bin\windows\codex-computer-use.exe" } else { "" }
+    $selectedComputerClient = if ($computerRoot) { Join-Path $computerRoot "scripts\computer-use-client.mjs" } else { "" }
+    $selectedComputerSkill = if ($computerRoot) { Join-Path $computerRoot "skills\computer-use\SKILL.md" } else { "" }
+    $selectedComputerHelperExists = (-not [string]::IsNullOrWhiteSpace($selectedComputerHelper)) -and (Test-Path -LiteralPath $selectedComputerHelper -PathType Leaf)
+    $selectedComputerSkillText = if (Test-Path -LiteralPath $selectedComputerSkill -PathType Leaf) { Get-Content -LiteralPath $selectedComputerSkill -Raw } else { "" }
+    $computerScriptBasedEvidence = (
+        (Test-Path -LiteralPath $selectedComputerClient -PathType Leaf) -and
+        $selectedComputerSkillText -match "computer-use-client\.mjs" -and
+        $selectedComputerSkillText -match "Do not spawn ``?codex-computer-use\.exe``?"
+    )
+    $computerModeValid = $selectedComputerHelperExists -or $computerScriptBasedEvidence
     $notifyItems = @()
     if ($null -ne $config.notify) {
         $notifyItems = @($config.notify | ForEach-Object { [string]$_ })
     }
     $configuredNotifyExecutable = if ($notifyItems.Count -gt 0) { [string]$notifyItems[0] } else { "" }
+    $notifyConfigured = -not [string]::IsNullOrWhiteSpace($configuredNotifyExecutable)
     $configuredNotifyExists = (-not [string]::IsNullOrWhiteSpace($configuredNotifyExecutable)) -and (Test-Path -LiteralPath $configuredNotifyExecutable -PathType Leaf)
     $notifyMatchesSelectedHelper = (Convert-ToComparablePath $configuredNotifyExecutable) -eq (Convert-ToComparablePath $selectedComputerHelper)
-    Add-Check $checks "computer_use_notify_matches_selected_helper" ($(if ($computerRoot -and (Test-Path -LiteralPath $selectedComputerHelper -PathType Leaf) -and $configuredNotifyExists -and $notifyMatchesSelectedHelper) { "pass" } else { "fail" })) @{
+    $computerNotifyRouteValid = if ($selectedComputerHelperExists) {
+        $configuredNotifyExists -and $notifyMatchesSelectedHelper
+    } else {
+        $computerScriptBasedEvidence -and -not $notifyConfigured
+    }
+    Add-Check $checks "computer_use_notify_matches_selected_helper" ($(if ($computerRoot -and $computerModeValid -and $computerNotifyRouteValid) { "pass" } else { "fail" })) @{
         computer_root = $computerRoot
         selected_helper = $selectedComputerHelper
+        selected_helper_exists = $selectedComputerHelperExists
+        selected_client = $selectedComputerClient
+        selected_skill = $selectedComputerSkill
+        script_based_mode_evidence = $computerScriptBasedEvidence
+        mode_valid = $computerModeValid
         configured_notify = $configuredNotifyExecutable
+        notify_configured = $notifyConfigured
         configured_notify_exists = $configuredNotifyExists
         notify_matches_selected_helper = $notifyMatchesSelectedHelper
-        note = "The active notify executable must match the selected Computer Use helper so cache-version updates cannot leave a stale turn-ended hook hidden behind passing plugin-root checks."
+        notify_route_valid = $computerNotifyRouteValid
+        note = "When the Computer Use plugin ships a helper executable, notify must match it. Current script-based Computer Use plugins must not keep a stale helper notify route."
     }
     $validatorSourcePath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
     $validatorText = [IO.File]::ReadAllText($validatorSourcePath, [Text.Encoding]::UTF8)
@@ -792,6 +855,7 @@ if ($LASTEXITCODE -eq 0) {
         $usesAliasStub = $expandedCommand -match "(?i)\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh\.exe\b"
         $usesVersionPinnedPwsh = $expandedCommand -match "(?i)\\Program Files\\WindowsApps\\Microsoft\.PowerShell_[^\\]+\\pwsh\.exe\b"
         $usesHiddenWrapper = $commandText -match "(?i)WindowStyle\s+Hidden"
+        $executionPolicyBypassCount = ([regex]::Matches($commandText, "(?i)-ExecutionPolicy\s+Bypass")).Count
         $referencesPwshShim = $expandedCommand -match [regex]::Escape($pwshShimPath)
         $startsWithStableWindowsPowerShell = $expandedCommand -match '^\s*"C:\\Windows\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe"(?=\s|$)'
         $quotesFileTargets = ([regex]::Matches($expandedCommand, '(?i)-File\s+"[^"]+"')).Count -ge 2
@@ -800,7 +864,7 @@ if ($LASTEXITCODE -eq 0) {
             (Test-Path -LiteralPath $pwshShimPath -PathType Leaf) -and
             (Test-Path -LiteralPath $hookPath -PathType Leaf)
         )
-        return ($referencesCompactHook -and $referencesPwshShim -and -not $usesLegacyHook -and -not $usesForegroundCmd -and -not $usesCmdShim -and -not $usesAliasStub -and -not $usesVersionPinnedPwsh -and $usesHiddenWrapper -and $startsWithStableWindowsPowerShell -and $quotesFileTargets -and $usesExistingRoute)
+        return ($referencesCompactHook -and $referencesPwshShim -and -not $usesLegacyHook -and -not $usesForegroundCmd -and -not $usesCmdShim -and -not $usesAliasStub -and -not $usesVersionPinnedPwsh -and $usesHiddenWrapper -and $executionPolicyBypassCount -ge 2 -and $startsWithStableWindowsPowerShell -and $quotesFileTargets -and $usesExistingRoute)
     }
     foreach ($commandItem in $hookCommands) {
         if (-not (& $testHookCommand $commandItem)) { $hookCommandProblems += $commandItem }
@@ -814,7 +878,12 @@ if ($LASTEXITCODE -eq 0) {
         command_bad = $hookCommandProblems
         command_windows_bad = $hookCommandWindowsProblems
         events = $hookEventDetails
-        note = "All hook events must route both command and commandWindows through a stable hidden Windows PowerShell launcher into pwsh.ps1 and the compact hook, without foreground cmd.exe, .cmd shim nesting, WindowsApps alias stubs, version-pinned WindowsApps pwsh.exe paths, or retired hook names."
+        note = "All hook events must route both command and commandWindows through a stable hidden Windows PowerShell launcher into pwsh.ps1 and the compact hook, with execution policy bypass on both parent and child PowerShell invocations, without foreground cmd.exe, .cmd shim nesting, WindowsApps alias stubs, version-pinned WindowsApps pwsh.exe paths, or retired hook names."
+    }
+    $managedForegroundCmdWindows = @(Get-ManagedForegroundCmdWindows -CodexHome $CodexHome)
+    Add-Check $checks "managed_foreground_cmd_windows_absent" ($(if ($managedForegroundCmdWindows.Count -eq 0) { "pass" } else { "fail" })) @{
+        visible_managed_cmd_windows = $managedForegroundCmdWindows
+        note = "Managed Codex, no-mistakes, and Chrome native messaging cmd.exe processes must not own a foreground window. Background cmd.exe wrappers with MainWindowHandle=0 are reported elsewhere but do not fail this check."
     }
     $toolRoutingRequired = @("functions\..*", "multi_tool_use\..*", "multi_agent.*", "tool_search\..*", "web\..*", "image_gen\..*", "codex_app\..*", "mcp__.*")
     $toolRoutingByEvent = [ordered]@{}
@@ -850,8 +919,18 @@ if ($LASTEXITCODE -eq 0) {
 $cleanupScript = Join-Path $CodexHome "maintenance\scripts\codex-runtime-process-cleanup.ps1"
 if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
     try {
-        $initialRuntimeView = Get-RuntimeStatusView -CleanupScript $cleanupScript -Root $CodexHome -Phase "initial"
         $runtimeRecoveryActions = New-Object System.Collections.Generic.List[object]
+        if (-not [bool]$ReportOnly) {
+            $ensureWatchOutput = & $cleanupScript -Mode ensure-watch -CodexHome $CodexHome -CleanupStaleOnEnsure -CleanupDuplicateRootsOnWatch -CleanupRetiredRootsOnWatch -StopAppServerOnOwnerExit -StopAppServerOnOwnerNoVisibleWindow 2>&1
+            $ensureWatchText = ($ensureWatchOutput | Out-String).Trim()
+            $runtimeRecoveryActions.Add([ordered]@{
+                action = "ensure-watch"
+                reason = "validator_requires_current_cleanup_watcher"
+                output_preview = ($ensureWatchText -replace "`r?`n", " ").Substring(0, [Math]::Min(500, $ensureWatchText.Length))
+            }) | Out-Null
+            Start-Sleep -Seconds 1
+        }
+        $initialRuntimeView = Get-RuntimeStatusView -CleanupScript $cleanupScript -Root $CodexHome -Phase "initial"
         $cleanupStatus = $initialRuntimeView.status
 
         if (-not (Test-RuntimeStatusViewClean -View $initialRuntimeView)) {
@@ -919,7 +998,7 @@ if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
         $appServerPid = $cleanupStatus.app_server_pid
         $watcherMatches = @(
             if ($null -ne $appServerPid) {
-                $watchers | Where-Object { $_.WatchedAppServerPid -eq $appServerPid -and [bool]$_.StopAppServerOnOwnerExit -and [bool]$_.StopAppServerOnOwnerNoVisibleWindow -and [bool]$_.CleanupRetiredRootsOnWatch }
+                $watchers | Where-Object { $_.WatchedAppServerPid -eq $appServerPid -and [bool]$_.StopAppServerOnOwnerExit -and [bool]$_.StopAppServerOnOwnerNoVisibleWindow -and [bool]$_.CleanupDuplicateRootsOnWatch -and [bool]$_.CleanupRetiredRootsOnWatch }
             }
         )
         $hasCleanupWatcher = ($null -eq $appServerPid) -or (@($watcherMatches).Count -gt 0)
@@ -1087,6 +1166,8 @@ try {
     $noMistakesWrapperPathProbeExit = $null
     $noMistakesWrapperPathProbeSanitizesVariants = $false
     $noMistakesWrapperPathProbePreservesOriginalEntries = $false
+    $noMistakesWrapperPathProbeExposesCodexExe = $false
+    $noMistakesWrapperPathProbeExposesPwshExe = $false
     $noMistakesWrapperBangProbeOutput = ""
     $noMistakesWrapperBangProbeExit = $null
     $noMistakesWrapperPreservesBangArgs = $false
@@ -1099,10 +1180,14 @@ try {
             $fakeNoMistakesDir = Join-Path $noMistakesWrapperProbeRoot "no-mistakes"
             New-Item -ItemType Directory -Path $fakeNoMistakesDir -Force | Out-Null
             Copy-Item -LiteralPath $env:ComSpec -Destination (Join-Path $fakeNoMistakesDir "no-mistakes.exe") -Force
+            $fakeCodexBinDir = Join-Path $noMistakesWrapperProbeRoot "OpenAI\Codex\bin"
+            New-Item -ItemType Directory -Path $fakeCodexBinDir -Force | Out-Null
+            Copy-Item -LiteralPath $env:ComSpec -Destination (Join-Path $fakeCodexBinDir "codex.exe") -Force
             $shimRootForward = $shimRoot -replace "\\", "/"
+            $shimRootEnvVarEntry = "%USERPROFILE%\.codex\toolchains\shims"
             $pathProbeOriginalBangEntry = "C:\Codex!PathProbe\Tools"
             $pathProbeOriginalSlashEntry = "C:/CodexPathProbe/Tools/"
-            $pathProbeInputs = @($shimRoot, "$shimRoot\", $shimRootForward, "$shimRootForward/", $pathProbeOriginalBangEntry, $pathProbeOriginalSlashEntry)
+            $pathProbeInputs = @($shimRoot, "$shimRoot\", $shimRootForward, "$shimRootForward/", $shimRootEnvVarEntry, $pathProbeOriginalBangEntry, $pathProbeOriginalSlashEntry)
             if ($previousPathForNoMistakesProbe) {
                 $pathProbeInputs += $previousPathForNoMistakesProbe
             }
@@ -1117,14 +1202,29 @@ try {
             $normalizedPathProbeEntries = @($pathProbeValue -split ";" | ForEach-Object {
                 ($_ -replace "/", "\").TrimEnd("\")
             } | Where-Object { $_ })
+            $expandedNormalizedPathProbeEntries = @($pathProbeValue -split ";" | ForEach-Object {
+                ([Environment]::ExpandEnvironmentVariables([string]$_) -replace "/", "\").TrimEnd("\")
+            } | Where-Object { $_ })
             $noMistakesWrapperPathProbeSanitizesVariants = (
                 $noMistakesWrapperPathProbeExit -eq 0 -and
-                -not (@($normalizedPathProbeEntries | Where-Object { $_ -ieq $normalizedShimRoot }).Count -gt 0)
+                -not (@($normalizedPathProbeEntries | Where-Object { $_ -ieq $normalizedShimRoot }).Count -gt 0) -and
+                -not (@($expandedNormalizedPathProbeEntries | Where-Object { $_ -ieq $normalizedShimRoot }).Count -gt 0)
             )
             $noMistakesWrapperPathProbePreservesOriginalEntries = (
                 $noMistakesWrapperPathProbeExit -eq 0 -and
                 $pathProbeValue -like "*$pathProbeOriginalBangEntry*" -and
                 $pathProbeValue -like "*$pathProbeOriginalSlashEntry*"
+            )
+            $noMistakesWrapperPathProbeExposesCodexExe = (
+                $noMistakesWrapperPathProbeExit -eq 0 -and
+                @($normalizedPathProbeEntries | Where-Object { $_ -ieq (($fakeCodexBinDir -replace "/", "\").TrimEnd("\")) }).Count -gt 0
+            )
+            $pwshProbeTool = Resolve-PwshExecutable
+            $pwshProbeDir = if ([string]::IsNullOrWhiteSpace($pwshProbeTool)) { "" } else { Split-Path -Parent $pwshProbeTool }
+            $noMistakesWrapperPathProbeExposesPwshExe = (
+                $noMistakesWrapperPathProbeExit -eq 0 -and
+                -not [string]::IsNullOrWhiteSpace($pwshProbeDir) -and
+                @($expandedNormalizedPathProbeEntries | Where-Object { $_ -ieq (($pwshProbeDir -replace "/", "\").TrimEnd("\")) }).Count -gt 0
             )
 
             $env:NO_MISTAKES_PROBE_ARG = "CORRUPTED"
@@ -1188,6 +1288,7 @@ try {
 
     $codexBatchShimPathPattern = "\.codex[\\/]toolchains[\\/]shims[\\/]codex\.cmd"
     $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesConfigText -match $codexBatchShimPathPattern)
+    $noMistakesCodexAgentUsesDirectExeOverride = [bool]($noMistakesConfigText -match "(?im)^\s*codex:\s*['""]?.*codex\.exe['""]?\s*$")
     $noMistakesConfigReady = (
         $noMistakesConfigText -match "(?m)^agent:\s*codex\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*--sandbox\s*$" -and
@@ -1195,10 +1296,14 @@ try {
         $noMistakesConfigText -match "(?m)^\s*-\s*--disable\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*plugins\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*--skip-git-repo-check\s*$" -and
-        -not ($noMistakesConfigText -match $codexBatchShimPathPattern)
+        -not $noMistakesCodexAgentUsesBatchShim
     )
     $noMistakesWrapperSanitizesPath = (
         $noMistakesShimText -match "CODEX_SHIM_DIR" -and
+        $noMistakesShimText -match "Convert-ToComparablePathEntry" -and
+        $noMistakesShimText -match "Resolve-PwshExecutable" -and
+        $noMistakesShimText -match "Add-PreferredPathDirectory" -and
+        $noMistakesShimText -match "\[Environment\]::ExpandEnvironmentVariables" -and
         $noMistakesShimText -match "NM_ORIGINAL_PATH" -and
         $noMistakesShimText -match "NM_PATH_ENTRY_ORIGINAL" -and
         $noMistakesShimText -match "NM_PATH_ENTRY_NORMALIZED" -and
@@ -1211,7 +1316,7 @@ try {
         $noMistakesVersionExit -eq 0 -and
         $noMistakesVersionOutput -match "no-mistakes version" -and
         $noMistakesCodexAgentDetected -and
-        -not $noMistakesCodexAgentUsesBatchShim -and
+        (-not $noMistakesCodexAgentUsesBatchShim) -and
         $noMistakesDaemonControlClean
     } else {
         $true
@@ -1223,6 +1328,8 @@ try {
         $noMistakesWrapperSanitizesPath -and
         $noMistakesWrapperPathProbeSanitizesVariants -and
         $noMistakesWrapperPathProbePreservesOriginalEntries -and
+        ($noMistakesWrapperPathProbeExposesCodexExe -or $noMistakesCodexAgentUsesDirectExeOverride) -and
+        $noMistakesWrapperPathProbeExposesPwshExe -and
         $noMistakesWrapperPreservesBangArgs -and
         $noMistakesDaemonControlClean
     )
@@ -1244,6 +1351,8 @@ try {
         wrapper_sanitizes_codex_shim_path = $noMistakesWrapperSanitizesPath
         wrapper_path_probe_sanitizes_variants = $noMistakesWrapperPathProbeSanitizesVariants
         wrapper_path_probe_preserves_original_entries = $noMistakesWrapperPathProbePreservesOriginalEntries
+        wrapper_path_probe_exposes_codex_exe = $noMistakesWrapperPathProbeExposesCodexExe
+        wrapper_path_probe_exposes_pwsh_exe = $noMistakesWrapperPathProbeExposesPwshExe
         wrapper_path_probe_exit_code = $noMistakesWrapperPathProbeExit
         wrapper_bang_arg_preserved = $noMistakesWrapperPreservesBangArgs
         wrapper_bang_probe_exit_code = $noMistakesWrapperBangProbeExit
@@ -1264,6 +1373,7 @@ try {
         doctor_skipped_reason = $noMistakesDoctorSkippedReason
         codex_agent_detected = $noMistakesCodexAgentDetected
         codex_agent_uses_batch_shim = $noMistakesCodexAgentUsesBatchShim
+        codex_agent_uses_direct_exe_override = $noMistakesCodexAgentUsesDirectExeOverride
         batch_shim_path_pattern = $codexBatchShimPathPattern
         telemetry_env = $env:NO_MISTAKES_TELEMETRY
         update_check_env = $env:NO_MISTAKES_NO_UPDATE_CHECK

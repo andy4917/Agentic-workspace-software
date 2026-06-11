@@ -93,13 +93,18 @@ def resolve_state_child_path(root: Path, path: str) -> tuple[Path | None, str | 
 def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
     try:
         skills_root = (root / "skills").resolve()
-        parent = removed_file.parent.resolve()
-        if parent.parent != skills_root:
+        current = removed_file.parent.resolve()
+        if skills_root not in current.parents:
             return None
-        if any(parent.iterdir()):
-            return None
-        parent.rmdir()
-        return rel(parent, root)
+        pruned: str | None = None
+        while current != skills_root and skills_root in current.parents:
+            if any(current.iterdir()):
+                break
+            parent = current.parent
+            current.rmdir()
+            pruned = rel(current, root)
+            current = parent.resolve()
+        return pruned
     except OSError:
         return None
 

@@ -128,13 +128,41 @@ function Repair-BrowserClient {
     )
 
     if (-not $NoNodeCheck) {
-        $node = Join-Path $CodexHome "toolchains\shims\node.cmd"
-        if (Test-Path -LiteralPath $node) {
-            & $node --check $BrowserClient | Out-Null
+        $node = Resolve-CodexBundledExe -Name "node"
+        if ([string]::IsNullOrWhiteSpace($node) -or -not (Test-Path -LiteralPath $node -PathType Leaf)) {
+            throw "Bundled node.exe not found for browser-client syntax check."
         }
+        & $node --check $BrowserClient | Out-Null
     }
 
     return "patched: chrome-extension origin allowed at $BrowserClient"
+}
+
+function Resolve-CodexBundledExe {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    $binRoot = Join-Path $env:LOCALAPPDATA "OpenAI\Codex\bin"
+    $direct = Join-Path $binRoot ($Name + ".exe")
+    if (Test-Path -LiteralPath $direct -PathType Leaf) {
+        return $direct
+    }
+
+    if (Test-Path -LiteralPath $binRoot -PathType Container) {
+        $match = Get-ChildItem -LiteralPath $binRoot -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $candidate = Join-Path $_.FullName ($Name + ".exe")
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                    Get-Item -LiteralPath $candidate
+                }
+            } |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+        if ($null -ne $match) {
+            return $match.FullName
+        }
+    }
+
+    return $null
 }
 
 $configPath = Join-Path $CodexHome "config.toml"

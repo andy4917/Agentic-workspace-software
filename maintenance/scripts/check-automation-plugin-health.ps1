@@ -346,8 +346,8 @@ function Invoke-NodeReplStdioProbe {
         [string]$Codex
     )
 
-    if (-not (Test-Path -LiteralPath $NodeRepl -PathType Leaf)) {
-        return [ordered]@{ ok = $false; exit_code = $null; output_excerpt = "node_repl shim missing" }
+    if ([string]::IsNullOrWhiteSpace($NodeRepl) -or -not (Test-Path -LiteralPath $NodeRepl -PathType Leaf)) {
+        return [ordered]@{ ok = $false; exit_code = $null; output_excerpt = "node_repl executable missing" }
     }
     $nodeReplExe = Resolve-CodexBundledExe -Name "node_repl"
     if ([string]::IsNullOrWhiteSpace($nodeReplExe)) {
@@ -357,9 +357,15 @@ function Invoke-NodeReplStdioProbe {
     if ([string]::IsNullOrWhiteSpace($nodeExe)) {
         $nodeExe = $Node
     }
+    if ([string]::IsNullOrWhiteSpace($nodeExe) -or -not (Test-Path -LiteralPath $nodeExe -PathType Leaf)) {
+        return [ordered]@{ ok = $false; exit_code = $null; output_excerpt = "node bundled exe missing" }
+    }
     $codexExe = Resolve-CodexBundledExe -Name "codex"
     if ([string]::IsNullOrWhiteSpace($codexExe)) {
         $codexExe = $Codex
+    }
+    if ([string]::IsNullOrWhiteSpace($codexExe) -or -not (Test-Path -LiteralPath $codexExe -PathType Leaf)) {
+        return [ordered]@{ ok = $false; exit_code = $null; output_excerpt = "codex bundled exe missing" }
     }
 
     $inputLines = @(
@@ -426,15 +432,14 @@ function Invoke-NodeReplStdioProbe {
 
 $checks = [System.Collections.Generic.List[object]]::new()
 $pluginCache = Join-PathStrict $CodexHome "plugins\cache\openai-bundled"
-$shimRoot = Join-PathStrict $CodexHome "toolchains\shims"
-$node = Join-PathStrict $shimRoot "node.cmd"
-$nodeRepl = Join-PathStrict $shimRoot "node_repl.cmd"
-$codex = Join-PathStrict $shimRoot "codex.ps1"
+$node = Resolve-CodexBundledExe -Name "node"
+$nodeRepl = Resolve-CodexBundledExe -Name "node_repl"
+$codex = Resolve-CodexBundledExe -Name "codex"
 $chromeRepairScript = Join-PathStrict $PSScriptRoot "repair-chrome-plugin-runtime.ps1"
 
 $nodeReplProbe = Invoke-NodeReplStdioProbe -NodeRepl $nodeRepl -CodexHome $CodexHome -Node $node -Codex $codex
 Add-Check $checks "node_repl_stdio_js_ready" ($(if ($nodeReplProbe.ok) { "pass" } else { "fail" })) @{
-    shim = $nodeRepl
+    executable = $nodeRepl
     probe = $nodeReplProbe
     note = "This proves the bundled execution primitive can initialize over MCP stdio and run JavaScript. Live tool-surface transport remains owned by the active Codex session."
 }
@@ -501,25 +506,44 @@ Add-Check $checks "chrome_plugin_runtime_health" ($(if ($chromeRoot -and $chrome
 $computerRoot = Get-PluginRoot -CacheRoot (Join-PathStrict $pluginCache "computer-use") -RequiredRelativePaths @(
     ".codex-plugin\plugin.json",
     "scripts\computer-use-client.mjs",
-    "skills\computer-use\SKILL.md",
-    "node_modules\@oai\sky\bin\windows\codex-computer-use.exe"
+    "skills\computer-use\SKILL.md"
 )
 $computerClient = if ($computerRoot) { Join-PathStrict $computerRoot "scripts\computer-use-client.mjs" } else { "" }
+$computerSkill = if ($computerRoot) { Join-PathStrict $computerRoot "skills\computer-use\SKILL.md" } else { "" }
 $computerHelper = if ($computerRoot) { Join-PathStrict $computerRoot "node_modules\@oai\sky\bin\windows\codex-computer-use.exe" } else { "" }
 $computerSyntax = Invoke-NodeSyntaxCheck -Node $node -Path $computerClient
 $configuredNotify = Get-ConfiguredNotifyExecutable -Root $CodexHome
+$notifyConfigured = -not [string]::IsNullOrWhiteSpace($configuredNotify)
 $configuredNotifyExists = (-not [string]::IsNullOrWhiteSpace($configuredNotify)) -and (Test-Path -LiteralPath $configuredNotify -PathType Leaf)
+$computerHelperExists = (Test-Path -LiteralPath $computerHelper -PathType Leaf)
+$computerSkillText = if (Test-Path -LiteralPath $computerSkill -PathType Leaf) { Get-Content -LiteralPath $computerSkill -Raw } else { "" }
+$computerScriptBasedEvidence = (
+    (Test-Path -LiteralPath $computerClient -PathType Leaf) -and
+    $computerSkillText -match "computer-use-client\.mjs" -and
+    $computerSkillText -match "Do not spawn ``?codex-computer-use\.exe``?"
+)
+$computerModeValid = $computerHelperExists -or $computerScriptBasedEvidence
 $notifyMatchesHelper = (Convert-ToComparablePath $configuredNotify) -eq (Convert-ToComparablePath $computerHelper)
-Add-Check $checks "computer_use_plugin_static_health" ($(if ($computerRoot -and $computerSyntax.ok -and (Test-Path -LiteralPath $computerHelper -PathType Leaf) -and $configuredNotifyExists -and $notifyMatchesHelper) { "pass" } else { "fail" })) @{
+$notifyRouteValid = if ($computerHelperExists) {
+    $configuredNotifyExists -and $notifyMatchesHelper
+} else {
+    $computerScriptBasedEvidence -and -not $notifyConfigured
+}
+Add-Check $checks "computer_use_plugin_static_health" ($(if ($computerRoot -and $computerSyntax.ok -and $computerModeValid -and $notifyRouteValid) { "pass" } else { "fail" })) @{
     root = $computerRoot
     computer_use_client = $computerClient
+    computer_use_skill = $computerSkill
     helper = $computerHelper
-    helper_exists = (Test-Path -LiteralPath $computerHelper -PathType Leaf)
+    helper_exists = $computerHelperExists
+    script_based_mode_evidence = $computerScriptBasedEvidence
+    mode_valid = $computerModeValid
     configured_notify_executable = $configuredNotify
+    notify_configured = $notifyConfigured
     configured_notify_exists = $configuredNotifyExists
     notify_matches_selected_helper = $notifyMatchesHelper
+    notify_route_valid = $notifyRouteValid
     client_syntax = $computerSyntax
-    note = "Static health avoids launching or controlling Windows apps; live app listing requires the active node_repl MCP transport. This check also proves the active notify executable matches the selected Computer Use helper so cache-version drift cannot pass silently."
+    note = "Static health avoids launching or controlling Windows apps. Script-based Computer Use plugins must not keep stale helper notify routes; helper-based plugins must match notify to the selected helper."
 }
 
 $failures = @($checks | Where-Object { $_.status -eq "fail" })
@@ -534,7 +558,7 @@ $result = [ordered]@{
             node_repl = "stdio MCP initialize plus JavaScript tool call"
             browser = "static plugin root, skill, and browser-client syntax"
             chrome = "static syntax, read-only plugin diagnostics, native-host manifest, and scaffold runtime status"
-            computer_use = "static plugin root, skill, client syntax, and helper executable presence"
+            computer_use = "static plugin root, skill, client syntax, and notify-route validity"
         }
     }
     checks = @($checks)

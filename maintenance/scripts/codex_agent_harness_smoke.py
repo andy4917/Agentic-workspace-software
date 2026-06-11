@@ -51,7 +51,11 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
         stop_stdout = stop_probe.get("stdout_preview", "").lower()
         add_check(
             "stop_hook_record_only_runtime",
-            stop_probe.get("status") == "pass" and "permissiondecision" not in stop_stdout and "deny" not in stop_stdout,
+            stop_probe.get("status") == "pass"
+            and "permissiondecision" not in stop_stdout
+            and "deny" not in stop_stdout
+            and '"decision":"block"' not in stop_stdout
+            and '"continue":false' not in stop_stdout,
             "Compact Stop hook should record evidence without claiming audit-blocking completion authority.",
         )
     finally:
@@ -113,13 +117,28 @@ def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
         argv = [arg[1:-1] if len(arg) >= 2 and arg[0] == '"' and arg[-1] == '"' else arg for arg in argv]
     candidate_hook = str(root / "hooks" / "compact-codex-hook.ps1")
     candidate_pwsh_shim = str(root / "toolchains" / "shims" / "pwsh.ps1")
+    live_root = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
+    allowed_roots = [root.resolve(), live_root.resolve()]
+
+    def assert_configured_target(value: str, expected_leaf: str) -> None:
+        expanded = Path(os.path.expandvars(value))
+        if expanded.name.lower() != expected_leaf.lower():
+            raise RuntimeError(f"configured hook target {value} is not {expected_leaf}")
+        if not expanded.exists():
+            raise RuntimeError(f"configured hook target does not exist before smoke rewrite: {expanded}")
+        resolved = expanded.resolve()
+        if not any(resolved == allowed or allowed in resolved.parents for allowed in allowed_roots):
+            raise RuntimeError(f"configured hook target is outside managed/live Codex roots: {resolved}")
+
     rewrote_file = False
     rewrote_pwsh_shim = False
     for index, arg in enumerate(argv[:-1]):
         if Path(arg).name.lower() == "pwsh.ps1":
+            assert_configured_target(arg, "pwsh.ps1")
             argv[index] = candidate_pwsh_shim
             rewrote_pwsh_shim = True
         if arg.lower() == "-file" and Path(argv[index + 1]).name.lower() == "compact-codex-hook.ps1":
+            assert_configured_target(argv[index + 1], "compact-codex-hook.ps1")
             argv[index + 1] = candidate_hook
             rewrote_file = True
     if not rewrote_file:
@@ -269,6 +288,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         add_check(
             "hook_config_runs_hidden_on_windows",
             "WindowStyle Hidden" in config_text
+            and config_text.count("ExecutionPolicy Bypass") >= 20
             and "cmd /c" not in config_text
             and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in config_text.lower()
             and "\\program files\\windowsapps\\microsoft.powershell_" not in config_text.lower()
@@ -301,6 +321,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                         command
                         and command_windows
                         and all(term in command and term in command_windows for term in route_terms)
+                        and command.count("ExecutionPolicy Bypass") >= 2
+                        and command_windows.count("ExecutionPolicy Bypass") >= 2
                         and "pwsh.cmd" not in f"{command}\n{command_windows}".lower()
                         and "cmd /c" not in f"{command}\n{command_windows}".lower()
                         and "cmd.exe /c" not in f"{command}\n{command_windows}".lower()
@@ -314,7 +336,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         add_check(
             "hook_config_uses_configured_hidden_wrapper_routes",
             not route_errors and len(set(route_hits)) == 5,
-            "; ".join(route_errors[:5]) if route_errors else "All hook events route through command and commandWindows hidden compact runner definitions without cmd shim nesting, WindowsApps alias stubs, or version-pinned WindowsApps pwsh paths.",
+            "; ".join(route_errors[:5]) if route_errors else "All hook events route through command and commandWindows hidden compact runner definitions with parent and child execution-policy bypass, without cmd shim nesting, WindowsApps alias stubs, or version-pinned WindowsApps pwsh paths.",
         )
         add_check(
             "compact_hook_contains_current_contract",
@@ -391,6 +413,15 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         cmd_pwsh_cmd_encoded_stdout = cmd_pwsh_cmd_encoded_probe.get("stdout_preview", "").lower()
         saps_encoded_probe = run_hook_sample(root, f"saps pwsh -ArgumentList '-enc', '{encoded_payload}'")
         saps_encoded_stdout = saps_encoded_probe.get("stdout_preview", "").lower()
+        programmatic_exec_encoded_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "functions.exec",
+                "tool_input": f"await tools.shell_command({{command: 'powershell -EncodedCommand {encoded_payload}'}})",
+            },
+        )
+        programmatic_exec_encoded_stdout = programmatic_exec_encoded_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_encoded_powershell",
             encoded_probe.get("status") == "pass"
@@ -415,8 +446,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and cmd_pwsh_cmd_encoded_probe.get("status") == "pass"
             and "deny" in cmd_pwsh_cmd_encoded_stdout
             and saps_encoded_probe.get("status") == "pass"
-            and "deny" in saps_encoded_stdout,
-            "PreToolUse should deny encoded PowerShell payloads, including Start-Process wrappers, instead of trusting plaintext path inspection.",
+            and "deny" in saps_encoded_stdout
+            and programmatic_exec_encoded_probe.get("status") == "pass"
+            and "deny" in programmatic_exec_encoded_stdout,
+            "PreToolUse should deny encoded PowerShell payloads, including Start-Process and functions.exec wrappers, instead of trusting plaintext path inspection.",
         )
         readonly_destructive_search_probe = run_hook_sample(root, 'rg -n "Remove-Item|rm -rf" hooks\\*.ps1 maintenance\\*.py')
         readonly_destructive_search_stdout = readonly_destructive_search_probe.get("stdout_preview", "").lower()
@@ -484,6 +517,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         call_operator_git_force_stdout = call_operator_git_force_probe.get("stdout_preview", "").lower()
         invoke_expression_git_force_probe = run_hook_sample(root, "Invoke-Expression 'git push origin --force'")
         invoke_expression_git_force_stdout = invoke_expression_git_force_probe.get("stdout_preview", "").lower()
+        invoke_expression_benign_probe = run_hook_sample(root, "Invoke-Expression 'Write-Output ok'")
+        invoke_expression_benign_stdout = invoke_expression_benign_probe.get("stdout_preview", "").lower()
+        iex_benign_probe = run_hook_sample(root, "iex 'Write-Output ok'")
+        iex_benign_stdout = iex_benign_probe.get("stdout_preview", "").lower()
         invoke_expression_variable_git_force_probe = run_hook_sample(root, "$x='git push origin --force'; Invoke-Expression $x")
         invoke_expression_variable_git_force_stdout = invoke_expression_variable_git_force_probe.get("stdout_preview", "").lower()
         invoke_expression_call_operator_git_force_probe = run_hook_sample(root, "& 'Invoke-Expression' 'git push origin --force'")
@@ -492,6 +529,15 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         pwsh_colon_command_force_stdout = pwsh_colon_command_force_probe.get("stdout_preview", "").lower()
         start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
         start_process_destructive_stdout = start_process_destructive_probe.get("stdout_preview", "").lower()
+        programmatic_exec_destructive_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "functions.exec",
+                "tool_input": "await tools.shell_command({command: 'Remove-Item $env:USERPROFILE\\\\.codex\\\\tmp -Recurse -Force'})",
+            },
+        )
+        programmatic_exec_destructive_stdout = programmatic_exec_destructive_probe.get("stdout_preview", "").lower()
         git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
         git_regular_push_stdout = git_regular_push_probe.get("stdout_preview", "").lower()
         add_check(
@@ -530,6 +576,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and git_clean_long_dry_run_probe.get("status") == "pass"
             and "allow" in git_clean_long_dry_run_stdout,
             "PreToolUse should allow git clean dry-run forms because they inspect rather than delete.",
+        )
+        add_check(
+            "pretooluse_allows_benign_literal_invoke_expression",
+            invoke_expression_benign_probe.get("status") == "pass"
+            and "allow" in invoke_expression_benign_stdout
+            and iex_benign_probe.get("status") == "pass"
+            and "allow" in iex_benign_stdout,
+            "PreToolUse should inspect literal Invoke-Expression content instead of denying every benign literal expression.",
         )
         add_check(
             "pretooluse_blocks_git_force_push",
@@ -587,9 +641,11 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in pwsh_colon_command_force_stdout
             and start_process_destructive_probe.get("status") == "pass"
             and "deny" in start_process_destructive_stdout
+            and programmatic_exec_destructive_probe.get("status") == "pass"
+            and "deny" in programmatic_exec_destructive_stdout
             and git_regular_push_probe.get("status") == "pass"
             and "allow" in git_regular_push_stdout,
-            "PreToolUse should deny git push force/delete forms, plus-refspec forced updates, and Start-Process destructive wrappers while preserving ordinary push.",
+            "PreToolUse should deny git push force/delete forms, plus-refspec forced updates, Start-Process wrappers, and functions.exec destructive wrappers while preserving ordinary push.",
         )
         sensitive_apply_patch = """*** Begin Patch
 *** Update File: C:\\Users\\anise\\.codex\\auth.json
@@ -973,9 +1029,20 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         )
         post_probe = run_post_tool_hook_sample(root, "functions.shell_command", "Write-Output compact-hook-smoke")
         stop_probe = run_stop_hook_sample(root, "compact hook smoke final")
+        post_stdout = post_probe.get("stdout_preview", "").lower()
+        stop_stdout = stop_probe.get("stdout_preview", "").lower()
         add_check(
             "posttool_and_stop_are_record_only",
-            post_probe.get("status") == "pass" and stop_probe.get("status") == "pass",
+            post_probe.get("status") == "pass"
+            and stop_probe.get("status") == "pass"
+            and "permissiondecision" not in post_stdout
+            and "permissiondecision" not in stop_stdout
+            and "deny" not in post_stdout
+            and "deny" not in stop_stdout
+            and '"decision":"block"' not in post_stdout
+            and '"decision":"block"' not in stop_stdout
+            and '"continue":false' not in post_stdout
+            and '"continue":false' not in stop_stdout,
             "PostToolUse and Stop should not enforce old heavyweight policy gates.",
         )
     finally:

@@ -63,7 +63,7 @@ def hidden_compact_hook_command() -> str:
         shim = Path.home() / ".codex" / "toolchains" / "shims" / "pwsh.ps1"
         return (
             f'"{launcher}" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass '
-            f'-File "{shim}" -NoProfile -NonInteractive -File "{hook_runner}"'
+            f'-File "{shim}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{hook_runner}"'
         )
     hook_pwsh = resolve_pwsh_for_hook()
     return f"{hook_pwsh} -NoProfile -NonInteractive -File {hook_runner}"

@@ -40,6 +40,33 @@ function Get-ProductDesignCacheVersion {
     return $versions[0]
 }
 
+function Resolve-CodexBundledTool {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    $binRoot = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin"
+    $direct = Join-PathStrict $binRoot ($Name + ".exe")
+    if (Test-Path -LiteralPath $direct -PathType Leaf) {
+        return $direct
+    }
+
+    if (Test-Path -LiteralPath $binRoot -PathType Container) {
+        $match = Get-ChildItem -LiteralPath $binRoot -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $candidate = Join-PathStrict $_.FullName ($Name + ".exe")
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                    Get-Item -LiteralPath $candidate
+                }
+            } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+        if ($null -ne $match) {
+            return $match.FullName
+        }
+    }
+
+    return $null
+}
+
 function Get-JunctionTarget {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return "" }
@@ -99,15 +126,15 @@ function Test-ConfigRegistration {
 }
 
 function Invoke-CodexPluginListProbe {
-    $codexShim = Join-PathStrict $CodexHome "toolchains\shims\codex.ps1"
-    if (-not (Test-Path -LiteralPath $codexShim -PathType Leaf)) {
-        return [ordered]@{ ok = $false; command = $codexShim; exit_code = $null; output = "missing codex shim" }
+    $codexExe = Resolve-CodexBundledTool -Name "codex"
+    if ([string]::IsNullOrWhiteSpace($codexExe)) {
+        return [ordered]@{ ok = $false; command = "codex.exe plugin list -m openai-curated-remote"; exit_code = $null; output = "missing bundled codex.exe" }
     }
-    $output = @(& $codexShim plugin list -m openai-curated-remote 2>&1)
+    $output = @(& $codexExe plugin list -m openai-curated-remote 2>&1)
     $text = (($output | Out-String).Trim())
     return [ordered]@{
         ok = ($LASTEXITCODE -eq 0 -and $text -match "product-design@openai-curated-remote" -and $text -match "installed,\s*enabled")
-        command = "$codexShim plugin list -m openai-curated-remote"
+        command = "$codexExe plugin list -m openai-curated-remote"
         exit_code = $LASTEXITCODE
         output = $text
     }
