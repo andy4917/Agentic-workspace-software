@@ -132,6 +132,22 @@ function Get-PowerShellCommandTokens {
     }
 }
 
+function Get-ExecutableLeaf {
+    param([string]$Command)
+
+    $trimmed = ([string]$Command).Trim().Trim('"', "'")
+    if ([string]::IsNullOrWhiteSpace($trimmed)) { return "" }
+    try {
+        $leaf = [System.IO.Path]::GetFileName($trimmed)
+        if (-not [string]::IsNullOrWhiteSpace($leaf)) {
+            return $leaf
+        }
+    } catch {
+        return $trimmed
+    }
+    return $trimmed
+}
+
 function Test-EncodedPowerShellCommand {
     param([string]$CommandText)
 
@@ -144,6 +160,7 @@ function Test-EncodedPowerShellCommand {
         $parsedItem = $parsedItems[$index]
         if ([string]$parsedItem.Type -ne "Command") { continue }
         $command = [string]$parsedItem.Content
+        $commandLeaf = Get-ExecutableLeaf -Command $command
         $segment = New-Object System.Collections.Generic.List[string]
         for ($cursor = $index + 1; $cursor -lt $parsedItems.Count; $cursor++) {
             if ([string]$parsedItems[$cursor].Type -eq "Command") { break }
@@ -151,7 +168,7 @@ function Test-EncodedPowerShellCommand {
         }
         $segmentText = ($segment -join " ")
 
-        if ($command -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
+        if ($commandLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
             if ($segmentText -match '(?i)(^|[\s"''`])-(EncodedCommand|enc|e)(?=$|[\s"''`:=])') {
                 return $true
             }
@@ -167,7 +184,7 @@ function Test-EncodedPowerShellCommand {
             continue
         }
 
-        if ($command -match '(?i)^cmd(\.exe)?$') {
+        if ($commandLeaf -match '(?i)^cmd(\.exe)?$') {
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
                 if ($segment[$segmentIndex] -notmatch '(?i)^/c$') { continue }
                 if ($segmentIndex + 1 -ge $segment.Count) { continue }
@@ -195,7 +212,7 @@ function Test-HighRiskDestructiveCommand {
         return (
             ($CommandText -match '(?i)\bgit\s+reset\s+--hard\b') -or
             ($CommandText -match '(?i)\bgit\s+clean\s+-[^\r\n]*[fd]') -or
-            ($CommandText -match '(?i)\bgit\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|-[A-Za-z]*f[A-Za-z]*)') -or
+            ($CommandText -match '(?i)\bgit(?:\.exe|\.cmd)?\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|-[A-Za-z]*f[A-Za-z]*|(^|[\s"''`])\+[^"''`\s]+)') -or
             (
                 ($CommandText -match '(?i)\b(Remove-Item|ri|rm|rd|rmdir|del)\b') -and
                 ($CommandText -match $RecursiveFlagPattern) -and
@@ -208,6 +225,7 @@ function Test-HighRiskDestructiveCommand {
         $parsedItem = $parsedItems[$index]
         if ([string]$parsedItem.Type -ne "Command") { continue }
         $command = [string]$parsedItem.Content
+        $commandLeaf = Get-ExecutableLeaf -Command $command
         $segment = New-Object System.Collections.Generic.List[string]
         for ($cursor = $index + 1; $cursor -lt $parsedItems.Count; $cursor++) {
             if ([string]$parsedItems[$cursor].Type -eq "Command") { break }
@@ -215,14 +233,14 @@ function Test-HighRiskDestructiveCommand {
         }
         $segmentText = ($segment -join " ")
 
-        if ($command -match '(?i)^(Remove-Item|ri|rm|rd|rmdir|del)$') {
+        if ($commandLeaf -match '(?i)^(Remove-Item|ri|rm|rd|rmdir|del)$') {
             if (($segmentText -match $RecursiveFlagPattern) -and ($segmentText -match $BroadTargetPattern)) {
                 return $true
             }
             continue
         }
 
-        if ($command -match '(?i)^git(\.exe|\.cmd)?$') {
+        if ($commandLeaf -match '(?i)^git(\.exe|\.cmd)?$') {
             $gitParts = @($segment | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
             $gitSubcommand = ""
             $gitRemaining = @()
@@ -258,7 +276,8 @@ function Test-HighRiskDestructiveCommand {
                     if (
                         ([string]$gitRemainingPart -match '(?i)^--force(?:=|$)') -or
                         ([string]$gitRemainingPart -match '(?i)^--force-with-lease(?:=|$)') -or
-                        ([string]$gitRemainingPart -match '(?i)^-[A-Za-z]*f[A-Za-z]*')
+                        ([string]$gitRemainingPart -match '(?i)^-[A-Za-z]*f[A-Za-z]*') -or
+                        ([string]$gitRemainingPart -match '^\+')
                     ) {
                         return $true
                     }
@@ -267,7 +286,7 @@ function Test-HighRiskDestructiveCommand {
             continue
         }
 
-        if ($command -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
+        if ($commandLeaf -match '(?i)^(powershell|pwsh|powershell\.exe|pwsh\.exe)$') {
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
                 if ($segment[$segmentIndex] -notmatch '(?i)^-(Command|c)$') { continue }
                 if ($segmentIndex + 1 -ge $segment.Count) { continue }
@@ -280,7 +299,7 @@ function Test-HighRiskDestructiveCommand {
             continue
         }
 
-        if ($command -match '(?i)^cmd(\.exe)?$') {
+        if ($commandLeaf -match '(?i)^cmd(\.exe)?$') {
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
                 if ($segment[$segmentIndex] -notmatch '(?i)^/c$') { continue }
                 if ($segmentIndex + 1 -ge $segment.Count) { continue }

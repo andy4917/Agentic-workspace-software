@@ -262,13 +262,17 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         encoded_stdout = encoded_probe.get("stdout_preview", "").lower()
         nested_encoded_probe = run_hook_sample(root, f"cmd /c pwsh -enc {encoded_payload}")
         nested_encoded_stdout = nested_encoded_probe.get("stdout_preview", "").lower()
+        path_encoded_probe = run_hook_sample(root, f"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -EncodedCommand {encoded_payload}")
+        path_encoded_stdout = path_encoded_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_encoded_powershell",
             encoded_probe.get("status") == "pass"
             and "permissiondecision" in encoded_stdout
             and "deny" in encoded_stdout
             and nested_encoded_probe.get("status") == "pass"
-            and "deny" in nested_encoded_stdout,
+            and "deny" in nested_encoded_stdout
+            and path_encoded_probe.get("status") == "pass"
+            and "deny" in path_encoded_stdout,
             "PreToolUse should deny encoded PowerShell payloads instead of trusting plaintext path inspection.",
         )
         readonly_destructive_search_probe = run_hook_sample(root, 'rg -n "Remove-Item|rm -rf" hooks\\*.ps1 maintenance\\*.py')
@@ -285,6 +289,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_force_push_stdout = git_force_push_probe.get("stdout_preview", "").lower()
         git_force_with_lease_push_probe = run_hook_sample(root, "git push --force-with-lease origin HEAD")
         git_force_with_lease_push_stdout = git_force_with_lease_push_probe.get("stdout_preview", "").lower()
+        git_plus_refspec_push_probe = run_hook_sample(root, "git push origin +HEAD:main")
+        git_plus_refspec_push_stdout = git_plus_refspec_push_probe.get("stdout_preview", "").lower()
+        git_scoped_plus_refspec_push_probe = run_hook_sample(root, "git -C . push origin +HEAD:main")
+        git_scoped_plus_refspec_push_stdout = git_scoped_plus_refspec_push_probe.get("stdout_preview", "").lower()
         git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
         git_regular_push_stdout = git_regular_push_probe.get("stdout_preview", "").lower()
         add_check(
@@ -311,9 +319,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in git_force_push_stdout
             and git_force_with_lease_push_probe.get("status") == "pass"
             and "deny" in git_force_with_lease_push_stdout
+            and git_plus_refspec_push_probe.get("status") == "pass"
+            and "deny" in git_plus_refspec_push_stdout
+            and git_scoped_plus_refspec_push_probe.get("status") == "pass"
+            and "deny" in git_scoped_plus_refspec_push_stdout
             and git_regular_push_probe.get("status") == "pass"
             and "allow" in git_regular_push_stdout,
-            "PreToolUse should deny git push force forms while preserving ordinary push.",
+            "PreToolUse should deny git push force forms and plus-refspec forced updates while preserving ordinary push.",
         )
         blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
         blocked_stdout = blocked_probe.get("stdout_preview", "").lower()

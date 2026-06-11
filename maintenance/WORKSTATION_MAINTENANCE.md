@@ -195,6 +195,22 @@ runtime substrates block unrelated managed-source checks.
   relevant local checks are coherent, but do not invoke it recursively from
   inside a no-mistakes-spawned gate worktree or agent step.
 
+Hook route reload boundary:
+
+- When hook command routes change in `config.d/20-hooks.toml`, regenerate both
+  managed and live `config.toml`, then treat the current Codex app-server as
+  potentially stale until direct process evidence or an app-server restart shows
+  it is no longer launching the previous hook command.
+- Do not run no-mistakes, broad Git publishing, or other hook-heavy workflows
+  while current process evidence shows
+  `.codex\toolchains\shims\pwsh.cmd` launching `compact-codex-hook.ps1`.
+  This is a session-cache/runtime-reload issue, not a source-file pass.
+- Before resuming a hook-heavy workflow after a hook route change, check for
+  stale route processes and visible terminal windows. If stale route processes
+  appear only transiently during the current session, restart Codex Desktop or
+  the active app-server before claiming the foreground-terminal issue fixed for
+  the user's current session.
+
 Choose the smallest layer that proves the task. Escalate to `full` whenever
 hooks, MCP baseline, toolchains, browser/native host state, Goal governance,
 Worker-Watcher, or release handoff is touched.

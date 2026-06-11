@@ -218,6 +218,12 @@ keeping ordinary inspected tool use allowed.
   `git push --force-with-lease` at the hook boundary, preserving ordinary
   `git push`, and making `hook_tool_routing_status()` validate runtime
   `config.toml` plus reconciliation with `config.d/20-hooks.toml`.
+- no-mistakes follow-up on `bc84073`: run `01KTT58V9RA3PPGG4FT8QBANN0`
+  was aborted after the user reported that no-mistakes and git-related work
+  still caused repeated `cmd` windows. Its two auto-fix findings are addressed
+  by normalizing parsed command tokens to their executable leaf before
+  PowerShell, `cmd`, and `git` detection, and by denying `git push` refspecs
+  prefixed with `+` as forced updates.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
