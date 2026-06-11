@@ -343,6 +343,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         path_encoded_stdout = path_encoded_probe.get("stdout_preview", "").lower()
         ec_encoded_probe = run_hook_sample(root, f"powershell -ec {encoded_payload}")
         ec_encoded_stdout = ec_encoded_probe.get("stdout_preview", "").lower()
+        call_operator_encoded_probe = run_hook_sample(root, f"& 'powershell' -EncodedCommand {encoded_payload}")
+        call_operator_encoded_stdout = call_operator_encoded_probe.get("stdout_preview", "").lower()
         start_process_encoded_probe = run_hook_sample(root, f"Start-Process pwsh -ArgumentList '-EncodedCommand', '{encoded_payload}'")
         start_process_encoded_stdout = start_process_encoded_probe.get("stdout_preview", "").lower()
         saps_encoded_probe = run_hook_sample(root, f"saps pwsh -ArgumentList '-enc', '{encoded_payload}'")
@@ -358,6 +360,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in path_encoded_stdout
             and ec_encoded_probe.get("status") == "pass"
             and "deny" in ec_encoded_stdout
+            and call_operator_encoded_probe.get("status") == "pass"
+            and "deny" in call_operator_encoded_stdout
             and start_process_encoded_probe.get("status") == "pass"
             and "deny" in start_process_encoded_stdout
             and saps_encoded_probe.get("status") == "pass"
@@ -414,10 +418,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         start_process_git_windowstyle_force_stdout = start_process_git_windowstyle_force_probe.get("stdout_preview", "").lower()
         start_process_git_wi_force_probe = run_hook_sample(root, "Start-Process git -Wi Hidden 'push origin --force'")
         start_process_git_wi_force_stdout = start_process_git_wi_force_probe.get("stdout_preview", "").lower()
+        call_operator_git_force_probe = run_hook_sample(root, "& 'git' push origin --force")
+        call_operator_git_force_stdout = call_operator_git_force_probe.get("stdout_preview", "").lower()
         invoke_expression_git_force_probe = run_hook_sample(root, "Invoke-Expression 'git push origin --force'")
         invoke_expression_git_force_stdout = invoke_expression_git_force_probe.get("stdout_preview", "").lower()
         invoke_expression_variable_git_force_probe = run_hook_sample(root, "$x='git push origin --force'; Invoke-Expression $x")
         invoke_expression_variable_git_force_stdout = invoke_expression_variable_git_force_probe.get("stdout_preview", "").lower()
+        invoke_expression_call_operator_git_force_probe = run_hook_sample(root, "& 'Invoke-Expression' 'git push origin --force'")
+        invoke_expression_call_operator_git_force_stdout = invoke_expression_call_operator_git_force_probe.get("stdout_preview", "").lower()
         pwsh_colon_command_force_probe = run_hook_sample(root, "pwsh -Command:'git push origin --force'")
         pwsh_colon_command_force_stdout = pwsh_colon_command_force_probe.get("stdout_preview", "").lower()
         start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
@@ -493,10 +501,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in start_process_git_windowstyle_force_stdout
             and start_process_git_wi_force_probe.get("status") == "pass"
             and "deny" in start_process_git_wi_force_stdout
+            and call_operator_git_force_probe.get("status") == "pass"
+            and "deny" in call_operator_git_force_stdout
             and invoke_expression_git_force_probe.get("status") == "pass"
             and "deny" in invoke_expression_git_force_stdout
             and invoke_expression_variable_git_force_probe.get("status") == "pass"
             and "deny" in invoke_expression_variable_git_force_stdout
+            and invoke_expression_call_operator_git_force_probe.get("status") == "pass"
+            and "deny" in invoke_expression_call_operator_git_force_stdout
             and pwsh_colon_command_force_probe.get("status") == "pass"
             and "deny" in pwsh_colon_command_force_stdout
             and start_process_destructive_probe.get("status") == "pass"

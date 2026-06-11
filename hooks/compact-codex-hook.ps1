@@ -132,6 +132,26 @@ function Get-PowerShellCommandTokens {
     }
 }
 
+function Test-ExecutableTokenStart {
+    param(
+        [object[]]$ParsedItems,
+        [int]$Index
+    )
+
+    if ($Index -lt 0 -or $Index -ge $ParsedItems.Count) { return $false }
+    $type = [string]$ParsedItems[$Index].Type
+    if ($type -eq "Command") { return $true }
+    if (
+        $Index -gt 0 -and
+        [string]$ParsedItems[$Index - 1].Type -eq "Operator" -and
+        [string]$ParsedItems[$Index - 1].Content -eq "&" -and
+        @("String", "CommandArgument") -contains $type
+    ) {
+        return $true
+    }
+    return $false
+}
+
 function Get-ExecutableLeaf {
     param([string]$Command)
 
@@ -311,12 +331,12 @@ function Test-EncodedPowerShellCommand {
 
     for ($index = 0; $index -lt $parsedItems.Count; $index++) {
         $parsedItem = $parsedItems[$index]
-        if ([string]$parsedItem.Type -ne "Command") { continue }
+        if (-not (Test-ExecutableTokenStart -ParsedItems $parsedItems -Index $index)) { continue }
         $command = [string]$parsedItem.Content
         $commandLeaf = Get-ExecutableLeaf -Command $command
         $segment = New-Object System.Collections.Generic.List[string]
         for ($cursor = $index + 1; $cursor -lt $parsedItems.Count; $cursor++) {
-            if ([string]$parsedItems[$cursor].Type -eq "Command") { break }
+            if (Test-ExecutableTokenStart -ParsedItems $parsedItems -Index $cursor) { break }
             $segment.Add([string]$parsedItems[$cursor].Content) | Out-Null
         }
         $segmentText = ($segment -join " ")
@@ -406,12 +426,12 @@ function Test-HighRiskDestructiveCommand {
 
     for ($index = 0; $index -lt $parsedItems.Count; $index++) {
         $parsedItem = $parsedItems[$index]
-        if ([string]$parsedItem.Type -ne "Command") { continue }
+        if (-not (Test-ExecutableTokenStart -ParsedItems $parsedItems -Index $index)) { continue }
         $command = [string]$parsedItem.Content
         $commandLeaf = Get-ExecutableLeaf -Command $command
         $segment = New-Object System.Collections.Generic.List[string]
         for ($cursor = $index + 1; $cursor -lt $parsedItems.Count; $cursor++) {
-            if ([string]$parsedItems[$cursor].Type -eq "Command") { break }
+            if (Test-ExecutableTokenStart -ParsedItems $parsedItems -Index $cursor) { break }
             $segment.Add([string]$parsedItems[$cursor].Content) | Out-Null
         }
         $segmentText = ($segment -join " ")
