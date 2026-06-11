@@ -394,10 +394,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         start_process_git_force_stdout = start_process_git_force_probe.get("stdout_preview", "").lower()
         start_process_git_arg_force_probe = run_hook_sample(root, "Start-Process git -Arg 'push','origin','--force'")
         start_process_git_arg_force_stdout = start_process_git_arg_force_probe.get("stdout_preview", "").lower()
+        start_process_git_a_force_probe = run_hook_sample(root, "Start-Process git -A 'push','origin','--force'")
+        start_process_git_a_force_stdout = start_process_git_a_force_probe.get("stdout_preview", "").lower()
         start_process_git_positional_force_probe = run_hook_sample(root, "Start-Process git 'push origin --force'")
         start_process_git_positional_force_stdout = start_process_git_positional_force_probe.get("stdout_preview", "").lower()
         start_process_git_windowstyle_force_probe = run_hook_sample(root, "Start-Process git -WindowStyle Hidden 'push origin --force'")
         start_process_git_windowstyle_force_stdout = start_process_git_windowstyle_force_probe.get("stdout_preview", "").lower()
+        start_process_git_wi_force_probe = run_hook_sample(root, "Start-Process git -Wi Hidden 'push origin --force'")
+        start_process_git_wi_force_stdout = start_process_git_wi_force_probe.get("stdout_preview", "").lower()
         invoke_expression_git_force_probe = run_hook_sample(root, "Invoke-Expression 'git push origin --force'")
         invoke_expression_git_force_stdout = invoke_expression_git_force_probe.get("stdout_preview", "").lower()
         start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
@@ -455,10 +459,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in start_process_git_force_stdout
             and start_process_git_arg_force_probe.get("status") == "pass"
             and "deny" in start_process_git_arg_force_stdout
+            and start_process_git_a_force_probe.get("status") == "pass"
+            and "deny" in start_process_git_a_force_stdout
             and start_process_git_positional_force_probe.get("status") == "pass"
             and "deny" in start_process_git_positional_force_stdout
             and start_process_git_windowstyle_force_probe.get("status") == "pass"
             and "deny" in start_process_git_windowstyle_force_stdout
+            and start_process_git_wi_force_probe.get("status") == "pass"
+            and "deny" in start_process_git_wi_force_stdout
             and invoke_expression_git_force_probe.get("status") == "pass"
             and "deny" in invoke_expression_git_force_stdout
             and start_process_destructive_probe.get("status") == "pass"

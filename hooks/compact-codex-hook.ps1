@@ -154,11 +154,60 @@ function Test-TextContainsEncodedPowerShellInvocation {
     return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|enc|ec|e)(?=$|[\s"''`:=,])')
 }
 
+function Get-ParameterPrefixes {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [int]$MinLength = 1
+    )
+
+    $prefixes = New-Object System.Collections.Generic.List[string]
+    for ($length = $MinLength; $length -le $Name.Length; $length++) {
+        $prefixes.Add($Name.Substring(0, $length)) | Out-Null
+    }
+    return $prefixes.ToArray()
+}
+
+function Test-NamedParameter {
+    param(
+        [string]$Value,
+        [string[]]$Names
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value) -or $Value -notmatch '^-') { return $false }
+    $name = $Value.TrimStart("-")
+    return ($Names -contains $name)
+}
+
 function Get-StartProcessNestedCommandText {
     param([object[]]$Segment)
 
     $target = ""
     $arguments = New-Object System.Collections.Generic.List[string]
+    $filePathParameters = @(
+        (Get-ParameterPrefixes -Name "FilePath" -MinLength 1) +
+        "File"
+    )
+    $argumentListParameters = @(
+        (Get-ParameterPrefixes -Name "ArgumentList" -MinLength 1) +
+        "Args"
+    )
+    $valueParameters = @(
+        (Get-ParameterPrefixes -Name "Credential" -MinLength 1) +
+        (Get-ParameterPrefixes -Name "Environment" -MinLength 1) +
+        (Get-ParameterPrefixes -Name "Verb" -MinLength 1) +
+        (Get-ParameterPrefixes -Name "WorkingDirectory" -MinLength 2) +
+        (Get-ParameterPrefixes -Name "WindowStyle" -MinLength 2) +
+        (Get-ParameterPrefixes -Name "RedirectStandardInput" -MinLength 17) +
+        (Get-ParameterPrefixes -Name "RedirectStandardOutput" -MinLength 17) +
+        (Get-ParameterPrefixes -Name "RedirectStandardError" -MinLength 17)
+    )
+    $switchParameters = @(
+        (Get-ParameterPrefixes -Name "LoadUserProfile" -MinLength 1) +
+        (Get-ParameterPrefixes -Name "NoNewWindow" -MinLength 1) +
+        (Get-ParameterPrefixes -Name "PassThru" -MinLength 1) +
+        (Get-ParameterPrefixes -Name "UseNewEnvironment" -MinLength 1) +
+        (Get-ParameterPrefixes -Name "Wait" -MinLength 2)
+    )
     $expectFilePath = $false
     $expectStartProcessParameterValue = $false
     $collectArgumentList = $false
@@ -174,21 +223,21 @@ function Get-StartProcessNestedCommandText {
             $expectFilePath = $false
             continue
         }
-        if ($value -match '(?i)^-(FilePath|File|F)$') {
+        if (Test-NamedParameter -Value $value -Names $filePathParameters) {
             $expectFilePath = $true
             $collectArgumentList = $false
             continue
         }
-        if ($value -match '(?i)^-(ArgumentList|Arg|Args)$') {
+        if (Test-NamedParameter -Value $value -Names $argumentListParameters) {
             $collectArgumentList = $true
             continue
         }
-        if ($value -match '(?i)^-(WorkingDirectory|WindowStyle|Verb|Credential|RedirectStandardInput|RedirectStandardOutput|RedirectStandardError|Environment)$') {
+        if (Test-NamedParameter -Value $value -Names $valueParameters) {
             $expectStartProcessParameterValue = $true
             $collectArgumentList = $false
             continue
         }
-        if ($value -match '(?i)^-(NoNewWindow|PassThru|Wait|LoadUserProfile|UseNewEnvironment)$') {
+        if (Test-NamedParameter -Value $value -Names $switchParameters) {
             $collectArgumentList = $false
             continue
         }

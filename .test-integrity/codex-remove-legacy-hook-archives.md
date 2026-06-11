@@ -349,6 +349,14 @@ keeping ordinary inspected tool use allowed.
   `pwsh -File` helper; `hook-policy-smoke` now denies
   `Invoke-Expression 'git push origin --force'` and
   `iex 'Remove-Item . -Recurse -Force'`.
+- no-mistakes follow-up on `d22690e`: run `01KTTK6RFQAQDMEEQ9NTCHESQD`
+  returned `start-process-abbreviation-bypass`. The compact hook now treats
+  Start-Process parameter names with PowerShell unique-prefix abbreviation
+  semantics for `ArgumentList`, `FilePath`, common value parameters such as
+  `WindowStyle`, and common switches such as `Wait`.
+- New or updated oracle evidence: `hook-policy-smoke` now denies
+  `Start-Process git -A 'push','origin','--force'` and
+  `Start-Process git -Wi Hidden 'push origin --force'`.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
