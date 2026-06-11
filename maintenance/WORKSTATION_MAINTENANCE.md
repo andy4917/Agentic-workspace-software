@@ -191,7 +191,7 @@ runtime substrates block unrelated managed-source checks.
   report-only, MCP list, and `codex doctor`.
 - `no-mistakes`: repository handoff outer gate for non-self-certified
   validation, safe push, PR, CI, release, merge handoff, and test/TDD handoff.
-  Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` after the
+  Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` after the
   relevant local checks are coherent, but do not invoke it recursively from
   inside a no-mistakes-spawned gate worktree or agent step.
   Routine scaffold validation must not start or require a persistent
@@ -208,7 +208,7 @@ Hook route reload boundary:
   it is no longer launching the previous hook command.
 - Do not run no-mistakes, broad Git publishing, or other hook-heavy workflows
   while current process evidence shows
-  `.codex\toolchains\shims\pwsh.cmd` launching `compact-codex-hook.ps1`.
+  direct hidden `pwsh.exe` route launching `compact-codex-hook.ps1`.
   This is a session-cache/runtime-reload issue, not a source-file pass.
 - Before resuming a hook-heavy workflow after a hook route change, check for
   stale route processes and visible terminal windows. If stale route processes

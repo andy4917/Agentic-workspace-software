@@ -310,6 +310,19 @@ keeping ordinary inspected tool use allowed.
   injects a stale `skills/dont-even-try/SKILL.md` state entry with
   `remove_on_uninstall=false` and verifies it is removed with its empty skill
   directory.
+- no-mistakes follow-up on `eab4463`: run `01KTTEQM8CZA69WKK11J9PMNAB`
+  returned `start-process-argumentlist-abbrev-bypass` and
+  `worker-watcher-template-digest-gap`. The Start-Process launcher parser now
+  accepts `-Arg` and `-Args` as argument-list forms, and
+  `worker_watcher_templates.py` is included in `harness_source_digest()`.
+- New or updated oracle evidence: `hook-policy-smoke` now denies
+  `Start-Process git -Arg 'push','origin','--force'`; harness source freshness
+  now changes when `maintenance/scripts/worker_watcher_templates.py` changes.
+- User-facing process integrity follow-up: no-mistakes/Git work still caused
+  repeated `cmd.exe` windows because `git`, `pwsh`, `codex`, and `no-mistakes`
+  resolved to `.cmd` shims in PowerShell/Codex-managed runs. The adopted oracle
+  is that PowerShell resolves these frequent PM workflow commands to `.ps1`
+  shims first, while `.cmd` remains only for cmd.exe compatibility.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until

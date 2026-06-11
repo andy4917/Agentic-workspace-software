@@ -381,6 +381,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_array_force_stdout = git_array_force_probe.get("stdout_preview", "").lower()
         start_process_git_force_probe = run_hook_sample(root, "Start-Process git -ArgumentList 'push','origin','--force'")
         start_process_git_force_stdout = start_process_git_force_probe.get("stdout_preview", "").lower()
+        start_process_git_arg_force_probe = run_hook_sample(root, "Start-Process git -Arg 'push','origin','--force'")
+        start_process_git_arg_force_stdout = start_process_git_arg_force_probe.get("stdout_preview", "").lower()
         start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
         start_process_destructive_stdout = start_process_destructive_probe.get("stdout_preview", "").lower()
         git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
@@ -425,6 +427,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in git_array_force_stdout
             and start_process_git_force_probe.get("status") == "pass"
             and "deny" in start_process_git_force_stdout
+            and start_process_git_arg_force_probe.get("status") == "pass"
+            and "deny" in start_process_git_arg_force_stdout
             and start_process_destructive_probe.get("status") == "pass"
             and "deny" in start_process_destructive_stdout
             and git_regular_push_probe.get("status") == "pass"

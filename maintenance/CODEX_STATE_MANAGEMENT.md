@@ -139,7 +139,7 @@ Currently byte-synced live-copy files are the public-safe paths named by the
   `maintenance\manifests\keep-set.json`;
 - public-safe maintenance scripts used by the scaffold, harness, P0 loop,
   browser/MCP toggles, and runtime cleanup;
-- `toolchains\README.md` and `toolchains\shims\no-mistakes.cmd`;
+- `toolchains\README.md` and `toolchains\shims\no-mistakes.ps1`;
 - active live-called skills such as `skills\frontend-visual-debug\SKILL.md`,
   `skills\git-easy-korean\SKILL.md`, and
   `skills\test-integrity-gate\SKILL.md`.
@@ -179,10 +179,10 @@ failures, and not-run checks as evidence gaps rather than success.
 ## Standard Commands
 
 ```powershell
-C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json
-C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode status -CodexHome C:\Users\anise\.codex
-C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -CodexHome C:\Users\anise\.codex
-C:\Users\anise\.codex\toolchains\shims\pwsh.cmd -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
+C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -CodexHome C:\Users\anise\.codex -Json
+C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-runtime-process-cleanup.ps1 -Mode status -CodexHome C:\Users\anise\.codex
+C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -CodexHome C:\Users\anise\.codex
+C:\Users\anise\AppData\Local\Microsoft\WindowsApps\pwsh.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\anise\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
 ```
 
 Use `-ReportOnly` only for read-only inspection or intentionally dirty review

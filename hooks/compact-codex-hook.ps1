@@ -169,12 +169,12 @@ function Get-StartProcessNestedCommandText {
             $expectFilePath = $false
             continue
         }
-        if ($value -match '(?i)^-FilePath$') {
+        if ($value -match '(?i)^-(FilePath|File|F)$') {
             $expectFilePath = $true
             $collectArgumentList = $false
             continue
         }
-        if ($value -match '(?i)^-ArgumentList$') {
+        if ($value -match '(?i)^-(ArgumentList|Arg|Args)$') {
             $collectArgumentList = $true
             continue
         }

@@ -177,7 +177,9 @@ function ConvertFrom-JsonOutput {
 
 function Get-PowerShellPath {
     $candidates = @(
-        (Join-Path $CodexHome "toolchains\shims\pwsh.cmd"),
+        (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\pwsh.exe"),
+        (Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe"),
+        "pwsh.exe",
         "powershell.exe"
     )
     foreach ($candidate in $candidates) {
@@ -521,7 +523,24 @@ Add-Check $checks "toolchain_sources_current" ($(if ($toolchainRun.exit_code -eq
 }
 
 $doctorEnv = @{ PATH = "$shimRoot;$env:PATH" }
-$doctorRun = Invoke-ProcessCapture -FilePath "cmd.exe" -Arguments @("/c", (Join-Path $shimRoot "codex.cmd"), "doctor", "--json") -WorkingDirectory $repoRootResolved -Environment $doctorEnv
+$codexPs1 = Join-Path $shimRoot "codex.ps1"
+$doctorRun = if (Test-Path -LiteralPath $codexPs1 -PathType Leaf) {
+    Invoke-ProcessCapture -FilePath $pwsh -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $codexPs1, "doctor", "--json") -WorkingDirectory $repoRootResolved -Environment $doctorEnv
+} else {
+    [ordered]@{
+        file = $codexPs1
+        arguments = @("doctor", "--json")
+        command_line = "$codexPs1 doctor --json"
+        working_directory = $repoRootResolved
+        started_utc = (Get-Date).ToUniversalTime().ToString("o")
+        ended_utc = (Get-Date).ToUniversalTime().ToString("o")
+        exit_code = 1
+        timed_out = $false
+        timeout_seconds = 0
+        stdout = ""
+        stderr = "missing codex.ps1; refusing cmd.exe fallback for foreground-window hygiene"
+    }
+}
 $doctor = ConvertFrom-JsonOutput -Text $doctorRun.stdout
 Add-Check $checks "codex_doctor_current" ($(if ($doctorRun.exit_code -eq 0 -and $null -ne $doctor -and $doctor.overallStatus -eq "ok") { "pass" } else { "fail" })) @{
     command = $doctorRun.command_line

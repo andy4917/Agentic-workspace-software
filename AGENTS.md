@@ -240,7 +240,7 @@ Hard rules for test-related work:
 - `no-mistakes` is an adopted workstation validation gate. When test-integrity
   work intersects a Git repository with a real validation, push, PR, CI, or
   release handoff need, run the `no-mistakes` gate through the approved shim
-  `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` after the local
+  `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` after the local
   intent/oracle/red/green/pollution evidence is coherent. If the target
   repository is not initialized for the gate, initialize or configure it when
   the repo has the required remote and current task scope permits the gate. If
@@ -274,7 +274,7 @@ Trigger `no-mistakes` when any of these are true:
 Use the approved shim:
 
 ```powershell
-%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd
+%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1
 ```
 
 Gate rules:

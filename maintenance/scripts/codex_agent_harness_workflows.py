@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -21,6 +22,42 @@ from codex_agent_harness_smoke import (
     check_orchestration_governance_smoke,
     check_worker_watcher_normalized_handoff_smoke,
 )
+
+
+def resolve_codex_bundled_tool(name: str) -> str:
+    bin_root = Path.home() / "AppData" / "Local" / "OpenAI" / "Codex" / "bin"
+    direct = bin_root / f"{name}.exe"
+    if direct.exists():
+        return str(direct)
+    if bin_root.exists():
+        matches = sorted(
+            (candidate / f"{name}.exe" for candidate in bin_root.iterdir() if candidate.is_dir()),
+            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+            reverse=True,
+        )
+        for match in matches:
+            if match.exists():
+                return str(match)
+    return ""
+
+
+def resolve_powershell_exe(codex_home: Path) -> str:
+    shim_root = codex_home / "toolchains" / "shims"
+    candidates = [
+        Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+    ]
+    which_pwsh = shutil.which("pwsh.exe")
+    if which_pwsh:
+        candidates.append(Path(which_pwsh))
+    candidates.append(Path("powershell.exe"))
+    for candidate in candidates:
+        if not str(candidate):
+            continue
+        if candidate.name == "powershell.exe":
+            return str(candidate)
+        if candidate.exists() and not str(candidate).lower().startswith(str(shim_root).lower()):
+            return str(candidate)
+    return "powershell.exe"
 
 
 def load_eval_definition(root: Path, eval_id: str) -> tuple[dict[str, Any], list[str]]:
@@ -139,10 +176,10 @@ def cmd_context(args: argparse.Namespace) -> int:
 def cmd_verify(args: argparse.Namespace) -> int:
     root = root_path(args)
     codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser().resolve()
-    powershell = str(codex_home / "toolchains" / "shims" / "pwsh.cmd")
-    if not Path(powershell).exists():
-        powershell = "powershell.exe"
-    codex_shim = codex_home / "toolchains" / "shims" / "codex.cmd"
+    powershell = resolve_powershell_exe(codex_home)
+    shim_root = codex_home / "toolchains" / "shims"
+    codex_ps1 = shim_root / "codex.ps1"
+    codex_exe = resolve_codex_bundled_tool("codex")
     validate_script = codex_home / "maintenance" / "scripts" / "validate-codex-scaffold.ps1"
     p0_script = codex_home / "maintenance" / "scripts" / "codex-p0-integrity-loop.ps1"
     checks = []
@@ -158,12 +195,15 @@ def cmd_verify(args: argparse.Namespace) -> int:
         checks.append({"name": "p0_integrity_report_only", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(p0_script), "-ReportOnly", "-Json", "-ProcessTimeoutSeconds", "180"], root, timeout=300)})
     else:
         checks.append({"name": "p0_integrity_report_only", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {p0_script}", "duration_seconds": 0})
-    if codex_shim.exists():
-        checks.append({"name": "codex_mcp_list", **run_command(["cmd.exe", "/c", str(codex_shim), "mcp", "list", "--json"], root, timeout=120)})
-        checks.append({"name": "codex_doctor", **run_command(["cmd.exe", "/c", str(codex_shim), "doctor", "--json"], root, timeout=180)})
+    if codex_exe:
+        checks.append({"name": "codex_mcp_list", **run_command([codex_exe, "mcp", "list", "--json"], root, timeout=120)})
+        checks.append({"name": "codex_doctor", **run_command([codex_exe, "doctor", "--json"], root, timeout=180)})
+    elif codex_ps1.exists():
+        checks.append({"name": "codex_mcp_list", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(codex_ps1), "mcp", "list", "--json"], root, timeout=120)})
+        checks.append({"name": "codex_doctor", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(codex_ps1), "doctor", "--json"], root, timeout=180)})
     else:
-        checks.append({"name": "codex_mcp_list", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {codex_shim}", "duration_seconds": 0})
-        checks.append({"name": "codex_doctor", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {codex_shim}", "duration_seconds": 0})
+        checks.append({"name": "codex_mcp_list", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "missing bundled codex.exe and codex.ps1", "duration_seconds": 0})
+        checks.append({"name": "codex_doctor", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "missing bundled codex.exe and codex.ps1", "duration_seconds": 0})
 
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}

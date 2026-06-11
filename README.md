@@ -60,7 +60,7 @@ proof path.
 
 For repository handoff that needs non-self-certified validation, use the adopted
 `no-mistakes` outer gate through
-`%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` after the relevant
+`%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` after the relevant
 local layer has established basic correctness.
 
 ## Review Use

@@ -7,13 +7,19 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($PSVersionTable.PSEdition -ne "Core" -and -not $env:CODEX_AUTOMATION_HEALTH_PWSH_REEXEC -and -not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
-    $pwshShim = [IO.Path]::Combine($CodexHome, "toolchains\shims\pwsh.cmd")
-    if (Test-Path -LiteralPath $pwshShim -PathType Leaf) {
+    $pwshExe = [IO.Path]::Combine($env:LOCALAPPDATA, "Microsoft\WindowsApps\pwsh.exe")
+    if (-not (Test-Path -LiteralPath $pwshExe -PathType Leaf)) {
+        $pwshCommand = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+        if ($null -ne $pwshCommand -and -not [string]::IsNullOrWhiteSpace([string]$pwshCommand.Source)) {
+            $pwshExe = [string]$pwshCommand.Source
+        }
+    }
+    if (Test-Path -LiteralPath $pwshExe -PathType Leaf) {
         $env:CODEX_AUTOMATION_HEALTH_PWSH_REEXEC = "1"
         $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $PSCommandPath, "-CodexHome", $CodexHome)
         if ($Json) { $arguments += "-Json" }
         if ($ReportOnly) { $arguments += "-ReportOnly" }
-        & $pwshShim @arguments
+        & $pwshExe @arguments
         exit $LASTEXITCODE
     }
 }
@@ -406,7 +412,7 @@ $pluginCache = Join-PathStrict $CodexHome "plugins\cache\openai-bundled"
 $shimRoot = Join-PathStrict $CodexHome "toolchains\shims"
 $node = Join-PathStrict $shimRoot "node.cmd"
 $nodeRepl = Join-PathStrict $shimRoot "node_repl.cmd"
-$codex = Join-PathStrict $shimRoot "codex.cmd"
+$codex = Join-PathStrict $shimRoot "codex.ps1"
 $chromeRepairScript = Join-PathStrict $PSScriptRoot "repair-chrome-plugin-runtime.ps1"
 
 $nodeReplProbe = Invoke-NodeReplStdioProbe -NodeRepl $nodeRepl -CodexHome $CodexHome -Node $node -Codex $codex

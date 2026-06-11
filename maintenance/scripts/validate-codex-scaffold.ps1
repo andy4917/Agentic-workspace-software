@@ -7,11 +7,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 $fallbackExpectedShims = @(
-    "bun.cmd","cargo-clippy.cmd","cargo.cmd","code.cmd","codex.cmd","eslint.cmd",
-    "fd.cmd","gh.cmd","git.cmd","jq.cmd","just.cmd","node.cmd","npm.cmd",
-    "node_repl.cmd","npx.cmd","pip.cmd","pnpm.cmd","prettier.cmd","pwsh.cmd","py.cmd",
+    "bun.cmd","cargo-clippy.cmd","cargo.cmd","code.cmd","codex.cmd","codex.ps1","eslint.cmd",
+    "fd.cmd","gh.cmd","git.cmd","git.ps1","jq.cmd","just.cmd","node.cmd","npm.cmd",
+    "node_repl.cmd","npx.cmd","pip.cmd","pnpm.cmd","prettier.cmd","pwsh.cmd","pwsh.ps1","py.cmd",
     "pytest.cmd","python.cmd","rg.cmd","rg.ps1","ruff.cmd","rustc.cmd",
-    "rustfmt.cmd","rustup.cmd","tsc.cmd","tsx.cmd","uv.cmd","winget.cmd"
+    "rustfmt.cmd","rustup.cmd","tsc.cmd","tsx.cmd","uv.cmd","winget.cmd","no-mistakes.ps1"
 )
 
 $script:KeepSetManifest = $null
@@ -361,9 +361,10 @@ function Test-BundleShimSource {
         [Parameter(Mandatory = $true)][string]$Name
     )
 
-    $extension = if ($Name -eq "rg-ps1") { "ps1" } else { "cmd" }
-    $toolName = if ($Name -eq "rg-ps1") { "rg" } else { $Name }
-    $shimName = if ($Name -eq "rg-ps1") { "rg.ps1" } else { "$Name.cmd" }
+    $isPs1 = $Name.EndsWith("-ps1", [System.StringComparison]::OrdinalIgnoreCase)
+    $extension = if ($isPs1) { "ps1" } else { "cmd" }
+    $toolName = if ($isPs1) { $Name.Substring(0, $Name.Length - 4) } else { $Name }
+    $shimName = if ($isPs1) { "$toolName.ps1" } else { "$Name.cmd" }
     $shimPath = Join-Path $ShimRoot $shimName
     $toolPath = Resolve-CodexBundledTool -Name $toolName
     $text = if (Test-Path -LiteralPath $shimPath -PathType Leaf) { Get-Content -LiteralPath $shimPath -Raw } else { "" }
@@ -389,7 +390,15 @@ function Test-FirstCommandSource {
 
     $bundleRoot = Join-Path $env:LOCALAPPDATA "OpenAI\Codex\bin"
     $windowsAppsCodexPattern = "*\WindowsApps\OpenAI.Codex_*\app\resources*"
-    $command = @(Get-Command $Name -All -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $previousPath = $env:PATH
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($ShimRoot)) {
+            $env:PATH = "$ShimRoot;$previousPath"
+        }
+        $command = @(Get-Command $Name -All -ErrorAction SilentlyContinue | Select-Object -First 1)
+    } finally {
+        $env:PATH = $previousPath
+    }
     $source = if ($command.Count -gt 0) {
         if (-not [string]::IsNullOrWhiteSpace([string]$command[0].Source)) {
             [string]$command[0].Source
@@ -910,7 +919,7 @@ Add-Check $checks "shims_exact_set" ($(if ($missingShims.Count -eq 0 -and $extra
     extra = $extraShims
 }
 
-$noMistakesShim = Join-Path $shimRoot "no-mistakes.cmd"
+$noMistakesShim = Join-Path $shimRoot "no-mistakes.ps1"
 try {
     $previousTelemetry = $env:NO_MISTAKES_TELEMETRY
     $previousUpdateCheck = $env:NO_MISTAKES_NO_UPDATE_CHECK
@@ -1082,8 +1091,8 @@ try {
         $noMistakesShimText -match "NM_ORIGINAL_PATH" -and
         $noMistakesShimText -match "NM_PATH_ENTRY_ORIGINAL" -and
         $noMistakesShimText -match "NM_PATH_ENTRY_NORMALIZED" -and
-        $noMistakesShimText -match "NO_MISTAKES_TELEMETRY=0" -and
-        $noMistakesShimText -match "NO_MISTAKES_NO_UPDATE_CHECK=1"
+        $noMistakesShimText -match "NO_MISTAKES_TELEMETRY" -and
+        $noMistakesShimText -match "NO_MISTAKES_NO_UPDATE_CHECK"
     )
     $noMistakesDaemonRunning = $noMistakesDaemonPidExists -and $noMistakesDaemonPidAlive
     $noMistakesCodexAgentDetected = [bool]($noMistakesConfigText -match "(?m)^agent:\s*codex\s*$")
@@ -1160,6 +1169,7 @@ try {
 
 $bundleShimSources = @(
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "codex"),
+    (Test-BundleShimSource -ShimRoot $shimRoot -Name "codex-ps1"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "node"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "node_repl"),
     (Test-BundleShimSource -ShimRoot $shimRoot -Name "rg"),
@@ -1199,6 +1209,32 @@ Add-Check $checks "rg_ps1_argument_passthrough" ($(if ($rgShimExit -eq 0 -and ((
     shim = $rgPs1
     exit_code = $rgShimExit
     output = (($rgShimOutput | Out-String).Trim())
+}
+
+$gitPs1 = Join-Path $shimRoot "git.ps1"
+$gitShimOutput = @()
+$gitShimExit = $null
+if (Test-Path -LiteralPath $gitPs1 -PathType Leaf) {
+    $gitShimOutput = @(& $gitPs1 --version 2>&1)
+    $gitShimExit = $LASTEXITCODE
+}
+Add-Check $checks "git_ps1_argument_passthrough" ($(if ($gitShimExit -eq 0 -and (($gitShimOutput | Out-String) -match "git version")) { "pass" } else { "fail" })) @{
+    shim = $gitPs1
+    exit_code = $gitShimExit
+    output = (($gitShimOutput | Out-String).Trim())
+}
+
+$pwshPs1 = Join-Path $shimRoot "pwsh.ps1"
+$pwshShimOutput = @()
+$pwshShimExit = $null
+if (Test-Path -LiteralPath $pwshPs1 -PathType Leaf) {
+    $pwshShimOutput = @(& $pwshPs1 -NoProfile -NonInteractive -Command '$PSVersionTable.PSEdition' 2>&1)
+    $pwshShimExit = $LASTEXITCODE
+}
+Add-Check $checks "pwsh_ps1_argument_passthrough" ($(if ($pwshShimExit -eq 0 -and (($pwshShimOutput | Out-String) -match "Core")) { "pass" } else { "fail" })) @{
+    shim = $pwshPs1
+    exit_code = $pwshShimExit
+    output = (($pwshShimOutput | Out-String).Trim())
 }
 
 $pathHits = @()
@@ -1430,6 +1466,7 @@ $syncPairs = @(
     "maintenance\scripts\codex-retrieve.ps1",
     "maintenance\scripts\codex-trajectory.ps1",
     "maintenance\scripts\codex-verify.ps1",
+    "maintenance\scripts\check-worktree-sensitive-diff.ps1",
     "maintenance\scripts\codex_agent_harness.py",
     "maintenance\scripts\codex_agent_harness_base.py",
     "maintenance\scripts\codex_agent_harness_calibration.py",
@@ -1445,6 +1482,10 @@ $syncPairs = @(
     "maintenance\NAMING_CONVENTION.md",
     "toolchains\README.md",
     "toolchains\shims\no-mistakes.cmd",
+    "toolchains\shims\no-mistakes.ps1",
+    "toolchains\shims\git.ps1",
+    "toolchains\shims\pwsh.ps1",
+    "toolchains\shims\codex.ps1",
     "skills\frontend-visual-debug\SKILL.md",
     "skills\git-easy-korean\SKILL.md",
     "skills\test-integrity-gate\SKILL.md"

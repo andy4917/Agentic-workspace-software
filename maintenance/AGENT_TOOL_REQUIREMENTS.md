@@ -6,8 +6,10 @@ them explicitly. It is operational guidance for `%USERPROFILE%\.codex`.
 ## Default Resolution
 
 Use `%USERPROFILE%\.codex\toolchains\shims` by explicit path, or use a
-process-local PATH only for a bounded task. Do not add this directory to
-persistent User or Machine PATH.
+process-local PATH only for a bounded task. In PowerShell/Codex-managed runs,
+prefer PowerShell-native `.ps1` shims when both `.ps1` and `.cmd` exist so
+Windows does not open foreground `cmd.exe` windows. Do not add this directory
+to persistent User or Machine PATH.
 
 Source selection rule:
 
@@ -104,7 +106,7 @@ validation, especially test/TDD changes, validation handoff, safe push, PR, CI,
 release, or merge handoff. Use the explicit wrapper:
 
 ```powershell
-%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd
+%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1
 ```
 
 The active binary is the official `kunchenguid/no-mistakes` release under
@@ -113,8 +115,8 @@ The active binary is the official `kunchenguid/no-mistakes` release under
 checks disabled for Codex-managed runs with `NO_MISTAKES_TELEMETRY=0` and
 `NO_MISTAKES_NO_UPDATE_CHECK=1`.
 
-The wrapper must also remove `%USERPROFILE%\.codex\toolchains\shims` from the
-child `PATH` before starting `no-mistakes`. This is intentional: no-mistakes
+The PowerShell wrapper must also remove `%USERPROFILE%\.codex\toolchains\shims`
+from the child `PATH` before starting `no-mistakes`. This is intentional: no-mistakes
 spawns Codex agents, and Codex shell commands must resolve a real `pwsh.exe`,
 not the `.cmd` shim, or Windows batch argument handling can block every shell
 command with `batch file arguments are invalid`.

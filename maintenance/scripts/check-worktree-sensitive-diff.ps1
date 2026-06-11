@@ -21,6 +21,7 @@ if (-not (Test-Path -LiteralPath $scanner -PathType Leaf)) {
 
 $previousIndex = [Environment]::GetEnvironmentVariable("GIT_INDEX_FILE", "Process")
 $tempIndex = [System.IO.Path]::GetTempFileName()
+$tempGitAddStderr = [System.IO.Path]::GetTempFileName()
 $exitCode = 1
 $nativeErrorPreference = $ErrorActionPreference
 
@@ -42,7 +43,19 @@ try {
 
         [Environment]::SetEnvironmentVariable("GIT_INDEX_FILE", $tempIndex, "Process")
 
-        $gitAddOutput = @(& git -C $resolvedRoot add -A -- . 2>&1)
+        $gitAddErrorPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "SilentlyContinue"
+            $gitAddStdout = @(& git -C $resolvedRoot -c core.autocrlf=false add -A -- . 2> $tempGitAddStderr)
+        } finally {
+            $ErrorActionPreference = $gitAddErrorPreference
+        }
+        $gitAddStderr = if (Test-Path -LiteralPath $tempGitAddStderr -PathType Leaf) {
+            @(Get-Content -LiteralPath $tempGitAddStderr -ErrorAction SilentlyContinue)
+        } else {
+            @()
+        }
+        $gitAddOutput = @($gitAddStdout + $gitAddStderr)
         if ($LASTEXITCODE -ne 0) {
             Write-Output "status=fail; reason=temp-index-git-add-failed"
             $gitAddOutput | Select-Object -First 5 | ForEach-Object { Write-Output ("detail=" + [string]$_) }
@@ -60,6 +73,9 @@ try {
     [Environment]::SetEnvironmentVariable("GIT_INDEX_FILE", $previousIndex, "Process")
     if (Test-Path -LiteralPath $tempIndex -PathType Leaf) {
         Remove-Item -LiteralPath $tempIndex -Force
+    }
+    if (Test-Path -LiteralPath $tempGitAddStderr -PathType Leaf) {
+        Remove-Item -LiteralPath $tempGitAddStderr -Force
     }
 }
 

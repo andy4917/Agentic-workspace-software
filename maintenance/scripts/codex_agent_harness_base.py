@@ -338,6 +338,7 @@ def harness_source_files(root: Path) -> list[Path]:
     extra = [
         "AGENTS.md", "CALIBRATION.md", "config.toml",
         "config.d/20-hooks.toml", "hooks/compact-codex-hook.ps1",
+        "maintenance/scripts/worker_watcher_templates.py",
         "agents/calibration-verifier.toml",
         "evals/calibration-eval.yaml", "evals/calibration-policy-smoke.json",
     ]
