@@ -321,7 +321,16 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             prompt_probe.get("status") == "pass"
             and "compact hook active" in prompt_stdout
             and "treat claims as candidate" in prompt_stdout,
-            "UserPromptSubmit should emit only the compact current-evidence reminder.",
+            "UserPromptSubmit should emit the compact current-evidence reminder for ordinary prompts.",
+        )
+        secret_prompt_probe = run_prompt_hook_sample(root, "Here is a fake token for smoke testing: sk-proj_FAKEFAKEFAKEFAKEFAKEFAKEFAKE")
+        secret_prompt_stdout = secret_prompt_probe.get("stdout_preview", "").lower()
+        add_check(
+            "user_prompt_submit_blocks_secret_like_values",
+            secret_prompt_probe.get("status") == "pass"
+            and '"decision":"block"' in secret_prompt_stdout
+            and "secret-like value" in secret_prompt_stdout,
+            "UserPromptSubmit should block high-confidence secret-like prompt values without storing the raw prompt.",
         )
         session_probe = run_subagent_session_start_sample(root)
         session_stdout = session_probe.get("stdout_preview", "").lower()

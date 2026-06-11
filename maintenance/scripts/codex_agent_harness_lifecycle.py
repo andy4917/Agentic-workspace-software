@@ -115,6 +115,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         if isinstance(op, dict) and op.get("path")
     }
     operations = []
+    blocked_updates = []
     for path, previous in sorted(previous_ops.items()):
         if path in templates:
             continue
@@ -179,7 +180,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         full = root / path
         digest = sha256_text(content)
         previous = previous_ops.get(path, {})
-        was_managed = previous.get("managed") is True or previous.get("action") in {"created", "updated", "unchanged"}
+        was_managed = previous.get("managed") is True or previous.get("action") in {"created", "updated", "unchanged", "updated_blocked_drift"}
         if full.exists():
             current = sha256_file(full)
             if current == digest:
@@ -199,6 +200,22 @@ def cmd_apply(args: argparse.Namespace) -> int:
                 continue
             if was_managed:
                 remove_on_uninstall = bool(previous.get("remove_on_uninstall", True))
+                previous_digest = previous.get("digest")
+                if previous_digest and current != previous_digest:
+                    blocked_updates.append(path)
+                    operations.append(
+                        {
+                            "path": path,
+                            "action": "updated_blocked_drift",
+                            "digest": current,
+                            "desired_digest": digest,
+                            "previous_digest": previous_digest,
+                            "owner": OWNER,
+                            "managed": True,
+                            "remove_on_uninstall": remove_on_uninstall,
+                        }
+                    )
+                    continue
                 write_text(full, content)
                 operations.append(
                     {
@@ -237,6 +254,9 @@ def cmd_apply(args: argparse.Namespace) -> int:
     }
     write_json(install_state_path(root), state)
     print(f"Applied harness state: {install_state_path(root)}")
+    if blocked_updates:
+        print(json.dumps({"blocked_updates": blocked_updates, "reason": "managed files changed since the last recorded digest; refusing silent overwrite"}, ensure_ascii=False, sort_keys=True))
+        return 1
     return 0
 
 

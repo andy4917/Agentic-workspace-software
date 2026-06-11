@@ -72,6 +72,43 @@ function Get-HookInputText {
     return ($parts -join "`n")
 }
 
+function Get-PromptText {
+    param([object]$Payload)
+
+    foreach ($name in @("prompt", "user_prompt", "userPrompt", "message", "text")) {
+        if ($Payload.PSObject.Properties.Name -contains $name -and $null -ne $Payload.$name) {
+            return [string]$Payload.$name
+        }
+    }
+    return ""
+}
+
+function Test-PromptSecretLeak {
+    param([AllowNull()][string]$Prompt)
+
+    if ([string]::IsNullOrWhiteSpace($Prompt)) {
+        return $false
+    }
+
+    $secretPatterns = @(
+        '(?i)\b(sk-(proj-)?[A-Za-z0-9_-]{20,})\b',
+        '(?i)\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b',
+        '(?i)\bgithub_pat_[A-Za-z0-9_]{20,}\b',
+        '\bAKIA[0-9A-Z]{16}\b',
+        '(?i)\bxox[baprs]-[A-Za-z0-9-]{20,}\b',
+        '(?i)\bnpm_[A-Za-z0-9]{20,}\b',
+        '(?i)\bpypi-[A-Za-z0-9_-]{20,}\b',
+        '(?i)\b(api[-_]?key|access[-_]?token|auth[-_]?token|secret|password|passwd)\b\s*[:=]\s*["'']?[A-Za-z0-9_./+=-]{20,}'
+    )
+
+    foreach ($pattern in $secretPatterns) {
+        if ($Prompt -match $pattern) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Get-CommandTextFromObject {
     param([object]$Value)
 
@@ -698,6 +735,16 @@ $preToolUseDecision = $null
 if ($event -eq "PreToolUse") {
     $preToolUseDecision = Get-PreToolUseDecision -ToolName $tool -Payload $payload -Raw $stdinRaw
 }
+$userPromptDecision = $null
+if ($event -eq "UserPromptSubmit") {
+    $promptText = Get-PromptText -Payload $payload
+    if (Test-PromptSecretLeak -Prompt $promptText) {
+        $userPromptDecision = [ordered]@{
+            decision = "block"
+            reason = "Prompt appears to contain a secret-like value. Remove the credential from the prompt and reference only metadata, variable names, or a redacted placeholder."
+        }
+    }
+}
 
 $record = [ordered]@{
     ts = (Get-Date).ToUniversalTime().ToString("o")
@@ -706,8 +753,8 @@ $record = [ordered]@{
     event = $event
     tool = $tool
     cwd = if ($payload.cwd) { [string]$payload.cwd } else { $null }
-    action = if ($preToolUseDecision -and [string]$preToolUseDecision.decision -eq "deny") { "deny" } else { "continue" }
-    decision_reason = if ($preToolUseDecision) { [string]$preToolUseDecision.reason } else { $null }
+    action = if ($preToolUseDecision -and [string]$preToolUseDecision.decision -eq "deny") { "deny" } elseif ($userPromptDecision) { "block" } else { "continue" }
+    decision_reason = if ($preToolUseDecision) { [string]$preToolUseDecision.reason } elseif ($userPromptDecision) { [string]$userPromptDecision.reason } else { $null }
     runtime_cleanup_watch = $runtimeCleanupWatch
 }
 ($record | ConvertTo-Json -Compress -Depth 8) | Add-Content -LiteralPath $ledger -Encoding UTF8
@@ -726,9 +773,14 @@ if ($event -eq "PreToolUse") {
         additionalContext = "Minimal scaffold active: use current evidence, keep runtime cleanup watcher active, treat claims as candidate until direct evidence supports them, avoid stale runtime state, and verify before completion."
     }
 } elseif ($event -eq "UserPromptSubmit") {
-    $out["hookSpecificOutput"] = [ordered]@{
-        hookEventName = "UserPromptSubmit"
-        additionalContext = "Compact hook active: keep workflow compact, use matching skills, treat claims as candidate until direct evidence supports them, verify from current files and commands, and report not-run checks."
+    if ($userPromptDecision) {
+        $out["decision"] = [string]$userPromptDecision.decision
+        $out["reason"] = [string]$userPromptDecision.reason
+    } else {
+        $out["hookSpecificOutput"] = [ordered]@{
+            hookEventName = "UserPromptSubmit"
+            additionalContext = "Compact hook active: keep workflow compact, use matching skills, treat claims as candidate until direct evidence supports them, verify from current files and commands, and report not-run checks."
+        }
     }
 }
 
