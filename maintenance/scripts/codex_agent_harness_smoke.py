@@ -459,6 +459,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
 +new
 *** End Patch
 """
+        current_drive_apply_patch = """*** Begin Patch
+*** Update File: \\Users\\anise\\.codex\\config.toml
+@@
+-old
++new
+*** End Patch
+"""
         sensitive_apply_patch_probe = run_apply_patch_sample(root, sensitive_apply_patch)
         sensitive_apply_patch_stdout = sensitive_apply_patch_probe.get("stdout_preview", "").lower()
         nested_sensitive_apply_patch_probe = run_nested_apply_patch_sample(root, sensitive_apply_patch)
@@ -467,6 +474,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         parent_apply_patch_stdout = parent_apply_patch_probe.get("stdout_preview", "").lower()
         rooted_apply_patch_probe = run_apply_patch_sample(root, rooted_apply_patch)
         rooted_apply_patch_stdout = rooted_apply_patch_probe.get("stdout_preview", "").lower()
+        current_drive_apply_patch_probe = run_apply_patch_sample(root, current_drive_apply_patch)
+        current_drive_apply_patch_stdout = current_drive_apply_patch_probe.get("stdout_preview", "").lower()
         ordinary_apply_patch_probe = run_apply_patch_sample(root, ordinary_apply_patch)
         ordinary_apply_patch_stdout = ordinary_apply_patch_probe.get("stdout_preview", "").lower()
         add_check(
@@ -479,6 +488,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in parent_apply_patch_stdout
             and rooted_apply_patch_probe.get("status") == "pass"
             and "deny" in rooted_apply_patch_stdout
+            and current_drive_apply_patch_probe.get("status") == "pass"
+            and "deny" in current_drive_apply_patch_stdout
             and ordinary_apply_patch_probe.get("status") == "pass"
             and "allow" in ordinary_apply_patch_stdout,
             "PreToolUse should deny direct and nested apply_patch targeting sensitive, rooted, or parent-traversal files while preserving ordinary patch targets.",

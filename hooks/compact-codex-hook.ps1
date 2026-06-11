@@ -224,6 +224,9 @@ function Test-ApplyPatchTargetRisk {
         if ($normalized -match $SensitivePathPattern) {
             return "sensitive target $clean"
         }
+        if ($clean -match '^[\\/]' -or $normalized -match '^\\') {
+            return "broad target $clean"
+        }
         if ($normalized -match '(?i)^([A-Z]:\\|\\+|/+)' -or $normalized -match '(^|\\)\.\.(\\|$)' -or $normalized -match '(?i)^([A-Z]:\\?|\\+|/+|\.{1,2}|~|\*)$') {
             return "broad target $clean"
         }

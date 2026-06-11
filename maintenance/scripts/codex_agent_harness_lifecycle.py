@@ -90,6 +90,20 @@ def resolve_state_child_path(root: Path, path: str) -> tuple[Path | None, str | 
     return full, None
 
 
+def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
+    try:
+        skills_root = (root / "skills").resolve()
+        parent = removed_file.parent.resolve()
+        if parent.parent != skills_root:
+            return None
+        if any(parent.iterdir()):
+            return None
+        parent.rmdir()
+        return rel(parent, root)
+    except OSError:
+        return None
+
+
 def cmd_apply(args: argparse.Namespace) -> int:
     root = root_path(args)
     modules = selected_modules(args.profile, args.module)
@@ -131,12 +145,13 @@ def cmd_apply(args: argparse.Namespace) -> int:
             )
             continue
         assert full is not None
-        if previous.get("managed") is not True or previous.get("remove_on_uninstall") is not True:
+        if previous.get("managed") is not True:
             continue
         if not full.is_file():
             continue
         if previous_digest and sha256_file(full) == previous_digest:
             full.unlink()
+            pruned_empty_dir = prune_empty_skill_dir(root, full)
             operations.append(
                 {
                     "path": path,
@@ -145,6 +160,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
                     "owner": OWNER,
                     "managed": False,
                     "remove_on_uninstall": False,
+                    "pruned_empty_dir": pruned_empty_dir,
                 }
             )
             continue

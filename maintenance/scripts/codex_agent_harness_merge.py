@@ -315,8 +315,25 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         if not any(op.get("remove_on_uninstall") is True for op in state.get("applied_operations", [])):
             print("uninstall ownership missing in self-test", file=sys.stderr)
             return 1
+        stale_skill = root / "skills" / "dont-even-try" / "SKILL.md"
+        write_text(stale_skill, "# Retired skill\n")
+        stale_digest = sha256_file(stale_skill)
+        state["applied_operations"].append(
+            {
+                "path": "skills/dont-even-try/SKILL.md",
+                "action": "unchanged",
+                "digest": stale_digest,
+                "owner": OWNER,
+                "managed": True,
+                "remove_on_uninstall": False,
+            }
+        )
+        write_json(install_state_path(root), state)
         write_text(root / "agents" / "explorer.toml", "drifted = true\n")
         cmd_apply(ns)
+        if stale_skill.exists() or stale_skill.parent.exists():
+            print("retired managed skill residue was not removed in self-test", file=sys.stderr)
+            return 1
         write_json(
             root / "reports" / "global-scan.latest.json",
             {

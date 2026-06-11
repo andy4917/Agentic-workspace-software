@@ -299,6 +299,17 @@ keeping ordinary inspected tool use allowed.
   `--mirror` and `--prune` in both raw fallback and parsed-token paths.
 - New or updated oracle evidence: `hook-policy-smoke` now denies
   `git push --mirror origin` and `git push --prune origin`.
+- no-mistakes follow-up on `d42bce5`: run `01KTTDYC89J3550BMB6Z5CW5EJ`
+  returned `F1` and `F2`. `F1` is addressed by denying apply_patch targets
+  that start with `/` or `\` before and after normalization. `F2` is addressed
+  by removing digest-matching retired managed files even when their old state
+  had `remove_on_uninstall=false`, and pruning an empty retired skill directory
+  after removal.
+- New or updated oracle evidence: `hook-policy-smoke` now denies current-drive
+  rooted apply_patch targets such as `\Users\...\config.toml`, and `self-test`
+  injects a stale `skills/dont-even-try/SKILL.md` state entry with
+  `remove_on_uninstall=false` and verifies it is removed with its empty skill
+  directory.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
