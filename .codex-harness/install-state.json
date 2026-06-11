@@ -457,19 +457,18 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-06-10T22:32:56+00:00",
+  "installed_at": "2026-06-11T10:52:08+00:00",
   "requested_modules": [],
-  "requested_profile": "full",
+  "requested_profile": "developer",
   "schema_version": "1",
   "selected_modules": [
     "codex-baseline",
     "rules-core",
     "skills-core",
     "workflow-quality",
-    "security",
-    "orchestration",
     "mcp-baseline",
-    "benchmarking"
+    "benchmarking",
+    "orchestration"
   ],
   "skipped_modules": [],
   "source": {

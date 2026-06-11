@@ -217,6 +217,12 @@ function Test-GitExecutableLeaf {
     return ([string]$Leaf -match '(?i)^git(\.exe|\.cmd|\.ps1)?$')
 }
 
+function Test-PosixShellExecutableLeaf {
+    param([string]$Leaf)
+
+    return ([string]$Leaf -match '(?i)^(bash|sh|zsh|dash)(\.exe)?$')
+}
+
 function Test-TextContainsEncodedPowerShellInvocation {
     param([string]$CommandText)
 
@@ -631,6 +637,19 @@ function Test-HighRiskDestructiveCommand {
             $powerShellCommandParameters = @(Get-ParameterPrefixes -Name "Command" -MinLength 1)
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
                 if (-not (Test-NamedParameter -Value $segment[$segmentIndex] -Names $powerShellCommandParameters)) { continue }
+                if ($segmentIndex + 1 -ge $segment.Count) { continue }
+                $nestedCommand = ($segment[($segmentIndex + 1)..($segment.Count - 1)] -join " ")
+                if (Test-HighRiskDestructiveCommand -CommandText $nestedCommand -BroadTargetPattern $BroadTargetPattern -RecursiveFlagPattern $RecursiveFlagPattern) {
+                    return $true
+                }
+                break
+            }
+            continue
+        }
+
+        if (Test-PosixShellExecutableLeaf -Leaf $commandLeaf) {
+            for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
+                if ($segment[$segmentIndex] -notmatch '(?i)^-[A-Za-z]*c[A-Za-z]*$') { continue }
                 if ($segmentIndex + 1 -ge $segment.Count) { continue }
                 $nestedCommand = ($segment[($segmentIndex + 1)..($segment.Count - 1)] -join " ")
                 if (Test-HighRiskDestructiveCommand -CommandText $nestedCommand -BroadTargetPattern $BroadTargetPattern -RecursiveFlagPattern $RecursiveFlagPattern) {

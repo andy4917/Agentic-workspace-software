@@ -1202,8 +1202,8 @@ try {
         $noMistakesShimText -match "NM_ORIGINAL_PATH" -and
         $noMistakesShimText -match "NM_PATH_ENTRY_ORIGINAL" -and
         $noMistakesShimText -match "NM_PATH_ENTRY_NORMALIZED" -and
-        $noMistakesShimText -match "NO_MISTAKES_TELEMETRY" -and
-        $noMistakesShimText -match "NO_MISTAKES_NO_UPDATE_CHECK"
+        $noMistakesShimText -match '(?m)^\s*\$env:NO_MISTAKES_TELEMETRY\s*=\s*"0"\s*$' -and
+        $noMistakesShimText -match '(?m)^\s*\$env:NO_MISTAKES_NO_UPDATE_CHECK\s*=\s*"1"\s*$'
     )
     $noMistakesDaemonRunning = $noMistakesDaemonPidExists -and $noMistakesDaemonPidAlive
     $noMistakesCodexAgentDetected = [bool]($noMistakesConfigText -match "(?m)^agent:\s*codex\s*$")

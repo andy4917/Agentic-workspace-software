@@ -313,6 +313,27 @@ foreach ($shim in Get-ChildItem -LiteralPath $shimDir -Filter "*.cmd" -ErrorActi
     }
 }
 
+$pwshCmdShim = Join-Path $shimDir "pwsh.cmd"
+if (Test-Path -LiteralPath $pwshCmdShim -PathType Leaf) {
+    $pwshCmdProbe = Invoke-WrapperProbe -WrapperPath $pwshCmdShim -Arguments @("-NoProfile", "-Command", "Write-Output codex-pwsh-cmd-probe") -ExpectedPattern "codex-pwsh-cmd-probe"
+    $checks.Add([ordered]@{
+        name = "pwsh-cmd-wrapper-invocation"
+        status = if ($pwshCmdProbe.ok) { "pass" } else { "fail" }
+        source_class = "local-chain"
+        wrapper = $pwshCmdShim
+        probe = $pwshCmdProbe
+        note = "pwsh.cmd uses conditional and %% variable-based targets, so direct-wrapper-target parsing is supplemented by an execution probe."
+    })
+} else {
+    $checks.Add([ordered]@{
+        name = "pwsh-cmd-wrapper-invocation"
+        status = "fail"
+        source_class = "local-chain"
+        wrapper = $pwshCmdShim
+        probe = @{ ok = $false; error = "missing wrapper" }
+    })
+}
+
 foreach ($shim in Get-ChildItem -LiteralPath $shimDir -Filter "*.cmd" -ErrorAction SilentlyContinue) {
     $text = Get-Content -LiteralPath $shim.FullName -Raw
     foreach ($match in [regex]::Matches($text, '"([^"]+)"')) {

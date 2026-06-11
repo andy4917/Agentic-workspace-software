@@ -15,6 +15,7 @@ from codex_agent_harness_base import *
 def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     ledger_path = root / "state" / "hook-ledger.jsonl"
+    original_state_dir_exists = ledger_path.parent.exists()
     original_ledger_exists = ledger_path.exists()
     original_ledger_bytes = ledger_path.read_bytes() if original_ledger_exists else None
 
@@ -62,6 +63,11 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
                 ledger_path.unlink()
             except FileNotFoundError:
                 pass
+            if not original_state_dir_exists:
+                try:
+                    ledger_path.parent.rmdir()
+                except OSError:
+                    pass
     restored_ledger_exists = ledger_path.exists()
     restored_ledger_bytes = ledger_path.read_bytes() if restored_ledger_exists else None
     add_check(
@@ -225,6 +231,7 @@ def run_stop_hook_sample(root: Path, message: str) -> dict[str, Any]:
 def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     ledger_path = root / "state" / "hook-ledger.jsonl"
+    original_state_dir_exists = ledger_path.parent.exists()
     original_ledger_exists = ledger_path.exists()
     original_ledger_bytes = ledger_path.read_bytes() if original_ledger_exists else None
 
@@ -431,6 +438,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_inline_option_force_push_stdout = git_inline_option_force_push_probe.get("stdout_preview", "").lower()
         git_inline_option_clean_probe = run_hook_sample(root, "git --git-dir=.git clean -fd")
         git_inline_option_clean_stdout = git_inline_option_clean_probe.get("stdout_preview", "").lower()
+        bash_nested_rm_probe = run_hook_sample(root, "bash -lc 'rm -rf /'")
+        bash_nested_rm_stdout = bash_nested_rm_probe.get("stdout_preview", "").lower()
         git_force_with_lease_push_probe = run_hook_sample(root, "git push --force-with-lease origin HEAD")
         git_force_with_lease_push_stdout = git_force_with_lease_push_probe.get("stdout_preview", "").lower()
         git_plus_refspec_push_probe = run_hook_sample(root, "git push origin +HEAD:main")
@@ -524,6 +533,8 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in git_inline_option_force_push_stdout
             and git_inline_option_clean_probe.get("status") == "pass"
             and "deny" in git_inline_option_clean_stdout
+            and bash_nested_rm_probe.get("status") == "pass"
+            and "deny" in bash_nested_rm_stdout
             and git_force_with_lease_push_probe.get("status") == "pass"
             and "deny" in git_force_with_lease_push_stdout
             and git_plus_refspec_push_probe.get("status") == "pass"
@@ -956,6 +967,11 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                 ledger_path.unlink()
             except FileNotFoundError:
                 pass
+            if not original_state_dir_exists:
+                try:
+                    ledger_path.parent.rmdir()
+                except OSError:
+                    pass
 
     restored_ledger_exists = ledger_path.exists()
     restored_ledger_bytes = ledger_path.read_bytes() if restored_ledger_exists else None
