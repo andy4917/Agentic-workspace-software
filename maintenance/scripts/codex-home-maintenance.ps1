@@ -52,7 +52,7 @@ function Get-ChildItemsWithoutReparseTraversal {
 
     while ($pending.Count -gt 0) {
         $current = $pending.Pop()
-        foreach ($child in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)) {
+        foreach ($child in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction Stop)) {
             $items.Add($child) | Out-Null
             if ($child.PSIsContainer -and -not (Test-ReparsePoint -Item $child)) {
                 $pending.Push($child.FullName)
@@ -151,7 +151,20 @@ function Get-DirectorySummary {
         }
     }
 
-    $children = @(Get-ChildItemsWithoutReparseTraversal -Path $Path)
+    try {
+        $children = @(Get-ChildItemsWithoutReparseTraversal -Path $Path)
+    }
+    catch {
+        return [ordered]@{
+            path = $Path
+            exists = $true
+            item_type = 'directory'
+            item_count = $null
+            bytes = $null
+            last_write_time = $item.LastWriteTime.ToString('o')
+            scan_error = $_.Exception.Message
+        }
+    }
     $files = @($children | Where-Object { -not $_.PSIsContainer })
     $sum = ($files | Measure-Object -Property Length -Sum).Sum
     if ($null -eq $sum) { $sum = 0 }
@@ -234,7 +247,12 @@ function Remove-PathDirectly {
     }
     $descendantReparsePoints = @()
     if ($targetItem.PSIsContainer) {
-        $descendantReparsePoints = @(Get-ReparsePointDescendants -Path $resolvedTarget)
+        try {
+            $descendantReparsePoints = @(Get-ReparsePointDescendants -Path $resolvedTarget)
+        }
+        catch {
+            throw "Refusing to recursively delete path because descendant scan failed: $resolvedTarget; error=$($_.Exception.Message)"
+        }
     }
     if ($descendantReparsePoints.Count -gt 0) {
         $sample = (($descendantReparsePoints | Select-Object -First 10) -join '; ')
@@ -266,7 +284,21 @@ function Stop-GitFsmonitorUnderRoot {
         $repoRoots.Add($Source) | Out-Null
     }
 
-    foreach ($gitDir in @(Get-ChildItemsWithoutReparseTraversal -Path $Source | Where-Object { $_.PSIsContainer -and $_.Name -eq '.git' -and -not (Test-ReparsePoint -Item $_) })) {
+    $gitDirs = @()
+    try {
+        $gitDirs = @(Get-ChildItemsWithoutReparseTraversal -Path $Source | Where-Object { $_.PSIsContainer -and $_.Name -eq '.git' -and -not (Test-ReparsePoint -Item $_) })
+    }
+    catch {
+        return @([ordered]@{
+            repo_root = $Source
+            status_exit_code = $null
+            status = "scan_failed: $($_.Exception.Message)"
+            stop_exit_code = $null
+            stop = $null
+        })
+    }
+
+    foreach ($gitDir in $gitDirs) {
         $repoRoot = Split-Path -Parent $gitDir.FullName
         if (-not [string]::IsNullOrWhiteSpace($repoRoot) -and $repoRoot -notin $repoRoots) {
             $repoRoots.Add($repoRoot) | Out-Null
@@ -333,7 +365,18 @@ function Remove-TransientRoot {
     }
     $descendantReparsePoints = @()
     if ($sourceItem.PSIsContainer) {
-        $descendantReparsePoints = @(Get-ReparsePointDescendants -Path $Source)
+        try {
+            $descendantReparsePoints = @(Get-ReparsePointDescendants -Path $Source)
+        }
+        catch {
+            return [ordered]@{
+                source = $Source
+                action = 'delete_refused_reparse_scan_failed'
+                destination = $null
+                git_fsmonitor = @()
+                error = "Refusing to recursively delete path because descendant scan failed: $Source; error=$($_.Exception.Message)"
+            }
+        }
     }
     if ($descendantReparsePoints.Count -gt 0) {
         $sample = (($descendantReparsePoints | Select-Object -First 10) -join '; ')
