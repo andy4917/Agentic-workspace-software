@@ -158,6 +158,21 @@ def run_apply_patch_sample(root: Path, patch: str) -> dict[str, Any]:
     )
 
 
+def run_nested_apply_patch_sample(root: Path, patch: str) -> dict[str, Any]:
+    return run_compact_hook_sample(
+        root,
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "multi_tool_use.parallel",
+            "tool_input": {
+                "tool_uses": [
+                    {"recipient_name": "functions.apply_patch", "parameters": {"patch": patch}},
+                ],
+            },
+        },
+    )
+
+
 def run_prompt_hook_sample(root: Path, prompt: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
@@ -416,15 +431,19 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
 """
         sensitive_apply_patch_probe = run_apply_patch_sample(root, sensitive_apply_patch)
         sensitive_apply_patch_stdout = sensitive_apply_patch_probe.get("stdout_preview", "").lower()
+        nested_sensitive_apply_patch_probe = run_nested_apply_patch_sample(root, sensitive_apply_patch)
+        nested_sensitive_apply_patch_stdout = nested_sensitive_apply_patch_probe.get("stdout_preview", "").lower()
         ordinary_apply_patch_probe = run_apply_patch_sample(root, ordinary_apply_patch)
         ordinary_apply_patch_stdout = ordinary_apply_patch_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_sensitive_apply_patch_targets",
             sensitive_apply_patch_probe.get("status") == "pass"
             and "deny" in sensitive_apply_patch_stdout
+            and nested_sensitive_apply_patch_probe.get("status") == "pass"
+            and "deny" in nested_sensitive_apply_patch_stdout
             and ordinary_apply_patch_probe.get("status") == "pass"
             and "allow" in ordinary_apply_patch_stdout,
-            "PreToolUse should deny apply_patch targeting sensitive runtime files while preserving ordinary patch targets.",
+            "PreToolUse should deny direct and nested apply_patch targeting sensitive runtime files while preserving ordinary patch targets.",
         )
         blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
         blocked_stdout = blocked_probe.get("stdout_preview", "").lower()

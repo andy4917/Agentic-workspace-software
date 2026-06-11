@@ -473,6 +473,13 @@ function Get-PreToolUseDecision {
             if ($nestedIsFileReadMcp -and $nestedCombined -match $sensitivePathPattern) {
                 return [ordered]@{ decision = "deny"; reason = "nested credential or secret-file reads require explicit user approval and a narrower non-secret metadata route" }
             }
+            $nestedIsApplyPatch = $nestedToolText -match '(?i)(^|[._-])apply_patch$'
+            if ($nestedIsApplyPatch) {
+                $nestedApplyPatchRisk = Test-ApplyPatchTargetRisk -Text $nestedCombined -SensitivePathPattern $sensitivePathPattern
+                if ($nestedApplyPatchRisk) {
+                    return [ordered]@{ decision = "deny"; reason = "nested apply_patch targets $nestedApplyPatchRisk and requires explicit approval" }
+                }
+            }
             $nestedIsShellLike = $nestedToolText -match '(?i)(^|\.|_)(bash|shell|shell_command|powershell|pwsh|cmd)$'
             if (-not $nestedIsShellLike) { continue }
             if (Test-EncodedPowerShellCommand -CommandText $nestedCall.command) {
@@ -486,13 +493,6 @@ function Get-PreToolUseDecision {
             }
             if (($nestedInspection -match $sensitivePathPattern) -and -not (($nestedInspection -match $safeReferenceSearchPattern) -and ($nestedInspection -notmatch $sensitivePathWithDirectoryPattern))) {
                 return [ordered]@{ decision = "deny"; reason = "nested credential or secret-file reads require explicit user approval and a narrower non-secret metadata route" }
-            }
-            $nestedIsApplyPatch = $nestedToolText -match '(?i)(^|[._-])apply_patch$'
-            if ($nestedIsApplyPatch) {
-                $nestedApplyPatchRisk = Test-ApplyPatchTargetRisk -Text $nestedCombined -SensitivePathPattern $sensitivePathPattern
-                if ($nestedApplyPatchRisk) {
-                    return [ordered]@{ decision = "deny"; reason = "nested apply_patch targets $nestedApplyPatchRisk and requires explicit approval" }
-                }
             }
             if (Test-HighRiskDestructiveCommand -CommandText $nestedCall.command -BroadTargetPattern $broadTargetPattern -RecursiveFlagPattern $recursiveFlagPattern) {
                 return [ordered]@{ decision = "deny"; reason = "nested broad destructive operations must be scoped and explicitly approved before hook execution" }

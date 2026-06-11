@@ -277,6 +277,14 @@ keeping ordinary inspected tool use allowed.
   `git push origin --delete old-branch`, `git push origin :old-branch`, and
   `apply_patch` targeting `.codex\auth.json`, while preserving ordinary
   `git push origin HEAD` and ordinary `apply_patch` targets.
+- no-mistakes follow-up on `455f99e`: run `01KTTC22JN2PNT4QZXSTAVTVDZ`
+  returned `nested-apply-patch-bypass`. The nested `multi_tool_use.parallel`
+  branch now checks `functions.apply_patch` target risk before the shell-like
+  early continue, so a nested non-shell patch cannot bypass sensitive runtime
+  file protection.
+- New or updated oracle evidence: `hook-policy-smoke` now denies both direct
+  and nested `functions.apply_patch` targeting `.codex\auth.json`, while still
+  allowing an ordinary patch target.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
