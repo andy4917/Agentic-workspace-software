@@ -194,6 +194,11 @@ runtime substrates block unrelated managed-source checks.
   Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` after the
   relevant local checks are coherent, but do not invoke it recursively from
   inside a no-mistakes-spawned gate worktree or agent step.
+  Routine scaffold validation must not start or require a persistent
+  no-mistakes daemon. A live daemon is acceptable only while the daemon PID file
+  points at a running `no-mistakes.exe`; stale `daemon.pid` or `socket` files
+  are runtime control residue and should be cleaned before calling the
+  workstation user-clean.
 
 Hook route reload boundary:
 

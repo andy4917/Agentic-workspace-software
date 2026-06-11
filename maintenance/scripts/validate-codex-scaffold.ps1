@@ -946,15 +946,12 @@ try {
     } else {
         $null
     }
-    $noMistakesDoctorOutput = if ($noMistakesRealCliProbeAllowed -and (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)) {
-        (& $noMistakesShim doctor 2>&1 | Out-String).Trim()
+    $noMistakesDoctorOutput = ""
+    $noMistakesDoctorExit = $null
+    $noMistakesDoctorSkippedReason = if ($noMistakesRealCliProbeAllowed) {
+        "skipped; routine scaffold validation must not start or keep a no-mistakes daemon"
     } else {
-        ""
-    }
-    $noMistakesDoctorExit = if ($noMistakesRealCliProbeAllowed) {
-        if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
-    } else {
-        $null
+        $noMistakesRealCliProbeSkippedReason
     }
     $noMistakesConfigPath = Join-Path $env:USERPROFILE ".no-mistakes\config.yaml"
     $noMistakesConfigText = if (Test-Path -LiteralPath $noMistakesConfigPath -PathType Leaf) {
@@ -1029,8 +1026,48 @@ try {
             Remove-Item -LiteralPath $noMistakesWrapperProbeRoot -Recurse -Force
         }
     }
+    $noMistakesDaemonPidPath = Join-Path $env:USERPROFILE ".no-mistakes\daemon.pid"
+    $noMistakesSocketPath = Join-Path $env:USERPROFILE ".no-mistakes\socket"
+    $noMistakesDaemonPidExists = Test-Path -LiteralPath $noMistakesDaemonPidPath -PathType Leaf
+    $noMistakesSocketExists = Test-Path -LiteralPath $noMistakesSocketPath -PathType Leaf
+    $noMistakesDaemonPidRaw = if ($noMistakesDaemonPidExists) {
+        (Get-Content -LiteralPath $noMistakesDaemonPidPath -Raw).Trim()
+    } else {
+        ""
+    }
+    $noMistakesDaemonPidValue = ""
+    if ($noMistakesDaemonPidRaw -match '"pid"\s*:\s*(\d+)') {
+        $noMistakesDaemonPidValue = $Matches[1]
+    } elseif ($noMistakesDaemonPidRaw -match '^\s*(\d+)\s*$') {
+        $noMistakesDaemonPidValue = $Matches[1]
+    }
+    $noMistakesDaemonProcess = if ($noMistakesDaemonPidValue) {
+        Get-CimInstance Win32_Process -Filter "ProcessId=$noMistakesDaemonPidValue" -ErrorAction SilentlyContinue
+    } else {
+        $null
+    }
+    $noMistakesDaemonProcesses = @(Get-CimInstance Win32_Process -Filter "Name='no-mistakes.exe'" -ErrorAction SilentlyContinue)
+    $noMistakesDaemonPidAlive = [bool]($noMistakesDaemonProcess -and $noMistakesDaemonProcess.Name -eq "no-mistakes.exe")
+    $noMistakesDaemonControlProblems = New-Object System.Collections.Generic.List[string]
+    if ($noMistakesDaemonPidExists -and -not $noMistakesDaemonPidValue) {
+        $noMistakesDaemonControlProblems.Add("daemon.pid is present but no PID could be parsed") | Out-Null
+    }
+    if ($noMistakesDaemonPidExists -and $noMistakesDaemonPidValue -and -not $noMistakesDaemonProcess) {
+        $noMistakesDaemonControlProblems.Add("daemon.pid points to non-running PID $noMistakesDaemonPidValue") | Out-Null
+    }
+    if ($noMistakesDaemonPidExists -and $noMistakesDaemonProcess -and $noMistakesDaemonProcess.Name -ne "no-mistakes.exe") {
+        $noMistakesDaemonControlProblems.Add("daemon.pid points to PID $noMistakesDaemonPidValue running as $($noMistakesDaemonProcess.Name)") | Out-Null
+    }
+    if ($noMistakesSocketExists -and -not $noMistakesDaemonPidExists) {
+        $noMistakesDaemonControlProblems.Add("socket is present without daemon.pid") | Out-Null
+    }
+    if ($noMistakesDaemonProcesses.Count -gt 0 -and -not $noMistakesDaemonPidExists) {
+        $noMistakesDaemonControlProblems.Add("no-mistakes.exe is running without daemon.pid") | Out-Null
+    }
+    $noMistakesDaemonControlClean = $noMistakesDaemonControlProblems.Count -eq 0
+
     $codexBatchShimPathPattern = "\.codex[\\/]toolchains[\\/]shims[\\/]codex\.cmd"
-    $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesDoctorOutput -match $codexBatchShimPathPattern)
+    $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesConfigText -match $codexBatchShimPathPattern)
     $noMistakesConfigReady = (
         $noMistakesConfigText -match "(?m)^agent:\s*codex\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*--sandbox\s*$" -and
@@ -1048,23 +1085,14 @@ try {
         $noMistakesShimText -match "NO_MISTAKES_TELEMETRY=0" -and
         $noMistakesShimText -match "NO_MISTAKES_NO_UPDATE_CHECK=1"
     )
-    $noMistakesDaemonRunning = if ($noMistakesRealCliProbeAllowed) {
-        [bool]($noMistakesDoctorOutput -match "(?m)daemon\s+running")
-    } else {
-        $null
-    }
-    $noMistakesCodexAgentDetected = if ($noMistakesRealCliProbeAllowed) {
-        [bool]($noMistakesDoctorOutput -match "(?m)codex\s+")
-    } else {
-        $null
-    }
+    $noMistakesDaemonRunning = $noMistakesDaemonPidExists -and $noMistakesDaemonPidAlive
+    $noMistakesCodexAgentDetected = [bool]($noMistakesConfigText -match "(?m)^agent:\s*codex\s*$")
     $noMistakesCliDaemonProbeReady = if ($noMistakesRealCliProbeAllowed) {
         $noMistakesVersionExit -eq 0 -and
-        $noMistakesDoctorExit -eq 0 -and
         $noMistakesVersionOutput -match "no-mistakes version" -and
-        $noMistakesDaemonRunning -and
         $noMistakesCodexAgentDetected -and
-        -not $noMistakesCodexAgentUsesBatchShim
+        -not $noMistakesCodexAgentUsesBatchShim -and
+        $noMistakesDaemonControlClean
     } else {
         $true
     }
@@ -1075,8 +1103,21 @@ try {
         $noMistakesWrapperSanitizesPath -and
         $noMistakesWrapperPathProbeSanitizesVariants -and
         $noMistakesWrapperPathProbePreservesOriginalEntries -and
-        $noMistakesWrapperPreservesBangArgs
+        $noMistakesWrapperPreservesBangArgs -and
+        $noMistakesDaemonControlClean
     )
+    Add-Check $checks "no_mistakes_daemon_control_clean" ($(if ($noMistakesDaemonControlClean) { "pass" } else { "fail" })) @{
+        daemon_pid_path = $noMistakesDaemonPidPath
+        socket_path = $noMistakesSocketPath
+        daemon_pid_exists = $noMistakesDaemonPidExists
+        socket_exists = $noMistakesSocketExists
+        daemon_pid_raw = $noMistakesDaemonPidRaw
+        daemon_pid = $noMistakesDaemonPidValue
+        daemon_pid_alive = $noMistakesDaemonPidAlive
+        running_no_mistakes_processes = @($noMistakesDaemonProcesses | Select-Object ProcessId, ParentProcessId, ExecutablePath)
+        problems = @($noMistakesDaemonControlProblems.ToArray())
+        note = "Clean scaffold validation permits a live no-mistakes daemon only when daemon.pid matches a running process; stale pid/socket files must be removed before treating the workstation as clean."
+    }
     Add-Check $checks "no_mistakes_gate_ready" ($(if ($noMistakesReady) { "pass" } else { "fail" })) @{
         shim = $noMistakesShim
         shim_exists = (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)
@@ -1099,12 +1140,14 @@ try {
         version_output = $noMistakesVersionOutput
         doctor_exit_code = $noMistakesDoctorExit
         daemon_running = $noMistakesDaemonRunning
+        daemon_control_clean = $noMistakesDaemonControlClean
+        doctor_skipped_reason = $noMistakesDoctorSkippedReason
         codex_agent_detected = $noMistakesCodexAgentDetected
         codex_agent_uses_batch_shim = $noMistakesCodexAgentUsesBatchShim
         batch_shim_path_pattern = $codexBatchShimPathPattern
         telemetry_env = $env:NO_MISTAKES_TELEMETRY
         update_check_env = $env:NO_MISTAKES_NO_UPDATE_CHECK
-        note = "no-mistakes is adopted as the outer validation gate. The wrapper must keep Codex toolchain .cmd shims out of the child PATH so Codex shell commands resolve real pwsh.exe."
+        note = "no-mistakes is adopted as the outer validation gate. Routine scaffold validation checks wrapper/config readiness without starting or requiring the no-mistakes daemon."
     }
     $env:NO_MISTAKES_TELEMETRY = $previousTelemetry
     $env:NO_MISTAKES_NO_UPDATE_CHECK = $previousUpdateCheck

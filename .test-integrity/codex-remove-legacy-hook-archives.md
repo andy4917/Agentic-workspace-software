@@ -224,6 +224,19 @@ keeping ordinary inspected tool use allowed.
   by normalizing parsed command tokens to their executable leaf before
   PowerShell, `cmd`, and `git` detection, and by denying `git push` refspecs
   prefixed with `+` as forced updates.
+- User-observed no-mistakes/Git foreground loop follow-up: process evidence
+  showed a lingering `no-mistakes.exe` daemon whose `daemon.pid` still pointed
+  at the old PID. The process was stopped, stale `daemon.pid` and `socket`
+  files were removed, and scaffold validation now checks wrapper/config
+  readiness without invoking `no-mistakes doctor` or requiring a persistent
+  daemon. New `no_mistakes_daemon_control_clean` evidence fails stale
+  pid/socket residue but permits a live daemon only when `daemon.pid` points at
+  a running `no-mistakes.exe`.
+- Non-mutating daemon proof: `validate-codex-scaffold.ps1 -Json` passed with
+  `no_mistakes_daemon_control_clean`, `no_mistakes_gate_ready`, and
+  `managed_source_live_sync` all passing; after the command,
+  `.no-mistakes\daemon.pid` and `.no-mistakes\socket` were absent,
+  `no-mistakes.exe` process count was `0`, and visible console count was `0`.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
@@ -266,13 +279,18 @@ keeping ordinary inspected tool use allowed.
   of `.` are denied. The origin/main hook trust hashes were reproduced from the
   Codex 0.138.0 `command_hook_hash` algorithm before replacing them with the
   hidden-wrapper hashes. Windows aliases `ri . -r -Force`, `cmd /c rd /s .`,
-  and `cmd /c del /s .` are also denied by the smoke.
+  and `cmd /c del /s .` are also denied by the smoke. Routine scaffold
+  validation no longer starts or requires a no-mistakes daemon, and stale
+  no-mistakes pid/socket residue is treated as a clean-state failure.
 
 ## Outer Gate
 
 - Command: `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi run --intent ...`
-- Outcome: pending fresh run after this fix is committed.
-- Not-run reason: no-mistakes requires committed work and the previous run was
-  on the older head.
+- Outcome: pending fresh run after this fix is committed and the current
+  foreground-window loop is confirmed stable.
+- Not-run reason: no-mistakes requires committed work, and the user observed a
+  repeated `cmd` loop during no-mistakes/Git work. The stale daemon process and
+  pid/socket residue were cleaned first to avoid re-triggering the same
+  workstation issue.
 - ask-user findings: previous run found this hook issue, report-root drift, and
   unmanaged eval state; this slice fixes them instead of approving bypasses.
