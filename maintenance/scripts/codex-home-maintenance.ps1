@@ -34,6 +34,15 @@ function Test-PathUnderRoot {
     )
 }
 
+function Test-ReparsePoint {
+    param([System.IO.FileSystemInfo]$Item)
+
+    return (
+        $null -ne $Item -and
+        (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq [IO.FileAttributes]::ReparsePoint)
+    )
+}
+
 function Resolve-ExpectedCodexHome {
     if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
         throw "USERPROFILE is required to validate the default CodexHome runtime root"
@@ -90,6 +99,17 @@ function Get-DirectorySummary {
     }
 
     $item = Get-Item -LiteralPath $Path -Force
+    if (Test-ReparsePoint -Item $item) {
+        return [ordered]@{
+            path = $Path
+            exists = $true
+            item_type = 'reparse_point'
+            item_count = 0
+            bytes = 0
+            last_write_time = $item.LastWriteTime.ToString('o')
+        }
+    }
+
     if (-not $item.PSIsContainer) {
         return [ordered]@{
             path = $Path
@@ -178,6 +198,10 @@ function Remove-PathDirectly {
     if (-not $resolvedTarget.StartsWith("$resolvedRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to delete outside CodexHome: $resolvedTarget"
     }
+    $targetItem = Get-Item -LiteralPath $resolvedTarget -Force
+    if (Test-ReparsePoint -Item $targetItem) {
+        throw "Refusing to recursively delete reparse point: $resolvedTarget"
+    }
     Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
 }
 
@@ -186,6 +210,17 @@ function Stop-GitFsmonitorUnderRoot {
 
     if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
         return @()
+    }
+
+    $sourceItem = Get-Item -LiteralPath $Source -Force
+    if (Test-ReparsePoint -Item $sourceItem) {
+        return @([ordered]@{
+            repo_root = $Source
+            status_exit_code = $null
+            status = 'skipped_reparse_point'
+            stop_exit_code = $null
+            stop = $null
+        })
     }
 
     $repoRoots = New-Object System.Collections.Generic.List[string]
@@ -245,6 +280,17 @@ function Remove-TransientRoot {
             action = 'absent'
             destination = $null
             error = $null
+        }
+    }
+
+    $sourceItem = Get-Item -LiteralPath $Source -Force
+    if (Test-ReparsePoint -Item $sourceItem) {
+        return [ordered]@{
+            source = $Source
+            action = 'delete_refused_reparse_point'
+            destination = $null
+            git_fsmonitor = @()
+            error = "Refusing to recursively delete reparse point: $Source"
         }
     }
 
