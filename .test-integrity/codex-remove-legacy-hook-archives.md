@@ -206,6 +206,18 @@ keeping ordinary inspected tool use allowed.
   before plaintext secret-path checks, and Chrome DevTools observer rollback
   docs now match the toggle script's transient
   `%TEMP%\codex-mcp-config-{guid}.toml` copy-and-delete behavior.
+- User-observed foreground terminal follow-up: managed and live `config.toml`
+  were regenerated from `config.d` so the active runtime truth no longer
+  contains the old `powershell.exe -> pwsh.cmd -> compact-codex-hook.ps1` route.
+  The current Codex app-server/session can still execute a cached pre-change
+  hook command until the app-server is restarted; process evidence showed
+  transient old-route hook processes even after the files were corrected.
+- no-mistakes follow-up on `e99f801`: run `01KTT3WSGDX5ZGVKY586KHFMFW`
+  was aborted after the user reported continued terminal flashes. Its two
+  auto-fix findings are addressed by denying `git push --force` and
+  `git push --force-with-lease` at the hook boundary, preserving ordinary
+  `git push`, and making `hook_tool_routing_status()` validate runtime
+  `config.toml` plus reconciliation with `config.d/20-hooks.toml`.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until

@@ -195,6 +195,7 @@ function Test-HighRiskDestructiveCommand {
         return (
             ($CommandText -match '(?i)\bgit\s+reset\s+--hard\b') -or
             ($CommandText -match '(?i)\bgit\s+clean\s+-[^\r\n]*[fd]') -or
+            ($CommandText -match '(?i)\bgit\s+push\b[^\r\n]*(--force(?:=|$)|--force-with-lease(?:=|$)|-[A-Za-z]*f[A-Za-z]*)') -or
             (
                 ($CommandText -match '(?i)\b(Remove-Item|ri|rm|rd|rmdir|del)\b') -and
                 ($CommandText -match $RecursiveFlagPattern) -and
@@ -246,6 +247,17 @@ function Test-HighRiskDestructiveCommand {
                 foreach ($gitRemainingPart in $gitRemaining) {
                     if (
                         ([string]$gitRemainingPart -match '(?i)^--force(?:=|$)') -or
+                        ([string]$gitRemainingPart -match '(?i)^-[A-Za-z]*f[A-Za-z]*')
+                    ) {
+                        return $true
+                    }
+                }
+            }
+            if ($gitSubcommand -match '(?i)^push$') {
+                foreach ($gitRemainingPart in $gitRemaining) {
+                    if (
+                        ([string]$gitRemainingPart -match '(?i)^--force(?:=|$)') -or
+                        ([string]$gitRemainingPart -match '(?i)^--force-with-lease(?:=|$)') -or
                         ([string]$gitRemainingPart -match '(?i)^-[A-Za-z]*f[A-Za-z]*')
                     ) {
                         return $true

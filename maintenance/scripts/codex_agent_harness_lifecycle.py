@@ -380,9 +380,19 @@ def check_skill_frontmatter(root: Path) -> dict[str, Any]:
 
 
 def hook_tool_routing_status(root: Path) -> dict[str, Any]:
-    path = root / "config.d" / "20-hooks.toml"
-    if not path.exists():
+    fragment_path = root / "config.d" / "20-hooks.toml"
+    if not fragment_path.exists():
         return {"status": "fail", "error": "config.d/20-hooks.toml missing"}
+    fragment_text = read_text(fragment_path)
+    path = root / "config.toml"
+    source = "managed_root"
+    if not path.exists():
+        live_path = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex")) / "config.toml"
+        if live_path.exists():
+            path = live_path
+            source = "codex_home"
+    if not path.exists():
+        return {"status": "fail", "error": "config.toml missing", "checked_path": str(path), "source": source}
     text = read_text(path)
     lowered = text.lower()
     required_fragments = [
@@ -399,14 +409,23 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     try:
         data = tomllib.loads(text)
     except Exception as exc:  # noqa: BLE001
+        return {"status": "fail", "error": f"config.toml parse failed: {exc}", "checked_path": str(path), "source": source}
+    try:
+        fragment_data = tomllib.loads(fragment_text)
+    except Exception as exc:  # noqa: BLE001
         return {"status": "fail", "error": f"config.d/20-hooks.toml parse failed: {exc}"}
     hooks = data.get("hooks", {}) if isinstance(data, dict) else {}
+    fragment_hooks = fragment_data.get("hooks", {}) if isinstance(fragment_data, dict) else {}
     missing: dict[str, list[str]] = {}
     event_matchers: dict[str, list[str]] = {}
-    for event in ["PreToolUse", "PostToolUse"]:
+    for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]:
         groups = hooks.get(event, []) if isinstance(hooks, dict) else []
         if not groups:
             missing[event] = ["event"]
+            continue
+        if hooks.get(event) != fragment_hooks.get(event):
+            missing[f"{event}_reconcile"] = ["runtime config.toml differs from config.d/20-hooks.toml"]
+        if event not in ["PreToolUse", "PostToolUse"]:
             continue
         matchers = [str(group.get("matcher", "")) for group in groups if isinstance(group, dict)]
         event_matchers[event] = matchers
@@ -420,7 +439,7 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     legacy_config = "hooks" + ".json"
     if legacy_hook in lowered or legacy_config in lowered:
         missing["legacy"] = ["legacy hook reference"]
-    return {"status": "pass" if not missing else "fail", "missing": missing, "matchers": event_matchers}
+    return {"status": "pass" if not missing else "fail", "missing": missing, "matchers": event_matchers, "checked_path": str(path), "source": source}
 
 
 def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:

@@ -281,6 +281,12 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         git_clean_long_force_stdout = git_clean_long_force_probe.get("stdout_preview", "").lower()
         git_scoped_clean_long_force_probe = run_hook_sample(root, "git -C . clean --force -d")
         git_scoped_clean_long_force_stdout = git_scoped_clean_long_force_probe.get("stdout_preview", "").lower()
+        git_force_push_probe = run_hook_sample(root, "git push origin HEAD --force")
+        git_force_push_stdout = git_force_push_probe.get("stdout_preview", "").lower()
+        git_force_with_lease_push_probe = run_hook_sample(root, "git push --force-with-lease origin HEAD")
+        git_force_with_lease_push_stdout = git_force_with_lease_push_probe.get("stdout_preview", "").lower()
+        git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
+        git_regular_push_stdout = git_regular_push_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_allows_readonly_destructive_reference_search",
             readonly_destructive_search_probe.get("status") == "pass"
@@ -298,6 +304,16 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and git_scoped_clean_long_force_probe.get("status") == "pass"
             and "deny" in git_scoped_clean_long_force_stdout,
             "PreToolUse should deny git clean --force forms, including when git -C is used before the clean subcommand.",
+        )
+        add_check(
+            "pretooluse_blocks_git_force_push",
+            git_force_push_probe.get("status") == "pass"
+            and "deny" in git_force_push_stdout
+            and git_force_with_lease_push_probe.get("status") == "pass"
+            and "deny" in git_force_with_lease_push_stdout
+            and git_regular_push_probe.get("status") == "pass"
+            and "allow" in git_regular_push_stdout,
+            "PreToolUse should deny git push force forms while preserving ordinary push.",
         )
         blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
         blocked_stdout = blocked_probe.get("stdout_preview", "").lower()
