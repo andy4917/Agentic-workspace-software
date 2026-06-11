@@ -599,6 +599,20 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
 +new
 *** End Patch
 """
+        home_relative_apply_patch = """*** Begin Patch
+*** Update File: ~\\config.toml
+@@
+-old
++new
+*** End Patch
+"""
+        drive_relative_apply_patch = """*** Begin Patch
+*** Update File: C:config.toml
+@@
+-old
++new
+*** End Patch
+"""
         sensitive_apply_patch_probe = run_apply_patch_sample(root, sensitive_apply_patch)
         sensitive_apply_patch_stdout = sensitive_apply_patch_probe.get("stdout_preview", "").lower()
         nested_sensitive_apply_patch_probe = run_nested_apply_patch_sample(root, sensitive_apply_patch)
@@ -609,6 +623,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         rooted_apply_patch_stdout = rooted_apply_patch_probe.get("stdout_preview", "").lower()
         current_drive_apply_patch_probe = run_apply_patch_sample(root, current_drive_apply_patch)
         current_drive_apply_patch_stdout = current_drive_apply_patch_probe.get("stdout_preview", "").lower()
+        home_relative_apply_patch_probe = run_apply_patch_sample(root, home_relative_apply_patch)
+        home_relative_apply_patch_stdout = home_relative_apply_patch_probe.get("stdout_preview", "").lower()
+        drive_relative_apply_patch_probe = run_apply_patch_sample(root, drive_relative_apply_patch)
+        drive_relative_apply_patch_stdout = drive_relative_apply_patch_probe.get("stdout_preview", "").lower()
         ordinary_apply_patch_probe = run_apply_patch_sample(root, ordinary_apply_patch)
         ordinary_apply_patch_stdout = ordinary_apply_patch_probe.get("stdout_preview", "").lower()
         add_check(
@@ -623,6 +641,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in rooted_apply_patch_stdout
             and current_drive_apply_patch_probe.get("status") == "pass"
             and "deny" in current_drive_apply_patch_stdout
+            and home_relative_apply_patch_probe.get("status") == "pass"
+            and "deny" in home_relative_apply_patch_stdout
+            and drive_relative_apply_patch_probe.get("status") == "pass"
+            and "deny" in drive_relative_apply_patch_stdout
             and ordinary_apply_patch_probe.get("status") == "pass"
             and "allow" in ordinary_apply_patch_stdout,
             "PreToolUse should deny direct and nested apply_patch targeting sensitive, rooted, or parent-traversal files while preserving ordinary patch targets.",

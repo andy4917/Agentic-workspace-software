@@ -104,6 +104,10 @@ def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
         return None
 
 
+def previous_operation_is_managed(previous: dict[str, Any]) -> bool:
+    return bool(previous.get("managed") is True or (previous.get("owner") == OWNER and previous.get("remove_on_uninstall") is True))
+
+
 def managed_template_drift_blockers(root: Path, templates: dict[str, str], previous_ops: dict[str, dict[str, Any]]) -> list[str]:
     blocked: list[str] = []
     for path, content in sorted(templates.items()):
@@ -115,9 +119,8 @@ def managed_template_drift_blockers(root: Path, templates: dict[str, str], previ
         if current_digest == desired_digest:
             continue
         previous = previous_ops.get(path, {})
-        was_managed = previous.get("managed") is True or previous.get("action") in {"created", "updated", "unchanged", "updated_blocked_drift"}
         previous_digest = previous.get("digest")
-        if was_managed and previous_digest and current_digest != previous_digest:
+        if previous_operation_is_managed(previous) and previous_digest and current_digest != previous_digest:
             blocked.append(path)
     return blocked
 
@@ -168,7 +171,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
             )
             continue
         assert full is not None
-        if previous.get("managed") is not True:
+        if not previous_operation_is_managed(previous):
             continue
         if not full.is_file():
             continue
@@ -202,12 +205,11 @@ def cmd_apply(args: argparse.Namespace) -> int:
         full = root / path
         digest = sha256_text(content)
         previous = previous_ops.get(path, {})
-        was_managed = previous.get("managed") is True or previous.get("action") in {"created", "updated", "unchanged", "updated_blocked_drift"}
+        was_managed = previous_operation_is_managed(previous)
         if full.exists():
             current = sha256_file(full)
             if current == digest:
-                seen_by_harness = bool(previous)
-                managed_now = bool(was_managed or (seen_by_harness and previous.get("owner") == OWNER))
+                managed_now = bool(was_managed)
                 remove_on_uninstall = bool(previous.get("remove_on_uninstall", was_managed))
                 operations.append(
                     {
