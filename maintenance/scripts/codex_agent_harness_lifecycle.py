@@ -104,6 +104,24 @@ def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
         return None
 
 
+def managed_template_drift_blockers(root: Path, templates: dict[str, str], previous_ops: dict[str, dict[str, Any]]) -> list[str]:
+    blocked: list[str] = []
+    for path, content in sorted(templates.items()):
+        full = root / path
+        if not full.exists():
+            continue
+        desired_digest = sha256_text(content)
+        current_digest = sha256_file(full)
+        if current_digest == desired_digest:
+            continue
+        previous = previous_ops.get(path, {})
+        was_managed = previous.get("managed") is True or previous.get("action") in {"created", "updated", "unchanged", "updated_blocked_drift"}
+        previous_digest = previous.get("digest")
+        if was_managed and previous_digest and current_digest != previous_digest:
+            blocked.append(path)
+    return blocked
+
+
 def cmd_apply(args: argparse.Namespace) -> int:
     root = root_path(args)
     modules = selected_modules(args.profile, args.module)
@@ -114,8 +132,12 @@ def cmd_apply(args: argparse.Namespace) -> int:
         for op in previous_state.get("applied_operations", [])
         if isinstance(op, dict) and op.get("path")
     }
+    blocked_updates = managed_template_drift_blockers(root, templates, previous_ops)
+    if blocked_updates:
+        print(json.dumps({"blocked_updates": blocked_updates, "reason": "managed files changed since the last recorded digest; refusing silent overwrite"}, ensure_ascii=False, sort_keys=True))
+        return 1
+
     operations = []
-    blocked_updates = []
     for path, previous in sorted(previous_ops.items()):
         if path in templates:
             continue
@@ -202,20 +224,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
                 remove_on_uninstall = bool(previous.get("remove_on_uninstall", True))
                 previous_digest = previous.get("digest")
                 if previous_digest and current != previous_digest:
-                    blocked_updates.append(path)
-                    operations.append(
-                        {
-                            "path": path,
-                            "action": "updated_blocked_drift",
-                            "digest": current,
-                            "desired_digest": digest,
-                            "previous_digest": previous_digest,
-                            "owner": OWNER,
-                            "managed": True,
-                            "remove_on_uninstall": remove_on_uninstall,
-                        }
-                    )
-                    continue
+                    raise RuntimeError(f"managed file drift changed during apply after preflight: {path}")
                 write_text(full, content)
                 operations.append(
                     {
@@ -252,9 +261,6 @@ def cmd_apply(args: argparse.Namespace) -> int:
         "source": source_plan_metadata(),
         "applied_operations": operations,
     }
-    if blocked_updates:
-        print(json.dumps({"blocked_updates": blocked_updates, "reason": "managed files changed since the last recorded digest; refusing silent overwrite"}, ensure_ascii=False, sort_keys=True))
-        return 1
     write_json(install_state_path(root), state)
     print(f"Applied harness state: {install_state_path(root)}")
     return 0
