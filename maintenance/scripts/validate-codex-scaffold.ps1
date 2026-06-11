@@ -289,6 +289,18 @@ function Get-ObjectPropertyValue {
     return $property.Value
 }
 
+function Test-DefaultLiveCodexHome {
+    param([string]$Root)
+
+    try {
+        $resolvedRoot = ([System.IO.Path]::GetFullPath($Root)).TrimEnd("\")
+        $defaultRoot = ([System.IO.Path]::GetFullPath((Join-Path $env:USERPROFILE ".codex"))).TrimEnd("\")
+        return $resolvedRoot.Equals($defaultRoot, [System.StringComparison]::OrdinalIgnoreCase)
+    } catch {
+        return $false
+    }
+}
+
 function Test-ConfigItemEnabled {
     param([object]$Item)
 
@@ -993,6 +1005,7 @@ Add-Check $checks "keep_set_skills_match_config" ($(if ($keepSetSkillProblems.Co
 $shimRoot = Join-Path $CodexHome "toolchains\shims"
 $actualShims = @(Get-ChildItem -File -LiteralPath $shimRoot -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Sort-Object)
 $expectedShims = @(Get-ExpectedShimNames -Root $CodexHome -Config $config)
+$isDefaultLiveCodexHome = Test-DefaultLiveCodexHome -Root $CodexHome
 $keepSetShimProblems = New-Object System.Collections.Generic.List[string]
 if (-not [bool]$script:KeepSetManifestStatus.exists) {
     $keepSetShimProblems.Add("keep-set manifest missing") | Out-Null
@@ -1014,11 +1027,15 @@ Add-Check $checks "keep_set_manifest_active_toolchain_shims" ($(if ($keepSetShim
 }
 $missingShims = @($expectedShims | Where-Object { $_ -notin $actualShims })
 $extraShims = @($actualShims | Where-Object { $_ -notin $expectedShims })
-Add-Check $checks "shims_exact_set" ($(if ($missingShims.Count -eq 0 -and $extraShims.Count -eq 0) { "pass" } else { "fail" })) @{
+$unexpectedLiveExtraShims = if ($isDefaultLiveCodexHome) { @($extraShims) } else { @() }
+Add-Check $checks "shims_required_set" ($(if ($missingShims.Count -eq 0 -and $unexpectedLiveExtraShims.Count -eq 0) { "pass" } else { "fail" })) @{
     actual = $actualShims
-    expected = $expectedShims
+    required_active = $expectedShims
     missing = $missingShims
-    extra = $extraShims
+    extra_source_or_optional = $extraShims
+    unexpected_live_extra = $unexpectedLiveExtraShims
+    default_live_codex_home = $isDefaultLiveCodexHome
+    note = "Default live CODEX_HOME must not contain shims outside the active keep-set. Managed-source and gate worktrees may contain additional tracked shim templates without turning them into active runtime truth."
 }
 
 $noMistakesShim = Join-Path $shimRoot "no-mistakes.ps1"

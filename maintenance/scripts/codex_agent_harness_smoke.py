@@ -106,14 +106,20 @@ def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
     if os.name == "nt":
         argv = [arg[1:-1] if len(arg) >= 2 and arg[0] == '"' and arg[-1] == '"' else arg for arg in argv]
     candidate_hook = str(root / "hooks" / "compact-codex-hook.ps1")
+    candidate_pwsh_shim = str(root / "toolchains" / "shims" / "pwsh.ps1")
     rewrote_file = False
+    rewrote_pwsh_shim = False
     for index, arg in enumerate(argv[:-1]):
+        if Path(arg).name.lower() == "pwsh.ps1":
+            argv[index] = candidate_pwsh_shim
+            rewrote_pwsh_shim = True
         if arg.lower() == "-file" and Path(argv[index + 1]).name.lower() == "compact-codex-hook.ps1":
             argv[index + 1] = candidate_hook
             rewrote_file = True
-            break
     if not rewrote_file:
         raise RuntimeError("configured hook route does not expose a compact-codex-hook.ps1 -File target")
+    if os.name == "nt" and not rewrote_pwsh_shim:
+        raise RuntimeError("configured hook route does not expose a pwsh.ps1 shim target")
     return argv
 
 
