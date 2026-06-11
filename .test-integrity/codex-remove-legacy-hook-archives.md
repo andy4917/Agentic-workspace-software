@@ -237,6 +237,20 @@ keeping ordinary inspected tool use allowed.
   `managed_source_live_sync` all passing; after the command,
   `.no-mistakes\daemon.pid` and `.no-mistakes\socket` were absent,
   `no-mistakes.exe` process count was `0`, and visible console count was `0`.
+- no-mistakes follow-up on `b07f181`: run `01KTT7FN36HTVFKRT801NBVHDP`
+  reached review after about eight minutes and returned two auto-fix findings.
+  `configured-hook-route-not-exercised` is addressed by making hook smoke
+  samples read and execute the configured event route from
+  `config.d/20-hooks.toml` instead of constructing a parallel pwsh invocation.
+  `self-test-hook-contract-mismatch` is addressed by generating the self-test
+  hook fixture through the same five-event compact hook fragment for both
+  `config.d/20-hooks.toml` and `config.toml`.
+- New or updated oracle evidence: `hook-policy-smoke` now exercises the
+  configured `commandWindows`/`command` route for synthetic hook samples, so a
+  foreground route, stale path, or route-specific argument failure can no
+  longer be hidden by the smoke runner. `self-test` now includes
+  `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop`
+  in the fixture contract before doctor validation.
 - Remaining no-mistakes decision: the secret-reference search overblock finding
   is `ask-user`. The hook still blocks source-code searches that mention
   sensitive filenames outside the current narrow safe-reference exception until
@@ -280,8 +294,10 @@ keeping ordinary inspected tool use allowed.
   Codex 0.138.0 `command_hook_hash` algorithm before replacing them with the
   hidden-wrapper hashes. Windows aliases `ri . -r -Force`, `cmd /c rd /s .`,
   and `cmd /c del /s .` are also denied by the smoke. Routine scaffold
-  validation no longer starts or requires a no-mistakes daemon, and stale
-  no-mistakes pid/socket residue is treated as a clean-state failure.
+  validation no longer starts or requires a no-mistakes daemon, stale
+  no-mistakes pid/socket residue is treated as a clean-state failure, and hook
+  smoke samples exercise the configured hook route rather than a hand-built
+  command.
 
 ## Outer Gate
 

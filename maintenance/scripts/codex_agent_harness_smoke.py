@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shlex
 import subprocess
 import tomllib
 from pathlib import Path
@@ -75,15 +76,40 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     return report
 
 
+def configured_hook_command(root: Path, event_name: str) -> str:
+    config_path = root / "config.d" / "20-hooks.toml"
+    try:
+        hook_config = tomllib.loads(read_text(config_path))
+    except (FileNotFoundError, tomllib.TOMLDecodeError) as exc:
+        raise RuntimeError(f"cannot read configured hook route: {exc}") from exc
+    hook_section = hook_config.get("hooks", {}) if isinstance(hook_config, dict) else {}
+    event_entries = hook_section.get(event_name, [])
+    if not isinstance(event_entries, list):
+        event_entries = []
+    command_key = "commandWindows" if os.name == "nt" else "command"
+    for event_entry in event_entries:
+        hook_entries = event_entry.get("hooks", []) if isinstance(event_entry, dict) else []
+        if not isinstance(hook_entries, list):
+            continue
+        for hook_entry in hook_entries:
+            if not isinstance(hook_entry, dict):
+                continue
+            command = str(hook_entry.get(command_key) or hook_entry.get("command") or "").strip()
+            if command:
+                return command
+    raise RuntimeError(f"missing configured hook route for {event_name}")
+
+
 def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     env = os.environ.copy()
     env["CODEX_HOOK_SMOKE"] = "1"
     env["CODEX_HOME"] = str(root)
-    windows_pwsh = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WindowsApps" / "pwsh.exe"
-    executable = str(windows_pwsh) if os.name == "nt" and windows_pwsh.exists() else "pwsh"
+    event_name = str(payload.get("hook_event_name") or "")
     try:
+        command = configured_hook_command(root, event_name)
+        argv = shlex.split(command, posix=(os.name != "nt"))
         completed = subprocess.run(
-            [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "hooks/compact-codex-hook.ps1"],
+            argv,
             cwd=root,
             env=env,
             input=json.dumps(payload),
@@ -98,6 +124,8 @@ def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, An
             "stdout_preview": redact_obvious_secrets(completed.stdout[-COMMAND_PREVIEW_CHARS:]),
             "stderr_preview": redact_obvious_secrets(completed.stderr[-COMMAND_PREVIEW_CHARS:]),
         }
+    except (RuntimeError, OSError, ValueError) as exc:
+        return {"status": "fail", "exit_code": 2, "stdout_preview": "", "stderr_preview": str(exc)}
     except subprocess.TimeoutExpired as exc:
         return {"status": "fail", "exit_code": 124, "stdout_preview": "", "stderr_preview": str(exc)}
 

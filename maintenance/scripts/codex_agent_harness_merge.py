@@ -15,6 +15,28 @@ from codex_agent_harness_workflows import cmd_compact_summary, cmd_context, cmd_
 HOOK_MATCHER = "Bash|functions\\..*|multi_tool_use\\..*|multi_agent.*|tool_search\\..*|web\\..*|image_gen\\..*|codex_app\\..*|apply_patch|mcp__.*"
 
 
+def compact_hook_fragment(hidden_hook_command: str) -> str:
+    parts: list[str] = ["# Hook fragment. All enabled events call one deterministic runner.\n"]
+    event_specs = [
+        ("SessionStart", "startup|resume", 30),
+        ("UserPromptSubmit", "", 30),
+        ("PreToolUse", HOOK_MATCHER, 30),
+        ("PostToolUse", HOOK_MATCHER, 30),
+        ("Stop", "", 10),
+    ]
+    for event_name, matcher, timeout in event_specs:
+        parts.append(f"[[hooks.{event_name}]]\n")
+        if matcher:
+            parts.append(f"matcher = {json.dumps(matcher)}\n")
+        parts.append(f"[[hooks.{event_name}.hooks]]\n")
+        parts.append('type = "command"\n')
+        parts.append(f"command = '{hidden_hook_command}'\n")
+        parts.append(f"commandWindows = '{hidden_hook_command}'\n")
+        parts.append(f"timeout = {timeout}\n")
+        parts.append('statusMessage = "compact scaffold hook"\n\n')
+    return "".join(parts)
+
+
 def cmd_merge_config(args: argparse.Namespace) -> int:
     root = root_path(args)
     source = Path(args.source).resolve()
@@ -250,22 +272,9 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         hook_pwsh = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
         hook_runner = Path.home() / ".codex" / "hooks" / "compact-codex-hook.ps1"
         hidden_hook_command = f"{hook_pwsh} -NoProfile -NonInteractive -WindowStyle Hidden -File {hook_runner}"
-        write_text(
-            root / "config.d" / "20-hooks.toml",
-            "[[hooks.PreToolUse]]\n"
-            f"matcher = {json.dumps(HOOK_MATCHER)}\n"
-            "[[hooks.PreToolUse.hooks]]\n"
-            "type = \"command\"\n"
-            f"command = '{hidden_hook_command}'\n"
-            f"commandWindows = '{hidden_hook_command}'\n"
-            "\n"
-            "[[hooks.PostToolUse]]\n"
-            f"matcher = {json.dumps(HOOK_MATCHER)}\n"
-            "[[hooks.PostToolUse.hooks]]\n"
-            "type = \"command\"\n"
-            f"command = '{hidden_hook_command}'\n"
-            f"commandWindows = '{hidden_hook_command}'\n"
-        )
+        hook_fragment = compact_hook_fragment(hidden_hook_command)
+        write_text(root / "config.d" / "20-hooks.toml", hook_fragment)
+        write_text(root / "config.toml", read_text(root / "config.toml") + "\n" + hook_fragment)
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
         write_text(
             root / "hooks" / "compact-codex-hook.ps1",
