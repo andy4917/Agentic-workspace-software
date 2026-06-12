@@ -395,6 +395,59 @@ function Convert-ToComparablePath {
     }
 }
 
+function Convert-NoMistakesYamlScalar {
+    param([AllowNull()][string]$Value)
+
+    $trimmed = ([string]$Value).Trim()
+    if ($trimmed.Length -ge 2) {
+        if (($trimmed.StartsWith("'") -and $trimmed.EndsWith("'")) -or ($trimmed.StartsWith('"') -and $trimmed.EndsWith('"'))) {
+            return $trimmed.Substring(1, $trimmed.Length - 2)
+        }
+    }
+    return $trimmed
+}
+
+function Get-NoMistakesCodexAgentConfig {
+    param([AllowNull()][string]$ConfigText)
+
+    $agentPath = ""
+    $agentArgs = New-Object System.Collections.Generic.List[string]
+    $section = ""
+    $insideCodexArgs = $false
+
+    foreach ($line in (([string]$ConfigText) -split "\r?\n")) {
+        if ($line -match '^\s*(#.*)?$') {
+            continue
+        }
+
+        if ($line -match '^([A-Za-z0-9_-]+):\s*(?:#.*)?$') {
+            $section = $Matches[1]
+            $insideCodexArgs = $false
+            continue
+        }
+
+        if ($section -eq "agent_path_override" -and $line -match '^\s{2}codex:\s*(.+?)\s*(?:#.*)?$') {
+            $agentPath = Convert-NoMistakesYamlScalar -Value $Matches[1]
+            continue
+        }
+
+        if ($section -eq "agent_args_override") {
+            if ($line -match '^\s{2}([A-Za-z0-9_.:-]+):\s*(?:#.*)?$') {
+                $insideCodexArgs = [string]$Matches[1] -ieq "codex"
+                continue
+            }
+            if ($insideCodexArgs -and $line -match '^\s{4}-\s*(.+?)\s*(?:#.*)?$') {
+                $agentArgs.Add((Convert-NoMistakesYamlScalar -Value $Matches[1])) | Out-Null
+            }
+        }
+    }
+
+    [pscustomobject]@{
+        CodexPath = $agentPath
+        CodexArgs = $agentArgs.ToArray()
+    }
+}
+
 function Get-PluginRoot {
     param(
         [string]$CacheRoot,
@@ -1288,23 +1341,25 @@ try {
     $noMistakesDaemonControlClean = $noMistakesDaemonControlProblems.Count -eq 0
 
     $codexBatchShimPathPattern = "\.codex[\\/]toolchains[\\/]shims[\\/]codex\.cmd"
-    $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesConfigText -match $codexBatchShimPathPattern)
-    $noMistakesCodexAgentUsesDirectExeOverride = [bool]($noMistakesConfigText -match "(?im)^\s*codex:\s*['""]?.*codex\.exe['""]?\s*$")
-    $noMistakesCodexAgentUsesHiddenLauncher = [bool]($noMistakesConfigText -match "(?im)^\s*codex:\s*['""]?.*toolchains[\\/]no-mistakes[\\/]codex-agent-hidden\.exe['""]?\s*$")
+    $noMistakesCodexAgentConfig = Get-NoMistakesCodexAgentConfig -ConfigText $noMistakesConfigText
+    $noMistakesCodexAgentPath = [string]$noMistakesCodexAgentConfig.CodexPath
+    $noMistakesCodexAgentArgs = @($noMistakesCodexAgentConfig.CodexArgs)
+    $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesCodexAgentPath -match $codexBatchShimPathPattern)
+    $noMistakesCodexAgentUsesDirectExeOverride = [bool]($noMistakesCodexAgentPath -match "(?i)(^|[\\/])codex\.exe$")
+    $noMistakesCodexAgentUsesHiddenLauncher = (Convert-ToComparablePath $noMistakesCodexAgentPath) -eq (Convert-ToComparablePath $noMistakesHiddenAgentPath)
     $noMistakesCodexAgentUsesBoundedReasoning = (
-        $noMistakesConfigText -match '(?m)^\s*-\s*-c\s*$' -and
-        $noMistakesConfigText -match '(?m)^\s*-\s*[''"]?model_reasoning_effort="medium"[''"]?\s*$'
+        $noMistakesCodexAgentArgs -contains "-c" -and
+        $noMistakesCodexAgentArgs -contains 'model_reasoning_effort="medium"'
     )
     $noMistakesHiddenLauncherExists = Test-Path -LiteralPath $noMistakesHiddenAgentPath -PathType Leaf
     $noMistakesConfigReady = (
         $noMistakesConfigText -match "(?m)^agent:\s*codex\s*$" -and
-        $noMistakesConfigText -match "(?m)^agent_path_override:\s*$" -and
         $noMistakesCodexAgentUsesBoundedReasoning -and
-        $noMistakesConfigText -match "(?m)^\s*-\s*--sandbox\s*$" -and
-        $noMistakesConfigText -match "(?m)^\s*-\s*danger-full-access\s*$" -and
-        $noMistakesConfigText -match "(?m)^\s*-\s*--disable\s*$" -and
-        $noMistakesConfigText -match "(?m)^\s*-\s*plugins\s*$" -and
-        $noMistakesConfigText -match "(?m)^\s*-\s*--skip-git-repo-check\s*$" -and
+        $noMistakesCodexAgentArgs -contains "--sandbox" -and
+        $noMistakesCodexAgentArgs -contains "danger-full-access" -and
+        $noMistakesCodexAgentArgs -contains "--disable" -and
+        $noMistakesCodexAgentArgs -contains "plugins" -and
+        $noMistakesCodexAgentArgs -contains "--skip-git-repo-check" -and
         $noMistakesCodexAgentUsesHiddenLauncher -and
         $noMistakesHiddenLauncherExists -and
         -not $noMistakesCodexAgentUsesBatchShim
@@ -1372,7 +1427,9 @@ try {
         wrapper_probe_error = $noMistakesWrapperProbeError
         config = $noMistakesConfigPath
         config_ready = $noMistakesConfigReady
-        codex_args_include_skip_git_repo_check = [bool]($noMistakesConfigText -match "(?m)^\s*-\s*--skip-git-repo-check\s*$")
+        codex_args_include_skip_git_repo_check = [bool]($noMistakesCodexAgentArgs -contains "--skip-git-repo-check")
+        codex_agent_path_from_config = $noMistakesCodexAgentPath
+        codex_agent_args_from_config = @($noMistakesCodexAgentArgs)
         running_inside_no_mistakes_worktree = $runningInsideNoMistakesWorktree
         no_mistakes_worktree_root = $noMistakesWorktreeRootFull
         real_cli_daemon_probe_allowed = $noMistakesRealCliProbeAllowed

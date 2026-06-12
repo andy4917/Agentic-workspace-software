@@ -115,6 +115,59 @@ function Test-RequiresCodexAgent {
     return $false
 }
 
+function Convert-NoMistakesYamlScalar {
+    param([AllowNull()][string]$Value)
+
+    $trimmed = ([string]$Value).Trim()
+    if ($trimmed.Length -ge 2) {
+        if (($trimmed.StartsWith("'") -and $trimmed.EndsWith("'")) -or ($trimmed.StartsWith('"') -and $trimmed.EndsWith('"'))) {
+            return $trimmed.Substring(1, $trimmed.Length - 2)
+        }
+    }
+    return $trimmed
+}
+
+function Get-NoMistakesCodexAgentConfig {
+    param([AllowNull()][string]$ConfigText)
+
+    $agentPath = ""
+    $agentArgs = New-Object System.Collections.Generic.List[string]
+    $section = ""
+    $insideCodexArgs = $false
+
+    foreach ($line in (([string]$ConfigText) -split "\r?\n")) {
+        if ($line -match '^\s*(#.*)?$') {
+            continue
+        }
+
+        if ($line -match '^([A-Za-z0-9_-]+):\s*(?:#.*)?$') {
+            $section = $Matches[1]
+            $insideCodexArgs = $false
+            continue
+        }
+
+        if ($section -eq "agent_path_override" -and $line -match '^\s{2}codex:\s*(.+?)\s*(?:#.*)?$') {
+            $agentPath = Convert-NoMistakesYamlScalar -Value $Matches[1]
+            continue
+        }
+
+        if ($section -eq "agent_args_override") {
+            if ($line -match '^\s{2}([A-Za-z0-9_.:-]+):\s*(?:#.*)?$') {
+                $insideCodexArgs = [string]$Matches[1] -ieq "codex"
+                continue
+            }
+            if ($insideCodexArgs -and $line -match '^\s{4}-\s*(.+?)\s*(?:#.*)?$') {
+                $agentArgs.Add((Convert-NoMistakesYamlScalar -Value $Matches[1])) | Out-Null
+            }
+        }
+    }
+
+    [pscustomobject]@{
+        CodexPath = $agentPath
+        CodexArgs = $agentArgs.ToArray()
+    }
+}
+
 function Assert-HiddenCodexAgentReady {
     if (-not (Test-Path -LiteralPath $NO_MISTAKES_HIDDEN_CODEX_AGENT -PathType Leaf)) {
         if (Test-Path -LiteralPath $NO_MISTAKES_HIDDEN_CODEX_AGENT_BUILDER -PathType Leaf) {
@@ -134,28 +187,22 @@ function Assert-HiddenCodexAgentReady {
     }
 
     $configText = Get-Content -LiteralPath $configPath -Raw
-    $launcherPattern = "(?im)^\s*codex:\s*['""]?" + [regex]::Escape($NO_MISTAKES_HIDDEN_CODEX_AGENT) + "['""]?\s*$"
-    if ($configText -notmatch "(?m)^agent_path_override:\s*$" -or $configText -notmatch $launcherPattern) {
+    $codexAgentConfig = Get-NoMistakesCodexAgentConfig -ConfigText $configText
+    $configuredAgentPath = Convert-ToComparablePathEntry -PathEntry $codexAgentConfig.CodexPath
+    $expectedAgentPath = Convert-ToComparablePathEntry -PathEntry $NO_MISTAKES_HIDDEN_CODEX_AGENT
+    if ($configuredAgentPath -ine $expectedAgentPath) {
         Write-Error "no-mistakes config.yaml must set agent_path_override.codex to $NO_MISTAKES_HIDDEN_CODEX_AGENT before running agent-backed gates."
         exit 1
     }
 
-    $boundedReasoningPattern = '(?m)^\s*-\s*[''"]?model_reasoning_effort="medium"[''"]?\s*$'
-    if ($configText -notmatch '(?m)^\s*-\s*-c\s*$' -or $configText -notmatch $boundedReasoningPattern) {
+    $codexAgentArgs = @($codexAgentConfig.CodexArgs)
+    if (-not ($codexAgentArgs -contains "-c") -or -not ($codexAgentArgs -contains 'model_reasoning_effort="medium"')) {
         Write-Error 'no-mistakes config.yaml must set agent_args_override.codex to include -c model_reasoning_effort="medium" before running agent-backed gates.'
         exit 1
     }
 
-    $requiredAgentArgPatterns = @{
-        "--sandbox" = '(?m)^\s*-\s*--sandbox\s*$'
-        "danger-full-access" = '(?m)^\s*-\s*danger-full-access\s*$'
-        "--disable" = '(?m)^\s*-\s*--disable\s*$'
-        "plugins" = '(?m)^\s*-\s*plugins\s*$'
-        "--skip-git-repo-check" = '(?m)^\s*-\s*--skip-git-repo-check\s*$'
-    }
-    $missingAgentArgs = @($requiredAgentArgPatterns.GetEnumerator() |
-        Where-Object { $configText -notmatch $_.Value } |
-        ForEach-Object { $_.Key })
+    $requiredAgentArgs = @("--sandbox", "danger-full-access", "--disable", "plugins", "--skip-git-repo-check")
+    $missingAgentArgs = @($requiredAgentArgs | Where-Object { $codexAgentArgs -notcontains $_ })
     if ($missingAgentArgs.Count -gt 0) {
         Write-Error ("no-mistakes config.yaml must set agent_args_override.codex to include required Codex agent args: " + ($missingAgentArgs -join ", "))
         exit 1
