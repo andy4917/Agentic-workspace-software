@@ -546,7 +546,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
             continue
         full = root / path
         desired = templates[path]
-        if full.exists() and sha256_file(full) == sha256_text(desired):
+        if full.exists() and managed_file_digest(full) == sha256_text(desired):
             continue
         if args.apply:
             write_text(full, desired)
@@ -571,7 +571,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
                 refused.append({"path": raw_path, "reason": path_error})
                 continue
             assert path is not None
-            if path.exists() and sha256_file(path) == op.get("digest"):
+            if path.exists() and managed_file_digest(path) == op.get("digest"):
                 targets.append(rel(path, root))
     if install_state_path(root).exists():
         targets.append(rel(install_state_path(root), root))
