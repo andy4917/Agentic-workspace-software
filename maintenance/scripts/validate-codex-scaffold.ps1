@@ -831,9 +831,11 @@ if ($LASTEXITCODE -eq 0) {
     $selectedComputerClient = if ($computerRoot) { Join-Path $computerRoot "scripts\computer-use-client.mjs" } else { "" }
     $selectedComputerSkill = if ($computerRoot) { Join-Path $computerRoot "skills\computer-use\SKILL.md" } else { "" }
     $selectedComputerHelperExists = (-not [string]::IsNullOrWhiteSpace($selectedComputerHelper)) -and (Test-Path -LiteralPath $selectedComputerHelper -PathType Leaf)
-    $selectedComputerSkillText = if (Test-Path -LiteralPath $selectedComputerSkill -PathType Leaf) { Get-Content -LiteralPath $selectedComputerSkill -Raw } else { "" }
+    $selectedComputerClientExists = (-not [string]::IsNullOrWhiteSpace($selectedComputerClient)) -and (Test-Path -LiteralPath $selectedComputerClient -PathType Leaf)
+    $selectedComputerSkillExists = (-not [string]::IsNullOrWhiteSpace($selectedComputerSkill)) -and (Test-Path -LiteralPath $selectedComputerSkill -PathType Leaf)
+    $selectedComputerSkillText = if ($selectedComputerSkillExists) { Get-Content -LiteralPath $selectedComputerSkill -Raw } else { "" }
     $computerScriptBasedEvidence = (
-        (Test-Path -LiteralPath $selectedComputerClient -PathType Leaf) -and
+        $selectedComputerClientExists -and
         $selectedComputerSkillText -match "computer-use-client\.mjs" -and
         $selectedComputerSkillText -match "Do not spawn ``?codex-computer-use\.exe``?"
     )
@@ -851,12 +853,15 @@ if ($LASTEXITCODE -eq 0) {
     } else {
         $computerScriptBasedEvidence -and -not $notifyConfigured
     }
-    Add-Check $checks "computer_use_notify_matches_selected_helper" ($(if ($computerRoot -and $computerModeValid -and $computerNotifyRouteValid) { "pass" } else { "fail" })) @{
+    $computerUseCheckOk = if ($computerRoot) { $computerModeValid -and $computerNotifyRouteValid } else { -not (Test-DefaultLiveCodexHome -Root $CodexHome) }
+    Add-Check $checks "computer_use_notify_matches_selected_helper" ($(if ($computerUseCheckOk) { "pass" } else { "fail" })) @{
         computer_root = $computerRoot
         selected_helper = $selectedComputerHelper
         selected_helper_exists = $selectedComputerHelperExists
         selected_client = $selectedComputerClient
+        selected_client_exists = $selectedComputerClientExists
         selected_skill = $selectedComputerSkill
+        selected_skill_exists = $selectedComputerSkillExists
         script_based_mode_evidence = $computerScriptBasedEvidence
         mode_valid = $computerModeValid
         configured_notify = $configuredNotifyExecutable
@@ -864,6 +869,7 @@ if ($LASTEXITCODE -eq 0) {
         configured_notify_exists = $configuredNotifyExists
         notify_matches_selected_helper = $notifyMatchesSelectedHelper
         notify_route_valid = $computerNotifyRouteValid
+        non_default_codex_home_optional_absent = (-not $computerRoot) -and (-not (Test-DefaultLiveCodexHome -Root $CodexHome))
         note = "When the Computer Use plugin ships a helper executable, notify must match it. Current script-based Computer Use plugins must not keep a stale helper notify route."
     }
     $validatorSourcePath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }

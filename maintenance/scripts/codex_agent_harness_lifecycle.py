@@ -131,6 +131,10 @@ def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
         return None
 def previous_operation_is_managed(previous: dict[str, Any]) -> bool:
     return bool(previous.get("managed") is True or (previous.get("owner") == OWNER and previous.get("remove_on_uninstall") is True))
+def managed_file_digest(path: Path) -> str:
+    if path.suffix.lower() in {".json", ".md", ".ps1", ".py", ".toml"}:
+        return sha256_text(read_text(path))
+    return sha256_file(path)
 def managed_template_drift_blockers(root: Path, templates: dict[str, str], previous_ops: dict[str, dict[str, Any]]) -> list[str]:
     blocked: list[str] = []
     for path, content in sorted(templates.items()):
@@ -138,7 +142,7 @@ def managed_template_drift_blockers(root: Path, templates: dict[str, str], previ
         if not full.exists():
             continue
         desired_digest = sha256_text(content)
-        current_digest = sha256_file(full)
+        current_digest = managed_file_digest(full)
         if current_digest == desired_digest:
             continue
         previous = previous_ops.get(path, {})
@@ -195,7 +199,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
             continue
         if not full.is_file():
             continue
-        if previous_digest and sha256_file(full) == previous_digest:
+        if previous_digest and managed_file_digest(full) == previous_digest:
             full.unlink()
             pruned_empty_dir = prune_empty_skill_dir(root, full)
             operations.append(
@@ -215,7 +219,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
                 "path": path,
                 "action": "stale_preserved_modified",
                 "digest": previous_digest,
-                "current_digest": sha256_file(full),
+                "current_digest": managed_file_digest(full),
                 "owner": OWNER,
                 "managed": True,
                 "remove_on_uninstall": True,
@@ -227,7 +231,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         previous = previous_ops.get(path, {})
         was_managed = previous_operation_is_managed(previous)
         if full.exists():
-            current = sha256_file(full)
+            current = managed_file_digest(full)
             if current == digest:
                 managed_now = bool(was_managed)
                 remove_on_uninstall = bool(previous.get("remove_on_uninstall", was_managed))
@@ -404,7 +408,7 @@ def check_managed_files(root: Path) -> dict[str, Any]:
         if not path.exists():
             missing.append(op["path"])
             continue
-        digest = sha256_file(path)
+        digest = managed_file_digest(path)
         if digest != op.get("digest"):
             drifted.append(op["path"])
     return {"status": "pass" if not missing and not drifted else "fail", "missing": missing, "drifted": drifted}
