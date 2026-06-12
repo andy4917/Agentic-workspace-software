@@ -124,6 +124,10 @@ Last verification:
   `%LOCALAPPDATA%\no-mistakes` with telemetry and background update checks
   disabled for deterministic Codex-managed runs. The wrapper intentionally
   removes the Codex shim directory from its child `PATH` so
-  no-mistakes-spawned Codex agents resolve real `pwsh.exe` and `codex.exe`
-  binaries instead of `.cmd` wrappers. It must normalize PATH entries only for
-  the shim-directory comparison and append retained entries unchanged.
+  no-mistakes-spawned shell commands resolve real `pwsh.exe` instead of `.cmd`
+  wrappers. It must normalize PATH entries only for the shim-directory
+  comparison and append retained entries unchanged. The no-mistakes Codex agent
+  path is overridden to
+  `%USERPROFILE%\.codex\toolchains\no-mistakes\codex-agent-hidden.exe`, a
+  managed hidden launcher that delegates to bundled `codex.exe` without opening
+  a foreground console window.

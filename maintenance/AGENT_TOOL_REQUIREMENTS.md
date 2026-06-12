@@ -116,13 +116,20 @@ checks disabled for Codex-managed runs with `NO_MISTAKES_TELEMETRY=0` and
 `NO_MISTAKES_NO_UPDATE_CHECK=1`.
 
 The PowerShell wrapper must also remove `%USERPROFILE%\.codex\toolchains\shims`
-from the child `PATH` before starting `no-mistakes`. This is intentional: no-mistakes
-spawns Codex agents, and Codex shell commands must resolve a real `pwsh.exe`,
-not the `.cmd` shim, or Windows batch argument handling can block every shell
-command with `batch file arguments are invalid`.
+from the child `PATH` before starting `no-mistakes`. This is intentional:
+no-mistakes-spawned shell commands must resolve a real `pwsh.exe`, not the
+`.cmd` shim, or Windows batch argument handling can block every shell command
+with `batch file arguments are invalid`.
 Normalize PATH entries only for comparison with the Codex shim directory; append
 retained entries unchanged so paths containing `!`, forward slashes, or root
 trailing slashes are not corrupted.
+
+On Windows, no-mistakes must not spawn a foreground `codex.exe` console window.
+Set `agent_path_override.codex` in `%USERPROFILE%\.no-mistakes\config.yaml` to
+`%USERPROFILE%\.codex\toolchains\no-mistakes\codex-agent-hidden.exe`. That
+launcher is a managed WinExe wrapper that preserves stdin/stdout/stderr, starts
+the official bundled `codex.exe` with `CreateNoWindow=true`, and avoids the
+`.cmd` shim path.
 
 The no-mistakes Codex agent configuration must include `--sandbox
 danger-full-access`, `--disable plugins`, and `--skip-git-repo-check`.

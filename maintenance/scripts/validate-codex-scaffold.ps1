@@ -1151,6 +1151,7 @@ try {
         $noMistakesRealCliProbeSkippedReason
     }
     $noMistakesConfigPath = Join-Path $env:USERPROFILE ".no-mistakes\config.yaml"
+    $noMistakesHiddenAgentPath = Join-Path (Split-Path -Parent $shimRoot) "no-mistakes\codex-agent-hidden.exe"
     $noMistakesConfigText = if (Test-Path -LiteralPath $noMistakesConfigPath -PathType Leaf) {
         Get-Content -LiteralPath $noMistakesConfigPath -Raw
     } else {
@@ -1289,13 +1290,18 @@ try {
     $codexBatchShimPathPattern = "\.codex[\\/]toolchains[\\/]shims[\\/]codex\.cmd"
     $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesConfigText -match $codexBatchShimPathPattern)
     $noMistakesCodexAgentUsesDirectExeOverride = [bool]($noMistakesConfigText -match "(?im)^\s*codex:\s*['""]?.*codex\.exe['""]?\s*$")
+    $noMistakesCodexAgentUsesHiddenLauncher = [bool]($noMistakesConfigText -match "(?im)^\s*codex:\s*['""]?.*toolchains[\\/]no-mistakes[\\/]codex-agent-hidden\.exe['""]?\s*$")
+    $noMistakesHiddenLauncherExists = Test-Path -LiteralPath $noMistakesHiddenAgentPath -PathType Leaf
     $noMistakesConfigReady = (
         $noMistakesConfigText -match "(?m)^agent:\s*codex\s*$" -and
+        $noMistakesConfigText -match "(?m)^agent_path_override:\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*--sandbox\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*danger-full-access\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*--disable\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*plugins\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*--skip-git-repo-check\s*$" -and
+        $noMistakesCodexAgentUsesHiddenLauncher -and
+        $noMistakesHiddenLauncherExists -and
         -not $noMistakesCodexAgentUsesBatchShim
     )
     $noMistakesWrapperSanitizesPath = (
@@ -1316,6 +1322,8 @@ try {
         $noMistakesVersionExit -eq 0 -and
         $noMistakesVersionOutput -match "no-mistakes version" -and
         $noMistakesCodexAgentDetected -and
+        $noMistakesCodexAgentUsesHiddenLauncher -and
+        $noMistakesHiddenLauncherExists -and
         (-not $noMistakesCodexAgentUsesBatchShim) -and
         $noMistakesDaemonControlClean
     } else {
@@ -1371,9 +1379,12 @@ try {
         daemon_running = $noMistakesDaemonRunning
         daemon_control_clean = $noMistakesDaemonControlClean
         doctor_skipped_reason = $noMistakesDoctorSkippedReason
+        hidden_codex_agent = $noMistakesHiddenAgentPath
+        hidden_codex_agent_exists = $noMistakesHiddenLauncherExists
         codex_agent_detected = $noMistakesCodexAgentDetected
         codex_agent_uses_batch_shim = $noMistakesCodexAgentUsesBatchShim
         codex_agent_uses_direct_exe_override = $noMistakesCodexAgentUsesDirectExeOverride
+        codex_agent_uses_hidden_launcher = $noMistakesCodexAgentUsesHiddenLauncher
         batch_shim_path_pattern = $codexBatchShimPathPattern
         telemetry_env = $env:NO_MISTAKES_TELEMETRY
         update_check_env = $env:NO_MISTAKES_NO_UPDATE_CHECK
@@ -1707,6 +1718,8 @@ $syncPairs = @(
     "maintenance\scripts\codex-home-maintenance.ps1",
     "maintenance\NAMING_CONVENTION.md",
     "toolchains\README.md",
+    "toolchains\no-mistakes\CodexAgentHiddenLauncher.cs",
+    "toolchains\no-mistakes\build-codex-agent-hidden.ps1",
     "toolchains\shims\no-mistakes.cmd",
     "toolchains\shims\no-mistakes.ps1",
     "toolchains\shims\gh.ps1",

@@ -5,6 +5,9 @@ $env:NO_MISTAKES_NO_UPDATE_CHECK = "1"
 
 $NO_MISTAKES_EXE = Join-Path $env:LOCALAPPDATA "no-mistakes\no-mistakes.exe"
 $CODEX_SHIM_DIR = Split-Path -Parent $PSCommandPath
+$CODEX_HOME = if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { Join-Path $env:USERPROFILE ".codex" } else { $env:CODEX_HOME }
+$NO_MISTAKES_HIDDEN_CODEX_AGENT = Join-Path $CODEX_HOME "toolchains\no-mistakes\codex-agent-hidden.exe"
+$NO_MISTAKES_HIDDEN_CODEX_AGENT_BUILDER = Join-Path $CODEX_HOME "toolchains\no-mistakes\build-codex-agent-hidden.ps1"
 $NM_ORIGINAL_PATH = [string]$env:PATH
 $retainedPathEntries = New-Object System.Collections.Generic.List[string]
 
@@ -89,6 +92,44 @@ function Add-PreferredPathDirectory {
     }
 }
 
+function Test-RequiresCodexAgent {
+    param([string[]]$Arguments)
+
+    if ($Arguments.Count -ge 2 -and [string]$Arguments[0] -ieq "axi" -and [string]$Arguments[1] -ieq "run") {
+        return $true
+    }
+    if ($Arguments.Count -ge 1 -and [string]$Arguments[0] -ieq "rerun") {
+        return $true
+    }
+    return $false
+}
+
+function Assert-HiddenCodexAgentReady {
+    if (-not (Test-Path -LiteralPath $NO_MISTAKES_HIDDEN_CODEX_AGENT -PathType Leaf)) {
+        if (Test-Path -LiteralPath $NO_MISTAKES_HIDDEN_CODEX_AGENT_BUILDER -PathType Leaf) {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $NO_MISTAKES_HIDDEN_CODEX_AGENT_BUILDER -OutputPath $NO_MISTAKES_HIDDEN_CODEX_AGENT | Out-Null
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $NO_MISTAKES_HIDDEN_CODEX_AGENT -PathType Leaf)) {
+        Write-Error "no-mistakes hidden Codex agent launcher is missing at $NO_MISTAKES_HIDDEN_CODEX_AGENT"
+        exit 1
+    }
+
+    $configPath = Join-Path $env:USERPROFILE ".no-mistakes\config.yaml"
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        Write-Error "no-mistakes config.yaml is missing; expected agent_path_override.codex to point at $NO_MISTAKES_HIDDEN_CODEX_AGENT"
+        exit 1
+    }
+
+    $configText = Get-Content -LiteralPath $configPath -Raw
+    $launcherPattern = "(?im)^\s*codex:\s*['""]?" + [regex]::Escape($NO_MISTAKES_HIDDEN_CODEX_AGENT) + "['""]?\s*$"
+    if ($configText -notmatch "(?m)^agent_path_override:\s*$" -or $configText -notmatch $launcherPattern) {
+        Write-Error "no-mistakes config.yaml must set agent_path_override.codex to $NO_MISTAKES_HIDDEN_CODEX_AGENT before running agent-backed gates."
+        exit 1
+    }
+}
+
 foreach ($entry in ($NM_ORIGINAL_PATH -split ";")) {
     if ([string]::IsNullOrWhiteSpace($entry)) {
         continue
@@ -117,6 +158,10 @@ $env:PATH = ($retainedPathEntries.ToArray() -join ";")
 if (-not (Test-Path -LiteralPath $NO_MISTAKES_EXE -PathType Leaf)) {
     Write-Error "no-mistakes.exe not found at $NO_MISTAKES_EXE. Install the official kunchenguid/no-mistakes release first."
     exit 1
+}
+
+if (Test-RequiresCodexAgent -Arguments $args) {
+    Assert-HiddenCodexAgentReady
 }
 
 & $NO_MISTAKES_EXE @args
