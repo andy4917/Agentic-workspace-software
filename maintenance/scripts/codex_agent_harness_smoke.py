@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import base64
 import json
 import os
@@ -8,7 +7,6 @@ import subprocess
 import tomllib
 from pathlib import Path
 from typing import Any
-
 from codex_agent_harness_base import (
     COMMAND_PREVIEW_CHARS,
     hook_route_uses_hidden_compact_runner,
@@ -18,25 +16,20 @@ from codex_agent_harness_base import (
     utc_now,
     write_json,
 )
-
-
 def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     ledger_path = root / "state" / "hook-ledger.jsonl"
     original_state_dir_exists = ledger_path.parent.exists()
     original_ledger_exists = ledger_path.exists()
     original_ledger_bytes = ledger_path.read_bytes() if original_ledger_exists else None
-
     def add_check(name: str, passed: bool, detail: str) -> None:
         checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
-
     agents_text = read_text(root / "AGENTS.md")
     charter_text = read_text(root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md")
     audit_template = root / "codex-goals" / "_template" / "FINAL_GOAL_AUDIT.md"
     audit_text = read_text(audit_template) if audit_template.exists() else ""
     full_agents_goal_governance = all(term in agents_text for term in ["## Goal Governance", "tracking marker", "final goal audit", "Subagents receive contractual subgoals"])
     compact_agents_goal_governance = all(term in agents_text for term in ["compact live bootstrap", "reviewed repo `AGENTS.md`", "outputs evidence-only", "completion authority"])
-
     add_check(
         "agents_goal_governance",
         full_agents_goal_governance or compact_agents_goal_governance,
@@ -85,13 +78,10 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
         restored_ledger_exists == original_ledger_exists and restored_ledger_bytes == original_ledger_bytes,
         "Synthetic orchestration Stop samples must not leave hook ledger mutations behind.",
     )
-
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
     write_json(root / "reports" / "orchestration-governance-smoke.latest.json", report)
     return report
-
-
 def configured_hook_command(root: Path, event_name: str) -> str:
     config_path = root / "config.d" / "20-hooks.toml"
     try:
@@ -114,8 +104,6 @@ def configured_hook_command(root: Path, event_name: str) -> str:
             if command:
                 return command
     raise RuntimeError(f"missing configured hook route for {event_name}")
-
-
 def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
     command = configured_hook_command(root, event_name)
     argv = shlex.split(command, posix=(os.name != "nt"))
@@ -125,7 +113,6 @@ def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
     candidate_pwsh_shim = str(root / "toolchains" / "shims" / "pwsh.ps1")
     live_root = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
     allowed_roots = [root.resolve(), live_root.resolve()]
-
     def assert_configured_target(value: str, expected_leaf: str) -> None:
         expanded = Path(os.path.expandvars(value))
         if expanded.name.lower() != expected_leaf.lower():
@@ -135,7 +122,6 @@ def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
         resolved = expanded.resolve()
         if not any(resolved == allowed or allowed in resolved.parents for allowed in allowed_roots):
             raise RuntimeError(f"configured hook target is outside managed/live Codex roots: {resolved}")
-
     rewrote_file = False
     rewrote_pwsh_shim = False
     for index, arg in enumerate(argv[:-1]):
@@ -152,8 +138,6 @@ def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
     if os.name == "nt" and not rewrote_pwsh_shim:
         raise RuntimeError("configured hook route does not expose a pwsh.ps1 shim target")
     return argv
-
-
 def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     env = os.environ.copy()
     env["CODEX_HOOK_SMOKE"] = "1"
@@ -181,29 +165,21 @@ def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, An
         return {"status": "fail", "exit_code": 2, "stdout_preview": "", "stderr_preview": str(exc)}
     except subprocess.TimeoutExpired as exc:
         return {"status": "fail", "exit_code": 124, "stdout_preview": "", "stderr_preview": str(exc)}
-
-
 def run_hook_sample(root: Path, command: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
         {"hook_event_name": "PreToolUse", "tool_name": "functions.shell_command", "tool_input": {"command": command}},
     )
-
-
 def run_camel_hook_sample(root: Path, command: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
         {"hookEventName": "PreToolUse", "toolName": "functions.shell_command", "toolInput": {"command": command}},
     )
-
-
 def run_apply_patch_sample(root: Path, patch: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
         {"hook_event_name": "PreToolUse", "tool_name": "functions.apply_patch", "tool_input": {"patch": patch}},
     )
-
-
 def run_nested_apply_patch_sample(root: Path, patch: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
@@ -217,22 +193,16 @@ def run_nested_apply_patch_sample(root: Path, patch: str) -> dict[str, Any]:
             },
         },
     )
-
-
 def run_prompt_hook_sample(root: Path, prompt: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
         {"hook_event_name": "UserPromptSubmit", "prompt": prompt, "cwd": str(root), "permission_mode": "default"},
     )
-
-
 def run_post_tool_hook_sample(root: Path, tool_name: str, command: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
         {"hook_event_name": "PostToolUse", "tool_name": tool_name, "tool_input": {"command": command}},
     )
-
-
 def run_subagent_session_start_sample(root: Path) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
@@ -244,25 +214,19 @@ def run_subagent_session_start_sample(root: Path) -> dict[str, Any]:
             "spawn_agent": {"agent_type": "reviewer"},
         },
     )
-
-
 def run_stop_hook_sample(root: Path, message: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
         {"hook_event_name": "Stop", "last_assistant_message": message, "stop_hook_active": False},
     )
-
-
 def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     ledger_path = root / "state" / "hook-ledger.jsonl"
     original_state_dir_exists = ledger_path.parent.exists()
     original_ledger_exists = ledger_path.exists()
     original_ledger_bytes = ledger_path.read_bytes() if original_ledger_exists else None
-
     def add_check(name: str, passed: bool, detail: str) -> None:
         checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
-
     try:
         config_text = read_text(root / "config.d" / "20-hooks.toml")
         hook_text = read_text(root / "hooks" / "compact-codex-hook.ps1")
@@ -1090,7 +1054,6 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                     ledger_path.parent.rmdir()
                 except OSError:
                     pass
-
     restored_ledger_exists = ledger_path.exists()
     restored_ledger_bytes = ledger_path.read_bytes() if restored_ledger_exists else None
     add_check(
@@ -1098,10 +1061,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         restored_ledger_exists == original_ledger_exists and restored_ledger_bytes == original_ledger_bytes,
         "Synthetic compact hook samples must not leave ledger mutations behind.",
     )
-
     return write_smoke_report(root, "hook-policy-smoke", checks)
-
-
 def check_terms_file(root: Path, relative_path: str, terms: list[str]) -> tuple[bool, str]:
     path = root / relative_path
     if not path.exists():
@@ -1111,22 +1071,16 @@ def check_terms_file(root: Path, relative_path: str, terms: list[str]) -> tuple[
     if missing:
         return False, f"{relative_path} missing terms: {', '.join(missing)}"
     return True, f"{relative_path} contains required terms"
-
-
 def write_smoke_report(root: Path, name: str, checks: list[dict[str, Any]]) -> dict[str, Any]:
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
     write_json(root / "reports" / f"{name}.latest.json", report)
     return report
-
-
 def check_adversarial_review_integration_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
-
     def add_file_check(name: str, relative_path: str, terms: list[str]) -> None:
         passed, detail = check_terms_file(root, relative_path, terms)
         checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
-
     add_file_check(
         "skill_semantics",
         "skills/clean-all-slop/SKILL.md",
@@ -1148,15 +1102,11 @@ def check_adversarial_review_integration_smoke(root: Path) -> dict[str, Any]:
         ["immediately previous turn to review", "required review lens", "clean-all-slop"],
     )
     return write_smoke_report(root, "adversarial-review-integration-smoke", checks)
-
-
 def check_worker_watcher_normalized_handoff_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
-
     def add_file_check(name: str, relative_path: str, terms: list[str]) -> None:
         passed, detail = check_terms_file(root, relative_path, terms)
         checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
-
     add_file_check(
         "handoff_policy",
         "maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md",
@@ -1193,15 +1143,11 @@ def check_worker_watcher_normalized_handoff_smoke(root: Path) -> dict[str, Any]:
         ["worker-watcher normalized handoff", "normalized_worker_packet", "watcher_not_used", "pm_merge_decision"],
     )
     return write_smoke_report(root, "worker-watcher-normalized-handoff-smoke", checks)
-
-
 def check_goal_integrity_gate_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
-
     def add_file_check(name: str, relative_path: str, terms: list[str]) -> None:
         passed, detail = check_terms_file(root, relative_path, terms)
         checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
-
     add_file_check(
         "gate_policy",
         "maintenance/GOAL_INTEGRITY_GATE.md",

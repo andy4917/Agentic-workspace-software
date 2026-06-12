@@ -154,7 +154,7 @@
     },
     {
       "action": "unchanged",
-      "digest": "9d4539eebf71c9a0979ed8479bf06f32adb0604c08e390902635da16202bb97c",
+      "digest": "bb704daa93a2534b68dee6bc0dde2c2b047fe01e92d2fa42bd4bf05f5b5ebe83",
       "managed": true,
       "owner": "codex-agent-harness",
       "path": "evals/repo-verify.json",
@@ -457,7 +457,7 @@
       "remove_on_uninstall": true
     }
   ],
-  "installed_at": "2026-06-11T10:52:08+00:00",
+  "installed_at": "2026-06-12T04:18:51+00:00",
   "requested_modules": [],
   "requested_profile": "developer",
   "schema_version": "1",

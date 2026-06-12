@@ -1,12 +1,9 @@
 param()
-
 $ErrorActionPreference = "Stop"
-
 function Get-CodexHome {
     if ($env:CODEX_HOME) { return $env:CODEX_HOME }
     return (Join-Path $env:USERPROFILE ".codex")
 }
-
 function Read-HookPayload {
     param([string]$Raw)
     $raw = $Raw
@@ -19,10 +16,8 @@ function Read-HookPayload {
         return [pscustomobject]@{ hook_event_name = "unknown"; _raw = $raw }
     }
 }
-
 function Ensure-RuntimeCleanupWatch {
     param([string]$CodexHome)
-
     $cleanupScript = Join-Path $CodexHome "maintenance\scripts\codex-runtime-process-cleanup.ps1"
     if (-not (Test-Path -LiteralPath $cleanupScript -PathType Leaf)) {
         return [ordered]@{
@@ -31,7 +26,6 @@ function Ensure-RuntimeCleanupWatch {
             script = $cleanupScript
         }
     }
-
     $output = & $cleanupScript -Mode ensure-watch -CodexHome $CodexHome -CleanupStaleOnEnsure -CleanupDuplicateRootsOnWatch -CleanupRetiredRootsOnWatch -StopAppServerOnOwnerExit -StopAppServerOnOwnerNoVisibleWindow 2>&1
     $text = (($output | Out-String) -replace "\s+", " ").Trim()
     return [ordered]@{
@@ -41,10 +35,8 @@ function Ensure-RuntimeCleanupWatch {
         output = $text
     }
 }
-
 function ConvertTo-HookText {
     param([object]$Value)
-
     if ($null -eq $Value) { return "" }
     if ($Value -is [string]) { return $Value }
     try {
@@ -53,13 +45,11 @@ function ConvertTo-HookText {
         return ($Value | Out-String)
     }
 }
-
 function Get-HookInputText {
     param(
         [object]$Payload,
         [string]$Raw
     )
-
     $parts = New-Object System.Collections.Generic.List[string]
     foreach ($name in @("tool_input", "toolInput", "arguments", "input", "parameters")) {
         if ($Payload.PSObject.Properties.Name -contains $name) {
@@ -71,10 +61,8 @@ function Get-HookInputText {
     }
     return ($parts -join "`n")
 }
-
 function Get-PromptText {
     param([object]$Payload)
-
     foreach ($name in @("prompt", "user_prompt", "userPrompt", "message", "text")) {
         if ($Payload.PSObject.Properties.Name -contains $name -and $null -ne $Payload.$name) {
             return (ConvertTo-HookText -Value $Payload.$name)
@@ -82,14 +70,11 @@ function Get-PromptText {
     }
     return ""
 }
-
 function Test-PromptSecretLeak {
     param([AllowNull()][string]$Prompt)
-
     if ([string]::IsNullOrWhiteSpace($Prompt)) {
         return $false
     }
-
     $secretPatterns = @(
         '(?i)\b(sk-(proj-)?[A-Za-z0-9_-]{20,})\b',
         '(?i)\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b',
@@ -100,7 +85,6 @@ function Test-PromptSecretLeak {
         '(?i)\bpypi-[A-Za-z0-9_-]{20,}\b',
         '(?i)\b(api[-_]?key|access[-_]?token|auth[-_]?token|secret|password|passwd)\b\s*[:=]\s*["'']?[A-Za-z0-9_./+=-]{20,}'
     )
-
     foreach ($pattern in $secretPatterns) {
         if ($Prompt -match $pattern) {
             return $true
@@ -108,10 +92,8 @@ function Test-PromptSecretLeak {
     }
     return $false
 }
-
 function Get-CommandTextFromObject {
     param([object]$Value)
-
     if ($null -eq $Value) { return "" }
     if ($Value.PSObject.Properties.Name -contains "command") {
         return [string]$Value.command
@@ -126,10 +108,8 @@ function Get-CommandTextFromObject {
     }
     return (ConvertTo-HookText -Value $Value)
 }
-
 function Get-NestedToolCalls {
     param([object]$Payload)
-
     $calls = New-Object System.Collections.Generic.List[object]
     foreach ($containerName in @("tool_input", "toolInput", "arguments", "input", "parameters")) {
         if (-not ($Payload.PSObject.Properties.Name -contains $containerName)) { continue }
@@ -154,10 +134,8 @@ function Get-NestedToolCalls {
     }
     return $calls.ToArray()
 }
-
 function Get-PowerShellCommandTokens {
     param([string]$CommandText)
-
     if ([string]::IsNullOrWhiteSpace($CommandText)) {
         return @()
     }
@@ -168,13 +146,11 @@ function Get-PowerShellCommandTokens {
         return @()
     }
 }
-
 function Test-ExecutableTokenStart {
     param(
         [object[]]$ParsedItems,
         [int]$Index
     )
-
     if ($Index -lt 0 -or $Index -ge $ParsedItems.Count) { return $false }
     $type = [string]$ParsedItems[$Index].Type
     if ($type -eq "Command") { return $true }
@@ -188,10 +164,8 @@ function Test-ExecutableTokenStart {
     }
     return $false
 }
-
 function Get-ExecutableLeaf {
     param([string]$Command)
-
     $trimmed = ([string]$Command).Trim().Trim('"', "'")
     if ([string]::IsNullOrWhiteSpace($trimmed)) { return "" }
     try {
@@ -204,64 +178,48 @@ function Get-ExecutableLeaf {
     }
     return $trimmed
 }
-
 function Test-PowerShellExecutableLeaf {
     param([string]$Leaf)
-
     return ([string]$Leaf -match '(?i)^(powershell|pwsh)(\.exe|\.ps1|\.cmd)?$')
 }
-
 function Test-GitExecutableLeaf {
     param([string]$Leaf)
-
     return ([string]$Leaf -match '(?i)^git(\.exe|\.cmd|\.ps1)?$')
 }
-
 function Test-PosixShellExecutableLeaf {
     param([string]$Leaf)
-
     return ([string]$Leaf -match '(?i)^(bash|sh|zsh|dash)(\.exe)?$')
 }
-
 function Test-ShellLikeToolName {
     param([string]$ToolName)
-
     return ([string]$ToolName -match '(?i)(^|\.|_)(bash|shell|shell_command|exec_command|powershell|pwsh|cmd)$')
 }
-
 function Test-TextContainsEncodedPowerShellInvocation {
     param([string]$CommandText)
-
     return ($CommandText -match '(?i)\b(powershell|pwsh)(\.exe|\.ps1|\.cmd)?\b[^\r\n]*(^|[\s"'',`])-(EncodedCommand|Encoded|Encode|Enco|enc|ec|e)(?=$|[\s"''`:=,])')
 }
-
 function Get-ParameterPrefixes {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
         [int]$MinLength = 1
     )
-
     $prefixes = New-Object System.Collections.Generic.List[string]
     for ($length = $MinLength; $length -le $Name.Length; $length++) {
         $prefixes.Add($Name.Substring(0, $length)) | Out-Null
     }
     return $prefixes.ToArray()
 }
-
 function Test-NamedParameter {
     param(
         [string]$Value,
         [string[]]$Names
     )
-
     if ([string]::IsNullOrWhiteSpace($Value) -or $Value -notmatch '^-') { return $false }
     $name = (($Value.TrimStart("-")) -replace ":.*$", "")
     return ($Names -contains $name)
 }
-
 function Expand-CommandSegment {
     param([object[]]$Segment)
-
     $expanded = New-Object System.Collections.Generic.List[string]
     foreach ($segmentValue in $Segment) {
         $value = [string]$segmentValue
@@ -275,10 +233,8 @@ function Expand-CommandSegment {
     }
     return $expanded.ToArray()
 }
-
 function Get-StartProcessNestedCommandText {
     param([object[]]$Segment)
-
     $target = ""
     $arguments = New-Object System.Collections.Generic.List[string]
     $filePathParameters = @(
@@ -373,10 +329,8 @@ function Get-StartProcessNestedCommandText {
     $argumentText = ($arguments -join " ")
     return "$target $argumentText".Trim()
 }
-
 function Get-InvokeExpressionLiteralCommandText {
     param([object[]]$Segment)
-
     $commandParts = New-Object System.Collections.Generic.List[string]
     $expectCommandValue = $false
     foreach ($segmentValue in $Segment) {
@@ -403,16 +357,13 @@ function Get-InvokeExpressionLiteralCommandText {
         }
         $commandParts.Add($value) | Out-Null
     }
-
     $nestedCommand = (($commandParts.ToArray()) -join " ").Trim()
     if ([string]::IsNullOrWhiteSpace($nestedCommand)) { return "" }
     if ($nestedCommand -match '(^|[^`])\$' -or $nestedCommand -match '`') { return "" }
     return $nestedCommand.Trim('"', "'")
 }
-
 function Get-ApplyPatchTargetPaths {
     param([string]$Text)
-
     $targets = New-Object System.Collections.Generic.List[string]
     $textVariants = @($Text, ($Text -replace '\\r\\n|\\n', "`n"))
     foreach ($textVariant in $textVariants) {
@@ -429,13 +380,11 @@ function Get-ApplyPatchTargetPaths {
     }
     return $targets.ToArray()
 }
-
 function Test-ApplyPatchTargetRisk {
     param(
         [string]$Text,
         [string]$SensitivePathPattern
     )
-
     foreach ($target in (Get-ApplyPatchTargetPaths -Text $Text)) {
         $clean = ([string]$target).Trim().Trim('"', "'")
         $normalized = ($clean -replace '/', '\').Trim()
@@ -455,15 +404,12 @@ function Test-ApplyPatchTargetRisk {
     }
     return ""
 }
-
 function Test-EncodedPowerShellCommand {
     param([string]$CommandText)
-
     $parsedItems = @(Get-PowerShellCommandTokens -CommandText $CommandText)
     if ($parsedItems.Count -eq 0) {
         return (Test-TextContainsEncodedPowerShellInvocation -CommandText $CommandText)
     }
-
     for ($index = 0; $index -lt $parsedItems.Count; $index++) {
         $parsedItem = $parsedItems[$index]
         if (-not (Test-ExecutableTokenStart -ParsedItems $parsedItems -Index $index)) { continue }
@@ -476,7 +422,6 @@ function Test-EncodedPowerShellCommand {
         }
         $segment = @(Expand-CommandSegment -Segment $segment.ToArray())
         $segmentText = ($segment -join " ")
-
         if (Test-PowerShellExecutableLeaf -Leaf $commandLeaf) {
             $powerShellCommandParameters = @(Get-ParameterPrefixes -Name "Command" -MinLength 1)
             if ($segmentText -match '(?i)(^|[\s"''`])-(EncodedCommand|Encoded|Encode|Enco|enc|ec|e)(?=$|[\s"''`:=])') {
@@ -493,7 +438,6 @@ function Test-EncodedPowerShellCommand {
             }
             continue
         }
-
         if ($commandLeaf -match '(?i)^(Start-Process|saps|start)$') {
             $launcherCommand = Get-StartProcessNestedCommandText -Segment $segment
             if (
@@ -518,7 +462,6 @@ function Test-EncodedPowerShellCommand {
             }
             continue
         }
-
         if ($commandLeaf -match '(?i)^cmd(\.exe)?$') {
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
                 if ($segment[$segmentIndex] -notmatch '(?i)^/c$') { continue }
@@ -531,17 +474,14 @@ function Test-EncodedPowerShellCommand {
             }
         }
     }
-
     return $false
 }
-
 function Test-HighRiskDestructiveCommand {
     param(
         [string]$CommandText,
         [string]$BroadTargetPattern,
         [string]$RecursiveFlagPattern
     )
-
     $parsedItems = @(Get-PowerShellCommandTokens -CommandText $CommandText)
         if ($parsedItems.Count -eq 0) {
         return (
@@ -559,7 +499,6 @@ function Test-HighRiskDestructiveCommand {
             )
         )
     }
-
     for ($index = 0; $index -lt $parsedItems.Count; $index++) {
         $parsedItem = $parsedItems[$index]
         if (-not (Test-ExecutableTokenStart -ParsedItems $parsedItems -Index $index)) { continue }
@@ -574,14 +513,12 @@ function Test-HighRiskDestructiveCommand {
         }
         $segment = @(Expand-CommandSegment -Segment $segment.ToArray())
         $segmentText = ($segment -join " ")
-
         if ($commandLeaf -match '(?i)^(Remove-Item|ri|rm|rd|rmdir|del)$') {
             if (($segmentText -match $RecursiveFlagPattern) -and ($segmentText -match $BroadTargetPattern)) {
                 return $true
             }
             continue
         }
-
         if (Test-GitExecutableLeaf -Leaf $commandLeaf) {
             $gitParts = @($segment | Where-Object {
                 -not [string]::IsNullOrWhiteSpace($_) -and
@@ -660,7 +597,6 @@ function Test-HighRiskDestructiveCommand {
             }
             continue
         }
-
         if ($commandLeaf -match '(?i)^(Start-Process|saps|start)$') {
             $launcherCommand = Get-StartProcessNestedCommandText -Segment $segment
             if (
@@ -671,7 +607,6 @@ function Test-HighRiskDestructiveCommand {
             }
             continue
         }
-
         if ($commandLeaf -match '(?i)^(Invoke-Expression|iex)$') {
             foreach ($segmentToken in $segmentTokens) {
                 if ([string]$segmentToken.Type -eq "Variable") {
@@ -685,7 +620,6 @@ function Test-HighRiskDestructiveCommand {
             }
             continue
         }
-
         if (Test-PowerShellExecutableLeaf -Leaf $commandLeaf) {
             $powerShellCommandParameters = @(Get-ParameterPrefixes -Name "Command" -MinLength 1)
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
@@ -699,7 +633,6 @@ function Test-HighRiskDestructiveCommand {
             }
             continue
         }
-
         if (Test-PosixShellExecutableLeaf -Leaf $commandLeaf) {
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
                 if ($segment[$segmentIndex] -notmatch '(?i)^-[A-Za-z]*c[A-Za-z]*$') { continue }
@@ -712,7 +645,6 @@ function Test-HighRiskDestructiveCommand {
             }
             continue
         }
-
         if ($commandLeaf -match '(?i)^cmd(\.exe)?$') {
             for ($segmentIndex = 0; $segmentIndex -lt $segment.Count; $segmentIndex++) {
                 if ($segment[$segmentIndex] -notmatch '(?i)^/c$') { continue }
@@ -725,17 +657,14 @@ function Test-HighRiskDestructiveCommand {
             }
         }
     }
-
     return $false
 }
-
 function Get-PreToolUseDecision {
     param(
         [string]$ToolName,
         [object]$Payload,
         [string]$Raw
     )
-
     $toolText = if ($ToolName) { $ToolName } else { "" }
     $inputText = Get-HookInputText -Payload $Payload -Raw $Raw
     $combined = "$toolText`n$inputText"
@@ -756,7 +685,6 @@ function Get-PreToolUseDecision {
     if ($isFileReadMcp -and $combined -match $sensitivePathPattern) {
         return [ordered]@{ decision = "deny"; reason = "direct credential or secret-file reads require explicit user approval and a narrower non-secret metadata route" }
     }
-
     if ($toolText -match '(?i)^multi_tool_use(\.|$)') {
         foreach ($nestedCall in (Get-NestedToolCalls -Payload $Payload)) {
             $nestedToolText = if ($nestedCall.tool) { [string]$nestedCall.tool } else { "" }
@@ -792,7 +720,6 @@ function Get-PreToolUseDecision {
             }
         }
     }
-
     $isApplyPatch = $toolText -match '(?i)(^|[._-])apply_patch$'
     if ($isApplyPatch) {
         $applyPatchRisk = Test-ApplyPatchTargetRisk -Text $inputText -SensitivePathPattern $sensitivePathPattern
@@ -800,7 +727,6 @@ function Get-PreToolUseDecision {
             return [ordered]@{ decision = "deny"; reason = "apply_patch targets $applyPatchRisk and requires explicit approval" }
         }
     }
-
     $isProgrammaticExec = $toolText -match '(?i)^functions\.exec$'
     if ($isProgrammaticExec) {
         $execInspection = "$toolText`n$inputText"
@@ -838,15 +764,12 @@ function Get-PreToolUseDecision {
             return [ordered]@{ decision = "deny"; reason = "programmatic exec payload contains broad destructive operations and requires explicit approval" }
         }
     }
-
     if (-not $isShellLike) {
         return [ordered]@{ decision = "allow"; reason = "compact scaffold hook records evidence and blocks only immediate high-risk operations" }
     }
-
     if (Test-EncodedPowerShellCommand -CommandText $commandText) {
         return [ordered]@{ decision = "deny"; reason = "encoded PowerShell commands are blocked at the hook boundary because their payload cannot be safely inspected before execution" }
     }
-
     if ($inspectionText -match $contentReadCommandPattern -and $inspectionText -match $sensitivePathPattern) {
         return [ordered]@{ decision = "deny"; reason = "direct credential or secret-file reads require explicit user approval and a narrower non-secret metadata route" }
     }
@@ -856,14 +779,11 @@ function Get-PreToolUseDecision {
     if (($inspectionText -match $sensitivePathPattern) -and -not (($inspectionText -match $safeReferenceSearchPattern) -and ($inspectionText -notmatch $sensitivePathWithDirectoryPattern))) {
         return [ordered]@{ decision = "deny"; reason = "direct credential or secret-file reads require explicit user approval and a narrower non-secret metadata route" }
     }
-
     if (Test-HighRiskDestructiveCommand -CommandText $commandText -BroadTargetPattern $broadTargetPattern -RecursiveFlagPattern $recursiveFlagPattern) {
         return [ordered]@{ decision = "deny"; reason = "broad destructive operations must be scoped and explicitly approved before hook execution" }
     }
-
     return [ordered]@{ decision = "allow"; reason = "compact scaffold hook records evidence and blocks only immediate high-risk operations" }
 }
-
 $stdinRaw = ""
 try {
     $stdinStream = [Console]::OpenStandardInput()
@@ -875,21 +795,18 @@ try {
 if ([string]::IsNullOrWhiteSpace($stdinRaw)) {
     $stdinRaw = ($input | Out-String)
 }
-
 $payload = Read-HookPayload -Raw $stdinRaw
 $event = if ($payload.hook_event_name) { [string]$payload.hook_event_name } elseif ($payload.hookEventName) { [string]$payload.hookEventName } else { "unknown" }
 $tool = if ($payload.tool_name) { [string]$payload.tool_name } elseif ($payload.toolName) { [string]$payload.toolName } else { $null }
 $codexHome = Get-CodexHome
 $stateDir = Join-Path $codexHome "state"
 $ledger = Join-Path $stateDir "hook-ledger.jsonl"
-
 $ledgerReady = $true
 try {
     New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 } catch {
     $ledgerReady = $false
 }
-
 $runtimeCleanupWatch = $null
 if ($event -eq "SessionStart" -or $event -eq "UserPromptSubmit") {
     if ($env:CODEX_HOOK_SMOKE -eq "1") {
@@ -909,7 +826,6 @@ if ($event -eq "SessionStart" -or $event -eq "UserPromptSubmit") {
         }
     }
 }
-
 $preToolUseDecision = $null
 if ($event -eq "PreToolUse") {
     $preToolUseDecision = Get-PreToolUseDecision -ToolName $tool -Payload $payload -Raw $stdinRaw
@@ -924,7 +840,6 @@ if ($event -eq "UserPromptSubmit") {
         }
     }
 }
-
 $record = [ordered]@{
     ts = (Get-Date).ToUniversalTime().ToString("o")
     runner = "compact-codex-hook"
@@ -943,9 +858,7 @@ if ($ledgerReady) {
         $ledgerReady = $false
     }
 }
-
 $out = [ordered]@{}
-
 if ($event -eq "PreToolUse") {
     $out["hookSpecificOutput"] = [ordered]@{
         hookEventName = "PreToolUse"
@@ -968,7 +881,6 @@ if ($event -eq "PreToolUse") {
         }
     }
 }
-
 if ($out.Count -gt 0) {
     $out | ConvertTo-Json -Compress -Depth 8
 }

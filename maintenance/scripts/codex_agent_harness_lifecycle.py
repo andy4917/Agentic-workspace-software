@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import argparse
 import json
 import os
@@ -9,7 +8,6 @@ import sys
 import tomllib
 from pathlib import Path
 from typing import Any
-
 from codex_agent_harness_base import (
     COMMAND_ARTIFACT_THRESHOLD_CHARS,
     COMMAND_PREVIEW_CHARS,
@@ -75,8 +73,6 @@ def cmd_discovery(args: argparse.Namespace) -> int:
     write_text(root / "reports" / "discovery.md", "\n".join(lines) + "\n")
     print(root / "reports" / "discovery.md")
     return 0
-
-
 def cmd_plan(args: argparse.Namespace) -> int:
     root = root_path(args)
     modules = selected_modules(args.profile, args.module)
@@ -107,8 +103,6 @@ def cmd_plan(args: argparse.Namespace) -> int:
         for item in missing:
             print(f"  + {item}")
     return 0
-
-
 def resolve_state_child_path(root: Path, path: str) -> tuple[Path | None, str | None]:
     candidate = Path(path)
     if candidate.is_absolute() or candidate.drive or ".." in candidate.parts:
@@ -118,8 +112,6 @@ def resolve_state_child_path(root: Path, path: str) -> tuple[Path | None, str | 
     if full == root_resolved or root_resolved not in full.parents:
         return None, "outside_root"
     return full, None
-
-
 def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
     try:
         skills_root = (root / "skills").resolve()
@@ -137,12 +129,8 @@ def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
         return pruned
     except OSError:
         return None
-
-
 def previous_operation_is_managed(previous: dict[str, Any]) -> bool:
     return bool(previous.get("managed") is True or (previous.get("owner") == OWNER and previous.get("remove_on_uninstall") is True))
-
-
 def managed_template_drift_blockers(root: Path, templates: dict[str, str], previous_ops: dict[str, dict[str, Any]]) -> list[str]:
     blocked: list[str] = []
     for path, content in sorted(templates.items()):
@@ -158,8 +146,6 @@ def managed_template_drift_blockers(root: Path, templates: dict[str, str], previ
         if previous_operation_is_managed(previous) and previous_digest and current_digest != previous_digest:
             blocked.append(path)
     return blocked
-
-
 def cmd_apply(args: argparse.Namespace) -> int:
     root = root_path(args)
     modules = selected_modules(args.profile, args.module)
@@ -174,7 +160,6 @@ def cmd_apply(args: argparse.Namespace) -> int:
     if blocked_updates:
         print(json.dumps({"blocked_updates": blocked_updates, "reason": "managed files changed since the last recorded digest; refusing silent overwrite"}, ensure_ascii=False, sort_keys=True))
         return 1
-
     operations = []
     for path, previous in sorted(previous_ops.items()):
         if path in templates:
@@ -301,8 +286,6 @@ def cmd_apply(args: argparse.Namespace) -> int:
     write_json(install_state_path(root), state)
     print(f"Applied harness state: {install_state_path(root)}")
     return 0
-
-
 def source_plan_metadata() -> dict[str, Any]:
     if SOURCE_PLAN.exists():
         return {
@@ -316,11 +299,8 @@ def source_plan_metadata() -> dict[str, Any]:
         "implementation": "local-distillation",
         "warning": "source plan path was not present during apply",
     }
-
 def load_state(root: Path) -> dict[str, Any]:
     return load_json(install_state_path(root), {})
-
-
 def stale_active_references(root: Path) -> list[dict[str, Any]]:
     # Global state can contain prompt history; stale source checks should inspect policy/config surfaces only.
     active = [root / "config.toml", root / "AGENTS.md", root / "agent.md"]
@@ -339,8 +319,6 @@ def stale_active_references(root: Path) -> list[dict[str, Any]]:
         except UnicodeDecodeError:
             continue
     return matches
-
-
 def sentinel_checks(root: Path) -> list[dict[str, Any]]:
     targets = [
         "vendor_imports",
@@ -364,8 +342,6 @@ def sentinel_checks(root: Path) -> list[dict[str, Any]]:
             }
         )
     return out
-
-
 def check_config(root: Path) -> dict[str, Any]:
     path = root / "config.toml"
     source = "managed_root"
@@ -415,8 +391,6 @@ def check_config(root: Path) -> dict[str, Any]:
         "missing_agent_roles": missing_agent_roles,
         "missing_calibration_fallback": missing_calibration_fallback,
     }
-
-
 def check_managed_files(root: Path) -> dict[str, Any]:
     state = load_state(root)
     if not state:
@@ -434,8 +408,6 @@ def check_managed_files(root: Path) -> dict[str, Any]:
         if digest != op.get("digest"):
             drifted.append(op["path"])
     return {"status": "pass" if not missing and not drifted else "fail", "missing": missing, "drifted": drifted}
-
-
 def check_skill_frontmatter(root: Path) -> dict[str, Any]:
     state = load_state(root)
     managed = {
@@ -456,8 +428,6 @@ def check_skill_frontmatter(root: Path) -> dict[str, Any]:
             else:
                 warnings.append(item)
     return {"status": "pass" if not missing else "fail", "missing": missing, "warnings": warnings}
-
-
 def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     fragment_path = root / "config.d" / "20-hooks.toml"
     if not fragment_path.exists():
@@ -521,8 +491,6 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     if legacy_hook in lowered or legacy_config in lowered:
         missing["legacy"] = ["legacy hook reference"]
     return {"status": "pass" if not missing else "fail", "missing": missing, "matchers": event_matchers, "checked_path": str(path), "source": source}
-
-
 def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
     selected = DOCTOR_TIERS.get(tier, DOCTOR_TIERS["full"])
     builders = {
@@ -547,8 +515,6 @@ def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
         checks["stale_active_references"]["status"] = "fail"
     failed = [name for name, result in checks.items() if result.get("status") != "pass"]
     return {"generated_at": utc_now(), "root": str(root), "tier": tier, "status": "pass" if not failed else "fail", "failed": failed, "checks": checks}
-
-
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = root_path(args)
     data = doctor_data(root, args.tier)
@@ -561,8 +527,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         for name, result in data["checks"].items():
             print(f"- {name}: {result.get('status')}")
     return 0 if data["status"] == "pass" else 1
-
-
 def cmd_repair(args: argparse.Namespace) -> int:
     root = root_path(args)
     state = load_state(root)
@@ -587,8 +551,6 @@ def cmd_repair(args: argparse.Namespace) -> int:
             repaired.append(path)
     print(json.dumps({"apply": args.apply, "repair_targets": repaired}, ensure_ascii=False, indent=2))
     return 0
-
-
 def cmd_uninstall(args: argparse.Namespace) -> int:
     root = root_path(args)
     state = load_state(root)
@@ -620,8 +582,6 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         path.unlink()
     print(json.dumps({"dry_run": False, "removed": targets}, ensure_ascii=False, indent=2))
     return 0
-
-
 def audit_data(root: Path) -> dict[str, Any]:
     doctor = doctor_data(root, tier="core")
     global_scan = load_json(root / "reports" / "global-scan.latest.json", {})
@@ -724,8 +684,6 @@ def audit_data(root: Path) -> dict[str, Any]:
         "categories": categories,
         "top_actions": top_actions[:7],
     }
-
-
 def cmd_audit(args: argparse.Namespace) -> int:
     root = root_path(args)
     data = audit_data(root)
@@ -742,7 +700,6 @@ def cmd_audit(args: argparse.Namespace) -> int:
     else:
         print("\n".join(text))
     return 0 if data["status"] == "pass" else 1
-
 def load_trajectory_records(root: Path) -> list[dict[str, Any]]:
     path = root / "trajectories" / "runs.jsonl"
     if not path.exists():
@@ -756,15 +713,11 @@ def load_trajectory_records(root: Path) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             records.append({"version": TRAJECTORY_VERSION, "error": "invalid-jsonl-line", "raw_preview": clean_report_string(line)})
     return records
-
-
 def trajectory_records_valid(records: list[dict[str, Any]], *, require_records: bool = True) -> bool:
     if require_records and not records:
         return False
     required = {"version", "run_id", "timestamp", "task", "verification_result", "completed"}
     return all(not item.get("error") and required.issubset(item) for item in records)
-
-
 def latest_retrieval_report_valid(root: Path) -> bool:
     report = load_json(root / "reports" / "retrieval-report.latest.json", {})
     forbidden = ("artifacts/", "cache/", "memories/", "reports/", "sessions/", "sqlite/", "trajectories/", "node_repl/")
@@ -774,8 +727,6 @@ def latest_retrieval_report_valid(root: Path) -> bool:
         return False
     paths = [item.get("path", "") for item in [*selected, *candidates] if isinstance(item, dict)]
     return bool(selected) and all(not any(path.startswith(prefix) for prefix in forbidden) for path in paths)
-
-
 def latest_benchmark_results_valid(root: Path) -> bool:
     path = root / "reports" / "benchmark-results.jsonl"
     if not path.exists():
@@ -797,8 +748,6 @@ def latest_benchmark_results_valid(root: Path) -> bool:
         return False
     checks = latest.get("checks")
     return isinstance(checks, list) and bool(checks) and all(isinstance(item, dict) for item in checks)
-
-
 def compact_summary_valid(root: Path) -> bool:
     summaries = sorted(path for path in (root / "artifacts" / "compact-summaries").glob("*.md") if path.name.lower() != "readme.md")
     if not summaries:
