@@ -99,13 +99,12 @@ function Test-RequiresCodexAgent {
         return $false
     }
 
-    if ($Arguments.Count -ge 2 -and [string]$Arguments[0] -ieq "axi" -and [string]$Arguments[1] -ieq "run") {
-        return $true
+    for ($index = 0; $index -lt ($Arguments.Count - 1); $index++) {
+        if ([string]$Arguments[$index] -ieq "axi" -and ([string]$Arguments[$index + 1] -ieq "run" -or [string]$Arguments[$index + 1] -ieq "respond")) {
+            return $true
+        }
     }
-    if ($Arguments.Count -ge 2 -and [string]$Arguments[0] -ieq "axi" -and [string]$Arguments[1] -ieq "respond") {
-        return $true
-    }
-    if ($Arguments.Count -ge 1 -and [string]$Arguments[0] -ieq "rerun") {
+    if (@($Arguments | Where-Object { [string]$_ -ieq "rerun" }).Count -gt 0) {
         return $true
     }
     return $false
