@@ -538,6 +538,33 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             },
         )
         programmatic_exec_destructive_stdout = programmatic_exec_destructive_probe.get("stdout_preview", "").lower()
+        exec_command_protected_read_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "functions.exec_command",
+                "tool_input": {"command": "Get-Content $env:USERPROFILE\\.codex\\auth.json"},
+            },
+        )
+        exec_command_protected_read_stdout = exec_command_protected_read_probe.get("stdout_preview", "").lower()
+        exec_command_destructive_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "functions.exec_command",
+                "tool_input": {"command": "Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force"},
+            },
+        )
+        exec_command_destructive_stdout = exec_command_destructive_probe.get("stdout_preview", "").lower()
+        exec_command_regular_probe = run_compact_hook_sample(
+            root,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "functions.exec_command",
+                "tool_input": {"command": "git status -sb"},
+            },
+        )
+        exec_command_regular_stdout = exec_command_regular_probe.get("stdout_preview", "").lower()
         git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
         git_regular_push_stdout = git_regular_push_probe.get("stdout_preview", "").lower()
         add_check(
@@ -584,6 +611,16 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and iex_benign_probe.get("status") == "pass"
             and "allow" in iex_benign_stdout,
             "PreToolUse should inspect literal Invoke-Expression content instead of denying every benign literal expression.",
+        )
+        add_check(
+            "pretooluse_inspects_exec_command_tools",
+            exec_command_protected_read_probe.get("status") == "pass"
+            and "deny" in exec_command_protected_read_stdout
+            and exec_command_destructive_probe.get("status") == "pass"
+            and "deny" in exec_command_destructive_stdout
+            and exec_command_regular_probe.get("status") == "pass"
+            and "allow" in exec_command_regular_stdout,
+            "PreToolUse should inspect functions.exec_command payloads for secret reads and broad destructive operations while preserving ordinary shell commands.",
         )
         add_check(
             "pretooluse_blocks_git_force_push",

@@ -163,7 +163,8 @@ When any external patch, package update, app update, CLI update, repository impo
    - Update release ledger.
    - Update session/thread index.
    - Update manifest.
-   - Pin or archive threads.
+   - Pin active control threads, and close or remove stale thread surfaces only
+     when current retention rules authorize cleanup.
    - Record residual risks and next slice.
    - Present final diff/evidence for human review.
 

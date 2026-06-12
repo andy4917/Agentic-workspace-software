@@ -693,6 +693,10 @@ PM parallel-work rule:
 - the PM must keep an independent verification track for delegated claims;
 - subagent outputs are candidate evidence, not authority, and must be adversarially checked before being used for completion claims;
 - if a subagent hides failures, violates explicit rules, claims success without evidence, or produces reward-hacked validation, close that agent, start a new one with a handoff describing the failure, and independently verify the affected surface.
+- For large repository searches, broad file reads, or bulk operational evidence
+  gathering, prefer a Spark explorer sidecar when the runtime exposes one and
+  the user has authorized delegation; otherwise record the unavailable route
+  and use compressed local programmatic search.
 
 Delegation anti-reward-hacking contract:
 
@@ -781,6 +785,11 @@ it as out of scope with direct evidence.
   performance, hygiene, and maintainability directly when in scope, update the
   relevant handoff/maintenance record, and leave the workstation in a state a
   future agent can inspect without guessing.
+- For stale, duplicate, retired, or drifted operational surfaces that an agent
+  can safely handle, the default treatment is update to the current canonical
+  source or remove after path-boundary verification. Do not create a new archive
+  or retained backup unless the current user explicitly asks for that retention
+  or a runbook requires a temporary rollback artifact.
 - For workstation management, start with surface classification and narrow
   inspection before mutation. Use
   `maintenance/WORKSTATION_CONTROL_RUNBOOK.md` to distinguish active runtime,

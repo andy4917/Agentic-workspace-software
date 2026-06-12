@@ -6,6 +6,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "codex-bundled-tools.ps1")
+
 function Resolve-PreferredPwshExecutable {
     $aliasStub = [IO.Path]::Combine($env:LOCALAPPDATA, "Microsoft\WindowsApps\pwsh.exe")
     $candidates = @()
@@ -47,29 +49,6 @@ function Join-PathStrict {
         [Parameter(Mandatory = $true)][string]$Child
     )
     return [IO.Path]::Combine($Base, $Child)
-}
-
-function Resolve-CodexBundledExe {
-    param([Parameter(Mandatory = $true)][string]$Name)
-
-    $binRoot = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin"
-    $direct = Join-PathStrict $binRoot ($Name + ".exe")
-    if (Test-Path -LiteralPath $direct -PathType Leaf) {
-        return $direct
-    }
-    if (Test-Path -LiteralPath $binRoot -PathType Container) {
-        $candidate = @(Get-ChildItem -LiteralPath $binRoot -Directory -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTimeUtc -Descending |
-            ForEach-Object {
-                $path = Join-PathStrict $_.FullName ($Name + ".exe")
-                if (Test-Path -LiteralPath $path -PathType Leaf) { $path }
-            } |
-            Select-Object -First 1)
-        if ($candidate.Count -gt 0) {
-            return [string]$candidate[0]
-        }
-    }
-    return $null
 }
 
 function Add-Check {

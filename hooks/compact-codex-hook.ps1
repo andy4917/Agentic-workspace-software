@@ -223,6 +223,12 @@ function Test-PosixShellExecutableLeaf {
     return ([string]$Leaf -match '(?i)^(bash|sh|zsh|dash)(\.exe)?$')
 }
 
+function Test-ShellLikeToolName {
+    param([string]$ToolName)
+
+    return ([string]$ToolName -match '(?i)(^|\.|_)(bash|shell|shell_command|exec_command|powershell|pwsh|cmd)$')
+}
+
 function Test-TextContainsEncodedPowerShellInvocation {
     param([string]$CommandText)
 
@@ -728,7 +734,7 @@ function Get-PreToolUseDecision {
     $combined = "$toolText`n$inputText"
     $commandText = Get-CommandTextFromObject -Value $Payload
     $inspectionText = "$toolText`n$commandText"
-    $isShellLike = $toolText -match '(?i)(^|\.|_)(bash|shell|shell_command|powershell|pwsh|cmd)$'
+    $isShellLike = Test-ShellLikeToolName -ToolName $toolText
     $contentReadCommandPattern = '(?i)\b(Get-Content|type|cat|gc|more)\b'
     $sensitiveFileNamePattern = '(\.env(\.[\w.-]+)?|\.npmrc|\.netrc|\.pypirc|pip\.conf|kubeconfig|\.kube[\\/]config|auth\.json|\.credentials\.json|credentials?\.json|id_rsa|id_ed25519|\.pem\b|\.pfx\b|\.key\b|(?:api[-_]?key|credential|password|passwd|secret|token|cookie|session)[\w.-]*\.(json|txt|toml|ya?ml|env|key|pem))'
     $sensitivePathPattern = "(?i)$sensitiveFileNamePattern"
@@ -760,7 +766,7 @@ function Get-PreToolUseDecision {
                     return [ordered]@{ decision = "deny"; reason = "nested apply_patch targets $nestedApplyPatchRisk and requires explicit approval" }
                 }
             }
-            $nestedIsShellLike = $nestedToolText -match '(?i)(^|\.|_)(bash|shell|shell_command|powershell|pwsh|cmd)$'
+            $nestedIsShellLike = Test-ShellLikeToolName -ToolName $nestedToolText
             if (-not $nestedIsShellLike) { continue }
             if (Test-EncodedPowerShellCommand -CommandText $nestedCall.command) {
                 return [ordered]@{ decision = "deny"; reason = "nested encoded PowerShell commands are blocked at the hook boundary because their payload cannot be safely inspected before execution" }

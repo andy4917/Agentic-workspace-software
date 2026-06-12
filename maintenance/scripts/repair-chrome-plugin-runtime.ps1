@@ -7,6 +7,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "codex-bundled-tools.ps1")
+
 function Join-PathStrict {
     param(
         [Parameter(Mandatory = $true)][string]$Base,
@@ -27,33 +29,6 @@ function ConvertTo-ComparablePath {
     } catch {
         return ([string]$Path).TrimEnd("\", "/").Replace("/", "\")
     }
-}
-
-function Resolve-CodexBundledTool {
-    param([Parameter(Mandatory = $true)][string]$Name)
-
-    $binRoot = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin"
-    $direct = Join-PathStrict $binRoot ($Name + ".exe")
-    if (Test-Path -LiteralPath $direct -PathType Leaf) {
-        return $direct
-    }
-
-    if (Test-Path -LiteralPath $binRoot -PathType Container) {
-        $match = Get-ChildItem -LiteralPath $binRoot -Directory -ErrorAction SilentlyContinue |
-            ForEach-Object {
-                $candidate = Join-PathStrict $_.FullName ($Name + ".exe")
-                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-                    Get-Item -LiteralPath $candidate
-                }
-            } |
-            Sort-Object LastWriteTime -Descending |
-            Select-Object -First 1
-        if ($null -ne $match) {
-            return $match.FullName
-        }
-    }
-
-    return $null
 }
 
 function Test-CmdShimPath {
