@@ -75,26 +75,75 @@ def check_calibration_policy(root: Path, require_config: bool = True) -> dict[st
 
     calibration_text = read_text(calibration_path) if calibration_path.exists() else ""
     agents_text = read_text(agents_path) if agents_path.exists() else ""
-    config_text = read_text(config_path) if require_config and config_path.exists() else ""
-    compact_hook_text = read_text(compact_hook_path) if compact_hook_path.exists() else ""
+    config_text = (
+        read_text(config_path) if require_config and config_path.exists() else ""
+    )
+    compact_hook_text = (
+        read_text(compact_hook_path) if compact_hook_path.exists() else ""
+    )
     scoring_text = read_text(scoring_path) if scoring_path.exists() else ""
 
     add_check("CALIBRATION.md exists", calibration_path.exists())
-    add_check("answer statuses documented", all(term in calibration_text for term in ["candidate", "supported", "inferred", "uncertain", "accepted", "abstain"]))
-    add_check("claim evidence states documented", all(term in calibration_text for term in ["observed", "derived", "assumed", "unchecked"]))
+    add_check(
+        "answer statuses documented",
+        all(
+            term in calibration_text
+            for term in [
+                "candidate",
+                "supported",
+                "inferred",
+                "uncertain",
+                "accepted",
+                "abstain",
+            ]
+        ),
+    )
+    add_check(
+        "claim evidence states documented",
+        all(
+            term in calibration_text
+            for term in ["observed", "derived", "assumed", "unchecked"]
+        ),
+    )
     add_check("falsifier-first documented", "Falsifier-First" in calibration_text)
-    add_check("completion authority documented", "Completion Authority" in calibration_text)
-    add_check("AGENTS references canonical calibration", "CALIBRATION.md" in agents_text and "Live Turn Calibration" in agents_text)
+    add_check(
+        "completion authority documented", "Completion Authority" in calibration_text
+    )
+    add_check(
+        "AGENTS references canonical calibration",
+        "CALIBRATION.md" in agents_text and "Live Turn Calibration" in agents_text,
+    )
     if require_config:
-        config_fallback = "project_doc_fallback_filenames" in config_text and "CALIBRATION.md" in config_text and "project_doc_max_bytes = 65536" in config_text
-        compact_hook_wiring = "treat claims as candidate until direct evidence supports them" in compact_hook_text.lower()
-        add_check("calibration runtime wiring present", config_fallback or compact_hook_wiring)
+        config_fallback = (
+            "project_doc_fallback_filenames" in config_text
+            and "CALIBRATION.md" in config_text
+            and "project_doc_max_bytes = 65536" in config_text
+        )
+        compact_hook_wiring = (
+            "treat claims as candidate until direct evidence supports them"
+            in compact_hook_text.lower()
+        )
+        add_check(
+            "calibration runtime wiring present", config_fallback or compact_hook_wiring
+        )
     else:
-        add_skip("config registers calibration fallback", "repo-safe mode excludes ignored private runtime config.toml")
+        add_skip(
+            "config registers calibration fallback",
+            "repo-safe mode excludes ignored private runtime config.toml",
+        )
     add_check("compact hook exists", compact_hook_path.exists())
-    add_check("compact prompt reminder references calibration behavior", "treat claims as candidate until direct evidence supports them" in compact_hook_text.lower())
+    add_check(
+        "compact prompt reminder references calibration behavior",
+        "treat claims as candidate until direct evidence supports them"
+        in compact_hook_text.lower(),
+    )
     add_check("calibration verifier exists", agent_path.exists())
-    add_check("calibration scoring manifest exists", scoring_path.exists() and "confident_wrong" in scoring_text and "unsupported_material_claim" in scoring_text)
+    add_check(
+        "calibration scoring manifest exists",
+        scoring_path.exists()
+        and "confident_wrong" in scoring_text
+        and "unsupported_material_claim" in scoring_text,
+    )
     add_check("calibration eval definition exists", eval_path.exists())
 
     try:

@@ -17,7 +17,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from codex_agent_harness_calibration import CALIBRATION_EVAL_TEMPLATE, CALIBRATION_ROLE_CONFIG
+from codex_agent_harness_calibration import (
+    CALIBRATION_EVAL_TEMPLATE,
+    CALIBRATION_ROLE_CONFIG,
+)
 from worker_watcher_templates import (
     DELEGATION_CHARTER as WORKER_WATCHER_DELEGATION_CHARTER,
     EVAL_TEMPLATES as WORKER_WATCHER_EVAL_TEMPLATES,
@@ -34,30 +37,98 @@ SOURCE_PLAN = Path.home() / "Downloads" / "codex-agent-harness-distillation-plan
 COMMAND_PREVIEW_CHARS = 4000
 COMMAND_ARTIFACT_THRESHOLD_CHARS = 12000
 TRAJECTORY_VERSION = "codex-trajectory-v1"
-HIDDEN_COMPACT_HOOK_ROUTE_TERMS = ("powershell.exe", "WindowStyle Hidden", "pwsh.ps1", "compact-codex-hook.ps1")
+HIDDEN_COMPACT_HOOK_ROUTE_TERMS = (
+    "powershell.exe",
+    "WindowStyle Hidden",
+    "pwsh.ps1",
+    "compact-codex-hook.ps1",
+)
 DOCTOR_TIERS = {
-    "core": ["config", "harness_engine_modules", "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter", "harness_file_size", "stale_active_references", "sentinel_blockers"],
-    "extended": ["config", "pm_subagent_protocol", "harness_engine_modules", "app_runtime_state_writable", "generated_outputs_untracked", "compact_hook_contract", "subagent_nickname_policy", "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter", "harness_file_size", "workspace_script_file_size", "stale_active_references", "sentinel_blockers"],
-    "stress": ["config", "harness_engine_modules", "generated_outputs_untracked", "calibration_policy", "managed_files", "harness_file_size", "stale_active_references", "sentinel_blockers"],
+    "core": [
+        "config",
+        "harness_engine_modules",
+        "calibration_policy",
+        "hook_tool_routing",
+        "managed_files",
+        "skill_frontmatter",
+        "harness_file_size",
+        "stale_active_references",
+        "sentinel_blockers",
+    ],
+    "extended": [
+        "config",
+        "pm_subagent_protocol",
+        "harness_engine_modules",
+        "app_runtime_state_writable",
+        "generated_outputs_untracked",
+        "compact_hook_contract",
+        "subagent_nickname_policy",
+        "calibration_policy",
+        "hook_tool_routing",
+        "managed_files",
+        "skill_frontmatter",
+        "harness_file_size",
+        "workspace_script_file_size",
+        "stale_active_references",
+        "sentinel_blockers",
+    ],
+    "stress": [
+        "config",
+        "harness_engine_modules",
+        "generated_outputs_untracked",
+        "calibration_policy",
+        "managed_files",
+        "harness_file_size",
+        "stale_active_references",
+        "sentinel_blockers",
+    ],
 }
-DOCTOR_TIERS["full"] = list(dict.fromkeys(DOCTOR_TIERS["extended"] + DOCTOR_TIERS["stress"]))
+DOCTOR_TIERS["full"] = list(
+    dict.fromkeys(DOCTOR_TIERS["extended"] + DOCTOR_TIERS["stress"])
+)
 
 MODULES: dict[str, dict[str, str]] = {
-    "codex-baseline": {"purpose": "Codex baseline config, global instructions, and role agents"},
+    "codex-baseline": {
+        "purpose": "Codex baseline config, global instructions, and role agents"
+    },
     "rules-core": {"purpose": "Durable instruction and context-loading rules"},
     "skills-core": {"purpose": "Compact repo-local skill index and draft isolation"},
-    "workflow-quality": {"purpose": "Verification, compaction, learning, and report workflows"},
+    "workflow-quality": {
+        "purpose": "Verification, compaction, learning, and report workflows"
+    },
     "security": {"purpose": "Secret hygiene and external action boundaries"},
-    "orchestration": {"purpose": "Multi-agent role routing and iterative retrieval guidance"},
+    "orchestration": {
+        "purpose": "Multi-agent role routing and iterative retrieval guidance"
+    },
     "mcp-baseline": {"purpose": "Safe MCP recommendations and loading diagnostics"},
     "benchmarking": {"purpose": "Small deterministic eval and benchmark harness"},
 }
 
 PROFILES: dict[str, list[str]] = {
     "minimal": ["codex-baseline", "rules-core"],
-    "core": ["codex-baseline", "rules-core", "skills-core", "workflow-quality", "mcp-baseline"],
-    "developer": ["codex-baseline", "rules-core", "skills-core", "workflow-quality", "mcp-baseline", "benchmarking", "orchestration"],
-    "security": ["codex-baseline", "rules-core", "skills-core", "workflow-quality", "security"],
+    "core": [
+        "codex-baseline",
+        "rules-core",
+        "skills-core",
+        "workflow-quality",
+        "mcp-baseline",
+    ],
+    "developer": [
+        "codex-baseline",
+        "rules-core",
+        "skills-core",
+        "workflow-quality",
+        "mcp-baseline",
+        "benchmarking",
+        "orchestration",
+    ],
+    "security": [
+        "codex-baseline",
+        "rules-core",
+        "skills-core",
+        "workflow-quality",
+        "security",
+    ],
     "full": list(MODULES),
 }
 
@@ -170,7 +241,10 @@ EVAL_TEMPLATES = {
         "eval_id": "config-parse",
         "task": "Parse root config.toml with Python tomllib.",
         "setup": "Run from CODEX_HOME.",
-        "success_criteria": ["config.toml parses", "stable workflow feature keys are present"],
+        "success_criteria": [
+            "config.toml parses",
+            "stable workflow feature keys are present",
+        ],
         "grader": "python maintenance/scripts/codex_agent_harness.py doctor --json",
         "timeout_seconds": 30,
         "risk_notes": "Does not prove app runtime reloaded the config.",
@@ -179,7 +253,11 @@ EVAL_TEMPLATES = {
         "eval_id": "managed-files",
         "task": "Verify harness-managed files are present and match install-state digests.",
         "setup": "Run after harness apply.",
-        "success_criteria": ["install-state exists", "managed files exist", "digests match"],
+        "success_criteria": [
+            "install-state exists",
+            "managed files exist",
+            "digests match",
+        ],
         "grader": "python maintenance/scripts/codex_agent_harness.py doctor --json",
         "timeout_seconds": 30,
         "risk_notes": "Only checks files owned by this harness.",
@@ -197,7 +275,10 @@ EVAL_TEMPLATES = {
         "eval_id": "context-inspection",
         "task": "Generate deterministic context selection report.",
         "setup": "Run from CODEX_HOME.",
-        "success_criteria": ["context report exists", "selected instruction source is explicit"],
+        "success_criteria": [
+            "context report exists",
+            "selected instruction source is explicit",
+        ],
         "grader": "python maintenance/scripts/codex_agent_harness.py context",
         "timeout_seconds": 30,
         "risk_notes": "Does not prove the app injected the selected context into a live turn.",
@@ -206,7 +287,10 @@ EVAL_TEMPLATES = {
         "eval_id": "trajectory-search",
         "task": "Verify trajectory JSONL search path remains usable.",
         "setup": "Run after at least one verification or benchmark.",
-        "success_criteria": ["trajectory command exits successfully", "recent listing is JSON"],
+        "success_criteria": [
+            "trajectory command exits successfully",
+            "recent listing is JSON",
+        ],
         "grader": "python maintenance/scripts/codex_agent_harness.py trajectory --recent 5",
         "timeout_seconds": 30,
         "risk_notes": "Checks local harness trajectory records only.",
@@ -235,7 +319,7 @@ EVAL_TEMPLATES = {
             "Explicit rg.ps1 shim invocation runs and preserves cmd metacharacter arguments",
             "rg.cmd remains a cmd.exe compatibility shim for simple or escaped arguments",
             "New pwsh can run rg.ps1 and new cmd can run rg.cmd with process-local PATH",
-            "Bare rg.cmd without process-local PATH and unescaped rg.cmd metacharacters from PowerShell are documented as unsupported"
+            "Bare rg.cmd without process-local PATH and unescaped rg.cmd metacharacters from PowerShell are documented as unsupported",
         ],
         "grader": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File maintenance/scripts/check-rg-resolution.ps1",
         "timeout_seconds": 30,
@@ -248,7 +332,7 @@ EVAL_TEMPLATES = {
         "success_criteria": [
             "core doctor excludes generated_outputs_untracked",
             "stress doctor includes generated_outputs_untracked",
-            "full doctor remains backward-compatible and includes both core and stress checks"
+            "full doctor remains backward-compatible and includes both core and stress checks",
         ],
         "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id doctor-tier-smoke",
         "timeout_seconds": 60,
@@ -265,7 +349,7 @@ EVAL_TEMPLATES = {
             "compact_hook_route_scan runs",
             "PowerShell managed scripts parse",
             "repo-safe calibration smoke does not require ignored private config.toml",
-            "mutable generated outputs are not tracked"
+            "mutable generated outputs are not tracked",
         ],
         "grader": "python maintenance/scripts/codex_agent_harness.py repo-verify",
         "timeout_seconds": 120,
@@ -279,6 +363,8 @@ ROLE_CONFIGS.update(WORKER_WATCHER_ROLE_CONFIGS)
 SKILL_TEMPLATES.update(WORKER_WATCHER_SKILL_TEMPLATES)
 EVAL_TEMPLATES.update(WORKER_WATCHER_EVAL_TEMPLATES)
 DELEGATION_CHARTER += WORKER_WATCHER_DELEGATION_CHARTER
+
+
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
 
@@ -312,7 +398,9 @@ def write_text(path: Path, content: str) -> None:
 
 
 def write_json(path: Path, data: Any) -> None:
-    write_text(path, json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    write_text(
+        path, json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    )
 
 
 def append_jsonl(path: Path, data: Any) -> None:
@@ -336,11 +424,15 @@ def sha256_file(path: Path) -> str:
 def harness_source_files(root: Path) -> list[Path]:
     files = list((root / "maintenance" / "scripts").glob("codex_agent_harness*.py"))
     extra = [
-        "AGENTS.md", "CALIBRATION.md", "config.toml",
-        "config.d/20-hooks.toml", "hooks/compact-codex-hook.ps1",
+        "AGENTS.md",
+        "CALIBRATION.md",
+        "config.toml",
+        "config.d/20-hooks.toml",
+        "hooks/compact-codex-hook.ps1",
         "maintenance/scripts/worker_watcher_templates.py",
         "agents/calibration-verifier.toml",
-        "evals/calibration-eval.yaml", "evals/calibration-policy-smoke.json",
+        "evals/calibration-eval.yaml",
+        "evals/calibration-policy-smoke.json",
     ]
     files.extend(root / item for item in extra if (root / item).exists())
     return sorted(files)
@@ -394,30 +486,44 @@ exit $LASTEXITCODE
 def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
     templates: dict[str, str] = {}
 
-    templates[".codex-harness/manifests/modules.json"] = json.dumps(MODULES, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    templates[".codex-harness/manifests/profiles.json"] = json.dumps(PROFILES, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    templates[".codex-harness/schemas/install-state.schema.json"] = json.dumps(
-        {
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "title": "Codex Harness Install State",
-            "type": "object",
-            "required": ["schema_version", "installed_at", "target", "requested_profile", "selected_modules", "applied_operations"],
-            "properties": {
-                "schema_version": {"type": "string"},
-                "installed_at": {"type": "string"},
-                "target": {"type": "object"},
-                "requested_profile": {"type": "string"},
-                "requested_modules": {"type": "array"},
-                "selected_modules": {"type": "array"},
-                "skipped_modules": {"type": "array"},
-                "source": {"type": "object"},
-                "applied_operations": {"type": "array"},
+    templates[".codex-harness/manifests/modules.json"] = (
+        json.dumps(MODULES, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    )
+    templates[".codex-harness/manifests/profiles.json"] = (
+        json.dumps(PROFILES, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    )
+    templates[".codex-harness/schemas/install-state.schema.json"] = (
+        json.dumps(
+            {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "title": "Codex Harness Install State",
+                "type": "object",
+                "required": [
+                    "schema_version",
+                    "installed_at",
+                    "target",
+                    "requested_profile",
+                    "selected_modules",
+                    "applied_operations",
+                ],
+                "properties": {
+                    "schema_version": {"type": "string"},
+                    "installed_at": {"type": "string"},
+                    "target": {"type": "object"},
+                    "requested_profile": {"type": "string"},
+                    "requested_modules": {"type": "array"},
+                    "selected_modules": {"type": "array"},
+                    "skipped_modules": {"type": "array"},
+                    "source": {"type": "object"},
+                    "applied_operations": {"type": "array"},
+                },
             },
-        },
-        ensure_ascii=False,
-        indent=2,
-        sort_keys=True,
-    ) + "\n"
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
 
     if "codex-baseline" in modules or "orchestration" in modules:
         templates.update(ROLE_CONFIGS)
@@ -450,15 +556,23 @@ def managed_templates(root: Path, modules: list[str]) -> dict[str, str]:
             "artifact references in reports or trajectories, and delete retired\n"
             "generated artifacts in a separate bounded cleanup pass.\n"
         )
-        templates["artifacts/compact-summaries/README.md"] = "# Compact Summaries\n\nStructured phase-boundary summaries live here.\n"
-        templates["trajectories/README.md"] = "# Trajectories\n\nJSONL run records for successes and failures live here.\n"
-        templates["learning/README.md"] = "# Learning Drafts\n\nOnly unapproved, project-scoped instincts and skill candidates live here. Do not store raw private conversations or secrets.\n"
+        templates["artifacts/compact-summaries/README.md"] = (
+            "# Compact Summaries\n\nStructured phase-boundary summaries live here.\n"
+        )
+        templates["trajectories/README.md"] = (
+            "# Trajectories\n\nJSONL run records for successes and failures live here.\n"
+        )
+        templates["learning/README.md"] = (
+            "# Learning Drafts\n\nOnly unapproved, project-scoped instincts and skill candidates live here. Do not store raw private conversations or secrets.\n"
+        )
         templates["reports/context-inspection.template.md"] = context_template()
         templates["reports/retrieval-report.template.md"] = retrieval_template()
 
     if "benchmarking" in modules:
         for path, content in EVAL_TEMPLATES.items():
-            templates[path] = json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            templates[path] = (
+                json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            )
 
     wrappers = {
         "codex-harness-plan.ps1": "plan",
@@ -493,7 +607,11 @@ def skill_index_content(skill_templates: dict[str, str]) -> str:
         entries.append(
             f"| {frontmatter.get('name', Path(path).parent.name)} | {frontmatter.get('description', '')} | {', '.join(frontmatter.get('tags', []))} |"
         )
-    return "# Skill Index\n\nFull skill bodies are loaded only when their trigger matches.\n\n| Name | Description | Tags |\n|---|---|---|\n" + "\n".join(entries) + "\n"
+    return (
+        "# Skill Index\n\nFull skill bodies are loaded only when their trigger matches.\n\n| Name | Description | Tags |\n|---|---|---|\n"
+        + "\n".join(entries)
+        + "\n"
+    )
 
 
 def parse_frontmatter(content: str) -> dict[str, Any]:
@@ -546,18 +664,30 @@ def command_exists(command: str) -> bool:
     return shutil.which(command) is not None
 
 
-def hook_route_uses_hidden_compact_runner(command: str, command_windows: str, *, require_execution_policy_bypass: bool = False) -> bool:
+def hook_route_uses_hidden_compact_runner(
+    command: str, command_windows: str, *, require_execution_policy_bypass: bool = False
+) -> bool:
     route_text = f"{command}\n{command_windows}"
     route_text_lower = route_text.lower()
     return (
         bool(command)
         and bool(command_windows)
-        and all(term in command and term in command_windows for term in HIDDEN_COMPACT_HOOK_ROUTE_TERMS)
-        and (not require_execution_policy_bypass or (command.count("ExecutionPolicy Bypass") >= 2 and command_windows.count("ExecutionPolicy Bypass") >= 2))
+        and all(
+            term in command and term in command_windows
+            for term in HIDDEN_COMPACT_HOOK_ROUTE_TERMS
+        )
+        and (
+            not require_execution_policy_bypass
+            or (
+                command.count("ExecutionPolicy Bypass") >= 2
+                and command_windows.count("ExecutionPolicy Bypass") >= 2
+            )
+        )
         and "pwsh.cmd" not in route_text_lower
         and not re.search(r"(?i)\bcmd(?:\.exe)?\s*/c\b", route_text)
         and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in route_text_lower
-        and "\\program files\\windowsapps\\microsoft.powershell_" not in route_text_lower
+        and "\\program files\\windowsapps\\microsoft.powershell_"
+        not in route_text_lower
     )
 
 
@@ -565,7 +695,9 @@ def no_window_creationflags() -> int:
     return int(getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
-def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_stdout: bool = False) -> dict[str, Any]:
+def run_command(
+    command: list[str], cwd: Path, timeout: int = 60, *, include_stdout: bool = False
+) -> dict[str, Any]:
     started = dt.datetime.now()
     try:
         completed = subprocess.run(
@@ -583,16 +715,46 @@ def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_std
             "command": command,
             "status": status,
             "exit_code": completed.returncode,
-            "stdout_preview": redact_obvious_secrets(completed.stdout[-COMMAND_PREVIEW_CHARS:]),
-            "stderr_preview": redact_obvious_secrets(completed.stderr[-COMMAND_PREVIEW_CHARS:]),
+            "stdout_preview": redact_obvious_secrets(
+                completed.stdout[-COMMAND_PREVIEW_CHARS:]
+            ),
+            "stderr_preview": redact_obvious_secrets(
+                completed.stderr[-COMMAND_PREVIEW_CHARS:]
+            ),
             "duration_seconds": (dt.datetime.now() - started).total_seconds(),
         }
         artifacts = []
-        command_name = safe_slug("-".join(Path(part).name if index == 0 else part for index, part in enumerate(command[:4])), "command")
-        if not include_stdout and len(completed.stdout) > COMMAND_ARTIFACT_THRESHOLD_CHARS:
-            artifacts.append({"stream": "stdout", **store_tool_artifact(cwd, f"{command_name}-stdout", completed.stdout)})
-        if not include_stdout and len(completed.stderr) > COMMAND_ARTIFACT_THRESHOLD_CHARS:
-            artifacts.append({"stream": "stderr", **store_tool_artifact(cwd, f"{command_name}-stderr", completed.stderr)})
+        command_name = safe_slug(
+            "-".join(
+                Path(part).name if index == 0 else part
+                for index, part in enumerate(command[:4])
+            ),
+            "command",
+        )
+        if (
+            not include_stdout
+            and len(completed.stdout) > COMMAND_ARTIFACT_THRESHOLD_CHARS
+        ):
+            artifacts.append(
+                {
+                    "stream": "stdout",
+                    **store_tool_artifact(
+                        cwd, f"{command_name}-stdout", completed.stdout
+                    ),
+                }
+            )
+        if (
+            not include_stdout
+            and len(completed.stderr) > COMMAND_ARTIFACT_THRESHOLD_CHARS
+        ):
+            artifacts.append(
+                {
+                    "stream": "stderr",
+                    **store_tool_artifact(
+                        cwd, f"{command_name}-stderr", completed.stderr
+                    ),
+                }
+            )
         if artifacts:
             result["artifacts"] = artifacts
         if include_stdout:
@@ -610,7 +772,17 @@ def run_command(command: list[str], cwd: Path, timeout: int = 60, *, include_std
 
 
 def discover_instruction_files(root: Path) -> list[dict[str, Any]]:
-    candidates = [root / name for name in ["instructions.md", "AGENTS.md", "CALIBRATION.md", "agent.md", "CLAUDE.md", ".cursorrules"]]
+    candidates = [
+        root / name
+        for name in [
+            "instructions.md",
+            "AGENTS.md",
+            "CALIBRATION.md",
+            "agent.md",
+            "CLAUDE.md",
+            ".cursorrules",
+        ]
+    ]
     cursor_rules = root / ".cursor" / "rules"
     if cursor_rules.exists():
         candidates.extend(sorted(cursor_rules.glob("*.mdc")))
@@ -627,9 +799,18 @@ def instruction_warnings(path: Path) -> list[str]:
     except UnicodeDecodeError:
         return ["non-utf8 instruction file skipped for content inspection"]
     patterns = [
-        (r"(?i)ignore (all )?(previous|prior|above) instructions", "possible prompt-injection override language"),
-        (r"(?i)(exfiltrate|send|upload).{0,40}(secret|token|credential|password)", "possible credential exfiltration instruction"),
-        (r"(?i)BEGIN (RSA |OPENSSH |EC |DSA |PRIVATE )?PRIVATE KEY", "private key material pattern"),
+        (
+            r"(?i)ignore (all )?(previous|prior|above) instructions",
+            "possible prompt-injection override language",
+        ),
+        (
+            r"(?i)(exfiltrate|send|upload).{0,40}(secret|token|credential|password)",
+            "possible credential exfiltration instruction",
+        ),
+        (
+            r"(?i)BEGIN (RSA |OPENSSH |EC |DSA |PRIVATE )?PRIVATE KEY",
+            "private key material pattern",
+        ),
     ]
     return [message for pattern, message in patterns if re.search(pattern, text)]
 
@@ -697,6 +878,7 @@ def iter_files(root: Path, max_files: int = 100000) -> list[Path]:
                 return result
     return result
 
+
 def clean_report_string(value: str, limit: int = 500) -> str:
     cleaned = "".join(ch if (ch == "\t" or ord(ch) >= 32) else "?" for ch in value)
     return cleaned[:limit]
@@ -725,9 +907,18 @@ def safe_slug(value: str, fallback: str = "artifact") -> str:
 def store_tool_artifact(root: Path, name: str, content: str) -> dict[str, Any]:
     safe_name = safe_slug(name)
     digest = sha256_text(content)[:12]
-    path = root / "artifacts" / "tool-results" / f"{local_stamp()}-{digest}-{safe_name}.txt"
+    path = (
+        root
+        / "artifacts"
+        / "tool-results"
+        / f"{local_stamp()}-{digest}-{safe_name}.txt"
+    )
     write_text(path, redact_obvious_secrets(content))
-    return {"path": rel(path, root), "bytes": path.stat().st_size, "sha256": sha256_file(path)}
+    return {
+        "path": rel(path, root),
+        "bytes": path.stat().st_size,
+        "sha256": sha256_file(path),
+    }
 
 
 def current_git_state(root: Path) -> dict[str, Any]:
@@ -748,10 +939,21 @@ def current_git_state(root: Path) -> dict[str, Any]:
         return completed.stdout.strip() if completed.returncode == 0 else ""
 
     status = run_git(["status", "--short"])
-    return {"sha": run_git(["rev-parse", "--short", "HEAD"]), "dirty": bool(status), "status_preview": status[:2000]}
+    return {
+        "sha": run_git(["rev-parse", "--short", "HEAD"]),
+        "dirty": bool(status),
+        "status_preview": status[:2000],
+    }
 
 
-def append_trajectory(root: Path, task: str, status: str, checks: list[dict[str, Any]], artifacts: list[dict[str, Any]] | None = None, error: str | None = None) -> dict[str, Any]:
+def append_trajectory(
+    root: Path,
+    task: str,
+    status: str,
+    checks: list[dict[str, Any]],
+    artifacts: list[dict[str, Any]] | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
     record = {
         "version": TRAJECTORY_VERSION,
         "run_id": f"{dt.datetime.now().strftime('%Y%m%d%H%M%S')}-{sha256_text(task + utc_now())[:8]}",

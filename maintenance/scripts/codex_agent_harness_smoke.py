@@ -16,20 +16,42 @@ from codex_agent_harness_base import (
     utc_now,
     write_json,
 )
+
+
 def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     ledger_path = root / "state" / "hook-ledger.jsonl"
     original_state_dir_exists = ledger_path.parent.exists()
     original_ledger_exists = ledger_path.exists()
     original_ledger_bytes = ledger_path.read_bytes() if original_ledger_exists else None
+
     def add_check(name: str, passed: bool, detail: str) -> None:
-        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+        checks.append(
+            {"name": name, "status": "pass" if passed else "fail", "detail": detail}
+        )
+
     agents_text = read_text(root / "AGENTS.md")
     charter_text = read_text(root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md")
     audit_template = root / "codex-goals" / "_template" / "FINAL_GOAL_AUDIT.md"
     audit_text = read_text(audit_template) if audit_template.exists() else ""
-    full_agents_goal_governance = all(term in agents_text for term in ["## Goal Governance", "tracking marker", "final goal audit", "Subagents receive contractual subgoals"])
-    compact_agents_goal_governance = all(term in agents_text for term in ["compact live bootstrap", "reviewed repo `AGENTS.md`", "outputs evidence-only", "completion authority"])
+    full_agents_goal_governance = all(
+        term in agents_text
+        for term in [
+            "## Goal Governance",
+            "tracking marker",
+            "final goal audit",
+            "Subagents receive contractual subgoals",
+        ]
+    )
+    compact_agents_goal_governance = all(
+        term in agents_text
+        for term in [
+            "compact live bootstrap",
+            "reviewed repo `AGENTS.md`",
+            "outputs evidence-only",
+            "completion authority",
+        ]
+    )
     add_check(
         "agents_goal_governance",
         full_agents_goal_governance or compact_agents_goal_governance,
@@ -37,16 +59,30 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     )
     add_check(
         "subagent_authority_boundary",
-        all(term in charter_text for term in ["## Authority Boundary", "evidence only", "cannot complete"]),
+        all(
+            term in charter_text
+            for term in ["## Authority Boundary", "evidence only", "cannot complete"]
+        ),
         "Delegation charter should prevent subagent parent-goal completion authority.",
     )
     add_check(
         "final_audit_template",
-        all(term in audit_text for term in ["# FINAL_GOAL_AUDIT", "Direct Checks Not Run", "Residual Risks", "PM Independent Verification", "Decision"]),
+        all(
+            term in audit_text
+            for term in [
+                "# FINAL_GOAL_AUDIT",
+                "Direct Checks Not Run",
+                "Residual Risks",
+                "PM Independent Verification",
+                "Decision",
+            ]
+        ),
         "Final audit template should require checked, not-run, risks, PM verification, and status.",
     )
     try:
-        stop_probe = run_stop_hook_sample(root, "final answer without a synthetic goal audit")
+        stop_probe = run_stop_hook_sample(
+            root, "final answer without a synthetic goal audit"
+        )
         stop_stdout = stop_probe.get("stdout_preview", "").lower()
         add_check(
             "stop_hook_record_only_runtime",
@@ -75,13 +111,16 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     restored_ledger_bytes = ledger_path.read_bytes() if restored_ledger_exists else None
     add_check(
         "orchestration_smoke_restores_live_ledger",
-        restored_ledger_exists == original_ledger_exists and restored_ledger_bytes == original_ledger_bytes,
+        restored_ledger_exists == original_ledger_exists
+        and restored_ledger_bytes == original_ledger_bytes,
         "Synthetic orchestration Stop samples must not leave hook ledger mutations behind.",
     )
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
     write_json(root / "reports" / "orchestration-governance-smoke.latest.json", report)
     return report
+
+
 def configured_hook_command(root: Path, event_name: str) -> str:
     config_path = root / "config.d" / "20-hooks.toml"
     try:
@@ -94,34 +133,52 @@ def configured_hook_command(root: Path, event_name: str) -> str:
         event_entries = []
     command_key = "commandWindows" if os.name == "nt" else "command"
     for event_entry in event_entries:
-        hook_entries = event_entry.get("hooks", []) if isinstance(event_entry, dict) else []
+        hook_entries = (
+            event_entry.get("hooks", []) if isinstance(event_entry, dict) else []
+        )
         if not isinstance(hook_entries, list):
             continue
         for hook_entry in hook_entries:
             if not isinstance(hook_entry, dict):
                 continue
-            command = str(hook_entry.get(command_key) or hook_entry.get("command") or "").strip()
+            command = str(
+                hook_entry.get(command_key) or hook_entry.get("command") or ""
+            ).strip()
             if command:
                 return command
     raise RuntimeError(f"missing configured hook route for {event_name}")
+
+
 def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
     command = configured_hook_command(root, event_name)
     argv = shlex.split(command, posix=(os.name != "nt"))
     if os.name == "nt":
-        argv = [arg[1:-1] if len(arg) >= 2 and arg[0] == '"' and arg[-1] == '"' else arg for arg in argv]
+        argv = [
+            arg[1:-1] if len(arg) >= 2 and arg[0] == '"' and arg[-1] == '"' else arg
+            for arg in argv
+        ]
     candidate_hook = str(root / "hooks" / "compact-codex-hook.ps1")
     candidate_pwsh_shim = str(root / "toolchains" / "shims" / "pwsh.ps1")
     live_root = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
     allowed_roots = [root.resolve(), live_root.resolve()]
+
     def assert_configured_target(value: str, expected_leaf: str) -> None:
         expanded = Path(os.path.expandvars(value))
         if expanded.name.lower() != expected_leaf.lower():
             raise RuntimeError(f"configured hook target {value} is not {expected_leaf}")
         if not expanded.exists():
-            raise RuntimeError(f"configured hook target does not exist before smoke rewrite: {expanded}")
+            raise RuntimeError(
+                f"configured hook target does not exist before smoke rewrite: {expanded}"
+            )
         resolved = expanded.resolve()
-        if not any(resolved == allowed or allowed in resolved.parents for allowed in allowed_roots):
-            raise RuntimeError(f"configured hook target is outside managed/live Codex roots: {resolved}")
+        if not any(
+            resolved == allowed or allowed in resolved.parents
+            for allowed in allowed_roots
+        ):
+            raise RuntimeError(
+                f"configured hook target is outside managed/live Codex roots: {resolved}"
+            )
+
     rewrote_file = False
     rewrote_pwsh_shim = False
     for index, arg in enumerate(argv[:-1]):
@@ -129,20 +186,31 @@ def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
             assert_configured_target(arg, "pwsh.ps1")
             argv[index] = candidate_pwsh_shim
             rewrote_pwsh_shim = True
-        if arg.lower() == "-file" and Path(argv[index + 1]).name.lower() == "compact-codex-hook.ps1":
+        if (
+            arg.lower() == "-file"
+            and Path(argv[index + 1]).name.lower() == "compact-codex-hook.ps1"
+        ):
             assert_configured_target(argv[index + 1], "compact-codex-hook.ps1")
             argv[index + 1] = candidate_hook
             rewrote_file = True
     if not rewrote_file:
-        raise RuntimeError("configured hook route does not expose a compact-codex-hook.ps1 -File target")
+        raise RuntimeError(
+            "configured hook route does not expose a compact-codex-hook.ps1 -File target"
+        )
     if os.name == "nt" and not rewrote_pwsh_shim:
-        raise RuntimeError("configured hook route does not expose a pwsh.ps1 shim target")
+        raise RuntimeError(
+            "configured hook route does not expose a pwsh.ps1 shim target"
+        )
     return argv
+
+
 def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     env = os.environ.copy()
     env["CODEX_HOOK_SMOKE"] = "1"
     env["CODEX_HOME"] = str(root)
-    event_name = str(payload.get("hook_event_name") or payload.get("hookEventName") or "")
+    event_name = str(
+        payload.get("hook_event_name") or payload.get("hookEventName") or ""
+    )
     try:
         argv = configured_hook_argv_for_smoke(root, event_name)
         completed = subprocess.run(
@@ -158,28 +226,62 @@ def run_compact_hook_sample(root: Path, payload: dict[str, Any]) -> dict[str, An
         return {
             "status": "pass" if completed.returncode == 0 else "fail",
             "exit_code": completed.returncode,
-            "stdout_preview": redact_obvious_secrets(completed.stdout[-COMMAND_PREVIEW_CHARS:]),
-            "stderr_preview": redact_obvious_secrets(completed.stderr[-COMMAND_PREVIEW_CHARS:]),
+            "stdout_preview": redact_obvious_secrets(
+                completed.stdout[-COMMAND_PREVIEW_CHARS:]
+            ),
+            "stderr_preview": redact_obvious_secrets(
+                completed.stderr[-COMMAND_PREVIEW_CHARS:]
+            ),
         }
     except (RuntimeError, OSError, ValueError) as exc:
-        return {"status": "fail", "exit_code": 2, "stdout_preview": "", "stderr_preview": str(exc)}
+        return {
+            "status": "fail",
+            "exit_code": 2,
+            "stdout_preview": "",
+            "stderr_preview": str(exc),
+        }
     except subprocess.TimeoutExpired as exc:
-        return {"status": "fail", "exit_code": 124, "stdout_preview": "", "stderr_preview": str(exc)}
+        return {
+            "status": "fail",
+            "exit_code": 124,
+            "stdout_preview": "",
+            "stderr_preview": str(exc),
+        }
+
+
 def run_hook_sample(root: Path, command: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
-        {"hook_event_name": "PreToolUse", "tool_name": "functions.shell_command", "tool_input": {"command": command}},
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "functions.shell_command",
+            "tool_input": {"command": command},
+        },
     )
+
+
 def run_camel_hook_sample(root: Path, command: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
-        {"hookEventName": "PreToolUse", "toolName": "functions.shell_command", "toolInput": {"command": command}},
+        {
+            "hookEventName": "PreToolUse",
+            "toolName": "functions.shell_command",
+            "toolInput": {"command": command},
+        },
     )
+
+
 def run_apply_patch_sample(root: Path, patch: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
-        {"hook_event_name": "PreToolUse", "tool_name": "functions.apply_patch", "tool_input": {"patch": patch}},
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "functions.apply_patch",
+            "tool_input": {"patch": patch},
+        },
     )
+
+
 def run_nested_apply_patch_sample(root: Path, patch: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
@@ -188,21 +290,41 @@ def run_nested_apply_patch_sample(root: Path, patch: str) -> dict[str, Any]:
             "tool_name": "multi_tool_use.parallel",
             "tool_input": {
                 "tool_uses": [
-                    {"recipient_name": "functions.apply_patch", "parameters": {"patch": patch}},
+                    {
+                        "recipient_name": "functions.apply_patch",
+                        "parameters": {"patch": patch},
+                    },
                 ],
             },
         },
     )
+
+
 def run_prompt_hook_sample(root: Path, prompt: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
-        {"hook_event_name": "UserPromptSubmit", "prompt": prompt, "cwd": str(root), "permission_mode": "default"},
+        {
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": prompt,
+            "cwd": str(root),
+            "permission_mode": "default",
+        },
     )
-def run_post_tool_hook_sample(root: Path, tool_name: str, command: str) -> dict[str, Any]:
+
+
+def run_post_tool_hook_sample(
+    root: Path, tool_name: str, command: str
+) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
-        {"hook_event_name": "PostToolUse", "tool_name": tool_name, "tool_input": {"command": command}},
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": tool_name,
+            "tool_input": {"command": command},
+        },
     )
+
+
 def run_subagent_session_start_sample(root: Path) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
@@ -214,19 +336,31 @@ def run_subagent_session_start_sample(root: Path) -> dict[str, Any]:
             "spawn_agent": {"agent_type": "reviewer"},
         },
     )
+
+
 def run_stop_hook_sample(root: Path, message: str) -> dict[str, Any]:
     return run_compact_hook_sample(
         root,
-        {"hook_event_name": "Stop", "last_assistant_message": message, "stop_hook_active": False},
+        {
+            "hook_event_name": "Stop",
+            "last_assistant_message": message,
+            "stop_hook_active": False,
+        },
     )
+
+
 def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     ledger_path = root / "state" / "hook-ledger.jsonl"
     original_state_dir_exists = ledger_path.parent.exists()
     original_ledger_exists = ledger_path.exists()
     original_ledger_bytes = ledger_path.read_bytes() if original_ledger_exists else None
+
     def add_check(name: str, passed: bool, detail: str) -> None:
-        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+        checks.append(
+            {"name": name, "status": "pass" if passed else "fail", "detail": detail}
+        )
+
     try:
         config_text = read_text(root / "config.d" / "20-hooks.toml")
         hook_text = read_text(root / "hooks" / "compact-codex-hook.ps1")
@@ -237,7 +371,16 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and ("hooks" + ".json") not in config_text,
             "Active hook fragment should route only to compact-codex-hook.ps1.",
         )
-        required_matcher_terms = ["functions\\\\..*", "multi_tool_use\\\\..*", "multi_agent.*", "tool_search\\\\..*", "web\\\\..*", "image_gen\\\\..*", "codex_app\\\\..*", "mcp__.*"]
+        required_matcher_terms = [
+            "functions\\\\..*",
+            "multi_tool_use\\\\..*",
+            "multi_agent.*",
+            "tool_search\\\\..*",
+            "web\\\\..*",
+            "image_gen\\\\..*",
+            "codex_app\\\\..*",
+            "mcp__.*",
+        ]
         hook_matchers: dict[str, str] = {}
         current_hook_event = ""
         for raw_line in config_text.splitlines():
@@ -252,7 +395,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                 hook_matchers[current_hook_event] = line
         add_check(
             "hook_config_covers_desktop_tool_namespaces",
-            all(all(term in hook_matchers.get(event, "") for term in required_matcher_terms) for event in ["PreToolUse", "PostToolUse"]),
+            all(
+                all(
+                    term in hook_matchers.get(event, "")
+                    for term in required_matcher_terms
+                )
+                for event in ["PreToolUse", "PostToolUse"]
+            ),
             "Active PreToolUse and PostToolUse matchers should each cover Desktop tool namespaces that can carry shell, MCP, or automation payloads.",
         )
         add_check(
@@ -260,8 +409,10 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             "WindowStyle Hidden" in config_text
             and config_text.count("ExecutionPolicy Bypass") >= 20
             and "cmd /c" not in config_text
-            and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in config_text.lower()
-            and "\\program files\\windowsapps\\microsoft.powershell_" not in config_text.lower()
+            and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe"
+            not in config_text.lower()
+            and "\\program files\\windowsapps\\microsoft.powershell_"
+            not in config_text.lower()
             and config_text.count("commandWindows") >= 5,
             "Active hook fragment should define hidden commandWindows overrides for every hook through the stable pwsh.ps1 route while preserving stdout.",
         )
@@ -272,21 +423,37 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         except tomllib.TOMLDecodeError as exc:
             hook_config = {}
             route_errors.append(f"invalid hook TOML: {exc}")
-        hook_section = hook_config.get("hooks", {}) if isinstance(hook_config, dict) else {}
-        for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]:
+        hook_section = (
+            hook_config.get("hooks", {}) if isinstance(hook_config, dict) else {}
+        )
+        for event in [
+            "SessionStart",
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PostToolUse",
+            "Stop",
+        ]:
             event_entries = hook_section.get(event, [])
             if not isinstance(event_entries, list) or not event_entries:
                 route_errors.append(f"{event}: missing event")
                 continue
             event_ok = False
             for event_entry in event_entries:
-                hook_entries = event_entry.get("hooks", []) if isinstance(event_entry, dict) else []
-                for hook_entry in hook_entries if isinstance(hook_entries, list) else []:
+                hook_entries = (
+                    event_entry.get("hooks", [])
+                    if isinstance(event_entry, dict)
+                    else []
+                )
+                for hook_entry in (
+                    hook_entries if isinstance(hook_entries, list) else []
+                ):
                     if not isinstance(hook_entry, dict):
                         continue
                     command = str(hook_entry.get("command", ""))
                     command_windows = str(hook_entry.get("commandWindows", ""))
-                    if hook_route_uses_hidden_compact_runner(command, command_windows, require_execution_policy_bypass=True):
+                    if hook_route_uses_hidden_compact_runner(
+                        command, command_windows, require_execution_policy_bypass=True
+                    ):
                         event_ok = True
                         route_hits.append(event)
             if not event_ok:
@@ -294,11 +461,21 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
         add_check(
             "hook_config_uses_configured_hidden_wrapper_routes",
             not route_errors and len(set(route_hits)) == 5,
-            "; ".join(route_errors[:5]) if route_errors else "All hook events route through command and commandWindows hidden compact runner definitions with parent and child execution-policy bypass, without cmd shim nesting, WindowsApps alias stubs, or version-pinned WindowsApps pwsh paths.",
+            "; ".join(route_errors[:5])
+            if route_errors
+            else "All hook events route through command and commandWindows hidden compact runner definitions with parent and child execution-policy bypass, without cmd shim nesting, WindowsApps alias stubs, or version-pinned WindowsApps pwsh paths.",
         )
         add_check(
             "compact_hook_contains_current_contract",
-            all(term in hook_text for term in ["runner = \"compact-codex-hook\"", "hook-ledger.jsonl", "UserPromptSubmit", "PreToolUse"]),
+            all(
+                term in hook_text
+                for term in [
+                    'runner = "compact-codex-hook"',
+                    "hook-ledger.jsonl",
+                    "UserPromptSubmit",
+                    "PreToolUse",
+                ]
+            ),
             "Compact hook should expose the current event contract and ledger.",
         )
         prompt_probe = run_prompt_hook_sample(root, "Compact hook smoke.")
@@ -310,18 +487,28 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "treat claims as candidate" in prompt_stdout,
             "UserPromptSubmit should emit the compact current-evidence reminder for ordinary prompts.",
         )
-        secret_prompt_probe = run_prompt_hook_sample(root, "Here is a fake token for smoke testing: sk-proj_FAKEFAKEFAKEFAKEFAKEFAKEFAKE")
+        secret_prompt_probe = run_prompt_hook_sample(
+            root,
+            "Here is a fake token for smoke testing: sk-proj_FAKEFAKEFAKEFAKEFAKEFAKEFAKE",
+        )
         secret_prompt_stdout = secret_prompt_probe.get("stdout_preview", "").lower()
         structured_prompt_probe = run_compact_hook_sample(
             root,
             {
                 "hook_event_name": "UserPromptSubmit",
-                "prompt": [{"type": "text", "text": "fake smoke token sk-proj_FAKEFAKEFAKEFAKEFAKEFAKEFAKE"}],
+                "prompt": [
+                    {
+                        "type": "text",
+                        "text": "fake smoke token sk-proj_FAKEFAKEFAKEFAKEFAKEFAKEFAKE",
+                    }
+                ],
                 "cwd": str(root),
                 "permission_mode": "default",
             },
         )
-        structured_prompt_stdout = structured_prompt_probe.get("stdout_preview", "").lower()
+        structured_prompt_stdout = structured_prompt_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "user_prompt_submit_blocks_secret_like_values",
             secret_prompt_probe.get("status") == "pass"
@@ -348,28 +535,65 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "allow" in pre_probe.get("stdout_preview", "").lower(),
             "PreToolUse should allow ordinary inspected tool use and record evidence.",
         )
-        encoded_payload = base64.b64encode("Write-Output encoded-smoke".encode("utf-16le")).decode("ascii")
-        encoded_probe = run_hook_sample(root, f"powershell -EncodedCommand {encoded_payload}")
+        encoded_payload = base64.b64encode(
+            "Write-Output encoded-smoke".encode("utf-16le")
+        ).decode("ascii")
+        encoded_probe = run_hook_sample(
+            root, f"powershell -EncodedCommand {encoded_payload}"
+        )
         encoded_stdout = encoded_probe.get("stdout_preview", "").lower()
-        nested_encoded_probe = run_hook_sample(root, f"cmd /c pwsh -enc {encoded_payload}")
+        nested_encoded_probe = run_hook_sample(
+            root, f"cmd /c pwsh -enc {encoded_payload}"
+        )
         nested_encoded_stdout = nested_encoded_probe.get("stdout_preview", "").lower()
-        path_encoded_probe = run_hook_sample(root, f"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -EncodedCommand {encoded_payload}")
+        path_encoded_probe = run_hook_sample(
+            root,
+            f"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -EncodedCommand {encoded_payload}",
+        )
         path_encoded_stdout = path_encoded_probe.get("stdout_preview", "").lower()
         ec_encoded_probe = run_hook_sample(root, f"powershell -ec {encoded_payload}")
         ec_encoded_stdout = ec_encoded_probe.get("stdout_preview", "").lower()
-        call_operator_encoded_probe = run_hook_sample(root, f"& 'powershell' -EncodedCommand {encoded_payload}")
-        call_operator_encoded_stdout = call_operator_encoded_probe.get("stdout_preview", "").lower()
-        start_process_encoded_probe = run_hook_sample(root, f"Start-Process pwsh -ArgumentList '-EncodedCommand', '{encoded_payload}'")
-        start_process_encoded_stdout = start_process_encoded_probe.get("stdout_preview", "").lower()
-        pwsh_ps1_encoded_probe = run_hook_sample(root, f"pwsh.ps1 -EncodedCommand {encoded_payload}")
-        pwsh_ps1_encoded_stdout = pwsh_ps1_encoded_probe.get("stdout_preview", "").lower()
-        start_process_pwsh_ps1_encoded_probe = run_hook_sample(root, f"Start-Process pwsh.ps1 -ArgumentList '-EncodedCommand', '{encoded_payload}'")
-        start_process_pwsh_ps1_encoded_stdout = start_process_pwsh_ps1_encoded_probe.get("stdout_preview", "").lower()
-        pwsh_cmd_encoded_probe = run_hook_sample(root, f"pwsh.cmd -Encoded {encoded_payload}")
-        pwsh_cmd_encoded_stdout = pwsh_cmd_encoded_probe.get("stdout_preview", "").lower()
-        cmd_pwsh_cmd_encoded_probe = run_hook_sample(root, f"cmd /c pwsh.cmd -Enco {encoded_payload}")
-        cmd_pwsh_cmd_encoded_stdout = cmd_pwsh_cmd_encoded_probe.get("stdout_preview", "").lower()
-        saps_encoded_probe = run_hook_sample(root, f"saps pwsh -ArgumentList '-enc', '{encoded_payload}'")
+        call_operator_encoded_probe = run_hook_sample(
+            root, f"& 'powershell' -EncodedCommand {encoded_payload}"
+        )
+        call_operator_encoded_stdout = call_operator_encoded_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        start_process_encoded_probe = run_hook_sample(
+            root,
+            f"Start-Process pwsh -ArgumentList '-EncodedCommand', '{encoded_payload}'",
+        )
+        start_process_encoded_stdout = start_process_encoded_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        pwsh_ps1_encoded_probe = run_hook_sample(
+            root, f"pwsh.ps1 -EncodedCommand {encoded_payload}"
+        )
+        pwsh_ps1_encoded_stdout = pwsh_ps1_encoded_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        start_process_pwsh_ps1_encoded_probe = run_hook_sample(
+            root,
+            f"Start-Process pwsh.ps1 -ArgumentList '-EncodedCommand', '{encoded_payload}'",
+        )
+        start_process_pwsh_ps1_encoded_stdout = (
+            start_process_pwsh_ps1_encoded_probe.get("stdout_preview", "").lower()
+        )
+        pwsh_cmd_encoded_probe = run_hook_sample(
+            root, f"pwsh.cmd -Encoded {encoded_payload}"
+        )
+        pwsh_cmd_encoded_stdout = pwsh_cmd_encoded_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        cmd_pwsh_cmd_encoded_probe = run_hook_sample(
+            root, f"cmd /c pwsh.cmd -Enco {encoded_payload}"
+        )
+        cmd_pwsh_cmd_encoded_stdout = cmd_pwsh_cmd_encoded_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        saps_encoded_probe = run_hook_sample(
+            root, f"saps pwsh -ArgumentList '-enc', '{encoded_payload}'"
+        )
         saps_encoded_stdout = saps_encoded_probe.get("stdout_preview", "").lower()
         programmatic_exec_encoded_probe = run_compact_hook_sample(
             root,
@@ -379,7 +603,9 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                 "tool_input": f"await tools.shell_command({{command: 'powershell -EncodedCommand {encoded_payload}'}})",
             },
         )
-        programmatic_exec_encoded_stdout = programmatic_exec_encoded_probe.get("stdout_preview", "").lower()
+        programmatic_exec_encoded_stdout = programmatic_exec_encoded_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_blocks_encoded_powershell",
             encoded_probe.get("status") == "pass"
@@ -409,84 +635,209 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in programmatic_exec_encoded_stdout,
             "PreToolUse should deny encoded PowerShell payloads, including Start-Process and functions.exec wrappers, instead of trusting plaintext path inspection.",
         )
-        readonly_destructive_search_probe = run_hook_sample(root, 'rg -n "Remove-Item|rm -rf" hooks\\*.ps1 maintenance\\*.py')
-        readonly_destructive_search_stdout = readonly_destructive_search_probe.get("stdout_preview", "").lower()
-        select_destructive_search_probe = run_hook_sample(root, 'Select-String -Pattern "Remove-Item -Recurse *" -Path hooks\\*.ps1')
-        select_destructive_search_stdout = select_destructive_search_probe.get("stdout_preview", "").lower()
-        readonly_git_clean_name_probe = run_hook_sample(root, "git ls-files -- .codex/skills/clean-all-slop/SKILL.md")
-        readonly_git_clean_name_stdout = readonly_git_clean_name_probe.get("stdout_preview", "").lower()
+        readonly_destructive_search_probe = run_hook_sample(
+            root, 'rg -n "Remove-Item|rm -rf" hooks\\*.ps1 maintenance\\*.py'
+        )
+        readonly_destructive_search_stdout = readonly_destructive_search_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        select_destructive_search_probe = run_hook_sample(
+            root, 'Select-String -Pattern "Remove-Item -Recurse *" -Path hooks\\*.ps1'
+        )
+        select_destructive_search_stdout = select_destructive_search_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        readonly_git_clean_name_probe = run_hook_sample(
+            root, "git ls-files -- .codex/skills/clean-all-slop/SKILL.md"
+        )
+        readonly_git_clean_name_stdout = readonly_git_clean_name_probe.get(
+            "stdout_preview", ""
+        ).lower()
         git_clean_long_force_probe = run_hook_sample(root, "git clean --force -d")
-        git_clean_long_force_stdout = git_clean_long_force_probe.get("stdout_preview", "").lower()
+        git_clean_long_force_stdout = git_clean_long_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
         git_ps1_clean_force_probe = run_hook_sample(root, "git.ps1 clean -fd")
-        git_ps1_clean_force_stdout = git_ps1_clean_force_probe.get("stdout_preview", "").lower()
-        git_scoped_clean_long_force_probe = run_hook_sample(root, "git -C . clean --force -d")
-        git_scoped_clean_long_force_stdout = git_scoped_clean_long_force_probe.get("stdout_preview", "").lower()
+        git_ps1_clean_force_stdout = git_ps1_clean_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        git_scoped_clean_long_force_probe = run_hook_sample(
+            root, "git -C . clean --force -d"
+        )
+        git_scoped_clean_long_force_stdout = git_scoped_clean_long_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
         git_clean_interactive_probe = run_hook_sample(root, "git clean -i")
-        git_clean_interactive_stdout = git_clean_interactive_probe.get("stdout_preview", "").lower()
-        git_clean_long_interactive_probe = run_hook_sample(root, "git clean --interactive")
-        git_clean_long_interactive_stdout = git_clean_long_interactive_probe.get("stdout_preview", "").lower()
+        git_clean_interactive_stdout = git_clean_interactive_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        git_clean_long_interactive_probe = run_hook_sample(
+            root, "git clean --interactive"
+        )
+        git_clean_long_interactive_stdout = git_clean_long_interactive_probe.get(
+            "stdout_preview", ""
+        ).lower()
         git_clean_dry_run_probe = run_hook_sample(root, "git clean -nfd")
-        git_clean_dry_run_stdout = git_clean_dry_run_probe.get("stdout_preview", "").lower()
+        git_clean_dry_run_stdout = git_clean_dry_run_probe.get(
+            "stdout_preview", ""
+        ).lower()
         git_clean_long_dry_run_probe = run_hook_sample(root, "git clean --dry-run -fd")
-        git_clean_long_dry_run_stdout = git_clean_long_dry_run_probe.get("stdout_preview", "").lower()
+        git_clean_long_dry_run_stdout = git_clean_long_dry_run_probe.get(
+            "stdout_preview", ""
+        ).lower()
         git_force_push_probe = run_hook_sample(root, "git push origin HEAD --force")
         git_force_push_stdout = git_force_push_probe.get("stdout_preview", "").lower()
-        git_ps1_force_push_probe = run_hook_sample(root, "git.ps1 push origin HEAD --force")
-        git_ps1_force_push_stdout = git_ps1_force_push_probe.get("stdout_preview", "").lower()
-        git_inline_option_force_push_probe = run_hook_sample(root, "git --git-dir=C:\\repo\\.git push origin HEAD --force")
-        git_inline_option_force_push_stdout = git_inline_option_force_push_probe.get("stdout_preview", "").lower()
-        git_inline_option_clean_probe = run_hook_sample(root, "git --git-dir=.git clean -fd")
-        git_inline_option_clean_stdout = git_inline_option_clean_probe.get("stdout_preview", "").lower()
+        git_ps1_force_push_probe = run_hook_sample(
+            root, "git.ps1 push origin HEAD --force"
+        )
+        git_ps1_force_push_stdout = git_ps1_force_push_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        git_inline_option_force_push_probe = run_hook_sample(
+            root, "git --git-dir=C:\\repo\\.git push origin HEAD --force"
+        )
+        git_inline_option_force_push_stdout = git_inline_option_force_push_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        git_inline_option_clean_probe = run_hook_sample(
+            root, "git --git-dir=.git clean -fd"
+        )
+        git_inline_option_clean_stdout = git_inline_option_clean_probe.get(
+            "stdout_preview", ""
+        ).lower()
         bash_nested_rm_probe = run_hook_sample(root, "bash -lc 'rm -rf /'")
         bash_nested_rm_stdout = bash_nested_rm_probe.get("stdout_preview", "").lower()
-        git_force_with_lease_push_probe = run_hook_sample(root, "git push --force-with-lease origin HEAD")
-        git_force_with_lease_push_stdout = git_force_with_lease_push_probe.get("stdout_preview", "").lower()
-        git_plus_refspec_push_probe = run_hook_sample(root, "git push origin +HEAD:main")
-        git_plus_refspec_push_stdout = git_plus_refspec_push_probe.get("stdout_preview", "").lower()
-        git_scoped_plus_refspec_push_probe = run_hook_sample(root, "git -C . push origin +HEAD:main")
-        git_scoped_plus_refspec_push_stdout = git_scoped_plus_refspec_push_probe.get("stdout_preview", "").lower()
-        git_push_delete_probe = run_hook_sample(root, "git push origin --delete old-branch")
+        git_force_with_lease_push_probe = run_hook_sample(
+            root, "git push --force-with-lease origin HEAD"
+        )
+        git_force_with_lease_push_stdout = git_force_with_lease_push_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        git_plus_refspec_push_probe = run_hook_sample(
+            root, "git push origin +HEAD:main"
+        )
+        git_plus_refspec_push_stdout = git_plus_refspec_push_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        git_scoped_plus_refspec_push_probe = run_hook_sample(
+            root, "git -C . push origin +HEAD:main"
+        )
+        git_scoped_plus_refspec_push_stdout = git_scoped_plus_refspec_push_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        git_push_delete_probe = run_hook_sample(
+            root, "git push origin --delete old-branch"
+        )
         git_push_delete_stdout = git_push_delete_probe.get("stdout_preview", "").lower()
-        git_push_colon_delete_probe = run_hook_sample(root, "git push origin :old-branch")
-        git_push_colon_delete_stdout = git_push_colon_delete_probe.get("stdout_preview", "").lower()
+        git_push_colon_delete_probe = run_hook_sample(
+            root, "git push origin :old-branch"
+        )
+        git_push_colon_delete_stdout = git_push_colon_delete_probe.get(
+            "stdout_preview", ""
+        ).lower()
         git_push_mirror_probe = run_hook_sample(root, "git push --mirror origin")
         git_push_mirror_stdout = git_push_mirror_probe.get("stdout_preview", "").lower()
         git_push_prune_probe = run_hook_sample(root, "git push --prune origin")
         git_push_prune_stdout = git_push_prune_probe.get("stdout_preview", "").lower()
-        git_array_force_probe = run_hook_sample(root, "git @('push','origin','--force')")
+        git_array_force_probe = run_hook_sample(
+            root, "git @('push','origin','--force')"
+        )
         git_array_force_stdout = git_array_force_probe.get("stdout_preview", "").lower()
-        start_process_git_force_probe = run_hook_sample(root, "Start-Process git -ArgumentList 'push','origin','--force'")
-        start_process_git_force_stdout = start_process_git_force_probe.get("stdout_preview", "").lower()
-        start_process_git_colon_force_probe = run_hook_sample(root, "Start-Process -FilePath:git -ArgumentList:'push','origin','--force'")
-        start_process_git_colon_force_stdout = start_process_git_colon_force_probe.get("stdout_preview", "").lower()
-        start_process_git_ps1_force_probe = run_hook_sample(root, "Start-Process git.ps1 -ArgumentList 'push','origin','--force'")
-        start_process_git_ps1_force_stdout = start_process_git_ps1_force_probe.get("stdout_preview", "").lower()
-        start_process_git_arg_force_probe = run_hook_sample(root, "Start-Process git -Arg 'push','origin','--force'")
-        start_process_git_arg_force_stdout = start_process_git_arg_force_probe.get("stdout_preview", "").lower()
-        start_process_git_a_force_probe = run_hook_sample(root, "Start-Process git -A 'push','origin','--force'")
-        start_process_git_a_force_stdout = start_process_git_a_force_probe.get("stdout_preview", "").lower()
-        start_process_git_positional_force_probe = run_hook_sample(root, "Start-Process git 'push origin --force'")
-        start_process_git_positional_force_stdout = start_process_git_positional_force_probe.get("stdout_preview", "").lower()
-        start_process_git_windowstyle_force_probe = run_hook_sample(root, "Start-Process git -WindowStyle Hidden 'push origin --force'")
-        start_process_git_windowstyle_force_stdout = start_process_git_windowstyle_force_probe.get("stdout_preview", "").lower()
-        start_process_git_wi_force_probe = run_hook_sample(root, "Start-Process git -Wi Hidden 'push origin --force'")
-        start_process_git_wi_force_stdout = start_process_git_wi_force_probe.get("stdout_preview", "").lower()
-        call_operator_git_force_probe = run_hook_sample(root, "& 'git' push origin --force")
-        call_operator_git_force_stdout = call_operator_git_force_probe.get("stdout_preview", "").lower()
-        invoke_expression_git_force_probe = run_hook_sample(root, "Invoke-Expression 'git push origin --force'")
-        invoke_expression_git_force_stdout = invoke_expression_git_force_probe.get("stdout_preview", "").lower()
-        invoke_expression_benign_probe = run_hook_sample(root, "Invoke-Expression 'Write-Output ok'")
-        invoke_expression_benign_stdout = invoke_expression_benign_probe.get("stdout_preview", "").lower()
+        start_process_git_force_probe = run_hook_sample(
+            root, "Start-Process git -ArgumentList 'push','origin','--force'"
+        )
+        start_process_git_force_stdout = start_process_git_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        start_process_git_colon_force_probe = run_hook_sample(
+            root, "Start-Process -FilePath:git -ArgumentList:'push','origin','--force'"
+        )
+        start_process_git_colon_force_stdout = start_process_git_colon_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        start_process_git_ps1_force_probe = run_hook_sample(
+            root, "Start-Process git.ps1 -ArgumentList 'push','origin','--force'"
+        )
+        start_process_git_ps1_force_stdout = start_process_git_ps1_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        start_process_git_arg_force_probe = run_hook_sample(
+            root, "Start-Process git -Arg 'push','origin','--force'"
+        )
+        start_process_git_arg_force_stdout = start_process_git_arg_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        start_process_git_a_force_probe = run_hook_sample(
+            root, "Start-Process git -A 'push','origin','--force'"
+        )
+        start_process_git_a_force_stdout = start_process_git_a_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        start_process_git_positional_force_probe = run_hook_sample(
+            root, "Start-Process git 'push origin --force'"
+        )
+        start_process_git_positional_force_stdout = (
+            start_process_git_positional_force_probe.get("stdout_preview", "").lower()
+        )
+        start_process_git_windowstyle_force_probe = run_hook_sample(
+            root, "Start-Process git -WindowStyle Hidden 'push origin --force'"
+        )
+        start_process_git_windowstyle_force_stdout = (
+            start_process_git_windowstyle_force_probe.get("stdout_preview", "").lower()
+        )
+        start_process_git_wi_force_probe = run_hook_sample(
+            root, "Start-Process git -Wi Hidden 'push origin --force'"
+        )
+        start_process_git_wi_force_stdout = start_process_git_wi_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        call_operator_git_force_probe = run_hook_sample(
+            root, "& 'git' push origin --force"
+        )
+        call_operator_git_force_stdout = call_operator_git_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        invoke_expression_git_force_probe = run_hook_sample(
+            root, "Invoke-Expression 'git push origin --force'"
+        )
+        invoke_expression_git_force_stdout = invoke_expression_git_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        invoke_expression_benign_probe = run_hook_sample(
+            root, "Invoke-Expression 'Write-Output ok'"
+        )
+        invoke_expression_benign_stdout = invoke_expression_benign_probe.get(
+            "stdout_preview", ""
+        ).lower()
         iex_benign_probe = run_hook_sample(root, "iex 'Write-Output ok'")
         iex_benign_stdout = iex_benign_probe.get("stdout_preview", "").lower()
-        invoke_expression_variable_git_force_probe = run_hook_sample(root, "$x='git push origin --force'; Invoke-Expression $x")
-        invoke_expression_variable_git_force_stdout = invoke_expression_variable_git_force_probe.get("stdout_preview", "").lower()
-        invoke_expression_call_operator_git_force_probe = run_hook_sample(root, "& 'Invoke-Expression' 'git push origin --force'")
-        invoke_expression_call_operator_git_force_stdout = invoke_expression_call_operator_git_force_probe.get("stdout_preview", "").lower()
-        pwsh_colon_command_force_probe = run_hook_sample(root, "pwsh -Command:'git push origin --force'")
-        pwsh_colon_command_force_stdout = pwsh_colon_command_force_probe.get("stdout_preview", "").lower()
-        start_process_destructive_probe = run_hook_sample(root, "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'")
-        start_process_destructive_stdout = start_process_destructive_probe.get("stdout_preview", "").lower()
+        invoke_expression_variable_git_force_probe = run_hook_sample(
+            root, "$x='git push origin --force'; Invoke-Expression $x"
+        )
+        invoke_expression_variable_git_force_stdout = (
+            invoke_expression_variable_git_force_probe.get("stdout_preview", "").lower()
+        )
+        invoke_expression_call_operator_git_force_probe = run_hook_sample(
+            root, "& 'Invoke-Expression' 'git push origin --force'"
+        )
+        invoke_expression_call_operator_git_force_stdout = (
+            invoke_expression_call_operator_git_force_probe.get(
+                "stdout_preview", ""
+            ).lower()
+        )
+        pwsh_colon_command_force_probe = run_hook_sample(
+            root, "pwsh -Command:'git push origin --force'"
+        )
+        pwsh_colon_command_force_stdout = pwsh_colon_command_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        start_process_destructive_probe = run_hook_sample(
+            root,
+            "Start-Process pwsh -ArgumentList '-Command','Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force'",
+        )
+        start_process_destructive_stdout = start_process_destructive_probe.get(
+            "stdout_preview", ""
+        ).lower()
         programmatic_exec_destructive_probe = run_compact_hook_sample(
             root,
             {
@@ -495,25 +846,35 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                 "tool_input": "await tools.shell_command({command: 'Remove-Item $env:USERPROFILE\\\\.codex\\\\tmp -Recurse -Force'})",
             },
         )
-        programmatic_exec_destructive_stdout = programmatic_exec_destructive_probe.get("stdout_preview", "").lower()
+        programmatic_exec_destructive_stdout = programmatic_exec_destructive_probe.get(
+            "stdout_preview", ""
+        ).lower()
         exec_command_protected_read_probe = run_compact_hook_sample(
             root,
             {
                 "hook_event_name": "PreToolUse",
                 "tool_name": "functions.exec_command",
-                "tool_input": {"command": "Get-Content $env:USERPROFILE\\.codex\\auth.json"},
+                "tool_input": {
+                    "command": "Get-Content $env:USERPROFILE\\.codex\\auth.json"
+                },
             },
         )
-        exec_command_protected_read_stdout = exec_command_protected_read_probe.get("stdout_preview", "").lower()
+        exec_command_protected_read_stdout = exec_command_protected_read_probe.get(
+            "stdout_preview", ""
+        ).lower()
         exec_command_destructive_probe = run_compact_hook_sample(
             root,
             {
                 "hook_event_name": "PreToolUse",
                 "tool_name": "functions.exec_command",
-                "tool_input": {"command": "Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force"},
+                "tool_input": {
+                    "command": "Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force"
+                },
             },
         )
-        exec_command_destructive_stdout = exec_command_destructive_probe.get("stdout_preview", "").lower()
+        exec_command_destructive_stdout = exec_command_destructive_probe.get(
+            "stdout_preview", ""
+        ).lower()
         exec_command_regular_probe = run_compact_hook_sample(
             root,
             {
@@ -522,9 +883,13 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                 "tool_input": {"command": "git status -sb"},
             },
         )
-        exec_command_regular_stdout = exec_command_regular_probe.get("stdout_preview", "").lower()
+        exec_command_regular_stdout = exec_command_regular_probe.get(
+            "stdout_preview", ""
+        ).lower()
         git_regular_push_probe = run_hook_sample(root, "git push origin HEAD")
-        git_regular_push_stdout = git_regular_push_probe.get("stdout_preview", "").lower()
+        git_regular_push_stdout = git_regular_push_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_allows_readonly_destructive_reference_search",
             readonly_destructive_search_probe.get("status") == "pass"
@@ -691,22 +1056,48 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
 +new
 *** End Patch
 """
-        sensitive_apply_patch_probe = run_apply_patch_sample(root, sensitive_apply_patch)
-        sensitive_apply_patch_stdout = sensitive_apply_patch_probe.get("stdout_preview", "").lower()
-        nested_sensitive_apply_patch_probe = run_nested_apply_patch_sample(root, sensitive_apply_patch)
-        nested_sensitive_apply_patch_stdout = nested_sensitive_apply_patch_probe.get("stdout_preview", "").lower()
+        sensitive_apply_patch_probe = run_apply_patch_sample(
+            root, sensitive_apply_patch
+        )
+        sensitive_apply_patch_stdout = sensitive_apply_patch_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        nested_sensitive_apply_patch_probe = run_nested_apply_patch_sample(
+            root, sensitive_apply_patch
+        )
+        nested_sensitive_apply_patch_stdout = nested_sensitive_apply_patch_probe.get(
+            "stdout_preview", ""
+        ).lower()
         parent_apply_patch_probe = run_apply_patch_sample(root, parent_apply_patch)
-        parent_apply_patch_stdout = parent_apply_patch_probe.get("stdout_preview", "").lower()
+        parent_apply_patch_stdout = parent_apply_patch_probe.get(
+            "stdout_preview", ""
+        ).lower()
         rooted_apply_patch_probe = run_apply_patch_sample(root, rooted_apply_patch)
-        rooted_apply_patch_stdout = rooted_apply_patch_probe.get("stdout_preview", "").lower()
-        current_drive_apply_patch_probe = run_apply_patch_sample(root, current_drive_apply_patch)
-        current_drive_apply_patch_stdout = current_drive_apply_patch_probe.get("stdout_preview", "").lower()
-        home_relative_apply_patch_probe = run_apply_patch_sample(root, home_relative_apply_patch)
-        home_relative_apply_patch_stdout = home_relative_apply_patch_probe.get("stdout_preview", "").lower()
-        drive_relative_apply_patch_probe = run_apply_patch_sample(root, drive_relative_apply_patch)
-        drive_relative_apply_patch_stdout = drive_relative_apply_patch_probe.get("stdout_preview", "").lower()
+        rooted_apply_patch_stdout = rooted_apply_patch_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        current_drive_apply_patch_probe = run_apply_patch_sample(
+            root, current_drive_apply_patch
+        )
+        current_drive_apply_patch_stdout = current_drive_apply_patch_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        home_relative_apply_patch_probe = run_apply_patch_sample(
+            root, home_relative_apply_patch
+        )
+        home_relative_apply_patch_stdout = home_relative_apply_patch_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        drive_relative_apply_patch_probe = run_apply_patch_sample(
+            root, drive_relative_apply_patch
+        )
+        drive_relative_apply_patch_stdout = drive_relative_apply_patch_probe.get(
+            "stdout_preview", ""
+        ).lower()
         ordinary_apply_patch_probe = run_apply_patch_sample(root, ordinary_apply_patch)
-        ordinary_apply_patch_stdout = ordinary_apply_patch_probe.get("stdout_preview", "").lower()
+        ordinary_apply_patch_stdout = ordinary_apply_patch_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_blocks_sensitive_apply_patch_targets",
             sensitive_apply_patch_probe.get("status") == "pass"
@@ -727,13 +1118,21 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "allow" in ordinary_apply_patch_stdout,
             "PreToolUse should deny direct and nested apply_patch targeting sensitive, rooted, or parent-traversal files while preserving ordinary patch targets.",
         )
-        blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
+        blocked_probe = run_hook_sample(
+            root, "Get-Content $env:USERPROFILE\\.codex\\auth.json"
+        )
         blocked_stdout = blocked_probe.get("stdout_preview", "").lower()
-        camel_blocked_probe = run_camel_hook_sample(root, "Get-Content $env:USERPROFILE\\.codex\\auth.json")
+        camel_blocked_probe = run_camel_hook_sample(
+            root, "Get-Content $env:USERPROFILE\\.codex\\auth.json"
+        )
         camel_blocked_stdout = camel_blocked_probe.get("stdout_preview", "").lower()
-        npmrc_blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.npmrc")
+        npmrc_blocked_probe = run_hook_sample(
+            root, "Get-Content $env:USERPROFILE\\.npmrc"
+        )
         npmrc_blocked_stdout = npmrc_blocked_probe.get("stdout_preview", "").lower()
-        kube_blocked_probe = run_hook_sample(root, "Get-Content $env:USERPROFILE\\.kube\\config")
+        kube_blocked_probe = run_hook_sample(
+            root, "Get-Content $env:USERPROFILE\\.kube\\config"
+        )
         kube_blocked_stdout = kube_blocked_probe.get("stdout_preview", "").lower()
         ordinary_config_probe = run_hook_sample(root, "Get-Content config.toml")
         ordinary_config_stdout = ordinary_config_probe.get("stdout_preview", "").lower()
@@ -775,7 +1174,9 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                 "tool_input": {"path": str(Path.home() / ".codex" / "auth.json")},
             },
         )
-        mcp_fetch_blocked_stdout = mcp_fetch_blocked_probe.get("stdout_preview", "").lower()
+        mcp_fetch_blocked_stdout = mcp_fetch_blocked_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_blocks_mcp_secret_reads",
             mcp_blocked_probe.get("status") == "pass"
@@ -796,10 +1197,14 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             {
                 "hook_event_name": "PreToolUse",
                 "tool_name": "mcp__github__get_issue",
-                "tool_input": {"query": "docs mention auth.json but no file path is read"},
+                "tool_input": {
+                    "query": "docs mention auth.json but no file path is read"
+                },
             },
         )
-        mcp_non_file_get_stdout = mcp_non_file_get_probe.get("stdout_preview", "").lower()
+        mcp_non_file_get_stdout = mcp_non_file_get_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_allows_non_file_mcp_getters",
             mcp_non_file_get_probe.get("status") == "pass"
@@ -807,7 +1212,9 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "allow" in mcp_non_file_get_stdout,
             "PreToolUse should not classify every MCP getter as a filesystem read.",
         )
-        more_blocked_probe = run_hook_sample(root, "more $env:USERPROFILE\\.codex\\auth.json")
+        more_blocked_probe = run_hook_sample(
+            root, "more $env:USERPROFILE\\.codex\\auth.json"
+        )
         more_blocked_stdout = more_blocked_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_more_secret_reads",
@@ -825,7 +1232,9 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in generic_name_stdout,
             "PreToolUse should deny generic secret-like filenames, not only auth.json and key material.",
         )
-        interpreter_probe = run_hook_sample(root, "python -c \"open('$env:USERPROFILE\\.codex\\auth.json').read()\"")
+        interpreter_probe = run_hook_sample(
+            root, "python -c \"open('$env:USERPROFILE\\.codex\\auth.json').read()\""
+        )
         interpreter_stdout = interpreter_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_interpreter_secret_reads",
@@ -868,11 +1277,26 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "allow" in safe_reference_stdout,
             "PreToolUse should allow safe reference searches that mention sensitive filenames without targeting the sensitive file path.",
         )
-        unsafe_search_probe = run_hook_sample(root, "rg " + "to" + "ken" + " " + "to" + "ken" + ".txt")
+        unsafe_search_probe = run_hook_sample(
+            root, "rg " + "to" + "ken" + " " + "to" + "ken" + ".txt"
+        )
         unsafe_search_stdout = unsafe_search_probe.get("stdout_preview", "").lower()
-        extra_target_search_probe = run_hook_sample(root, "rg " + "auth" + ".json docs " + "auth" + ".json")
-        extra_target_search_stdout = extra_target_search_probe.get("stdout_preview", "").lower()
-        select_unsafe_probe = run_hook_sample(root, "Select-String -Pattern " + "to" + "ken" + " -Path " + "to" + "ken" + ".txt")
+        extra_target_search_probe = run_hook_sample(
+            root, "rg " + "auth" + ".json docs " + "auth" + ".json"
+        )
+        extra_target_search_stdout = extra_target_search_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        select_unsafe_probe = run_hook_sample(
+            root,
+            "Select-String -Pattern "
+            + "to"
+            + "ken"
+            + " -Path "
+            + "to"
+            + "ken"
+            + ".txt",
+        )
         select_unsafe_stdout = select_unsafe_probe.get("stdout_preview", "").lower()
         add_check(
             "pretooluse_blocks_search_secret_file_targets",
@@ -884,8 +1308,12 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in select_unsafe_stdout,
             "PreToolUse safe-reference exceptions should not allow secret-like search targets.",
         )
-        select_string_blocked_probe = run_hook_sample(root, "Select-String -Pattern . -Path $env:USERPROFILE\\.codex\\auth.json")
-        select_string_blocked_stdout = select_string_blocked_probe.get("stdout_preview", "").lower()
+        select_string_blocked_probe = run_hook_sample(
+            root, "Select-String -Pattern . -Path $env:USERPROFILE\\.codex\\auth.json"
+        )
+        select_string_blocked_stdout = select_string_blocked_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_blocks_select_string_secret_path",
             select_string_blocked_probe.get("status") == "pass"
@@ -893,8 +1321,12 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in select_string_blocked_stdout,
             "PreToolUse should deny Select-String when the path target is a credential file.",
         )
-        select_string_positional_probe = run_hook_sample(root, "Select-String -Pattern . $env:USERPROFILE\\.codex\\auth.json")
-        select_string_positional_stdout = select_string_positional_probe.get("stdout_preview", "").lower()
+        select_string_positional_probe = run_hook_sample(
+            root, "Select-String -Pattern . $env:USERPROFILE\\.codex\\auth.json"
+        )
+        select_string_positional_stdout = select_string_positional_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_blocks_select_string_positional_secret_path",
             select_string_positional_probe.get("status") == "pass"
@@ -902,8 +1334,12 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in select_string_positional_stdout,
             "PreToolUse should deny Select-String when a positional path target is a credential file.",
         )
-        select_string_reference_probe = run_hook_sample(root, "Select-String -Pattern auth.json -Path docs")
-        select_string_reference_stdout = select_string_reference_probe.get("stdout_preview", "").lower()
+        select_string_reference_probe = run_hook_sample(
+            root, "Select-String -Pattern auth.json -Path docs"
+        )
+        select_string_reference_stdout = select_string_reference_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_allows_select_string_reference_search",
             select_string_reference_probe.get("status") == "pass"
@@ -911,21 +1347,47 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "allow" in select_string_reference_stdout,
             "PreToolUse should allow Select-String reference searches when the target path is not sensitive.",
         )
-        destructive_order_probe = run_hook_sample(root, "Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force")
-        destructive_order_stdout = destructive_order_probe.get("stdout_preview", "").lower()
-        destructive_home_probe = run_hook_sample(root, "Remove-Item $HOME\\.codex\\tmp -Recurse -Force")
-        destructive_home_stdout = destructive_home_probe.get("stdout_preview", "").lower()
-        destructive_pwd_probe = run_hook_sample(root, "Remove-Item $PWD -Recurse -Force")
+        destructive_order_probe = run_hook_sample(
+            root, "Remove-Item $env:USERPROFILE\\.codex\\tmp -Recurse -Force"
+        )
+        destructive_order_stdout = destructive_order_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        destructive_home_probe = run_hook_sample(
+            root, "Remove-Item $HOME\\.codex\\tmp -Recurse -Force"
+        )
+        destructive_home_stdout = destructive_home_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        destructive_pwd_probe = run_hook_sample(
+            root, "Remove-Item $PWD -Recurse -Force"
+        )
         destructive_pwd_stdout = destructive_pwd_probe.get("stdout_preview", "").lower()
-        destructive_drive_root_probe = run_hook_sample(root, "Remove-Item \\ -Recurse -Force")
-        destructive_drive_root_stdout = destructive_drive_root_probe.get("stdout_preview", "").lower()
-        destructive_forward_root_probe = run_hook_sample(root, "Remove-Item / -Recurse -Force")
-        destructive_forward_root_stdout = destructive_forward_root_probe.get("stdout_preview", "").lower()
+        destructive_drive_root_probe = run_hook_sample(
+            root, "Remove-Item \\ -Recurse -Force"
+        )
+        destructive_drive_root_stdout = destructive_drive_root_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        destructive_forward_root_probe = run_hook_sample(
+            root, "Remove-Item / -Recurse -Force"
+        )
+        destructive_forward_root_stdout = destructive_forward_root_probe.get(
+            "stdout_preview", ""
+        ).lower()
         forward_drive_target = (Path.home() / ".codex" / "tmp").as_posix()
-        destructive_colon_recurse_probe = run_hook_sample(root, f"Remove-Item {forward_drive_target} -Recurse:$true -Force")
-        destructive_colon_recurse_stdout = destructive_colon_recurse_probe.get("stdout_preview", "").lower()
-        nonrecursive_force_probe = run_hook_sample(root, "Remove-Item .\\some-file.tmp -Force")
-        nonrecursive_force_stdout = nonrecursive_force_probe.get("stdout_preview", "").lower()
+        destructive_colon_recurse_probe = run_hook_sample(
+            root, f"Remove-Item {forward_drive_target} -Recurse:$true -Force"
+        )
+        destructive_colon_recurse_stdout = destructive_colon_recurse_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        nonrecursive_force_probe = run_hook_sample(
+            root, "Remove-Item .\\some-file.tmp -Force"
+        )
+        nonrecursive_force_stdout = nonrecursive_force_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_blocks_destructive_any_argument_order",
             destructive_order_probe.get("status") == "pass"
@@ -959,16 +1421,36 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "allow" in nonrecursive_force_stdout,
             "PreToolUse should not treat ordinary nonrecursive Remove-Item -Force as a broad recursive delete.",
         )
-        relative_destructive_probe = run_hook_sample(root, "Remove-Item . -Recurse -Force")
-        relative_destructive_stdout = relative_destructive_probe.get("stdout_preview", "").lower()
-        relative_recurse_abbrev_probe = run_hook_sample(root, "Remove-Item . -rec -Force")
-        relative_recurse_abbrev_stdout = relative_recurse_abbrev_probe.get("stdout_preview", "").lower()
-        relative_recurse_partial_probe = run_hook_sample(root, "Remove-Item . -recu -Force")
-        relative_recurse_partial_stdout = relative_recurse_partial_probe.get("stdout_preview", "").lower()
-        invoke_expression_relative_probe = run_hook_sample(root, "iex 'Remove-Item . -Recurse -Force'")
-        invoke_expression_relative_stdout = invoke_expression_relative_probe.get("stdout_preview", "").lower()
-        invoke_expression_variable_relative_probe = run_hook_sample(root, "$x='Remove-Item . -Recurse -Force'; Invoke-Expression $x")
-        invoke_expression_variable_relative_stdout = invoke_expression_variable_relative_probe.get("stdout_preview", "").lower()
+        relative_destructive_probe = run_hook_sample(
+            root, "Remove-Item . -Recurse -Force"
+        )
+        relative_destructive_stdout = relative_destructive_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        relative_recurse_abbrev_probe = run_hook_sample(
+            root, "Remove-Item . -rec -Force"
+        )
+        relative_recurse_abbrev_stdout = relative_recurse_abbrev_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        relative_recurse_partial_probe = run_hook_sample(
+            root, "Remove-Item . -recu -Force"
+        )
+        relative_recurse_partial_stdout = relative_recurse_partial_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        invoke_expression_relative_probe = run_hook_sample(
+            root, "iex 'Remove-Item . -Recurse -Force'"
+        )
+        invoke_expression_relative_stdout = invoke_expression_relative_probe.get(
+            "stdout_preview", ""
+        ).lower()
+        invoke_expression_variable_relative_probe = run_hook_sample(
+            root, "$x='Remove-Item . -Recurse -Force'; Invoke-Expression $x"
+        )
+        invoke_expression_variable_relative_stdout = (
+            invoke_expression_variable_relative_probe.get("stdout_preview", "").lower()
+        )
         rm_relative_probe = run_hook_sample(root, "rm -rf .")
         rm_relative_stdout = rm_relative_probe.get("stdout_preview", "").lower()
         ri_relative_probe = run_hook_sample(root, "ri . -r -Force")
@@ -1008,13 +1490,17 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                     "tool_uses": [
                         {
                             "recipient_name": "functions.shell_command",
-                            "parameters": {"command": "Remove-Item $HOME\\.codex\\tmp -Recurse -Force"},
+                            "parameters": {
+                                "command": "Remove-Item $HOME\\.codex\\tmp -Recurse -Force"
+                            },
                         }
                     ]
                 },
             },
         )
-        nested_destructive_stdout = nested_destructive_probe.get("stdout_preview", "").lower()
+        nested_destructive_stdout = nested_destructive_probe.get(
+            "stdout_preview", ""
+        ).lower()
         add_check(
             "pretooluse_blocks_nested_multitool_destructive",
             nested_destructive_probe.get("status") == "pass"
@@ -1022,7 +1508,9 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
             and "deny" in nested_destructive_stdout,
             "PreToolUse should inspect nested multi_tool_use destructive shell commands before allowing the wrapper call.",
         )
-        post_probe = run_post_tool_hook_sample(root, "functions.shell_command", "Write-Output compact-hook-smoke")
+        post_probe = run_post_tool_hook_sample(
+            root, "functions.shell_command", "Write-Output compact-hook-smoke"
+        )
         stop_probe = run_stop_hook_sample(root, "compact hook smoke final")
         post_stdout = post_probe.get("stdout_preview", "").lower()
         stop_stdout = stop_probe.get("stdout_preview", "").lower()
@@ -1058,11 +1546,16 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
     restored_ledger_bytes = ledger_path.read_bytes() if restored_ledger_exists else None
     add_check(
         "hook_policy_smoke_restores_live_ledger",
-        restored_ledger_exists == original_ledger_exists and restored_ledger_bytes == original_ledger_bytes,
+        restored_ledger_exists == original_ledger_exists
+        and restored_ledger_bytes == original_ledger_bytes,
         "Synthetic compact hook samples must not leave ledger mutations behind.",
     )
     return write_smoke_report(root, "hook-policy-smoke", checks)
-def check_terms_file(root: Path, relative_path: str, terms: list[str]) -> tuple[bool, str]:
+
+
+def check_terms_file(
+    root: Path, relative_path: str, terms: list[str]
+) -> tuple[bool, str]:
     path = root / relative_path
     if not path.exists():
         return False, f"missing file: {relative_path}"
@@ -1071,16 +1564,26 @@ def check_terms_file(root: Path, relative_path: str, terms: list[str]) -> tuple[
     if missing:
         return False, f"{relative_path} missing terms: {', '.join(missing)}"
     return True, f"{relative_path} contains required terms"
-def write_smoke_report(root: Path, name: str, checks: list[dict[str, Any]]) -> dict[str, Any]:
+
+
+def write_smoke_report(
+    root: Path, name: str, checks: list[dict[str, Any]]
+) -> dict[str, Any]:
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
     write_json(root / "reports" / f"{name}.latest.json", report)
     return report
+
+
 def check_adversarial_review_integration_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
+
     def add_file_check(name: str, relative_path: str, terms: list[str]) -> None:
         passed, detail = check_terms_file(root, relative_path, terms)
-        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+        checks.append(
+            {"name": name, "status": "pass" if passed else "fail", "detail": detail}
+        )
+
     add_file_check(
         "skill_semantics",
         "skills/clean-all-slop/SKILL.md",
@@ -1089,24 +1592,53 @@ def check_adversarial_review_integration_smoke(root: Path) -> dict[str, Any]:
     add_file_check(
         "goal_gate_mapping",
         "maintenance/GOAL_INTEGRITY_GATE.md",
-        ["clean", "c0", "p3", "c1", "p2", "c2", "p1", "c3", "p0", "c4", "clean is not completion authority", "immediately previous"],
+        [
+            "clean",
+            "c0",
+            "p3",
+            "c1",
+            "p2",
+            "c2",
+            "p1",
+            "c3",
+            "p0",
+            "c4",
+            "clean is not completion authority",
+            "immediately previous",
+        ],
     )
     add_file_check(
         "watcher_template_lens",
         "maintenance/templates/WATCHER_REPORT.md",
-        ["adversarial review verdict", "fix required", "clean", "defect classes checked", "pm merge recommendation"],
+        [
+            "adversarial review verdict",
+            "fix required",
+            "clean",
+            "defect classes checked",
+            "pm merge recommendation",
+        ],
     )
     add_file_check(
         "pre_ship_template_lens",
         "maintenance/templates/PRE_SHIP_AUDIT_CONTEXT.md",
-        ["immediately previous turn to review", "required review lens", "clean-all-slop"],
+        [
+            "immediately previous turn to review",
+            "required review lens",
+            "clean-all-slop",
+        ],
     )
     return write_smoke_report(root, "adversarial-review-integration-smoke", checks)
+
+
 def check_worker_watcher_normalized_handoff_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
+
     def add_file_check(name: str, relative_path: str, terms: list[str]) -> None:
         passed, detail = check_terms_file(root, relative_path, terms)
-        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+        checks.append(
+            {"name": name, "status": "pass" if passed else "fail", "detail": detail}
+        )
+
     add_file_check(
         "handoff_policy",
         "maintenance/WORKER_WATCHER_NORMALIZED_HANDOFF.md",
@@ -1128,7 +1660,13 @@ def check_worker_watcher_normalized_handoff_smoke(root: Path) -> dict[str, Any]:
     add_file_check(
         "observer_role",
         "agents/observer.toml",
-        ["clean-all-slop", "read-only", "do not repair", "watcher_report", "pm merge recommendation"],
+        [
+            "clean-all-slop",
+            "read-only",
+            "do not repair",
+            "watcher_report",
+            "pm merge recommendation",
+        ],
     )
     for template in [
         "maintenance/templates/NORMALIZED_WORKER_PACKET.md",
@@ -1136,18 +1674,33 @@ def check_worker_watcher_normalized_handoff_smoke(root: Path) -> dict[str, Any]:
         "maintenance/templates/WATCHER_NOT_USED.md",
         "maintenance/templates/PM_MERGE_DECISION.md",
     ]:
-        add_file_check(f"template:{Path(template).stem}", template, ["# " + Path(template).stem.upper()])
+        add_file_check(
+            f"template:{Path(template).stem}",
+            template,
+            ["# " + Path(template).stem.upper()],
+        )
     add_file_check(
         "delegation_charter_extension",
         "maintenance/SUBAGENT_DELEGATION_CHARTER.md",
-        ["worker-watcher normalized handoff", "normalized_worker_packet", "watcher_not_used", "pm_merge_decision"],
+        [
+            "worker-watcher normalized handoff",
+            "normalized_worker_packet",
+            "watcher_not_used",
+            "pm_merge_decision",
+        ],
     )
     return write_smoke_report(root, "worker-watcher-normalized-handoff-smoke", checks)
+
+
 def check_goal_integrity_gate_smoke(root: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
+
     def add_file_check(name: str, relative_path: str, terms: list[str]) -> None:
         passed, detail = check_terms_file(root, relative_path, terms)
-        checks.append({"name": name, "status": "pass" if passed else "fail", "detail": detail})
+        checks.append(
+            {"name": name, "status": "pass" if passed else "fail", "detail": detail}
+        )
+
     add_file_check(
         "gate_policy",
         "maintenance/GOAL_INTEGRITY_GATE.md",
@@ -1166,7 +1719,12 @@ def check_goal_integrity_gate_smoke(root: Path) -> dict[str, Any]:
     add_file_check(
         "midpoint_context_template",
         "maintenance/templates/MIDPOINT_AUDIT_CONTEXT.md",
-        ["immediately previous turn to review", "required review lens", "clean-all-slop", "reset to define"],
+        [
+            "immediately previous turn to review",
+            "required review lens",
+            "clean-all-slop",
+            "reset to define",
+        ],
     )
     add_file_check(
         "midpoint_decision_template",
@@ -1181,6 +1739,11 @@ def check_goal_integrity_gate_smoke(root: Path) -> dict[str, Any]:
     add_file_check(
         "agents_policy",
         "AGENTS.md",
-        ["midpoint and pre-ship", "c0-c4", "normalized worker packets", "watcher_not_used"],
+        [
+            "midpoint and pre-ship",
+            "c0-c4",
+            "normalized worker packets",
+            "watcher_not_used",
+        ],
     )
     return write_smoke_report(root, "goal-integrity-gate-smoke", checks)

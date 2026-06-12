@@ -26,14 +26,21 @@ from codex_agent_harness_base import (
     write_text,
 )
 from codex_agent_harness_lifecycle import audit_data, cmd_apply, doctor_data, load_state
-from codex_agent_harness_workflows import cmd_compact_summary, cmd_context, cmd_retrieve, write_verification_report
+from codex_agent_harness_workflows import (
+    cmd_compact_summary,
+    cmd_context,
+    cmd_retrieve,
+    write_verification_report,
+)
 
 
 HOOK_MATCHER = "Bash|functions\\..*|multi_tool_use\\..*|multi_agent.*|tool_search\\..*|web\\..*|image_gen\\..*|codex_app\\..*|apply_patch|mcp__.*"
 
 
 def compact_hook_fragment(hidden_hook_command: str) -> str:
-    parts: list[str] = ["# Hook fragment. All enabled events call one deterministic runner.\n"]
+    parts: list[str] = [
+        "# Hook fragment. All enabled events call one deterministic runner.\n"
+    ]
     event_specs = [
         ("SessionStart", "startup|resume", 30),
         ("UserPromptSubmit", "", 30),
@@ -55,12 +62,19 @@ def compact_hook_fragment(hidden_hook_command: str) -> str:
 
 
 def resolve_pwsh_for_hook() -> Path:
-    alias_stub = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+    alias_stub = (
+        Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+    )
     program_files = Path(os.environ.get("ProgramFiles") or r"C:\Program Files")
     candidates: list[Path] = []
     windows_apps = program_files / "WindowsApps"
     if windows_apps.exists():
-        candidates.extend(sorted(windows_apps.glob("Microsoft.PowerShell_*__8wekyb3d8bbwe/pwsh.exe"), reverse=True))
+        candidates.extend(
+            sorted(
+                windows_apps.glob("Microsoft.PowerShell_*__8wekyb3d8bbwe/pwsh.exe"),
+                reverse=True,
+            )
+        )
     candidates.append(program_files / "PowerShell" / "7" / "pwsh.exe")
     candidates.append(alias_stub)
     for candidate in candidates:
@@ -104,7 +118,9 @@ def cmd_merge_config(args: argparse.Namespace) -> int:
         "missing_items": len(additions),
         "drift": drift,
         "dry_run": not args.apply,
-        "additions": [{"table": ".".join(item["table"]), "key": item["key"]} for item in additions],
+        "additions": [
+            {"table": ".".join(item["table"]), "key": item["key"]} for item in additions
+        ],
     }
     if args.apply and addition_text:
         merged_text = apply_toml_additions(read_text(target), additions, target_data)
@@ -113,7 +129,9 @@ def cmd_merge_config(args: argparse.Namespace) -> int:
     return 0
 
 
-def apply_toml_additions(text: str, additions: list[dict[str, Any]], target_data: dict[str, Any]) -> str:
+def apply_toml_additions(
+    text: str, additions: list[dict[str, Any]], target_data: dict[str, Any]
+) -> str:
     lines = text.splitlines()
     root_items: list[dict[str, Any]] = []
     existing_table_items: dict[tuple[str, ...], list[dict[str, Any]]] = {}
@@ -129,9 +147,19 @@ def apply_toml_additions(text: str, additions: list[dict[str, Any]], target_data
             append_items.append(item)
 
     if root_items:
-        insertion = next((index for index, line in enumerate(lines) if re.match(r"\s*\[", line)), len(lines))
-        root_lines = [format_toml_value(item["key"], item["value"]) for item in sorted(root_items, key=lambda entry: entry["key"])]
-        lines[insertion:insertion] = ["# Added by codex-agent-harness merge-config", *root_lines, ""]
+        insertion = next(
+            (index for index, line in enumerate(lines) if re.match(r"\s*\[", line)),
+            len(lines),
+        )
+        root_lines = [
+            format_toml_value(item["key"], item["value"])
+            for item in sorted(root_items, key=lambda entry: entry["key"])
+        ]
+        lines[insertion:insertion] = [
+            "# Added by codex-agent-harness merge-config",
+            *root_lines,
+            "",
+        ]
 
     insertions: list[tuple[int, list[str]]] = []
     for table, items in existing_table_items.items():
@@ -140,10 +168,17 @@ def apply_toml_additions(text: str, additions: list[dict[str, Any]], target_data
             append_items.extend(items)
             continue
         insertion = find_toml_table_end(lines, header_index)
-        item_lines = [format_toml_value(item["key"], item["value"]) for item in sorted(items, key=lambda entry: entry["key"])]
-        insertions.append((insertion, ["# Added by codex-agent-harness merge-config", *item_lines]))
+        item_lines = [
+            format_toml_value(item["key"], item["value"])
+            for item in sorted(items, key=lambda entry: entry["key"])
+        ]
+        insertions.append(
+            (insertion, ["# Added by codex-agent-harness merge-config", *item_lines])
+        )
 
-    for insertion, item_lines in sorted(insertions, key=lambda pair: pair[0], reverse=True):
+    for insertion, item_lines in sorted(
+        insertions, key=lambda pair: pair[0], reverse=True
+    ):
         lines[insertion:insertion] = item_lines
 
     if append_items:
@@ -181,7 +216,13 @@ def find_toml_table_end(lines: list[str], header_index: int) -> int:
     return len(lines)
 
 
-def collect_toml_additions(source: dict[str, Any], target: dict[str, Any], table: list[str], additions: list[dict[str, Any]], drift: list[str]) -> None:
+def collect_toml_additions(
+    source: dict[str, Any],
+    target: dict[str, Any],
+    table: list[str],
+    additions: list[dict[str, Any]],
+    drift: list[str],
+) -> None:
     for key, value in sorted(source.items()):
         dotted = ".".join([*table, key])
         if key not in target:
@@ -314,23 +355,31 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "## Falsifier-First\n\nCheck the strongest contradiction before accepting.\n"
             "## Completion Authority\n\nTests, tools, and reports are evidence only.\n",
         )
-        write_text(root / ".gitignore", "auth.json\n.codex-global-state.json\n.codex-global-state.json.bak\n__pycache__/\n*.pyc\n")
+        write_text(
+            root / ".gitignore",
+            "auth.json\n.codex-global-state.json\n.codex-global-state.json.bak\n__pycache__/\n*.pyc\n",
+        )
         write_json(root / ".codex-global-state.json", {})
         hidden_hook_command = hidden_compact_hook_command()
         hook_fragment = compact_hook_fragment(hidden_hook_command)
         write_text(root / "config.d" / "20-hooks.toml", hook_fragment)
-        write_text(root / "config.toml", read_text(root / "config.toml") + "\n" + hook_fragment)
+        write_text(
+            root / "config.toml", read_text(root / "config.toml") + "\n" + hook_fragment
+        )
         write_text(root / "maintenance" / "MCP_RUNTIME_STATUS.md", "# MCP\n")
         write_text(
             root / "hooks" / "compact-codex-hook.ps1",
             "$ErrorActionPreference = 'Stop'\n"
             "$ledger = 'hook-ledger.jsonl'\n"
-            "$runner = \"compact-codex-hook\"\n"
+            '$runner = "compact-codex-hook"\n'
             "# compact hook active\n"
             "function Ensure-RuntimeCleanupWatch { return $true }\n"
             "# UserPromptSubmit PreToolUse treat claims as candidate until direct evidence supports them\n",
         )
-        write_text(root / "evals" / "calibration-eval.yaml", "checks:\n  - confident_wrong\n  - unsupported_material_claim\n")
+        write_text(
+            root / "evals" / "calibration-eval.yaml",
+            "checks:\n  - confident_wrong\n  - unsupported_material_claim\n",
+        )
         for name in [
             "codex_agent_harness.py",
             "codex_agent_harness_base.py",
@@ -342,7 +391,10 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "codex_agent_harness_workflows.py",
             "worker_watcher_templates.py",
         ]:
-            write_text(root / "maintenance" / "scripts" / name, "# self-test harness source placeholder\n")
+            write_text(
+                root / "maintenance" / "scripts" / name,
+                "# self-test harness source placeholder\n",
+            )
         ensure_dir(root / "toolchains" / "shims")
         write_json(
             root / "reports" / "global-scan.latest.json",
@@ -357,7 +409,10 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         ns = argparse.Namespace(root=str(root), profile="developer", module=None)
         cmd_apply(ns)
         state = load_state(root)
-        if not any(op.get("remove_on_uninstall") is True for op in state.get("applied_operations", [])):
+        if not any(
+            op.get("remove_on_uninstall") is True
+            for op in state.get("applied_operations", [])
+        ):
             print("uninstall ownership missing in self-test", file=sys.stderr)
             return 1
         stale_skill = root / "skills" / "dont-even-try" / "SKILL.md"
@@ -378,7 +433,10 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             print("stale managed skill cleanup failed in self-test", file=sys.stderr)
             return 1
         if stale_skill.exists() or stale_skill.parent.exists():
-            print("retired managed skill residue was not removed in self-test", file=sys.stderr)
+            print(
+                "retired managed skill residue was not removed in self-test",
+                file=sys.stderr,
+            )
             return 1
         state_before_drift = read_text(install_state_path(root))
         write_text(root / "agents" / "explorer.toml", "drifted = true\n")
@@ -386,10 +444,18 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             print("managed drift preflight did not block in self-test", file=sys.stderr)
             return 1
         if read_text(install_state_path(root)) != state_before_drift:
-            print("managed drift preflight mutated install state in self-test", file=sys.stderr)
+            print(
+                "managed drift preflight mutated install state in self-test",
+                file=sys.stderr,
+            )
             return 1
-        restored_templates = managed_templates(root, selected_modules("developer", None))
-        write_text(root / "agents" / "explorer.toml", restored_templates["agents/explorer.toml"])
+        restored_templates = managed_templates(
+            root, selected_modules("developer", None)
+        )
+        write_text(
+            root / "agents" / "explorer.toml",
+            restored_templates["agents/explorer.toml"],
+        )
         if cmd_apply(ns) != 0:
             print("managed drift restoration failed in self-test", file=sys.stderr)
             return 1
@@ -407,26 +473,50 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             return 1
         source = root / "source.toml"
         target = root / "target.toml"
-        write_text(source, 'model = "gpt-test"\n[features]\nplugins = true\nmulti_agent = true\n[mcp_servers.docs]\nenabled = true\n')
-        write_text(target, '[features]\nplugins = false\n')
-        merge_ns = argparse.Namespace(root=str(root), source=str(source), target=str(target), apply=True, update_managed=False)
+        write_text(
+            source,
+            'model = "gpt-test"\n[features]\nplugins = true\nmulti_agent = true\n[mcp_servers.docs]\nenabled = true\n',
+        )
+        write_text(target, "[features]\nplugins = false\n")
+        merge_ns = argparse.Namespace(
+            root=str(root),
+            source=str(source),
+            target=str(target),
+            apply=True,
+            update_managed=False,
+        )
         if cmd_merge_config(merge_ns) != 0:
             print("merge-config failed in self-test", file=sys.stderr)
             return 1
         merged = read_text(target)
-        if "plugins = false" not in merged or "multi_agent = true" not in merged or "[mcp_servers.docs]" not in merged:
-            print("merge-config did not preserve and append table keys in self-test", file=sys.stderr)
+        if (
+            "plugins = false" not in merged
+            or "multi_agent = true" not in merged
+            or "[mcp_servers.docs]" not in merged
+        ):
+            print(
+                "merge-config did not preserve and append table keys in self-test",
+                file=sys.stderr,
+            )
             return 1
         try:
             parsed_merged = tomllib.loads(merged)
         except Exception as exc:  # noqa: BLE001
-            print(f"merge-config produced invalid TOML in self-test: {exc}", file=sys.stderr)
+            print(
+                f"merge-config produced invalid TOML in self-test: {exc}",
+                file=sys.stderr,
+            )
             return 1
-        if parsed_merged["features"]["plugins"] is not False or parsed_merged["features"]["multi_agent"] is not True:
+        if (
+            parsed_merged["features"]["plugins"] is not False
+            or parsed_merged["features"]["multi_agent"] is not True
+        ):
             print("merge-config changed existing values in self-test", file=sys.stderr)
             return 1
         cmd_context(argparse.Namespace(root=str(root)))
-        retrieve_ns = argparse.Namespace(root=str(root), query="codex harness verification workflow", limit=5)
+        retrieve_ns = argparse.Namespace(
+            root=str(root), query="codex harness verification workflow", limit=5
+        )
         if cmd_retrieve(retrieve_ns) != 0:
             print("retrieve failed in self-test", file=sys.stderr)
             return 1
@@ -451,10 +541,25 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             {"name": "uninstall_dry_run", "status": "pass", "exit_code": 0},
         ]
         if command_exists("pwsh"):
-            verification_checks.append({"name": "pwsh_wrapper_doctor", "status": "pass", "exit_code": 0})
+            verification_checks.append(
+                {"name": "pwsh_wrapper_doctor", "status": "pass", "exit_code": 0}
+            )
         if command_exists("powershell.exe"):
-            verification_checks.append({"name": "windows_powershell_wrapper_doctor", "status": "pass", "exit_code": 0})
-        write_verification_report(root, {"generated_at": utc_now(), "status": "pass", "checks": verification_checks})
+            verification_checks.append(
+                {
+                    "name": "windows_powershell_wrapper_doctor",
+                    "status": "pass",
+                    "exit_code": 0,
+                }
+            )
+        write_verification_report(
+            root,
+            {
+                "generated_at": utc_now(),
+                "status": "pass",
+                "checks": verification_checks,
+            },
+        )
         append_trajectory(root, "self-test trajectory", "pass", verification_checks)
         append_jsonl(
             root / "reports" / "benchmark-results.jsonl",

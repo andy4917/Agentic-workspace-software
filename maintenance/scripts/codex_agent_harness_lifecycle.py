@@ -50,6 +50,8 @@ from codex_agent_harness_status import (
     subagent_nickname_policy_status,
     workspace_script_line_count_status,
 )
+
+
 def cmd_discovery(args: argparse.Namespace) -> int:
     root = root_path(args)
     data = discovery_data(root)
@@ -73,6 +75,8 @@ def cmd_discovery(args: argparse.Namespace) -> int:
     write_text(root / "reports" / "discovery.md", "\n".join(lines) + "\n")
     print(root / "reports" / "discovery.md")
     return 0
+
+
 def cmd_plan(args: argparse.Namespace) -> int:
     root = root_path(args)
     modules = selected_modules(args.profile, args.module)
@@ -90,7 +94,8 @@ def cmd_plan(args: argparse.Namespace) -> int:
         "will_create": missing,
         "already_exists": existing,
         "mutation_required": bool(missing),
-        "apply_command": "python maintenance/scripts/codex_agent_harness.py apply --profile " + args.profile,
+        "apply_command": "python maintenance/scripts/codex_agent_harness.py apply --profile "
+        + args.profile,
     }
     ensure_dir(root / "reports")
     write_json(root / "reports" / "harness-plan.latest.json", plan)
@@ -103,6 +108,8 @@ def cmd_plan(args: argparse.Namespace) -> int:
         for item in missing:
             print(f"  + {item}")
     return 0
+
+
 def resolve_state_child_path(root: Path, path: str) -> tuple[Path | None, str | None]:
     candidate = Path(path)
     if candidate.is_absolute() or candidate.drive or ".." in candidate.parts:
@@ -112,6 +119,8 @@ def resolve_state_child_path(root: Path, path: str) -> tuple[Path | None, str | 
     if full == root_resolved or root_resolved not in full.parents:
         return None, "outside_root"
     return full, None
+
+
 def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
     try:
         skills_root = (root / "skills").resolve()
@@ -129,13 +138,27 @@ def prune_empty_skill_dir(root: Path, removed_file: Path) -> str | None:
         return pruned
     except OSError:
         return None
+
+
 def previous_operation_is_managed(previous: dict[str, Any]) -> bool:
-    return bool(previous.get("managed") is True or (previous.get("owner") == OWNER and previous.get("remove_on_uninstall") is True))
+    return bool(
+        previous.get("managed") is True
+        or (
+            previous.get("owner") == OWNER
+            and previous.get("remove_on_uninstall") is True
+        )
+    )
+
+
 def managed_file_digest(path: Path) -> str:
     if path.suffix.lower() in {".json", ".md", ".ps1", ".py", ".toml"}:
         return sha256_text(read_text(path))
     return sha256_file(path)
-def managed_template_drift_blockers(root: Path, templates: dict[str, str], previous_ops: dict[str, dict[str, Any]]) -> list[str]:
+
+
+def managed_template_drift_blockers(
+    root: Path, templates: dict[str, str], previous_ops: dict[str, dict[str, Any]]
+) -> list[str]:
     blocked: list[str] = []
     for path, content in sorted(templates.items()):
         full = root / path
@@ -147,9 +170,15 @@ def managed_template_drift_blockers(root: Path, templates: dict[str, str], previ
             continue
         previous = previous_ops.get(path, {})
         previous_digest = previous.get("digest")
-        if previous_operation_is_managed(previous) and previous_digest and current_digest != previous_digest:
+        if (
+            previous_operation_is_managed(previous)
+            and previous_digest
+            and current_digest != previous_digest
+        ):
             blocked.append(path)
     return blocked
+
+
 def cmd_apply(args: argparse.Namespace) -> int:
     root = root_path(args)
     modules = selected_modules(args.profile, args.module)
@@ -162,7 +191,16 @@ def cmd_apply(args: argparse.Namespace) -> int:
     }
     blocked_updates = managed_template_drift_blockers(root, templates, previous_ops)
     if blocked_updates:
-        print(json.dumps({"blocked_updates": blocked_updates, "reason": "managed files changed since the last recorded digest; refusing silent overwrite"}, ensure_ascii=False, sort_keys=True))
+        print(
+            json.dumps(
+                {
+                    "blocked_updates": blocked_updates,
+                    "reason": "managed files changed since the last recorded digest; refusing silent overwrite",
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
         return 1
     operations = []
     for path, previous in sorted(previous_ops.items()):
@@ -234,7 +272,9 @@ def cmd_apply(args: argparse.Namespace) -> int:
             current = managed_file_digest(full)
             if current == digest:
                 managed_now = bool(was_managed)
-                remove_on_uninstall = bool(previous.get("remove_on_uninstall", was_managed))
+                remove_on_uninstall = bool(
+                    previous.get("remove_on_uninstall", was_managed)
+                )
                 operations.append(
                     {
                         "path": path,
@@ -250,7 +290,9 @@ def cmd_apply(args: argparse.Namespace) -> int:
                 remove_on_uninstall = bool(previous.get("remove_on_uninstall", True))
                 previous_digest = previous.get("digest")
                 if previous_digest and current != previous_digest:
-                    raise RuntimeError(f"managed file drift changed during apply after preflight: {path}")
+                    raise RuntimeError(
+                        f"managed file drift changed during apply after preflight: {path}"
+                    )
                 write_text(full, content)
                 operations.append(
                     {
@@ -275,7 +317,16 @@ def cmd_apply(args: argparse.Namespace) -> int:
             )
             continue
         write_text(full, content)
-        operations.append({"path": path, "action": "created", "digest": digest, "owner": OWNER, "managed": True, "remove_on_uninstall": True})
+        operations.append(
+            {
+                "path": path,
+                "action": "created",
+                "digest": digest,
+                "owner": OWNER,
+                "managed": True,
+                "remove_on_uninstall": True,
+            }
+        )
     state = {
         "schema_version": SCHEMA_VERSION,
         "installed_at": utc_now(),
@@ -290,6 +341,8 @@ def cmd_apply(args: argparse.Namespace) -> int:
     write_json(install_state_path(root), state)
     print(f"Applied harness state: {install_state_path(root)}")
     return 0
+
+
 def source_plan_metadata() -> dict[str, Any]:
     if SOURCE_PLAN.exists():
         return {
@@ -303,15 +356,22 @@ def source_plan_metadata() -> dict[str, Any]:
         "implementation": "local-distillation",
         "warning": "source plan path was not present during apply",
     }
+
+
 def load_state(root: Path) -> dict[str, Any]:
     return load_json(install_state_path(root), {})
+
+
 def stale_active_references(root: Path) -> list[dict[str, Any]]:
     # Global state can contain prompt history; stale source checks should inspect policy/config surfaces only.
     active = [root / "config.toml", root / "AGENTS.md", root / "agent.md"]
     config_dir = root / "config.d"
     if config_dir.exists():
         active.extend(sorted(config_dir.glob("*.toml")))
-    pattern = re.compile(r"(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|codex-runtimes|plugins\\cache|plugins\\plugins)", re.I)
+    pattern = re.compile(
+        r"(\\\.tmp\\|\\tmp\\|vendor_imports|bundled-marketplaces|codex-runtimes|plugins\\cache|plugins\\plugins)",
+        re.I,
+    )
     matches = []
     for path in active:
         if not path.exists() or path.name in {"auth.json", ".credentials.json"}:
@@ -319,10 +379,14 @@ def stale_active_references(root: Path) -> list[dict[str, Any]]:
         try:
             for number, line in enumerate(read_text(path).splitlines(), 1):
                 if pattern.search(line):
-                    matches.append({"path": rel(path, root), "line": number, "text": line.strip()})
+                    matches.append(
+                        {"path": rel(path, root), "line": number, "text": line.strip()}
+                    )
         except UnicodeDecodeError:
             continue
     return matches
+
+
 def sentinel_checks(root: Path) -> list[dict[str, Any]]:
     targets = [
         "vendor_imports",
@@ -334,7 +398,9 @@ def sentinel_checks(root: Path) -> list[dict[str, Any]]:
         readonly = False
         if path.exists():
             try:
-                readonly = bool(path.stat().st_file_attributes & stat.FILE_ATTRIBUTE_READONLY)
+                readonly = bool(
+                    path.stat().st_file_attributes & stat.FILE_ATTRIBUTE_READONLY
+                )
             except AttributeError:
                 readonly = not os.access(path, os.W_OK)
         out.append(
@@ -346,16 +412,26 @@ def sentinel_checks(root: Path) -> list[dict[str, Any]]:
             }
         )
     return out
+
+
 def check_config(root: Path) -> dict[str, Any]:
     path = root / "config.toml"
     source = "managed_root"
     if not path.exists():
-        live_path = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex")) / "config.toml"
+        live_path = (
+            Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
+            / "config.toml"
+        )
         if live_path.exists():
             path = live_path
             source = "codex_home"
     if not path.exists():
-        return {"status": "fail", "error": "config.toml missing", "checked_path": str(path), "source": source}
+        return {
+            "status": "fail",
+            "error": "config.toml missing",
+            "checked_path": str(path),
+            "source": source,
+        }
     try:
         data = tomllib.loads(read_text(path))
     except Exception as exc:  # noqa: BLE001
@@ -366,7 +442,11 @@ def check_config(root: Path) -> dict[str, Any]:
         "goals",
         "memories",
     ]
-    unexpected = [key for key in ["enable_fanout", "multi_agent_v2", "js_repl"] if features.get(key) is True]
+    unexpected = [
+        key
+        for key in ["enable_fanout", "multi_agent_v2", "js_repl"]
+        if features.get(key) is True
+    ]
     missing = [key for key in expected_true if features.get(key) is not True]
     wrong_false: list[str] = []
     agents = data.get("agents", {})
@@ -381,12 +461,22 @@ def check_config(root: Path) -> dict[str, Any]:
     if isinstance(agents, dict) and agents:
         for role, config_file in required_agent_roles.items():
             role_data = agents.get(role, {})
-            if not isinstance(role_data, dict) or role_data.get("config_file") != config_file or not role_data.get("description"):
+            if (
+                not isinstance(role_data, dict)
+                or role_data.get("config_file") != config_file
+                or not role_data.get("description")
+            ):
                 missing_agent_roles.append(role)
     fallback_max_bytes = data.get("project_doc_max_bytes")
     missing_calibration_fallback = fallback_max_bytes != 65536
     return {
-        "status": "pass" if not missing and not unexpected and not wrong_false and not missing_agent_roles and not missing_calibration_fallback else "fail",
+        "status": "pass"
+        if not missing
+        and not unexpected
+        and not wrong_false
+        and not missing_agent_roles
+        and not missing_calibration_fallback
+        else "fail",
         "source": source,
         "path": str(path),
         "missing_true": missing,
@@ -395,6 +485,8 @@ def check_config(root: Path) -> dict[str, Any]:
         "missing_agent_roles": missing_agent_roles,
         "missing_calibration_fallback": missing_calibration_fallback,
     }
+
+
 def check_managed_files(root: Path) -> dict[str, Any]:
     state = load_state(root)
     if not state:
@@ -411,7 +503,13 @@ def check_managed_files(root: Path) -> dict[str, Any]:
         digest = managed_file_digest(path)
         if digest != op.get("digest"):
             drifted.append(op["path"])
-    return {"status": "pass" if not missing and not drifted else "fail", "missing": missing, "drifted": drifted}
+    return {
+        "status": "pass" if not missing and not drifted else "fail",
+        "missing": missing,
+        "drifted": drifted,
+    }
+
+
 def check_skill_frontmatter(root: Path) -> dict[str, Any]:
     state = load_state(root)
     managed = {
@@ -421,7 +519,9 @@ def check_skill_frontmatter(root: Path) -> dict[str, Any]:
     }
     missing = []
     warnings = []
-    for path in (root / "skills").glob("*/SKILL.md") if (root / "skills").exists() else []:
+    for path in (
+        (root / "skills").glob("*/SKILL.md") if (root / "skills").exists() else []
+    ):
         data = parse_frontmatter(read_text(path))
         required = ["name", "description", "version", "tags"]
         absent = [key for key in required if key not in data]
@@ -431,7 +531,13 @@ def check_skill_frontmatter(root: Path) -> dict[str, Any]:
                 missing.append(item)
             else:
                 warnings.append(item)
-    return {"status": "pass" if not missing else "fail", "missing": missing, "warnings": warnings}
+    return {
+        "status": "pass" if not missing else "fail",
+        "missing": missing,
+        "warnings": warnings,
+    }
+
+
 def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     fragment_path = root / "config.d" / "20-hooks.toml"
     if not fragment_path.exists():
@@ -440,12 +546,20 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     path = root / "config.toml"
     source = "managed_root"
     if not path.exists():
-        live_path = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex")) / "config.toml"
+        live_path = (
+            Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
+            / "config.toml"
+        )
         if live_path.exists():
             path = live_path
             source = "codex_home"
     if not path.exists():
-        return {"status": "fail", "error": "config.toml missing", "checked_path": str(path), "source": source}
+        return {
+            "status": "fail",
+            "error": "config.toml missing",
+            "checked_path": str(path),
+            "source": source,
+        }
     text = read_text(path)
     lowered = text.lower()
     required_fragments = [
@@ -464,28 +578,52 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     try:
         data = tomllib.loads(text)
     except Exception as exc:  # noqa: BLE001
-        return {"status": "fail", "error": f"config.toml parse failed: {exc}", "checked_path": str(path), "source": source}
+        return {
+            "status": "fail",
+            "error": f"config.toml parse failed: {exc}",
+            "checked_path": str(path),
+            "source": source,
+        }
     try:
         fragment_data = tomllib.loads(fragment_text)
     except Exception as exc:  # noqa: BLE001
-        return {"status": "fail", "error": f"config.d/20-hooks.toml parse failed: {exc}"}
+        return {
+            "status": "fail",
+            "error": f"config.d/20-hooks.toml parse failed: {exc}",
+        }
     hooks = data.get("hooks", {}) if isinstance(data, dict) else {}
-    fragment_hooks = fragment_data.get("hooks", {}) if isinstance(fragment_data, dict) else {}
+    fragment_hooks = (
+        fragment_data.get("hooks", {}) if isinstance(fragment_data, dict) else {}
+    )
     missing: dict[str, list[str]] = {}
     event_matchers: dict[str, list[str]] = {}
-    for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]:
+    for event in [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "Stop",
+    ]:
         groups = hooks.get(event, []) if isinstance(hooks, dict) else []
         if not groups:
             missing[event] = ["event"]
             continue
         if hooks.get(event) != fragment_hooks.get(event):
-            missing[f"{event}_reconcile"] = ["runtime config.toml differs from config.d/20-hooks.toml"]
+            missing[f"{event}_reconcile"] = [
+                "runtime config.toml differs from config.d/20-hooks.toml"
+            ]
         if event not in ["PreToolUse", "PostToolUse"]:
             continue
-        matchers = [str(group.get("matcher", "")) for group in groups if isinstance(group, dict)]
+        matchers = [
+            str(group.get("matcher", "")) for group in groups if isinstance(group, dict)
+        ]
         event_matchers[event] = matchers
         matcher_text = "|".join(matchers)
-        absent = [fragment for fragment in required_fragments if fragment != "compact-codex-hook.ps1" and fragment not in matcher_text]
+        absent = [
+            fragment
+            for fragment in required_fragments
+            if fragment != "compact-codex-hook.ps1" and fragment not in matcher_text
+        ]
         if absent:
             missing[event] = absent
     if "compact-codex-hook.ps1" not in lowered:
@@ -494,7 +632,15 @@ def hook_tool_routing_status(root: Path) -> dict[str, Any]:
     legacy_config = "hooks" + ".json"
     if legacy_hook in lowered or legacy_config in lowered:
         missing["legacy"] = ["legacy hook reference"]
-    return {"status": "pass" if not missing else "fail", "missing": missing, "matchers": event_matchers, "checked_path": str(path), "source": source}
+    return {
+        "status": "pass" if not missing else "fail",
+        "missing": missing,
+        "matchers": event_matchers,
+        "checked_path": str(path),
+        "source": source,
+    }
+
+
 def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
     selected = DOCTOR_TIERS.get(tier, DOCTOR_TIERS["full"])
     builders = {
@@ -511,14 +657,26 @@ def doctor_data(root: Path, tier: str = "full") -> dict[str, Any]:
         "skill_frontmatter": lambda: check_skill_frontmatter(root),
         "harness_file_size": lambda: harness_line_count_status(root),
         "workspace_script_file_size": lambda: workspace_script_line_count_status(root),
-        "stale_active_references": lambda: {"status": "pass", "matches": stale_active_references(root)},
+        "stale_active_references": lambda: {
+            "status": "pass",
+            "matches": stale_active_references(root),
+        },
         "sentinel_blockers": lambda: {"status": "pass", "items": sentinel_checks(root)},
     }
     checks = {name: builders[name]() for name in selected}
     if checks["stale_active_references"]["matches"]:
         checks["stale_active_references"]["status"] = "fail"
     failed = [name for name, result in checks.items() if result.get("status") != "pass"]
-    return {"generated_at": utc_now(), "root": str(root), "tier": tier, "status": "pass" if not failed else "fail", "failed": failed, "checks": checks}
+    return {
+        "generated_at": utc_now(),
+        "root": str(root),
+        "tier": tier,
+        "status": "pass" if not failed else "fail",
+        "failed": failed,
+        "checks": checks,
+    }
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = root_path(args)
     data = doctor_data(root, args.tier)
@@ -531,6 +689,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         for name, result in data["checks"].items():
             print(f"- {name}: {result.get('status')}")
     return 0 if data["status"] == "pass" else 1
+
+
 def cmd_repair(args: argparse.Namespace) -> int:
     root = root_path(args)
     state = load_state(root)
@@ -553,8 +713,16 @@ def cmd_repair(args: argparse.Namespace) -> int:
             repaired.append(path)
         else:
             repaired.append(path)
-    print(json.dumps({"apply": args.apply, "repair_targets": repaired}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {"apply": args.apply, "repair_targets": repaired},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
+
+
 def cmd_uninstall(args: argparse.Namespace) -> int:
     root = root_path(args)
     state = load_state(root)
@@ -576,21 +744,43 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     if install_state_path(root).exists():
         targets.append(rel(install_state_path(root), root))
     if refused:
-        print(json.dumps({"dry_run": not args.apply, "would_remove": targets, "refused": refused}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "dry_run": not args.apply,
+                    "would_remove": targets,
+                    "refused": refused,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 1
     if not args.apply:
-        print(json.dumps({"dry_run": True, "would_remove": targets}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {"dry_run": True, "would_remove": targets}, ensure_ascii=False, indent=2
+            )
+        )
         return 0
     for item in sorted(targets, reverse=True):
         path = root / item
         path.unlink()
-    print(json.dumps({"dry_run": False, "removed": targets}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps({"dry_run": False, "removed": targets}, ensure_ascii=False, indent=2)
+    )
     return 0
+
+
 def audit_data(root: Path) -> dict[str, Any]:
     doctor = doctor_data(root, tier="core")
     global_scan = load_json(root / "reports" / "global-scan.latest.json", {})
     verification = load_json(root / "reports" / "verification.latest.json", {})
-    verification_checks = {item.get("name"): item.get("status") for item in verification.get("checks", []) if isinstance(item, dict)}
+    verification_checks = {
+        item.get("name"): item.get("status")
+        for item in verification.get("checks", [])
+        if isinstance(item, dict)
+    }
     trajectory_records = load_trajectory_records(root)
     current_digest = harness_source_digest(root)
     global_scan_fresh = global_scan.get("harness_digest") == current_digest
@@ -603,67 +793,183 @@ def audit_data(root: Path) -> dict[str, Any]:
     checks = {
         "Tool Coverage": [
             ("toolchain shims exist", (root / "toolchains" / "shims").exists()),
-            ("codex verify command exists", (root / "maintenance" / "scripts" / "codex-verify.ps1").exists()),
-            ("MCP status documented", (root / "maintenance" / "MCP_RUNTIME_STATUS.md").exists()),
-            ("PowerShell wrappers installed", len(list((root / "maintenance" / "scripts").glob("codex-*.ps1"))) >= 8),
+            (
+                "codex verify command exists",
+                (root / "maintenance" / "scripts" / "codex-verify.ps1").exists(),
+            ),
+            (
+                "MCP status documented",
+                (root / "maintenance" / "MCP_RUNTIME_STATUS.md").exists(),
+            ),
+            (
+                "PowerShell wrappers installed",
+                len(list((root / "maintenance" / "scripts").glob("codex-*.ps1"))) >= 8,
+            ),
         ],
         "Context Efficiency": [
             ("AGENTS.md exists", (root / "AGENTS.md").exists()),
-            ("context inspection template exists", (root / "reports" / "context-inspection.template.md").exists()),
-            ("context inspection command produced latest report", (root / "reports" / "context-inspection.latest.json").exists()),
-            ("compact summaries directory exists", (root / "artifacts" / "compact-summaries").exists()),
-            ("global scan redacts content", global_scan.get("content_redacted") is True),
+            (
+                "context inspection template exists",
+                (root / "reports" / "context-inspection.template.md").exists(),
+            ),
+            (
+                "context inspection command produced latest report",
+                (root / "reports" / "context-inspection.latest.json").exists(),
+            ),
+            (
+                "compact summaries directory exists",
+                (root / "artifacts" / "compact-summaries").exists(),
+            ),
+            (
+                "global scan redacts content",
+                global_scan.get("content_redacted") is True,
+            ),
         ],
         "Quality Gates": [
-            ("doctor command exists", (root / "maintenance" / "scripts" / "codex-harness-doctor.ps1").exists()),
-            ("verify command exists", (root / "maintenance" / "scripts" / "codex-verify.ps1").exists()),
-            ("PM subagent protocol documented", pm_subagent_protocol_status(root).get("status") == "pass"),
-            ("harness engine modules exist", harness_engine_module_status(root).get("status") == "pass"),
-            ("harness python files stay under line limit", harness_line_count_status(root).get("status") == "pass"),
-            ("active app runtime state files are writable", app_runtime_state_writable_status(root).get("status") == "pass"),
-            ("mutable generated outputs are not git-tracked", generated_output_tracking_status(root).get("status") == "pass"),
-            ("compact hook contract is current", compact_hook_contract_status(root).get("status") == "pass"),
-            ("subagent nicknames are role-prefixed", subagent_nickname_policy_status(root).get("status") == "pass"),
-            ("hook tool routing uses compact config fragment", hook_tool_routing_status(root).get("status") == "pass"),
-            ("hook script parses by existence", (root / "hooks" / "compact-codex-hook.ps1").exists()),
+            (
+                "doctor command exists",
+                (
+                    root / "maintenance" / "scripts" / "codex-harness-doctor.ps1"
+                ).exists(),
+            ),
+            (
+                "verify command exists",
+                (root / "maintenance" / "scripts" / "codex-verify.ps1").exists(),
+            ),
+            (
+                "PM subagent protocol documented",
+                pm_subagent_protocol_status(root).get("status") == "pass",
+            ),
+            (
+                "harness engine modules exist",
+                harness_engine_module_status(root).get("status") == "pass",
+            ),
+            (
+                "harness python files stay under line limit",
+                harness_line_count_status(root).get("status") == "pass",
+            ),
+            (
+                "active app runtime state files are writable",
+                app_runtime_state_writable_status(root).get("status") == "pass",
+            ),
+            (
+                "mutable generated outputs are not git-tracked",
+                generated_output_tracking_status(root).get("status") == "pass",
+            ),
+            (
+                "compact hook contract is current",
+                compact_hook_contract_status(root).get("status") == "pass",
+            ),
+            (
+                "subagent nicknames are role-prefixed",
+                subagent_nickname_policy_status(root).get("status") == "pass",
+            ),
+            (
+                "hook tool routing uses compact config fragment",
+                hook_tool_routing_status(root).get("status") == "pass",
+            ),
+            (
+                "hook script parses by existence",
+                (root / "hooks" / "compact-codex-hook.ps1").exists(),
+            ),
             ("core doctor currently passes", doctor.get("status") == "pass"),
             ("latest verification report exists", bool(verification)),
             ("latest verification matches current harness source", verification_fresh),
-            ("latest verification includes lifecycle dry-runs", all(verification_checks.get(name) == "pass" for name in ["self_test", "repair_dry_run", "uninstall_dry_run"])),
-            ("PowerShell wrappers execute when shells exist", all(verification_checks.get(name) == "pass" for name in expected_power_shell_checks)),
+            (
+                "latest verification includes lifecycle dry-runs",
+                all(
+                    verification_checks.get(name) == "pass"
+                    for name in ["self_test", "repair_dry_run", "uninstall_dry_run"]
+                ),
+            ),
+            (
+                "PowerShell wrappers execute when shells exist",
+                all(
+                    verification_checks.get(name) == "pass"
+                    for name in expected_power_shell_checks
+                ),
+            ),
         ],
         "Memory Persistence": [
             ("trajectories directory exists", (root / "trajectories").exists()),
-            ("trajectory command wrapper exists", (root / "maintenance" / "scripts" / "codex-trajectory.ps1").exists()),
-            ("trajectory records parse with required fields", trajectory_records_valid(trajectory_records)),
+            (
+                "trajectory command wrapper exists",
+                (root / "maintenance" / "scripts" / "codex-trajectory.ps1").exists(),
+            ),
+            (
+                "trajectory records parse with required fields",
+                trajectory_records_valid(trajectory_records),
+            ),
             ("learning drafts directory exists", (root / "learning").exists()),
             ("install-state exists", install_state_path(root).exists()),
-            ("source plan metadata recorded", bool(load_state(root).get("source", {}).get("plan"))),
+            (
+                "source plan metadata recorded",
+                bool(load_state(root).get("source", {}).get("plan")),
+            ),
         ],
         "Eval Coverage": [
-            ("at least five eval definitions", len(list((root / "evals").glob("*.json"))) >= 5 if (root / "evals").exists() else False),
-            ("benchmark runner wrapper exists", (root / "maintenance" / "scripts" / "codex-eval.ps1").exists()),
-            ("benchmark command wrapper exists", (root / "maintenance" / "scripts" / "codex-benchmark.ps1").exists()),
+            (
+                "at least five eval definitions",
+                len(list((root / "evals").glob("*.json"))) >= 5
+                if (root / "evals").exists()
+                else False,
+            ),
+            (
+                "benchmark runner wrapper exists",
+                (root / "maintenance" / "scripts" / "codex-eval.ps1").exists(),
+            ),
+            (
+                "benchmark command wrapper exists",
+                (root / "maintenance" / "scripts" / "codex-benchmark.ps1").exists(),
+            ),
             ("benchmark results are parseable", latest_benchmark_results_valid(root)),
-            ("audit command exists", (root / "maintenance" / "scripts" / "codex-harness-audit.ps1").exists()),
+            (
+                "audit command exists",
+                (root / "maintenance" / "scripts" / "codex-harness-audit.ps1").exists(),
+            ),
             ("eval results exist", (root / "reports" / "eval-results.jsonl").exists()),
         ],
         "Security Guardrails": [
             (".gitignore exists", (root / ".gitignore").exists()),
             ("security module available", "security" in MODULES),
             ("stale active references absent", not stale_active_references(root)),
-            ("global scan active hits absent", global_scan.get("active_hit_count", 0) == 0),
-            ("global scan had no scan errors", global_scan.get("scan_error_count", 1) == 0),
+            (
+                "global scan active hits absent",
+                global_scan.get("active_hit_count", 0) == 0,
+            ),
+            (
+                "global scan had no scan errors",
+                global_scan.get("scan_error_count", 1) == 0,
+            ),
             ("global scan matches current harness source", global_scan_fresh),
         ],
         "Cost Efficiency": [
-            ("tool result artifact directory exists", (root / "artifacts" / "tool-results").exists()),
-            ("tool output artifact threshold configured", COMMAND_ARTIFACT_THRESHOLD_CHARS > COMMAND_PREVIEW_CHARS),
-            ("retrieval report avoids generated and memory roots", latest_retrieval_report_valid(root)),
+            (
+                "tool result artifact directory exists",
+                (root / "artifacts" / "tool-results").exists(),
+            ),
+            (
+                "tool output artifact threshold configured",
+                COMMAND_ARTIFACT_THRESHOLD_CHARS > COMMAND_PREVIEW_CHARS,
+            ),
+            (
+                "retrieval report avoids generated and memory roots",
+                latest_retrieval_report_valid(root),
+            ),
             ("compact summary has required sections", compact_summary_valid(root)),
-        ("workspace dependencies use official app bundle", check_config(root).get("status") == "pass"),
-            ("large-output storage documented", (root / "artifacts" / "tool-results" / "README.md").exists()),
-            ("reports directory excluded from global scan recursion", "reports/**" in " ".join(global_scan.get("patterns", [])) or global_scan.get("content_redacted") is True),
+            (
+                "workspace dependencies use official app bundle",
+                check_config(root).get("status") == "pass",
+            ),
+            (
+                "large-output storage documented",
+                (root / "artifacts" / "tool-results" / "README.md").exists(),
+            ),
+            (
+                "reports directory excluded from global scan recursion",
+                "reports/**" in " ".join(global_scan.get("patterns", []))
+                or global_scan.get("content_redacted") is True,
+            ),
         ],
     }
     categories = []
@@ -678,7 +984,9 @@ def audit_data(root: Path) -> dict[str, Any]:
         failures = [name for name, ok in items if not ok]
         if failures:
             top_actions.append(f"{category}: {failures[0]}")
-        categories.append({"name": category, "passed": passed, "total": total, "failures": failures})
+        categories.append(
+            {"name": category, "passed": passed, "total": total, "failures": failures}
+        )
     score = round((total_pass / total_count) * 100, 2) if total_count else 0
     return {
         "rubric_version": RUBRIC_VERSION,
@@ -688,12 +996,22 @@ def audit_data(root: Path) -> dict[str, Any]:
         "categories": categories,
         "top_actions": top_actions[:7],
     }
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     root = root_path(args)
     data = audit_data(root)
     ensure_dir(root / "reports")
     write_json(root / "reports" / "harness-audit.latest.json", data)
-    text = ["# Harness Audit", "", f"- rubric_version: {data['rubric_version']}", f"- score: {data['score']}", f"- status: {data['status']}", "", "## Categories"]
+    text = [
+        "# Harness Audit",
+        "",
+        f"- rubric_version: {data['rubric_version']}",
+        f"- score: {data['score']}",
+        f"- status: {data['status']}",
+        "",
+        "## Categories",
+    ]
     for category in data["categories"]:
         text.append(f"- {category['name']}: {category['passed']}/{category['total']}")
     text.extend(["", "## Top Actions"])
@@ -704,6 +1022,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
     else:
         print("\n".join(text))
     return 0 if data["status"] == "pass" else 1
+
+
 def load_trajectory_records(root: Path) -> list[dict[str, Any]]:
     path = root / "trajectories" / "runs.jsonl"
     if not path.exists():
@@ -715,22 +1035,58 @@ def load_trajectory_records(root: Path) -> list[dict[str, Any]]:
         try:
             records.append(json.loads(line))
         except json.JSONDecodeError:
-            records.append({"version": TRAJECTORY_VERSION, "error": "invalid-jsonl-line", "raw_preview": clean_report_string(line)})
+            records.append(
+                {
+                    "version": TRAJECTORY_VERSION,
+                    "error": "invalid-jsonl-line",
+                    "raw_preview": clean_report_string(line),
+                }
+            )
     return records
-def trajectory_records_valid(records: list[dict[str, Any]], *, require_records: bool = True) -> bool:
+
+
+def trajectory_records_valid(
+    records: list[dict[str, Any]], *, require_records: bool = True
+) -> bool:
     if require_records and not records:
         return False
-    required = {"version", "run_id", "timestamp", "task", "verification_result", "completed"}
+    required = {
+        "version",
+        "run_id",
+        "timestamp",
+        "task",
+        "verification_result",
+        "completed",
+    }
     return all(not item.get("error") and required.issubset(item) for item in records)
+
+
 def latest_retrieval_report_valid(root: Path) -> bool:
     report = load_json(root / "reports" / "retrieval-report.latest.json", {})
-    forbidden = ("artifacts/", "cache/", "memories/", "reports/", "sessions/", "sqlite/", "trajectories/", "node_repl/")
+    forbidden = (
+        "artifacts/",
+        "cache/",
+        "memories/",
+        "reports/",
+        "sessions/",
+        "sqlite/",
+        "trajectories/",
+        "node_repl/",
+    )
     selected = report.get("selected_context", [])
     candidates = report.get("candidate_files", [])
     if not isinstance(selected, list) or not isinstance(candidates, list):
         return False
-    paths = [item.get("path", "") for item in [*selected, *candidates] if isinstance(item, dict)]
-    return bool(selected) and all(not any(path.startswith(prefix) for prefix in forbidden) for path in paths)
+    paths = [
+        item.get("path", "")
+        for item in [*selected, *candidates]
+        if isinstance(item, dict)
+    ]
+    return bool(selected) and all(
+        not any(path.startswith(prefix) for prefix in forbidden) for path in paths
+    )
+
+
 def latest_benchmark_results_valid(root: Path) -> bool:
     path = root / "reports" / "benchmark-results.jsonl"
     if not path.exists():
@@ -746,15 +1102,36 @@ def latest_benchmark_results_valid(root: Path) -> bool:
         latest = item
     if latest is None:
         return False
-    if not {"timestamp", "benchmark_id", "status", "success_rate", "checks", "error_count", "harness_digest"}.issubset(latest):
+    if not {
+        "timestamp",
+        "benchmark_id",
+        "status",
+        "success_rate",
+        "checks",
+        "error_count",
+        "harness_digest",
+    }.issubset(latest):
         return False
     if latest.get("harness_digest") != harness_source_digest(root):
         return False
     checks = latest.get("checks")
-    return isinstance(checks, list) and bool(checks) and all(isinstance(item, dict) for item in checks)
+    return (
+        isinstance(checks, list)
+        and bool(checks)
+        and all(isinstance(item, dict) for item in checks)
+    )
+
+
 def compact_summary_valid(root: Path) -> bool:
-    summaries = sorted(path for path in (root / "artifacts" / "compact-summaries").glob("*.md") if path.name.lower() != "readme.md")
+    summaries = sorted(
+        path
+        for path in (root / "artifacts" / "compact-summaries").glob("*.md")
+        if path.name.lower() != "readme.md"
+    )
     if not summaries:
         return False
     text = read_text(summaries[-1])
-    return all(section in text for section in ["## Goal", "## Test Results", "## Next Steps", "## Risks"])
+    return all(
+        section in text
+        for section in ["## Goal", "## Test Results", "## Next Steps", "## Risks"]
+    )

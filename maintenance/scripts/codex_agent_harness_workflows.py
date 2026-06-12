@@ -34,7 +34,13 @@ from codex_agent_harness_base import (
     write_text,
 )
 from codex_agent_harness_calibration import check_calibration_policy
-from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, load_trajectory_records, trajectory_records_valid
+from codex_agent_harness_lifecycle import (
+    audit_data,
+    check_config,
+    check_managed_files,
+    load_trajectory_records,
+    trajectory_records_valid,
+)
 from codex_agent_harness_smoke import (
     check_adversarial_review_integration_smoke,
     check_goal_integrity_gate_smoke,
@@ -51,7 +57,11 @@ def resolve_codex_bundled_tool(name: str) -> str:
         return str(direct)
     if bin_root.exists():
         matches = sorted(
-            (candidate / f"{name}.exe" for candidate in bin_root.iterdir() if candidate.is_dir()),
+            (
+                candidate / f"{name}.exe"
+                for candidate in bin_root.iterdir()
+                if candidate.is_dir()
+            ),
             key=lambda path: path.stat().st_mtime if path.exists() else 0,
             reverse=True,
         )
@@ -63,12 +73,19 @@ def resolve_codex_bundled_tool(name: str) -> str:
 
 def resolve_powershell_exe(codex_home: Path) -> str:
     shim_root = codex_home / "toolchains" / "shims"
-    alias_stub = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+    alias_stub = (
+        Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "pwsh.exe"
+    )
     program_files = Path(os.environ.get("ProgramFiles") or r"C:\Program Files")
     candidates: list[Path] = []
     windows_apps = program_files / "WindowsApps"
     if windows_apps.exists():
-        candidates.extend(sorted(windows_apps.glob("Microsoft.PowerShell_*__8wekyb3d8bbwe/pwsh.exe"), reverse=True))
+        candidates.extend(
+            sorted(
+                windows_apps.glob("Microsoft.PowerShell_*__8wekyb3d8bbwe/pwsh.exe"),
+                reverse=True,
+            )
+        )
     candidates.append(program_files / "PowerShell" / "7" / "pwsh.exe")
     which_pwsh = shutil.which("pwsh.exe")
     if which_pwsh:
@@ -82,7 +99,11 @@ def resolve_powershell_exe(codex_home: Path) -> str:
         if candidate.name == "powershell.exe":
             return str(candidate)
         candidate_text = str(candidate).lower()
-        if candidate.exists() and candidate_text != alias_stub_text and not candidate_text.startswith(str(shim_root).lower()):
+        if (
+            candidate.exists()
+            and candidate_text != alias_stub_text
+            and not candidate_text.startswith(str(shim_root).lower())
+        ):
             return str(candidate)
     if alias_stub.exists():
         return str(alias_stub)
@@ -113,7 +134,9 @@ def normalize_p0_report_only_check(check: dict[str, Any]) -> dict[str, Any]:
         check["status"] = "pass"
         check["exit_code"] = 0
         check["report_only_status"] = result.get("status")
-        check["report_only_note"] = "ReportOnly is accepted here only when it has no failures, no evidence gaps, and no not-run checks; full P0 remains the final clean evidence."
+        check["report_only_note"] = (
+            "ReportOnly is accepted here only when it has no failures, no evidence gaps, and no not-run checks; full P0 remains the final clean evidence."
+        )
     return check
 
 
@@ -131,7 +154,9 @@ def load_eval_definition(root: Path, eval_id: str) -> tuple[dict[str, Any], list
             errors.append(f"missing {key}")
     if data.get("eval_id") != eval_id:
         errors.append("eval_id mismatch")
-    if not isinstance(data.get("success_criteria"), list) or not data.get("success_criteria"):
+    if not isinstance(data.get("success_criteria"), list) or not data.get(
+        "success_criteria"
+    ):
         errors.append("success_criteria must be a non-empty list")
     if not isinstance(data.get("grader"), str) or not data.get("grader"):
         errors.append("grader must be a non-empty string")
@@ -153,7 +178,13 @@ def compact_hook_route_scan(root: Path) -> dict[str, Any]:
         except tomllib.TOMLDecodeError as exc:
             config = {}
             failures.append(f"config.d/20-hooks.toml: invalid TOML: {exc}")
-        expected_events = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]
+        expected_events = [
+            "SessionStart",
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PostToolUse",
+            "Stop",
+        ]
         hook_section = config.get("hooks", {}) if isinstance(config, dict) else {}
         for event in expected_events:
             event_entries = hook_section.get(event, [])
@@ -162,22 +193,34 @@ def compact_hook_route_scan(root: Path) -> dict[str, Any]:
                 continue
             event_has_valid_route = False
             for entry_index, event_entry in enumerate(event_entries):
-                hook_entries = event_entry.get("hooks", []) if isinstance(event_entry, dict) else []
+                hook_entries = (
+                    event_entry.get("hooks", [])
+                    if isinstance(event_entry, dict)
+                    else []
+                )
                 if not isinstance(hook_entries, list) or not hook_entries:
                     failures.append(f"{event}[{entry_index}]: missing command hook")
                     continue
                 for hook_index, hook_entry in enumerate(hook_entries):
                     if not isinstance(hook_entry, dict):
-                        failures.append(f"{event}[{entry_index}].hooks[{hook_index}]: invalid command hook")
+                        failures.append(
+                            f"{event}[{entry_index}].hooks[{hook_index}]: invalid command hook"
+                        )
                         continue
                     command = str(hook_entry.get("command", ""))
                     command_windows = str(hook_entry.get("commandWindows", ""))
-                    route_ok = hook_route_uses_hidden_compact_runner(command, command_windows)
+                    route_ok = hook_route_uses_hidden_compact_runner(
+                        command, command_windows
+                    )
                     if route_ok:
                         event_has_valid_route = True
-                        hits.append(f"{event}[{entry_index}].hooks[{hook_index}]: hidden compact runner route")
+                        hits.append(
+                            f"{event}[{entry_index}].hooks[{hook_index}]: hidden compact runner route"
+                        )
                     else:
-                        failures.append(f"{event}[{entry_index}].hooks[{hook_index}]: command/commandWindows route mismatch")
+                        failures.append(
+                            f"{event}[{entry_index}].hooks[{hook_index}]: command/commandWindows route mismatch"
+                        )
             if not event_has_valid_route:
                 failures.append(f"{event}: no valid commandWindows compact hook route")
     ok = bool(hits) and not missing and not failures
@@ -185,7 +228,9 @@ def compact_hook_route_scan(root: Path) -> dict[str, Any]:
         "status": "pass" if ok else "fail",
         "exit_code": 0 if ok else 1,
         "stdout_preview": "\n".join(hits[:5]),
-        "stderr_preview": "; ".join([*(f"missing {item}" for item in missing), *failures[:10]]),
+        "stderr_preview": "; ".join(
+            [*(f"missing {item}" for item in missing), *failures[:10]]
+        ),
         "duration_seconds": 0,
     }
 
@@ -198,68 +243,271 @@ def cmd_context(args: argparse.Namespace) -> int:
     truncation_decisions = []
     for item in files:
         path = root / item["path"]
-        warnings.extend({"path": item["path"], "warning": warning} for warning in instruction_warnings(path))
+        warnings.extend(
+            {"path": item["path"], "warning": warning}
+            for warning in instruction_warnings(path)
+        )
         if item["bytes"] > 12000:
-            truncation_decisions.append({"path": item["path"], "strategy": "head-tail", "head_bytes": 6000, "tail_bytes": 3000})
+            truncation_decisions.append(
+                {
+                    "path": item["path"],
+                    "strategy": "head-tail",
+                    "head_bytes": 6000,
+                    "tail_bytes": 3000,
+                }
+            )
     report = {
         "generated_at": utc_now(),
         "discovered_instruction_files": files,
         "selected_primary_instruction_source": selected,
-        "skipped_instruction_sources": [{"path": f["path"], "reason": "lower-priority instruction source"} for f in files[1:]],
+        "skipped_instruction_sources": [
+            {"path": f["path"], "reason": "lower-priority instruction source"}
+            for f in files[1:]
+        ],
         "truncation_decisions": truncation_decisions,
         "warnings": warnings,
         "estimated_context_size_bytes": sum(f["bytes"] for f in files[:2]),
     }
     write_json(root / "reports" / "context-inspection.latest.json", report)
-    lines = ["# Context Inspection", "", f"- selected_primary_instruction_source: {selected}", f"- estimated_context_size_bytes: {report['estimated_context_size_bytes']}", "", "## Discovered"]
+    lines = [
+        "# Context Inspection",
+        "",
+        f"- selected_primary_instruction_source: {selected}",
+        f"- estimated_context_size_bytes: {report['estimated_context_size_bytes']}",
+        "",
+        "## Discovered",
+    ]
     lines.extend(f"- {f['path']} ({f['bytes']} bytes)" for f in files)
     lines.extend(["", "## Warnings"])
     lines.extend(f"- {item['path']}: {item['warning']}" for item in warnings or [])
     if not warnings:
         lines.append("- None")
-    write_text(root / "reports" / "context-inspection.latest.md", "\n".join(lines) + "\n")
+    write_text(
+        root / "reports" / "context-inspection.latest.md", "\n".join(lines) + "\n"
+    )
     print(root / "reports" / "context-inspection.latest.md")
     return 0
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
     root = root_path(args)
-    codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser().resolve()
+    codex_home = (
+        Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+        .expanduser()
+        .resolve()
+    )
     powershell = resolve_powershell_exe(codex_home)
     shim_root = codex_home / "toolchains" / "shims"
     codex_ps1 = shim_root / "codex.ps1"
     codex_exe = resolve_codex_bundled_tool("codex")
-    validate_script = codex_home / "maintenance" / "scripts" / "validate-codex-scaffold.ps1"
+    validate_script = (
+        codex_home / "maintenance" / "scripts" / "validate-codex-scaffold.ps1"
+    )
     p0_script = codex_home / "maintenance" / "scripts" / "codex-p0-integrity-loop.ps1"
     checks = []
 
-    checks.append({"name": "repo_verify", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repo-verify"], root, timeout=180)})
-    checks.append({"name": "doctor_tier_smoke", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "eval", "--eval-id", "doctor-tier-smoke"], root, timeout=180)})
-    checks.append({"name": "worktree_sensitive_diff_scan", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "maintenance/scripts/check-worktree-sensitive-diff.ps1"], root, timeout=120)})
+    checks.append(
+        {
+            "name": "repo_verify",
+            **run_command(
+                [
+                    sys.executable,
+                    "maintenance/scripts/codex_agent_harness.py",
+                    "repo-verify",
+                ],
+                root,
+                timeout=180,
+            ),
+        }
+    )
+    checks.append(
+        {
+            "name": "doctor_tier_smoke",
+            **run_command(
+                [
+                    sys.executable,
+                    "maintenance/scripts/codex_agent_harness.py",
+                    "eval",
+                    "--eval-id",
+                    "doctor-tier-smoke",
+                ],
+                root,
+                timeout=180,
+            ),
+        }
+    )
+    checks.append(
+        {
+            "name": "worktree_sensitive_diff_scan",
+            **run_command(
+                [
+                    powershell,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    "maintenance/scripts/check-worktree-sensitive-diff.ps1",
+                ],
+                root,
+                timeout=120,
+            ),
+        }
+    )
     if validate_script.exists():
-        checks.append({"name": "scaffold_validation", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(validate_script), "-CodexHome", str(codex_home), "-Json"], root, timeout=180)})
+        checks.append(
+            {
+                "name": "scaffold_validation",
+                **run_command(
+                    [
+                        powershell,
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        str(validate_script),
+                        "-CodexHome",
+                        str(codex_home),
+                        "-Json",
+                    ],
+                    root,
+                    timeout=180,
+                ),
+            }
+        )
     else:
-        checks.append({"name": "scaffold_validation", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {validate_script}", "duration_seconds": 0})
+        checks.append(
+            {
+                "name": "scaffold_validation",
+                "status": "fail",
+                "exit_code": 1,
+                "stdout_preview": "",
+                "stderr_preview": f"missing {validate_script}",
+                "duration_seconds": 0,
+            }
+        )
     if p0_script.exists():
-        p0_check = run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(p0_script), "-ReportOnly", "-Json", "-ProcessTimeoutSeconds", "180"], root, timeout=300, include_stdout=True)
-        checks.append({"name": "p0_integrity_report_only", **normalize_p0_report_only_check(p0_check)})
+        p0_check = run_command(
+            [
+                powershell,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(p0_script),
+                "-ReportOnly",
+                "-Json",
+                "-ProcessTimeoutSeconds",
+                "180",
+            ],
+            root,
+            timeout=300,
+            include_stdout=True,
+        )
+        checks.append(
+            {
+                "name": "p0_integrity_report_only",
+                **normalize_p0_report_only_check(p0_check),
+            }
+        )
     else:
-        checks.append({"name": "p0_integrity_report_only", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": f"missing {p0_script}", "duration_seconds": 0})
+        checks.append(
+            {
+                "name": "p0_integrity_report_only",
+                "status": "fail",
+                "exit_code": 1,
+                "stdout_preview": "",
+                "stderr_preview": f"missing {p0_script}",
+                "duration_seconds": 0,
+            }
+        )
     if codex_exe:
-        checks.append({"name": "codex_mcp_list", **run_command([codex_exe, "mcp", "list", "--json"], root, timeout=120)})
-        checks.append({"name": "codex_doctor", **run_command([codex_exe, "doctor", "--json"], root, timeout=180)})
+        checks.append(
+            {
+                "name": "codex_mcp_list",
+                **run_command([codex_exe, "mcp", "list", "--json"], root, timeout=120),
+            }
+        )
+        checks.append(
+            {
+                "name": "codex_doctor",
+                **run_command([codex_exe, "doctor", "--json"], root, timeout=180),
+            }
+        )
     elif codex_ps1.exists():
-        checks.append({"name": "codex_mcp_list", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(codex_ps1), "mcp", "list", "--json"], root, timeout=120)})
-        checks.append({"name": "codex_doctor", **run_command([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(codex_ps1), "doctor", "--json"], root, timeout=180)})
+        checks.append(
+            {
+                "name": "codex_mcp_list",
+                **run_command(
+                    [
+                        powershell,
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        str(codex_ps1),
+                        "mcp",
+                        "list",
+                        "--json",
+                    ],
+                    root,
+                    timeout=120,
+                ),
+            }
+        )
+        checks.append(
+            {
+                "name": "codex_doctor",
+                **run_command(
+                    [
+                        powershell,
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        str(codex_ps1),
+                        "doctor",
+                        "--json",
+                    ],
+                    root,
+                    timeout=180,
+                ),
+            }
+        )
     else:
-        checks.append({"name": "codex_mcp_list", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "missing bundled codex.exe and codex.ps1", "duration_seconds": 0})
-        checks.append({"name": "codex_doctor", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "missing bundled codex.exe and codex.ps1", "duration_seconds": 0})
+        checks.append(
+            {
+                "name": "codex_mcp_list",
+                "status": "fail",
+                "exit_code": 1,
+                "stdout_preview": "",
+                "stderr_preview": "missing bundled codex.exe and codex.ps1",
+                "duration_seconds": 0,
+            }
+        )
+        checks.append(
+            {
+                "name": "codex_doctor",
+                "status": "fail",
+                "exit_code": 1,
+                "stdout_preview": "",
+                "stderr_preview": "missing bundled codex.exe and codex.ps1",
+                "duration_seconds": 0,
+            }
+        )
 
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     report = {"generated_at": utc_now(), "status": status, "checks": checks}
     write_verification_report(root, report)
-    artifacts = [artifact for check in checks for artifact in check.get("artifacts", [])]
-    append_trajectory(root, "codex-harness verify current control-plane stack", status, checks, artifacts)
+    artifacts = [
+        artifact for check in checks for artifact in check.get("artifacts", [])
+    ]
+    append_trajectory(
+        root,
+        "codex-harness verify current control-plane stack",
+        status,
+        checks,
+        artifacts,
+    )
     print(root / "reports" / "verification.latest.md")
     return 0 if status == "pass" else 1
 
@@ -289,9 +537,45 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
             ),
         }
     )
-    checks.append({"name": "json_eval_definitions", **run_command([sys.executable, "-c", "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('evals').glob('*.json')]"], root)})
-    checks.append({"name": "agent_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('agents').glob('*.toml')]"], root)})
-    checks.append({"name": "hook_config_toml_parse", **run_command([sys.executable, "-c", "import pathlib,tomllib; tomllib.loads(pathlib.Path('config.d/20-hooks.toml').read_text(encoding='utf-8'))"], root)})
+    checks.append(
+        {
+            "name": "json_eval_definitions",
+            **run_command(
+                [
+                    sys.executable,
+                    "-c",
+                    "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('evals').glob('*.json')]",
+                ],
+                root,
+            ),
+        }
+    )
+    checks.append(
+        {
+            "name": "agent_toml_parse",
+            **run_command(
+                [
+                    sys.executable,
+                    "-c",
+                    "import pathlib,tomllib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('agents').glob('*.toml')]",
+                ],
+                root,
+            ),
+        }
+    )
+    checks.append(
+        {
+            "name": "hook_config_toml_parse",
+            **run_command(
+                [
+                    sys.executable,
+                    "-c",
+                    "import pathlib,tomllib; tomllib.loads(pathlib.Path('config.d/20-hooks.toml').read_text(encoding='utf-8'))",
+                ],
+                root,
+            ),
+        }
+    )
     checks.append({"name": "compact_hook_route_scan", **compact_hook_route_scan(root)})
     calibration = check_calibration_policy(root, require_config=False)
     checks.append(
@@ -321,7 +605,16 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
         "evals/repo-verify.json",
     ]
     missing = [path for path in required_paths if not (root / path).exists()]
-    checks.append({"name": "required_managed_source_paths", "status": "pass" if not missing else "fail", "exit_code": 0 if not missing else 1, "stdout_preview": "", "stderr_preview": ", ".join(missing), "duration_seconds": 0})
+    checks.append(
+        {
+            "name": "required_managed_source_paths",
+            "status": "pass" if not missing else "fail",
+            "exit_code": 0 if not missing else 1,
+            "stdout_preview": "",
+            "stderr_preview": ", ".join(missing),
+            "duration_seconds": 0,
+        }
+    )
     if command_exists("powershell.exe"):
         checks.append(
             {
@@ -340,15 +633,52 @@ def cmd_repo_verify(args: argparse.Namespace) -> int:
             }
         )
     else:
-        checks.append({"name": "powershell_parser", "status": "fail", "exit_code": 1, "stdout_preview": "", "stderr_preview": "powershell.exe not found", "duration_seconds": 0})
-    checks.append({"name": "generated_outputs_untracked", **run_command(["git", "ls-files", "--", "reports/*.latest.json", "reports/*.latest.md", "reports/*results.jsonl", "trajectories/runs.jsonl", "artifacts/tool-results/*.txt"], root, include_stdout=True)})
+        checks.append(
+            {
+                "name": "powershell_parser",
+                "status": "fail",
+                "exit_code": 1,
+                "stdout_preview": "",
+                "stderr_preview": "powershell.exe not found",
+                "duration_seconds": 0,
+            }
+        )
+    checks.append(
+        {
+            "name": "generated_outputs_untracked",
+            **run_command(
+                [
+                    "git",
+                    "ls-files",
+                    "--",
+                    "reports/*.latest.json",
+                    "reports/*.latest.md",
+                    "reports/*results.jsonl",
+                    "trajectories/runs.jsonl",
+                    "artifacts/tool-results/*.txt",
+                ],
+                root,
+                include_stdout=True,
+            ),
+        }
+    )
     if checks[-1].get("status") == "pass" and str(checks[-1].get("stdout", "")).strip():
         checks[-1]["status"] = "fail"
         checks[-1]["stderr_preview"] = "mutable generated output is tracked"
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
-    report = {"generated_at": utc_now(), "status": status, "scope": "repo-managed-source", "checks": checks}
+    report = {
+        "generated_at": utc_now(),
+        "status": status,
+        "scope": "repo-managed-source",
+        "checks": checks,
+    }
     write_json(root / "reports" / "repo-verify.latest.json", report)
-    write_text(root / "reports" / "repo-verify.latest.md", "# Repo Verify\n\n" + "\n".join(f"- {c['name']}: {c['status']} ({c['exit_code']})" for c in checks) + "\n")
+    write_text(
+        root / "reports" / "repo-verify.latest.md",
+        "# Repo Verify\n\n"
+        + "\n".join(f"- {c['name']}: {c['status']} ({c['exit_code']})" for c in checks)
+        + "\n",
+    )
     append_trajectory(root, "codex-harness repo-verify", status, checks)
     print(root / "reports" / "repo-verify.latest.md")
     return 0 if status == "pass" else 1
@@ -360,13 +690,21 @@ def write_verification_report(root: Path, report: dict[str, Any]) -> None:
     write_json(root / "reports" / "verification.latest.json", report)
     write_text(
         root / "reports" / "verification.latest.md",
-        "# Verification\n\n" + "\n".join(f"- {c['name']}: {c['status']} ({c['exit_code']})" for c in report["checks"]) + "\n",
+        "# Verification\n\n"
+        + "\n".join(
+            f"- {c['name']}: {c['status']} ({c['exit_code']})" for c in report["checks"]
+        )
+        + "\n",
     )
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
     root = root_path(args)
-    eval_ids = [args.eval_id] if args.eval_id else [p.stem for p in sorted((root / "evals").glob("*.json"))]
+    eval_ids = (
+        [args.eval_id]
+        if args.eval_id
+        else [p.stem for p in sorted((root / "evals").glob("*.json"))]
+    )
     results = []
     for eval_id in eval_ids:
         definition, definition_errors = load_eval_definition(root, eval_id)
@@ -381,19 +719,32 @@ def cmd_eval(args: argparse.Namespace) -> int:
         elif eval_id == "context-inspection":
             context_ns = argparse.Namespace(root=str(root))
             report = root / "reports" / "context-inspection.latest.json"
-            passed = cmd_context(context_ns) == 0 and bool(load_json(report, {}).get("selected_primary_instruction_source"))
+            passed = cmd_context(context_ns) == 0 and bool(
+                load_json(report, {}).get("selected_primary_instruction_source")
+            )
         elif eval_id == "trajectory-search":
             records = load_trajectory_records(root)
-            trajectory_ns = argparse.Namespace(root=str(root), search=None, failed=False, recent=5)
-            passed = bool(records) and trajectory_records_valid(records) and cmd_trajectory(trajectory_ns) == 0
+            trajectory_ns = argparse.Namespace(
+                root=str(root), search=None, failed=False, recent=5
+            )
+            passed = (
+                bool(records)
+                and trajectory_records_valid(records)
+                and cmd_trajectory(trajectory_ns) == 0
+            )
         elif eval_id == "orchestration-governance-smoke":
             passed = check_orchestration_governance_smoke(root).get("status") == "pass"
         elif eval_id == "hook-policy-smoke":
             passed = check_hook_policy_smoke(root).get("status") == "pass"
         elif eval_id == "adversarial-review-integration-smoke":
-            passed = check_adversarial_review_integration_smoke(root).get("status") == "pass"
+            passed = (
+                check_adversarial_review_integration_smoke(root).get("status") == "pass"
+            )
         elif eval_id == "worker-watcher-normalized-handoff-smoke":
-            passed = check_worker_watcher_normalized_handoff_smoke(root).get("status") == "pass"
+            passed = (
+                check_worker_watcher_normalized_handoff_smoke(root).get("status")
+                == "pass"
+            )
         elif eval_id == "goal-integrity-gate-smoke":
             passed = check_goal_integrity_gate_smoke(root).get("status") == "pass"
         elif eval_id == "calibration-policy-smoke":
@@ -414,12 +765,49 @@ def cmd_eval(args: argparse.Namespace) -> int:
                 == "pass"
             )
         elif eval_id == "doctor-tier-smoke":
-            core = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--tier", "core", "--json"], root, include_stdout=True)
-            stress = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--tier", "stress", "--json"], root, include_stdout=True)
-            full = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "doctor", "--json"], root, include_stdout=True)
-            core_json = json.loads(core.get("stdout", "{}")) if core.get("stdout") else {}
-            stress_json = json.loads(stress.get("stdout", "{}")) if stress.get("stdout") else {}
-            full_json = json.loads(full.get("stdout", "{}")) if full.get("stdout") else {}
+            core = run_command(
+                [
+                    sys.executable,
+                    "maintenance/scripts/codex_agent_harness.py",
+                    "doctor",
+                    "--tier",
+                    "core",
+                    "--json",
+                ],
+                root,
+                include_stdout=True,
+            )
+            stress = run_command(
+                [
+                    sys.executable,
+                    "maintenance/scripts/codex_agent_harness.py",
+                    "doctor",
+                    "--tier",
+                    "stress",
+                    "--json",
+                ],
+                root,
+                include_stdout=True,
+            )
+            full = run_command(
+                [
+                    sys.executable,
+                    "maintenance/scripts/codex_agent_harness.py",
+                    "doctor",
+                    "--json",
+                ],
+                root,
+                include_stdout=True,
+            )
+            core_json = (
+                json.loads(core.get("stdout", "{}")) if core.get("stdout") else {}
+            )
+            stress_json = (
+                json.loads(stress.get("stdout", "{}")) if stress.get("stdout") else {}
+            )
+            full_json = (
+                json.loads(full.get("stdout", "{}")) if full.get("stdout") else {}
+            )
             core_checks = core_json.get("checks", {})
             stress_checks = stress_json.get("checks", {})
             full_checks = full_json.get("checks", {})
@@ -432,7 +820,18 @@ def cmd_eval(args: argparse.Namespace) -> int:
                 and "generated_outputs_untracked" in full_checks
             )
         elif eval_id == "repo-verify":
-            passed = run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "repo-verify"], root, timeout=180).get("status") == "pass"
+            passed = (
+                run_command(
+                    [
+                        sys.executable,
+                        "maintenance/scripts/codex_agent_harness.py",
+                        "repo-verify",
+                    ],
+                    root,
+                    timeout=180,
+                ).get("status")
+                == "pass"
+            )
         else:
             passed = False
         results.append(
@@ -440,9 +839,15 @@ def cmd_eval(args: argparse.Namespace) -> int:
                 "eval_id": eval_id,
                 "status": "pass" if passed else "fail",
                 "timestamp": utc_now(),
-                "definition_digest": sha256_text(json.dumps(definition, ensure_ascii=False, sort_keys=True)) if definition else None,
+                "definition_digest": sha256_text(
+                    json.dumps(definition, ensure_ascii=False, sort_keys=True)
+                )
+                if definition
+                else None,
                 "definition_errors": definition_errors,
-                "success_criteria_count": len(definition.get("success_criteria", [])) if isinstance(definition, dict) else 0,
+                "success_criteria_count": len(definition.get("success_criteria", []))
+                if isinstance(definition, dict)
+                else 0,
             }
         )
     ensure_dir(root / "reports")
@@ -478,7 +883,14 @@ def cmd_trajectory(args: argparse.Namespace) -> int:
         }
         for item in records
     ]
-    print(json.dumps({"count": len(output), "records": output, "valid_jsonl": all_records_valid}, ensure_ascii=False, indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            {"count": len(output), "records": output, "valid_jsonl": all_records_valid},
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0 if all_records_valid else 1
 
 
@@ -486,7 +898,8 @@ def cmd_compact_summary(args: argparse.Namespace) -> int:
     root = root_path(args)
     data = {
         "goal": args.goal or "unspecified",
-        "constraints": args.constraints or "See AGENTS.md and current user instructions.",
+        "constraints": args.constraints
+        or "See AGENTS.md and current user instructions.",
         "current_plan": args.current_plan or "Not recorded.",
         "completed_work": args.completed_work or "Not recorded.",
         "in_progress_work": args.in_progress_work or "Not recorded.",
@@ -500,13 +913,20 @@ def cmd_compact_summary(args: argparse.Namespace) -> int:
     lines = ["# Compact Summary", ""]
     for key, value in data.items():
         lines.extend([f"## {key.replace('_', ' ').title()}", "", value, ""])
-    path = root / "artifacts" / "compact-summaries" / f"{local_stamp()}-{safe_slug(data['goal'], 'summary')}.md"
+    path = (
+        root
+        / "artifacts"
+        / "compact-summaries"
+        / f"{local_stamp()}-{safe_slug(data['goal'], 'summary')}.md"
+    )
     write_text(path, "\n".join(lines).rstrip() + "\n")
     print(path)
     return 0
 
 
-def score_retrieval_candidate(query_terms: list[str], text: str, path: Path) -> tuple[int, list[str]]:
+def score_retrieval_candidate(
+    query_terms: list[str], text: str, path: Path
+) -> tuple[int, list[str]]:
     lower = text.lower()
     path_lower = path.as_posix().lower()
     reasons = []
@@ -535,7 +955,16 @@ def retrieval_candidate_files(root: Path) -> list[Path]:
         root / "evals",
         root / "hooks",
     ]
-    forbidden_parts = {"artifacts", "cache", "memories", "reports", "sessions", "sqlite", "trajectories", "node_repl"}
+    forbidden_parts = {
+        "artifacts",
+        "cache",
+        "memories",
+        "reports",
+        "sessions",
+        "sqlite",
+        "trajectories",
+        "node_repl",
+    }
     files: list[Path] = []
     for base in allowed:
         if base.is_file():
@@ -544,7 +973,12 @@ def retrieval_candidate_files(root: Path) -> list[Path]:
         if not base.exists():
             continue
         for dirpath, dirnames, filenames in os.walk(base):
-            dirnames[:] = [name for name in dirnames if name not in forbidden_parts and name not in {".git", "__pycache__", "node_modules"}]
+            dirnames[:] = [
+                name
+                for name in dirnames
+                if name not in forbidden_parts
+                and name not in {".git", "__pycache__", "node_modules"}
+            ]
             current = Path(dirpath)
             for filename in filenames:
                 path = (current / filename).relative_to(root)
@@ -557,11 +991,21 @@ def retrieval_candidate_files(root: Path) -> list[Path]:
 def cmd_retrieve(args: argparse.Namespace) -> int:
     root = root_path(args)
     query = args.query.strip()
-    query_terms = [term.lower() for term in re.findall(r"[\w.-]+", query) if len(term) > 1]
+    query_terms = [
+        term.lower() for term in re.findall(r"[\w.-]+", query) if len(term) > 1
+    ]
     candidates = []
     for path in retrieval_candidate_files(root):
         full = root / path
-        if full.suffix.lower() not in {".md", ".toml", ".json", ".jsonl", ".py", ".ps1", ".txt"}:
+        if full.suffix.lower() not in {
+            ".md",
+            ".toml",
+            ".json",
+            ".jsonl",
+            ".py",
+            ".ps1",
+            ".txt",
+        }:
             continue
         try:
             text = read_text(full)
@@ -569,7 +1013,13 @@ def cmd_retrieve(args: argparse.Namespace) -> int:
             continue
         score, reasons = score_retrieval_candidate(query_terms, text[:50000], path)
         if score:
-            candidates.append({"path": path.as_posix(), "score": score, "relevance_reasons": reasons[:5]})
+            candidates.append(
+                {
+                    "path": path.as_posix(),
+                    "score": score,
+                    "relevance_reasons": reasons[:5],
+                }
+            )
     candidates.sort(key=lambda item: (-item["score"], item["path"]))
     selected = candidates[: args.limit]
     report = {
@@ -578,13 +1028,25 @@ def cmd_retrieve(args: argparse.Namespace) -> int:
         "query_per_cycle": [query],
         "candidate_files": candidates[:50],
         "selected_context": selected,
-        "missing_context": [] if selected else ["No matching files found under allowed harness scan roots."],
+        "missing_context": []
+        if selected
+        else ["No matching files found under allowed harness scan roots."],
         "refined_query": None,
         "stop_reason": "sufficient_context" if selected else "no_candidates",
     }
     write_json(root / "reports" / "retrieval-report.latest.json", report)
-    lines = ["# Iterative Retrieval Report", "", f"- query: {query}", f"- stop_reason: {report['stop_reason']}", "", "## Selected Context"]
-    lines.extend(f"- {item['path']} score={item['score']} reasons={', '.join(item['relevance_reasons'])}" for item in selected or [])
+    lines = [
+        "# Iterative Retrieval Report",
+        "",
+        f"- query: {query}",
+        f"- stop_reason: {report['stop_reason']}",
+        "",
+        "## Selected Context",
+    ]
+    lines.extend(
+        f"- {item['path']} score={item['score']} reasons={', '.join(item['relevance_reasons'])}"
+        for item in selected or []
+    )
     if not selected:
         lines.append("- None")
     write_text(root / "reports" / "retrieval-report.latest.md", "\n".join(lines) + "\n")
@@ -594,7 +1056,11 @@ def cmd_retrieve(args: argparse.Namespace) -> int:
 
 def cmd_benchmark(args: argparse.Namespace) -> int:
     root = root_path(args)
-    eval_ids = [args.eval_id] if args.eval_id else [p.stem for p in sorted((root / "evals").glob("*.json"))]
+    eval_ids = (
+        [args.eval_id]
+        if args.eval_id
+        else [p.stem for p in sorted((root / "evals").glob("*.json"))]
+    )
     started = dt.datetime.now()
     checks = []
     ordered_eval_ids = [eval_id for eval_id in eval_ids if eval_id != "audit-threshold"]
@@ -602,7 +1068,9 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         ordered_eval_ids.append("audit-threshold")
     for eval_id in ordered_eval_ids:
         if eval_id == "audit-threshold" and checks:
-            provisional_status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
+            provisional_status = (
+                "pass" if all(item["status"] == "pass" for item in checks) else "fail"
+            )
             append_jsonl(
                 root / "reports" / "benchmark-results.jsonl",
                 {
@@ -610,24 +1078,49 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
                     "benchmark_id": f"{args.eval_id or 'all'}:pre-audit",
                     "status": provisional_status,
                     "harness_digest": harness_source_digest(root),
-                    "success_rate": round(sum(1 for item in checks if item["status"] == "pass") / len(checks), 4),
+                    "success_rate": round(
+                        sum(1 for item in checks if item["status"] == "pass")
+                        / len(checks),
+                        4,
+                    ),
                     "pass_at_1": provisional_status == "pass",
                     "duration_seconds": (dt.datetime.now() - started).total_seconds(),
                     "tool_calls": len(checks),
                     "terminal_commands": len(checks),
-                    "error_count": sum(1 for item in checks if item["status"] != "pass"),
+                    "error_count": sum(
+                        1 for item in checks if item["status"] != "pass"
+                    ),
                     "checks": checks,
                     "provisional_for": "audit-threshold",
                 },
             )
-        checks.append({"name": f"eval:{eval_id}", **run_command([sys.executable, "maintenance/scripts/codex_agent_harness.py", "eval", "--eval-id", eval_id], root, timeout=120)})
+        checks.append(
+            {
+                "name": f"eval:{eval_id}",
+                **run_command(
+                    [
+                        sys.executable,
+                        "maintenance/scripts/codex_agent_harness.py",
+                        "eval",
+                        "--eval-id",
+                        eval_id,
+                    ],
+                    root,
+                    timeout=120,
+                ),
+            }
+        )
     status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
     record = {
         "timestamp": utc_now(),
         "benchmark_id": args.eval_id or "all",
         "status": status,
         "harness_digest": harness_source_digest(root),
-        "success_rate": round(sum(1 for item in checks if item["status"] == "pass") / len(checks), 4) if checks else 0,
+        "success_rate": round(
+            sum(1 for item in checks if item["status"] == "pass") / len(checks), 4
+        )
+        if checks
+        else 0,
         "pass_at_1": status == "pass",
         "duration_seconds": (dt.datetime.now() - started).total_seconds(),
         "tool_calls": len(checks),
@@ -653,7 +1146,9 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
     ]
     scan_roots = [path for path in candidate_roots if path.exists()]
     patterns = [
-        re.escape(str(user_home / "Documents" / "Codex" / "2026-05-09" / "Codex")).lower(),
+        re.escape(
+            str(user_home / "Documents" / "Codex" / "2026-05-09" / "Codex")
+        ).lower(),
         r"bundled-marketplaces",
         r"vendor_imports",
         r"wshobson-agents-scan",
@@ -701,7 +1196,13 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
     matches: list[dict[str, Any]] = []
     if command_exists("rg"):
         for pattern in patterns:
-            command = ["rg", "--hidden", "--line-number", "--no-heading", "--fixed-strings"]
+            command = [
+                "rg",
+                "--hidden",
+                "--line-number",
+                "--no-heading",
+                "--fixed-strings",
+            ]
             if pattern.startswith("runCodex") or "wsl" in pattern.lower():
                 command = ["rg", "--hidden", "--line-number", "--no-heading"]
             command.extend(globs)
@@ -721,11 +1222,27 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
                             }
                         )
             else:
-                matches.append({"pattern": clean_report_string(pattern), "path": "<scan-error>", "line": "", "error": clean_report_string(result["stderr_preview"])})
+                matches.append(
+                    {
+                        "pattern": clean_report_string(pattern),
+                        "path": "<scan-error>",
+                        "line": "",
+                        "error": clean_report_string(result["stderr_preview"]),
+                    }
+                )
     else:
-        matches.append({"pattern": "<all>", "path": "<not-run>", "line": "", "error": "rg not available"})
+        matches.append(
+            {
+                "pattern": "<all>",
+                "path": "<not-run>",
+                "line": "",
+                "error": "rg not available",
+            }
+        )
 
-    scan_errors = [match for match in matches if match["path"] in {"<scan-error>", "<not-run>"}]
+    scan_errors = [
+        match for match in matches if match["path"] in {"<scan-error>", "<not-run>"}
+    ]
     active_roots = [
         str(root / "config.toml"),
         str(root / "config.d" / "20-hooks.toml"),
@@ -777,11 +1294,16 @@ def cmd_global_scan(args: argparse.Namespace) -> int:
     lines.extend(["", "## Runtime-Only Roots"])
     lines.extend(f"- {path}" for path in runtime_only_roots)
     lines.extend(["", "## Active Hits"])
-    lines.extend(f"- {hit['path']}:{hit['line']} pattern={hit['pattern']}" for hit in active_hits or [])
+    lines.extend(
+        f"- {hit['path']}:{hit['line']} pattern={hit['pattern']}"
+        for hit in active_hits or []
+    )
     if not active_hits:
         lines.append("- None")
     lines.extend(["", "## Scan Errors"])
-    lines.extend(f"- {hit['pattern']}: {hit.get('error', '')}" for hit in scan_errors or [])
+    lines.extend(
+        f"- {hit['pattern']}: {hit.get('error', '')}" for hit in scan_errors or []
+    )
     if not scan_errors:
         lines.append("- None")
     write_text(root / "reports" / "global-scan.latest.md", "\n".join(lines) + "\n")
