@@ -11,6 +11,7 @@ if (Test-Path -LiteralPath $windowsAppsRoot) {
 }
 
 $candidates += (Join-Path $env:ProgramFiles "PowerShell\7\pwsh.exe")
+$candidates += (Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe")
 
 $command = Get-Command pwsh.exe -ErrorAction SilentlyContinue
 if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
@@ -19,11 +20,9 @@ if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.S
     }
 }
 
-$candidates += $aliasStub
-
 $tool = @($candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1)
 if ($tool.Count -eq 0) {
-    Write-Error "pwsh.exe not found. Install PowerShell 7 or repair the Codex pwsh shim."
+    Write-Error "PowerShell executable not found. Install PowerShell 7 or repair the Codex pwsh shim."
     exit 1
 }
 

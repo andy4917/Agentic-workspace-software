@@ -36,6 +36,10 @@ Windows `rg` note:
   PowerShell-native entry points for Codex-managed runs. The corresponding
   `.cmd` files remain compatibility wrappers for cmd.exe callers only, except
   retired GitHub CLI `.cmd` wrappers, which should not be restored.
+- `no-mistakes.cmd` must delegate to `no-mistakes.ps1` and must not call
+  `no-mistakes.exe` directly, so agent-backed gates cannot bypass the PowerShell
+  guard. `pwsh.ps1` must not fall back to the WindowsApps app-execution alias;
+  use a real PowerShell 7 executable or Windows PowerShell fallback instead.
 
 Current shim groups:
 

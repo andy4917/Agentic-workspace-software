@@ -1179,6 +1179,7 @@ Add-Check $checks "shims_required_set" ($(if ($missingShims.Count -eq 0 -and $un
 }
 
 $noMistakesShim = Join-Path $shimRoot "no-mistakes.ps1"
+$noMistakesCmdShim = Join-Path $shimRoot "no-mistakes.cmd"
 try {
     $previousTelemetry = $env:NO_MISTAKES_TELEMETRY
     $previousUpdateCheck = $env:NO_MISTAKES_NO_UPDATE_CHECK
@@ -1230,6 +1231,15 @@ try {
     } else {
         ""
     }
+    $noMistakesCmdShimText = if (Test-Path -LiteralPath $noMistakesCmdShim -PathType Leaf) {
+        Get-Content -LiteralPath $noMistakesCmdShim -Raw
+    } else {
+        ""
+    }
+    $noMistakesCmdDelegatesToPs1 = (
+        $noMistakesCmdShimText -match "(?i)no-mistakes\.ps1" -and
+        $noMistakesCmdShimText -notmatch "(?i)no-mistakes\.exe"
+    )
     $noMistakesWrapperProbeError = ""
     $noMistakesWrapperPathProbeOutput = ""
     $noMistakesWrapperPathProbeExit = $null
@@ -1406,6 +1416,7 @@ try {
         $noMistakesCliDaemonProbeReady -and
         $noMistakesConfigReady -and
         $noMistakesWrapperSanitizesPath -and
+        $noMistakesCmdDelegatesToPs1 -and
         $noMistakesWrapperPathProbeSanitizesVariants -and
         $noMistakesWrapperPathProbePreservesOriginalEntries -and
         ($noMistakesWrapperPathProbeExposesCodexExe -or $noMistakesCodexAgentUsesDirectExeOverride) -and
@@ -1428,6 +1439,8 @@ try {
     Add-Check $checks "no_mistakes_gate_ready" ($(if ($noMistakesReady) { "pass" } else { "fail" })) @{
         shim = $noMistakesShim
         shim_exists = (Test-Path -LiteralPath $noMistakesShim -PathType Leaf)
+        cmd_shim = $noMistakesCmdShim
+        cmd_shim_delegates_to_ps1 = $noMistakesCmdDelegatesToPs1
         wrapper_sanitizes_codex_shim_path = $noMistakesWrapperSanitizesPath
         wrapper_path_probe_sanitizes_variants = $noMistakesWrapperPathProbeSanitizesVariants
         wrapper_path_probe_preserves_original_entries = $noMistakesWrapperPathProbePreservesOriginalEntries
@@ -1538,15 +1551,24 @@ Add-Check $checks "git_ps1_argument_passthrough" ($(if ($gitShimExit -eq 0 -and 
 $pwshPs1 = Join-Path $shimRoot "pwsh.ps1"
 $pwshShimOutput = @()
 $pwshShimExit = $null
+$pwshShimText = if (Test-Path -LiteralPath $pwshPs1 -PathType Leaf) {
+    Get-Content -LiteralPath $pwshPs1 -Raw
+} else {
+    ""
+}
+$pwshShimAvoidsAliasFallback = $pwshShimText -notmatch '(?m)^\s*\$candidates\s*\+=\s*\$aliasStub\s*$'
+$pwshShimHasWindowsPowerShellFallback = $pwshShimText -match 'System32\\WindowsPowerShell\\v1\.0\\powershell\.exe'
 if (Test-Path -LiteralPath $pwshPs1 -PathType Leaf) {
     $pwshShimProbe = Invoke-Ps1ShimFile -ScriptPath $pwshPs1 -Arguments @("-NoProfile", "-NonInteractive", "-Command", '$PSVersionTable.PSEdition')
     $pwshShimOutput = @($pwshShimProbe.output)
     $pwshShimExit = [int]$pwshShimProbe.exit_code
 }
-Add-Check $checks "pwsh_ps1_argument_passthrough" ($(if ($pwshShimExit -eq 0 -and (($pwshShimOutput | Out-String) -match "Core")) { "pass" } else { "fail" })) @{
+Add-Check $checks "pwsh_ps1_argument_passthrough" ($(if ($pwshShimExit -eq 0 -and (($pwshShimOutput | Out-String) -match "Core") -and $pwshShimAvoidsAliasFallback -and $pwshShimHasWindowsPowerShellFallback) { "pass" } else { "fail" })) @{
     shim = $pwshPs1
     exit_code = $pwshShimExit
     output = (($pwshShimOutput | Out-String).Trim())
+    avoids_windowsapps_alias_fallback = $pwshShimAvoidsAliasFallback
+    has_windows_powershell_fallback = $pwshShimHasWindowsPowerShellFallback
 }
 
 $pathHits = @()

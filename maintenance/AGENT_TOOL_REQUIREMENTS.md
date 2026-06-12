@@ -123,6 +123,11 @@ with `batch file arguments are invalid`.
 Normalize PATH entries only for comparison with the Codex shim directory; append
 retained entries unchanged so paths containing `!`, forward slashes, or root
 trailing slashes are not corrupted.
+`no-mistakes.cmd` is compatibility-only and must delegate to
+`no-mistakes.ps1`; it must not call `no-mistakes.exe` directly because that
+would bypass the PowerShell guard.
+`pwsh.ps1` must not fall back to the WindowsApps `pwsh.exe` app-execution alias;
+use a real PowerShell 7 executable or Windows PowerShell fallback instead.
 
 On Windows, no-mistakes must not spawn a foreground `codex.exe` console window.
 Set `agent_path_override.codex` in `%USERPROFILE%\.no-mistakes\config.yaml` to
