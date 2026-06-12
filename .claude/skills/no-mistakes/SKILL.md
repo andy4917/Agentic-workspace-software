@@ -16,6 +16,10 @@ On this workstation, invoke it through the managed wrapper
 `no-mistakes`, because the wrapper disables telemetry/update checks and fixes
 the child PATH used by no-mistakes-spawned Codex agents. The `.cmd` wrapper is
 kept only for cmd.exe compatibility.
+For agent-backed commands (`axi run`, `axi respond`, and `rerun`), the wrapper
+also verifies that the hidden Codex launcher and required Codex agent arguments
+are configured before starting the gate, so readiness failures are blockers to
+repair or report rather than reasons to bypass the wrapper.
 
 When you are already running inside a no-mistakes-spawned gate worktree or agent
 step, do not invoke `no-mistakes` again, including `--version`, `doctor`, `axi`,

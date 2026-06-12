@@ -14,5 +14,5 @@
 *.patch text eol=lf whitespace=-blank-at-eol
 
 # OpenAI-bundled plugin cache is kept for plugin compatibility and rollback.
-# It is not owned runtime-migration source; track it as vendored for Linguist.
+# It is not managed-source code; track it as vendored for Linguist.
 plugins/patched/openai-bundled/** linguist-vendored

@@ -137,6 +137,10 @@ Last verification:
   a foreground console window. It streams stdout/stderr, closes stdin by
   default to prevent `codex exec` from waiting for additional prompt input, and
   only forwards stdin when `CODEX_AGENT_HIDDEN_FORWARD_STDIN=1` is set. The
-  no-mistakes `agent_args_override.codex` block must also pass
-  `-c model_reasoning_effort="medium"` so gate agents do not inherit the
-  interactive-session `xhigh` reasoning setting.
+  PowerShell wrapper verifies this hidden launcher and the required
+  `agent_args_override.codex` settings before `axi run`, `axi respond`, or
+  `rerun` starts. The no-mistakes `agent_args_override.codex` block must pass
+  `-c model_reasoning_effort="medium"`, `--sandbox danger-full-access`,
+  `--disable plugins`, and `--skip-git-repo-check` so gate agents do not inherit
+  interactive-session `xhigh` reasoning, plugin state, or persistent project
+  trust from isolated no-mistakes worktrees.

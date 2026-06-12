@@ -196,10 +196,10 @@ keeping ordinary inspected tool use allowed.
 - User-observed foreground window follow-up: hook routes previously used hidden
   `powershell.exe` to call `pwsh.cmd`; the nested `.cmd` shim can create visible
   `cmd.exe` windows each time PreToolUse/PostToolUse fires. The hook route now
-  calls `compact-codex-hook.ps1` through the real hidden
-  `Microsoft\WindowsApps\pwsh.exe`, and smoke/repo/validator checks reject
-  `pwsh.cmd` in configured hook routes. Harness subprocess calls also set
-  Windows no-window creation flags for captured validation commands.
+  calls `compact-codex-hook.ps1` through the hidden Windows PowerShell ->
+  `pwsh.ps1` route, and smoke/repo/validator checks reject `pwsh.cmd` and the
+  WindowsApps alias in configured hook routes. Harness subprocess calls also
+  set Windows no-window creation flags for captured validation commands.
 - no-mistakes follow-up on `1f713c7`: run `01KTT1A62D3KEB686GPBEESYQC`
   returned two auto-fix items and one ask-user item. Auto-fix handling now
   denies direct and `cmd /c` nested `powershell/pwsh -EncodedCommand` forms

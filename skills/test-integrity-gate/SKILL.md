@@ -157,10 +157,12 @@ Stop or create an ask-user item when:
 
 ## no-mistakes Gate Use
 
-Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` for the outer gate from PowerShell/Codex-managed runs.
+Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` for the outer gate
+from PowerShell/Codex-managed runs.
 Treat missing CLI, daemon, repository initialization, remote, credentials, or
-gate findings as blockers to report or repair, not as reasons to silently rely
-only on local tests.
+hidden Codex agent readiness for `axi run`, `axi respond`, or `rerun` commands
+as blockers to report or repair, not as reasons to silently rely only on local
+tests.
 
 When already running inside a no-mistakes-spawned gate worktree or agent step,
 do not invoke `no-mistakes`, including `--version`, `doctor`, `axi`, `daemon`,
