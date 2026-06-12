@@ -98,6 +98,17 @@ function Test-RequiresCodexAgent {
     if ($Arguments.Count -ge 2 -and [string]$Arguments[0] -ieq "axi" -and [string]$Arguments[1] -ieq "run") {
         return $true
     }
+    if ($Arguments.Count -ge 2 -and [string]$Arguments[0] -ieq "axi" -and [string]$Arguments[1] -ieq "respond") {
+        for ($index = 2; $index -lt $Arguments.Count; $index++) {
+            $argument = [string]$Arguments[$index]
+            if ($argument -ieq "--action" -and ($index + 1) -lt $Arguments.Count -and [string]$Arguments[$index + 1] -ieq "fix") {
+                return $true
+            }
+            if ($argument -match "^(?i)--action=(.+)$" -and $Matches[1] -ieq "fix") {
+                return $true
+            }
+        }
+    }
     if ($Arguments.Count -ge 1 -and [string]$Arguments[0] -ieq "rerun") {
         return $true
     }
@@ -132,6 +143,21 @@ function Assert-HiddenCodexAgentReady {
     $boundedReasoningPattern = '(?m)^\s*-\s*[''"]?model_reasoning_effort="medium"[''"]?\s*$'
     if ($configText -notmatch '(?m)^\s*-\s*-c\s*$' -or $configText -notmatch $boundedReasoningPattern) {
         Write-Error 'no-mistakes config.yaml must set agent_args_override.codex to include -c model_reasoning_effort="medium" before running agent-backed gates.'
+        exit 1
+    }
+
+    $requiredAgentArgPatterns = @{
+        "--sandbox" = '(?m)^\s*-\s*--sandbox\s*$'
+        "danger-full-access" = '(?m)^\s*-\s*danger-full-access\s*$'
+        "--disable" = '(?m)^\s*-\s*--disable\s*$'
+        "plugins" = '(?m)^\s*-\s*plugins\s*$'
+        "--skip-git-repo-check" = '(?m)^\s*-\s*--skip-git-repo-check\s*$'
+    }
+    $missingAgentArgs = @($requiredAgentArgPatterns.GetEnumerator() |
+        Where-Object { $configText -notmatch $_.Value } |
+        ForEach-Object { $_.Key })
+    if ($missingAgentArgs.Count -gt 0) {
+        Write-Error ("no-mistakes config.yaml must set agent_args_override.codex to include required Codex agent args: " + ($missingAgentArgs -join ", "))
         exit 1
     }
 }
