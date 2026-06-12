@@ -103,15 +103,7 @@ function Test-RequiresCodexAgent {
         return $true
     }
     if ($Arguments.Count -ge 2 -and [string]$Arguments[0] -ieq "axi" -and [string]$Arguments[1] -ieq "respond") {
-        for ($index = 2; $index -lt $Arguments.Count; $index++) {
-            $argument = [string]$Arguments[$index]
-            if ($argument -ieq "--action" -and ($index + 1) -lt $Arguments.Count -and [string]$Arguments[$index + 1] -ieq "fix") {
-                return $true
-            }
-            if ($argument -match "^(?i)--action=(.+)$" -and $Matches[1] -ieq "fix") {
-                return $true
-            }
-        }
+        return $true
     }
     if ($Arguments.Count -ge 1 -and [string]$Arguments[0] -ieq "rerun") {
         return $true
