@@ -95,6 +95,10 @@ function Add-PreferredPathDirectory {
 function Test-RequiresCodexAgent {
     param([string[]]$Arguments)
 
+    if (Test-NoMistakesHelpOrVersionInvocation -Arguments $Arguments) {
+        return $false
+    }
+
     if ($Arguments.Count -ge 2 -and [string]$Arguments[0] -ieq "axi" -and [string]$Arguments[1] -ieq "run") {
         return $true
     }
@@ -111,6 +115,32 @@ function Test-RequiresCodexAgent {
     }
     if ($Arguments.Count -ge 1 -and [string]$Arguments[0] -ieq "rerun") {
         return $true
+    }
+    return $false
+}
+
+function Test-NoMistakesHelpOrVersionInvocation {
+    param([string[]]$Arguments)
+
+    foreach ($argument in @($Arguments)) {
+        if ([string]$argument -in @("help", "--help", "-h", "--version", "-v")) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Test-AdjacentArgumentPair {
+    param(
+        [string[]]$Arguments,
+        [string]$Option,
+        [string]$Value
+    )
+
+    for ($index = 0; $index -lt ($Arguments.Count - 1); $index++) {
+        if ([string]$Arguments[$index] -ieq $Option -and [string]$Arguments[$index + 1] -eq $Value) {
+            return $true
+        }
     }
     return $false
 }
@@ -196,13 +226,21 @@ function Assert-HiddenCodexAgentReady {
     }
 
     $codexAgentArgs = @($codexAgentConfig.CodexArgs)
-    if (-not ($codexAgentArgs -contains "-c") -or -not ($codexAgentArgs -contains 'model_reasoning_effort="medium"')) {
+    if (-not (Test-AdjacentArgumentPair -Arguments $codexAgentArgs -Option "-c" -Value 'model_reasoning_effort="medium"')) {
         Write-Error 'no-mistakes config.yaml must set agent_args_override.codex to include -c model_reasoning_effort="medium" before running agent-backed gates.'
         exit 1
     }
 
-    $requiredAgentArgs = @("--sandbox", "danger-full-access", "--disable", "plugins", "--skip-git-repo-check")
-    $missingAgentArgs = @($requiredAgentArgs | Where-Object { $codexAgentArgs -notcontains $_ })
+    $missingAgentArgs = @()
+    if (-not (Test-AdjacentArgumentPair -Arguments $codexAgentArgs -Option "--sandbox" -Value "danger-full-access")) {
+        $missingAgentArgs += "--sandbox danger-full-access"
+    }
+    if (-not (Test-AdjacentArgumentPair -Arguments $codexAgentArgs -Option "--disable" -Value "plugins")) {
+        $missingAgentArgs += "--disable plugins"
+    }
+    if ($codexAgentArgs -notcontains "--skip-git-repo-check") {
+        $missingAgentArgs += "--skip-git-repo-check"
+    }
     if ($missingAgentArgs.Count -gt 0) {
         Write-Error ("no-mistakes config.yaml must set agent_args_override.codex to include required Codex agent args: " + ($missingAgentArgs -join ", "))
         exit 1

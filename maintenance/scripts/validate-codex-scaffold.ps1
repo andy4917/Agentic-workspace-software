@@ -448,6 +448,21 @@ function Get-NoMistakesCodexAgentConfig {
     }
 }
 
+function Test-AdjacentArgumentPair {
+    param(
+        [string[]]$Arguments,
+        [string]$Option,
+        [string]$Value
+    )
+
+    for ($index = 0; $index -lt ($Arguments.Count - 1); $index++) {
+        if ([string]$Arguments[$index] -ieq $Option -and [string]$Arguments[$index + 1] -eq $Value) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Get-PluginRoot {
     param(
         [string]$CacheRoot,
@@ -1347,18 +1362,15 @@ try {
     $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesCodexAgentPath -match $codexBatchShimPathPattern)
     $noMistakesCodexAgentUsesDirectExeOverride = [bool]($noMistakesCodexAgentPath -match "(?i)(^|[\\/])codex\.exe$")
     $noMistakesCodexAgentUsesHiddenLauncher = (Convert-ToComparablePath $noMistakesCodexAgentPath) -eq (Convert-ToComparablePath $noMistakesHiddenAgentPath)
-    $noMistakesCodexAgentUsesBoundedReasoning = (
-        $noMistakesCodexAgentArgs -contains "-c" -and
-        $noMistakesCodexAgentArgs -contains 'model_reasoning_effort="medium"'
-    )
+    $noMistakesCodexAgentUsesBoundedReasoning = Test-AdjacentArgumentPair -Arguments $noMistakesCodexAgentArgs -Option "-c" -Value 'model_reasoning_effort="medium"'
+    $noMistakesCodexAgentUsesDangerSandbox = Test-AdjacentArgumentPair -Arguments $noMistakesCodexAgentArgs -Option "--sandbox" -Value "danger-full-access"
+    $noMistakesCodexAgentDisablesPlugins = Test-AdjacentArgumentPair -Arguments $noMistakesCodexAgentArgs -Option "--disable" -Value "plugins"
     $noMistakesHiddenLauncherExists = Test-Path -LiteralPath $noMistakesHiddenAgentPath -PathType Leaf
     $noMistakesConfigReady = (
         $noMistakesConfigText -match "(?m)^agent:\s*codex\s*$" -and
         $noMistakesCodexAgentUsesBoundedReasoning -and
-        $noMistakesCodexAgentArgs -contains "--sandbox" -and
-        $noMistakesCodexAgentArgs -contains "danger-full-access" -and
-        $noMistakesCodexAgentArgs -contains "--disable" -and
-        $noMistakesCodexAgentArgs -contains "plugins" -and
+        $noMistakesCodexAgentUsesDangerSandbox -and
+        $noMistakesCodexAgentDisablesPlugins -and
         $noMistakesCodexAgentArgs -contains "--skip-git-repo-check" -and
         $noMistakesCodexAgentUsesHiddenLauncher -and
         $noMistakesHiddenLauncherExists -and
@@ -1447,6 +1459,9 @@ try {
         codex_agent_uses_batch_shim = $noMistakesCodexAgentUsesBatchShim
         codex_agent_uses_direct_exe_override = $noMistakesCodexAgentUsesDirectExeOverride
         codex_agent_uses_hidden_launcher = $noMistakesCodexAgentUsesHiddenLauncher
+        codex_agent_uses_bounded_reasoning = $noMistakesCodexAgentUsesBoundedReasoning
+        codex_agent_uses_danger_sandbox_pair = $noMistakesCodexAgentUsesDangerSandbox
+        codex_agent_disables_plugins_pair = $noMistakesCodexAgentDisablesPlugins
         batch_shim_path_pattern = $codexBatchShimPathPattern
         telemetry_env = $env:NO_MISTAKES_TELEMETRY
         update_check_env = $env:NO_MISTAKES_NO_UPDATE_CHECK
