@@ -9,7 +9,15 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from codex_agent_harness_base import *
+from codex_agent_harness_base import (
+    COMMAND_PREVIEW_CHARS,
+    hook_route_uses_hidden_compact_runner,
+    no_window_creationflags,
+    read_text,
+    redact_obvious_secrets,
+    utc_now,
+    write_json,
+)
 
 
 def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
@@ -26,8 +34,6 @@ def check_orchestration_governance_smoke(root: Path) -> dict[str, Any]:
     charter_text = read_text(root / "maintenance" / "SUBAGENT_DELEGATION_CHARTER.md")
     audit_template = root / "codex-goals" / "_template" / "FINAL_GOAL_AUDIT.md"
     audit_text = read_text(audit_template) if audit_template.exists() else ""
-    hook_files = [root / "hooks" / "compact-codex-hook.ps1", root / "config.d" / "20-hooks.toml"]
-    hook_text = "\n".join(read_text(path) for path in hook_files if path.exists())
     full_agents_goal_governance = all(term in agents_text for term in ["## Goal Governance", "tracking marker", "final goal audit", "Subagents receive contractual subgoals"])
     compact_agents_goal_governance = all(term in agents_text for term in ["compact live bootstrap", "reviewed repo `AGENTS.md`", "outputs evidence-only", "completion authority"])
 
@@ -316,19 +322,7 @@ def check_hook_policy_smoke(root: Path) -> dict[str, Any]:
                         continue
                     command = str(hook_entry.get("command", ""))
                     command_windows = str(hook_entry.get("commandWindows", ""))
-                    route_terms = ["powershell.exe", "WindowStyle Hidden", "pwsh.ps1", "compact-codex-hook.ps1"]
-                    if (
-                        command
-                        and command_windows
-                        and all(term in command and term in command_windows for term in route_terms)
-                        and command.count("ExecutionPolicy Bypass") >= 2
-                        and command_windows.count("ExecutionPolicy Bypass") >= 2
-                        and "pwsh.cmd" not in f"{command}\n{command_windows}".lower()
-                        and "cmd /c" not in f"{command}\n{command_windows}".lower()
-                        and "cmd.exe /c" not in f"{command}\n{command_windows}".lower()
-                        and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in f"{command}\n{command_windows}".lower()
-                        and "\\program files\\windowsapps\\microsoft.powershell_" not in f"{command}\n{command_windows}".lower()
-                    ):
+                    if hook_route_uses_hidden_compact_runner(command, command_windows, require_execution_policy_bypass=True):
                         event_ok = True
                         route_hits.append(event)
             if not event_ok:

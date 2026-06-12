@@ -3,13 +3,29 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tomllib
 from pathlib import Path
 from typing import Any
 
-from codex_agent_harness_base import *
-from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, cmd_apply, doctor_data, load_state
+from codex_agent_harness_base import (
+    OWNER,
+    append_jsonl,
+    append_trajectory,
+    command_exists,
+    ensure_dir,
+    harness_source_digest,
+    install_state_path,
+    managed_templates,
+    read_text,
+    selected_modules,
+    sha256_file,
+    utc_now,
+    write_json,
+    write_text,
+)
+from codex_agent_harness_lifecycle import audit_data, cmd_apply, doctor_data, load_state
 from codex_agent_harness_workflows import cmd_compact_summary, cmd_context, cmd_retrieve, write_verification_report
 
 
@@ -70,7 +86,6 @@ def hidden_compact_hook_command() -> str:
 
 
 def cmd_merge_config(args: argparse.Namespace) -> int:
-    root = root_path(args)
     source = Path(args.source).resolve()
     target = Path(args.target).resolve()
     try:

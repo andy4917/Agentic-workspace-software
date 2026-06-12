@@ -13,14 +13,19 @@ import json
 import os
 import re
 import shutil
-import stat
 import subprocess
-import sys
-import tomllib
 from pathlib import Path
 from typing import Any
 
 from codex_agent_harness_calibration import CALIBRATION_EVAL_TEMPLATE, CALIBRATION_ROLE_CONFIG
+from worker_watcher_templates import (
+    DELEGATION_CHARTER as WORKER_WATCHER_DELEGATION_CHARTER,
+    EVAL_TEMPLATES as WORKER_WATCHER_EVAL_TEMPLATES,
+    ROLE_CONFIGS as WORKER_WATCHER_ROLE_CONFIGS,
+    SKILL_TEMPLATES as WORKER_WATCHER_SKILL_TEMPLATES,
+    WORKER_WATCHER_TEMPLATES,
+)
+
 SCHEMA_VERSION = "1"
 RUBRIC_VERSION = "codex-harness-audit-v1"
 OWNER = "codex-agent-harness"
@@ -29,6 +34,7 @@ SOURCE_PLAN = Path.home() / "Downloads" / "codex-agent-harness-distillation-plan
 COMMAND_PREVIEW_CHARS = 4000
 COMMAND_ARTIFACT_THRESHOLD_CHARS = 12000
 TRAJECTORY_VERSION = "codex-trajectory-v1"
+HIDDEN_COMPACT_HOOK_ROUTE_TERMS = ("powershell.exe", "WindowStyle Hidden", "pwsh.ps1", "compact-codex-hook.ps1")
 DOCTOR_TIERS = {
     "core": ["config", "harness_engine_modules", "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter", "harness_file_size", "stale_active_references", "sentinel_blockers"],
     "extended": ["config", "pm_subagent_protocol", "harness_engine_modules", "app_runtime_state_writable", "generated_outputs_untracked", "compact_hook_contract", "subagent_nickname_policy", "calibration_policy", "hook_tool_routing", "managed_files", "skill_frontmatter", "harness_file_size", "workspace_script_file_size", "stale_active_references", "sentinel_blockers"],
@@ -268,14 +274,6 @@ EVAL_TEMPLATES = {
 }
 
 EVAL_TEMPLATES["evals/calibration-policy-smoke.json"] = CALIBRATION_EVAL_TEMPLATE
-
-from worker_watcher_templates import (
-    DELEGATION_CHARTER as WORKER_WATCHER_DELEGATION_CHARTER,
-    EVAL_TEMPLATES as WORKER_WATCHER_EVAL_TEMPLATES,
-    ROLE_CONFIGS as WORKER_WATCHER_ROLE_CONFIGS,
-    SKILL_TEMPLATES as WORKER_WATCHER_SKILL_TEMPLATES,
-    WORKER_WATCHER_TEMPLATES,
-)
 
 ROLE_CONFIGS.update(WORKER_WATCHER_ROLE_CONFIGS)
 SKILL_TEMPLATES.update(WORKER_WATCHER_SKILL_TEMPLATES)
@@ -546,6 +544,21 @@ def retrieval_template() -> str:
 
 def command_exists(command: str) -> bool:
     return shutil.which(command) is not None
+
+
+def hook_route_uses_hidden_compact_runner(command: str, command_windows: str, *, require_execution_policy_bypass: bool = False) -> bool:
+    route_text = f"{command}\n{command_windows}"
+    route_text_lower = route_text.lower()
+    return (
+        bool(command)
+        and bool(command_windows)
+        and all(term in command and term in command_windows for term in HIDDEN_COMPACT_HOOK_ROUTE_TERMS)
+        and (not require_execution_policy_bypass or (command.count("ExecutionPolicy Bypass") >= 2 and command_windows.count("ExecutionPolicy Bypass") >= 2))
+        and "pwsh.cmd" not in route_text_lower
+        and not re.search(r"(?i)\bcmd(?:\.exe)?\s*/c\b", route_text)
+        and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in route_text_lower
+        and "\\program files\\windowsapps\\microsoft.powershell_" not in route_text_lower
+    )
 
 
 def no_window_creationflags() -> int:

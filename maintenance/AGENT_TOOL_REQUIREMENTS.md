@@ -199,7 +199,6 @@ closest project-native checks, and residual risk.
 - Use `cmake` and `zig` through `.codex` shims when present.
 - Use MSVC shims `cl`, `nmake`, `link`, `lib`, `dumpbin`, and `rc`; each shim
   loads `vcvars64.bat` before invoking the tool.
-- Use `msvc-x64-shell` when an interactive MSVC developer shell is needed.
 - Use LLVM/MSYS2 UCRT64 shims `clang`, `clang++`, `gcc`, `g++`, `lld`,
   `lld-link`, `llvm-config`, `pkg-config`, `make`, `mingw32-make`, and `gdb`
   for GNU/Clang UCRT builds. These wrappers prepend `C:\msys64\ucrt64\bin` for

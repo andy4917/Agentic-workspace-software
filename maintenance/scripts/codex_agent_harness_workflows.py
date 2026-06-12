@@ -6,15 +6,35 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 import tomllib
 from pathlib import Path
 from typing import Any
 
-from codex_agent_harness_base import *
+from codex_agent_harness_base import (
+    append_jsonl,
+    append_trajectory,
+    clean_report_string,
+    command_exists,
+    current_git_state,
+    discover_instruction_files,
+    ensure_dir,
+    harness_source_digest,
+    hook_route_uses_hidden_compact_runner,
+    instruction_warnings,
+    load_json,
+    local_stamp,
+    read_text,
+    root_path,
+    run_command,
+    safe_slug,
+    sha256_text,
+    utc_now,
+    write_json,
+    write_text,
+)
 from codex_agent_harness_calibration import check_calibration_policy
-from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, doctor_data, load_trajectory_records, trajectory_records_valid
+from codex_agent_harness_lifecycle import audit_data, check_config, check_managed_files, load_trajectory_records, trajectory_records_valid
 from codex_agent_harness_smoke import (
     check_adversarial_review_integration_smoke,
     check_goal_integrity_gate_smoke,
@@ -152,17 +172,7 @@ def compact_hook_route_scan(root: Path) -> dict[str, Any]:
                         continue
                     command = str(hook_entry.get("command", ""))
                     command_windows = str(hook_entry.get("commandWindows", ""))
-                    route_text = f"{command}\n{command_windows}"
-                    route_terms = ["powershell.exe", "WindowStyle Hidden", "pwsh.ps1", "compact-codex-hook.ps1"]
-                    route_ok = (
-                        bool(command)
-                        and bool(command_windows)
-                        and all(term in command and term in command_windows for term in route_terms)
-                        and "pwsh.cmd" not in route_text.lower()
-                        and not re.search(r"(?i)\bcmd(?:\.exe)?\s*/c\b", route_text)
-                        and "\\appdata\\local\\microsoft\\windowsapps\\pwsh.exe" not in route_text.lower()
-                        and "\\program files\\windowsapps\\microsoft.powershell_" not in route_text.lower()
-                    )
+                    route_ok = hook_route_uses_hidden_compact_runner(command, command_windows)
                     if route_ok:
                         event_has_valid_route = True
                         hits.append(f"{event}[{entry_index}].hooks[{hook_index}]: hidden compact runner route")

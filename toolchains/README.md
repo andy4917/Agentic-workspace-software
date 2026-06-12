@@ -60,7 +60,7 @@ Current shim groups:
   `cargo-upgrade`, `cargo-set-version`, `java`, `javac`, `mvn`, `gradle`,
   `cmake`, `dotnet`
 - C/C++: `zig`, `cl`, `nmake`, `link`, `lib`, `dumpbin`, `rc`,
-  `msvc-x64-shell`, `clang`, `clang++`, `clang-cl`, `gcc`, `g++`, `lld`,
+  `clang`, `clang++`, `clang-cl`, `gcc`, `g++`, `lld`,
   `lld-link`, `llvm-config`, `pkg-config`, `make`, `mingw32-make`, `gdb`,
   `ucrt64-shell`
 - Windows debugging: `cdb`, `dumpchk`, `symchk`
