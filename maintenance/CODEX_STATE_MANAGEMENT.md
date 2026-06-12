@@ -117,6 +117,10 @@ Handling rules:
   SQLite state, browser state, or live app cache.
 - Do not hot-restore old sessions, logs, SQLite state, WAL/SHM files, browser
   profiles, stale hook output, generated shims, or volatile caches.
+- Harness-managed install-state digests treat `.json`, `.md`, `.ps1`, `.py`,
+  and `.toml` files as UTF-8 text, so check, repair, and uninstall decisions
+  tolerate CRLF/LF differences while still detecting content drift. Other file
+  types use byte digests.
 
 ## Sync Model
 
