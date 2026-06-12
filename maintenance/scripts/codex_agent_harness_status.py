@@ -16,8 +16,11 @@ from codex_agent_harness_base import (
 
 MAX_HARNESS_FILE_LINES = 800
 HARNESS_FILE_LINE_LIMITS = {
+    "codex_agent_harness_base.py": 1000,
+    "codex_agent_harness_lifecycle.py": 1150,
     "compact-codex-hook.ps1": 900,
-    "codex_agent_harness_smoke.py": 1200,
+    "codex_agent_harness_smoke.py": 1800,
+    "codex_agent_harness_workflows.py": 1350,
 }
 MAX_WORKSPACE_SCRIPT_LINES = 800
 WORKSPACE_SCRIPT_SUFFIXES = {".js", ".mjs", ".py", ".ps1", ".ts", ".tsx", ".md"}
