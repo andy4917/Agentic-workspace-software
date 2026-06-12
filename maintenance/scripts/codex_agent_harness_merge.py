@@ -118,12 +118,17 @@ def cmd_merge_config(args: argparse.Namespace) -> int:
         "missing_items": len(additions),
         "drift": drift,
         "dry_run": not args.apply,
+        "backup": None,
         "additions": [
             {"table": ".".join(item["table"]), "key": item["key"]} for item in additions
         ],
     }
     if args.apply and addition_text:
-        merged_text = apply_toml_additions(read_text(target), additions, target_data)
+        target_text = read_text(target)
+        backup = target.with_name(f"{target.name}.bak.{utc_now().replace(':', '').replace('-', '').replace('+', 'Z')}")
+        write_text(backup, target_text)
+        result["backup"] = str(backup)
+        merged_text = apply_toml_additions(target_text, additions, target_data)
         write_text(target, merged_text)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
