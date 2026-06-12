@@ -566,9 +566,11 @@ function Test-HighRiskDestructiveCommand {
         $command = [string]$parsedItem.Content
         $commandLeaf = Get-ExecutableLeaf -Command $command
         $segment = New-Object System.Collections.Generic.List[string]
+        $segmentTokens = New-Object System.Collections.Generic.List[object]
         for ($cursor = $index + 1; $cursor -lt $parsedItems.Count; $cursor++) {
             if (Test-ExecutableTokenStart -ParsedItems $parsedItems -Index $cursor) { break }
             $segment.Add([string]$parsedItems[$cursor].Content) | Out-Null
+            $segmentTokens.Add($parsedItems[$cursor]) | Out-Null
         }
         $segment = @(Expand-CommandSegment -Segment $segment.ToArray())
         $segmentText = ($segment -join " ")
@@ -671,6 +673,11 @@ function Test-HighRiskDestructiveCommand {
         }
 
         if ($commandLeaf -match '(?i)^(Invoke-Expression|iex)$') {
+            foreach ($segmentToken in $segmentTokens) {
+                if ([string]$segmentToken.Type -eq "Variable") {
+                    return $true
+                }
+            }
             $nestedCommand = Get-InvokeExpressionLiteralCommandText -Segment $segment
             if ([string]::IsNullOrWhiteSpace($nestedCommand)) { return $true }
             if (Test-HighRiskDestructiveCommand -CommandText $nestedCommand -BroadTargetPattern $BroadTargetPattern -RecursiveFlagPattern $RecursiveFlagPattern) {
