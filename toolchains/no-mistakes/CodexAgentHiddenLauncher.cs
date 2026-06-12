@@ -78,6 +78,12 @@ public static class Program
 
     private static Thread StartInputPump(Stream childInput)
     {
+        if (!ShouldForwardStandardInput())
+        {
+            CloseQuietly(childInput);
+            return null;
+        }
+
         var thread = new Thread(() =>
         {
             try
@@ -107,6 +113,13 @@ public static class Program
         thread.IsBackground = true;
         thread.Start();
         return thread;
+    }
+
+    private static bool ShouldForwardStandardInput()
+    {
+        string value = Environment.GetEnvironmentVariable("CODEX_AGENT_HIDDEN_FORWARD_STDIN");
+        return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private static Thread StartPump(Stream input, Stream output)
@@ -141,6 +154,25 @@ public static class Program
             thread.Join(TimeSpan.FromSeconds(5));
         }
         catch (ThreadStateException)
+        {
+        }
+    }
+
+    private static void CloseQuietly(Stream stream)
+    {
+        if (stream == null)
+        {
+            return;
+        }
+
+        try
+        {
+            stream.Close();
+        }
+        catch (IOException)
+        {
+        }
+        catch (ObjectDisposedException)
         {
         }
     }

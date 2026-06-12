@@ -128,6 +128,12 @@ function Assert-HiddenCodexAgentReady {
         Write-Error "no-mistakes config.yaml must set agent_path_override.codex to $NO_MISTAKES_HIDDEN_CODEX_AGENT before running agent-backed gates."
         exit 1
     }
+
+    $boundedReasoningPattern = '(?m)^\s*-\s*[''"]?model_reasoning_effort="medium"[''"]?\s*$'
+    if ($configText -notmatch '(?m)^\s*-\s*-c\s*$' -or $configText -notmatch $boundedReasoningPattern) {
+        Write-Error 'no-mistakes config.yaml must set agent_args_override.codex to include -c model_reasoning_effort="medium" before running agent-backed gates.'
+        exit 1
+    }
 }
 
 foreach ($entry in ($NM_ORIGINAL_PATH -split ";")) {

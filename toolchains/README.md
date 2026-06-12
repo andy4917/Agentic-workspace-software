@@ -130,4 +130,9 @@ Last verification:
   path is overridden to
   `%USERPROFILE%\.codex\toolchains\no-mistakes\codex-agent-hidden.exe`, a
   managed hidden launcher that delegates to bundled `codex.exe` without opening
-  a foreground console window.
+  a foreground console window. It streams stdout/stderr, closes stdin by
+  default to prevent `codex exec` from waiting for additional prompt input, and
+  only forwards stdin when `CODEX_AGENT_HIDDEN_FORWARD_STDIN=1` is set. The
+  no-mistakes `agent_args_override.codex` block must also pass
+  `-c model_reasoning_effort="medium"` so gate agents do not inherit the
+  interactive-session `xhigh` reasoning setting.

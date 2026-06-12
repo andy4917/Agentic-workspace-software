@@ -127,9 +127,15 @@ trailing slashes are not corrupted.
 On Windows, no-mistakes must not spawn a foreground `codex.exe` console window.
 Set `agent_path_override.codex` in `%USERPROFILE%\.no-mistakes\config.yaml` to
 `%USERPROFILE%\.codex\toolchains\no-mistakes\codex-agent-hidden.exe`. That
-launcher is a managed WinExe wrapper that preserves stdin/stdout/stderr, starts
-the official bundled `codex.exe` with `CreateNoWindow=true`, and avoids the
-`.cmd` shim path.
+launcher is a managed WinExe wrapper that streams stdout/stderr, closes stdin by
+default so `codex exec` does not wait for extra prompt input, starts the official
+bundled `codex.exe` with `CreateNoWindow=true`, and avoids the `.cmd` shim path.
+Set `CODEX_AGENT_HIDDEN_FORWARD_STDIN=1` only for a deliberate stdin-forwarding
+test or future caller that actually requires it.
+Because no-mistakes agents inherit the workstation Codex config by default,
+`agent_args_override.codex` must also include
+`-c model_reasoning_effort="medium"` so gate agents do not inherit the
+interactive-session `xhigh` reasoning setting.
 
 The no-mistakes Codex agent configuration must include `--sandbox
 danger-full-access`, `--disable plugins`, and `--skip-git-repo-check`.

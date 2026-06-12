@@ -1291,10 +1291,15 @@ try {
     $noMistakesCodexAgentUsesBatchShim = [bool]($noMistakesConfigText -match $codexBatchShimPathPattern)
     $noMistakesCodexAgentUsesDirectExeOverride = [bool]($noMistakesConfigText -match "(?im)^\s*codex:\s*['""]?.*codex\.exe['""]?\s*$")
     $noMistakesCodexAgentUsesHiddenLauncher = [bool]($noMistakesConfigText -match "(?im)^\s*codex:\s*['""]?.*toolchains[\\/]no-mistakes[\\/]codex-agent-hidden\.exe['""]?\s*$")
+    $noMistakesCodexAgentUsesBoundedReasoning = (
+        $noMistakesConfigText -match '(?m)^\s*-\s*-c\s*$' -and
+        $noMistakesConfigText -match '(?m)^\s*-\s*[''"]?model_reasoning_effort="medium"[''"]?\s*$'
+    )
     $noMistakesHiddenLauncherExists = Test-Path -LiteralPath $noMistakesHiddenAgentPath -PathType Leaf
     $noMistakesConfigReady = (
         $noMistakesConfigText -match "(?m)^agent:\s*codex\s*$" -and
         $noMistakesConfigText -match "(?m)^agent_path_override:\s*$" -and
+        $noMistakesCodexAgentUsesBoundedReasoning -and
         $noMistakesConfigText -match "(?m)^\s*-\s*--sandbox\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*danger-full-access\s*$" -and
         $noMistakesConfigText -match "(?m)^\s*-\s*--disable\s*$" -and
