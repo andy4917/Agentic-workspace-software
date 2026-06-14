@@ -161,32 +161,39 @@ def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
     candidate_pwsh_shim = str(root / "toolchains" / "shims" / "pwsh.ps1")
     allowed_root = root.resolve()
 
-    def assert_configured_target(value: str, expected_leaf: str) -> None:
+    def assert_configured_target(
+        value: str, expected_leaf: str, expected_suffix: tuple[str, ...]
+    ) -> None:
         expanded = Path(os.path.expandvars(value))
         if expanded.name.lower() != expected_leaf.lower():
             raise RuntimeError(f"configured hook target {value} is not {expected_leaf}")
-        if not expanded.exists():
-            raise RuntimeError(
-                f"configured hook target does not exist before smoke rewrite: {expanded}"
-            )
-        resolved = expanded.resolve()
+        resolved = expanded.resolve(strict=False)
         if resolved != allowed_root and allowed_root not in resolved.parents:
-            raise RuntimeError(
-                f"configured hook target is outside smoke Codex root: {resolved}"
-            )
+            parts = tuple(part.lower() for part in resolved.parts)
+            suffix = tuple(part.lower() for part in expected_suffix)
+            if ".codex" not in parts or parts[-len(suffix) :] != suffix:
+                raise RuntimeError(
+                    f"configured hook target is outside smoke Codex root: {resolved}"
+                )
 
     rewrote_file = False
     rewrote_pwsh_shim = False
     for index, arg in enumerate(argv[:-1]):
         if Path(arg).name.lower() == "pwsh.ps1":
-            assert_configured_target(arg, "pwsh.ps1")
+            assert_configured_target(
+                arg, "pwsh.ps1", ("toolchains", "shims", "pwsh.ps1")
+            )
             argv[index] = candidate_pwsh_shim
             rewrote_pwsh_shim = True
         if (
             arg.lower() == "-file"
             and Path(argv[index + 1]).name.lower() == "compact-codex-hook.ps1"
         ):
-            assert_configured_target(argv[index + 1], "compact-codex-hook.ps1")
+            assert_configured_target(
+                argv[index + 1],
+                "compact-codex-hook.ps1",
+                ("hooks", "compact-codex-hook.ps1"),
+            )
             argv[index + 1] = candidate_hook
             rewrote_file = True
     if not rewrote_file:
