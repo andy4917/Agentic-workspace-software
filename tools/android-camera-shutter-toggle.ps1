@@ -22,11 +22,10 @@ function Find-Adb {
     }
 
     $commonPaths = @(
+        "$env:ANDROID_HOME\platform-tools\adb.exe",
+        "$env:ANDROID_SDK_ROOT\platform-tools\adb.exe",
         "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe",
         "$env:USERPROFILE\AppData\Local\Android\Sdk\platform-tools\adb.exe",
-        "$env:TEMP\codex-platform-tools\platform-tools\adb.exe",
-        "$env:USERPROFILE\Downloads\platform-tools\adb.exe",
-        "$env:USERPROFILE\Desktop\platform-tools\adb.exe",
         "C:\platform-tools\adb.exe"
     )
 
@@ -41,18 +40,7 @@ function Find-Adb {
         return $adb
     }
 
-    $zip = "$env:USERPROFILE\Downloads\platform-tools-latest-windows.zip"
-    if (Test-Path -LiteralPath $zip) {
-        $dest = Join-Path $env:TEMP "codex-platform-tools"
-        New-Item -ItemType Directory -Path $dest -Force | Out-Null
-        Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
-        $extracted = Join-Path $dest "platform-tools\adb.exe"
-        if (Test-Path -LiteralPath $extracted) {
-            return $extracted
-        }
-    }
-
-    throw "adb.exe was not found. Install Android Platform Tools or place platform-tools-latest-windows.zip in Downloads."
+    throw "adb.exe was not found. Install Android Platform Tools, add adb.exe to PATH, set ADB to a trusted adb.exe path, or set ANDROID_HOME/ANDROID_SDK_ROOT to an installed Android SDK."
 }
 
 function Invoke-Adb {
