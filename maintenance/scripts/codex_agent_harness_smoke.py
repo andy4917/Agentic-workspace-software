@@ -159,8 +159,7 @@ def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
         ]
     candidate_hook = str(root / "hooks" / "compact-codex-hook.ps1")
     candidate_pwsh_shim = str(root / "toolchains" / "shims" / "pwsh.ps1")
-    live_root = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
-    allowed_roots = [root.resolve(), live_root.resolve()]
+    allowed_root = root.resolve()
 
     def assert_configured_target(value: str, expected_leaf: str) -> None:
         expanded = Path(os.path.expandvars(value))
@@ -171,12 +170,9 @@ def configured_hook_argv_for_smoke(root: Path, event_name: str) -> list[str]:
                 f"configured hook target does not exist before smoke rewrite: {expanded}"
             )
         resolved = expanded.resolve()
-        if not any(
-            resolved == allowed or allowed in resolved.parents
-            for allowed in allowed_roots
-        ):
+        if resolved != allowed_root and allowed_root not in resolved.parents:
             raise RuntimeError(
-                f"configured hook target is outside managed/live Codex roots: {resolved}"
+                f"configured hook target is outside smoke Codex root: {resolved}"
             )
 
     rewrote_file = False
