@@ -86,11 +86,12 @@ def resolve_pwsh_for_hook() -> Path:
     return alias_stub
 
 
-def hidden_compact_hook_command() -> str:
-    hook_runner = Path.home() / ".codex" / "hooks" / "compact-codex-hook.ps1"
+def hidden_compact_hook_command(root: Path | None = None) -> str:
+    root = root or Path.home() / ".codex"
+    hook_runner = root / "hooks" / "compact-codex-hook.ps1"
     if os.name == "nt":
         launcher = Path(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
-        shim = Path.home() / ".codex" / "toolchains" / "shims" / "pwsh.ps1"
+        shim = root / "toolchains" / "shims" / "pwsh.ps1"
         return (
             f'"{launcher}" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass '
             f'-File "{shim}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{hook_runner}"'
@@ -365,7 +366,7 @@ def cmd_self_test(args: argparse.Namespace) -> int:
             "auth.json\n.codex-global-state.json\n.codex-global-state.json.bak\n__pycache__/\n*.pyc\n",
         )
         write_json(root / ".codex-global-state.json", {})
-        hidden_hook_command = hidden_compact_hook_command()
+        hidden_hook_command = hidden_compact_hook_command(root)
         hook_fragment = compact_hook_fragment(hidden_hook_command)
         write_text(root / "config.d" / "20-hooks.toml", hook_fragment)
         write_text(

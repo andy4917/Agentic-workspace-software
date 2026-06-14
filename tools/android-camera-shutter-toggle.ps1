@@ -65,10 +65,31 @@ function Invoke-Adb {
     )
 
     if ($Serial) {
-        & $Adb -s $Serial @Arguments
+        $commandArguments = @("-s", $Serial) + $Arguments
     } else {
-        & $Adb @Arguments
+        $commandArguments = $Arguments
     }
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & $Adb @commandArguments 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($exitCode -ne 0) {
+        $commandText = @($Adb) + $commandArguments | ForEach-Object {
+            if ($_ -match "\s") { "'$($_ -replace "'", "''")'" } else { $_ }
+        }
+        $details = ($output | Out-String).Trim()
+        if ($details) {
+            throw "adb exited with code $exitCode while running: $($commandText -join ' ')`n$details"
+        }
+        throw "adb exited with code $exitCode while running: $($commandText -join ' ')"
+    }
+
+    $output
 }
 
 function Get-ShutterValue {
