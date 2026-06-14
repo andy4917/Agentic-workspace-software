@@ -15,6 +15,8 @@ param(
 
     [switch] $Visible,
 
+    [switch] $Slim,
+
     [switch] $Full
 )
 
@@ -41,7 +43,6 @@ $CodexHome = Resolve-CodexHome
 $ShimDir = Join-PathStrict $CodexHome "toolchains\shims"
 $NpxWrapper = Join-PathStrict $ShimDir "npx.cmd"
 $ConfigPath = Join-PathStrict $CodexHome "config.toml"
-$BackupRoot = Join-PathStrict $CodexHome "state\mcp-toggle-backups"
 $CodexExe = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin\codex.exe"
 
 if (-not (Test-Path -LiteralPath $CodexExe)) {
@@ -98,20 +99,6 @@ function Test-McpServerPresent {
     return ($null -ne (Get-McpServerInfo))
 }
 
-function Save-ConfigBackup {
-    param([Parameter(Mandatory = $true)][string] $Reason)
-
-    if (-not (Test-Path -LiteralPath $ConfigPath)) {
-        return
-    }
-
-    New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
-    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $destination = Join-PathStrict $BackupRoot "config.$Reason.$stamp.toml"
-    Copy-Item -LiteralPath $ConfigPath -Destination $destination -Force
-    Write-Host "backup=$destination"
-}
-
 function Write-Utf8NoBomLines {
     param(
         [Parameter(Mandatory = $true)][string] $Path,
@@ -152,10 +139,39 @@ function Invoke-WithWritableConfig {
     }
 }
 
+function Invoke-WithConfigRollback {
+    param([Parameter(Mandatory = $true)][scriptblock] $Body)
+
+    $backupPath = $null
+    if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
+        $backupPath = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-mcp-config-{0}.toml" -f ([System.Guid]::NewGuid().ToString("N")))
+        Copy-Item -LiteralPath $ConfigPath -Destination $backupPath -Force
+    }
+
+    try {
+        & $Body
+    }
+    catch {
+        if ($null -ne $backupPath -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+            Copy-Item -LiteralPath $backupPath -Destination $ConfigPath -Force
+        }
+        throw
+    }
+    finally {
+        if ($null -ne $backupPath -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+            Remove-Item -LiteralPath $backupPath -Force
+        }
+    }
+}
+
 function Get-DesiredArgs {
+    if ($Slim -and $Full) {
+        throw "Use either -Slim or -Full, not both. Full is the default."
+    }
+
     $args = @("-y", "chrome-devtools-mcp@latest")
 
-    if (-not $Full) {
+    if ($Slim) {
         $args += "--slim"
     }
 
@@ -251,13 +267,14 @@ function Show-HelpText {
     Write-Host "Defaults:"
     Write-Host "  server=$ServerName"
     Write-Host "  command=$NpxWrapper"
-    Write-Host "  args=-y chrome-devtools-mcp@latest --slim --headless --isolated --no-usage-statistics --no-performance-crux"
+    Write-Host "  args=-y chrome-devtools-mcp@latest --headless --isolated --no-usage-statistics --no-performance-crux"
     Write-Host "  env=CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1"
     Write-Host "  env=CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1"
     Write-Host ""
     Write-Host "Options:"
     Write-Host "  -Visible  omit --headless for a visible isolated Chrome window"
-    Write-Host "  -Full     omit --slim and expose the full MCP tool surface"
+    Write-Host "  -Slim     add --slim for the reduced basic browser tool surface"
+    Write-Host "  -Full     accepted for compatibility; full is now the default"
 }
 
 if ($Action -eq "help") {
@@ -301,15 +318,15 @@ if ($Action -eq "on") {
         throw "npx wrapper not found: $NpxWrapper"
     }
 
-    Save-ConfigBackup -Reason "before-chrome-devtools-on"
-
     Invoke-WithWritableConfig {
-        if (Test-McpServerPresent) {
-            Invoke-CodexCli -Arguments @("mcp", "remove", $ServerName)
-        }
+        Invoke-WithConfigRollback {
+            if (Test-McpServerPresent) {
+                Invoke-CodexCli -Arguments @("mcp", "remove", $ServerName)
+            }
 
-        Add-McpServerConfig
-        Set-McpServerEnabledInConfig -Enabled $true
+            Add-McpServerConfig
+            Set-McpServerEnabledInConfig -Enabled $true
+        }
     }
 
     Write-Host "state=on"
@@ -319,14 +336,14 @@ if ($Action -eq "on") {
 }
 
 if ($Action -eq "off") {
-    Save-ConfigBackup -Reason "before-chrome-devtools-off"
-
     Invoke-WithWritableConfig {
-        if (-not (Test-McpServerPresent)) {
-            Add-McpServerConfig
-        }
+        Invoke-WithConfigRollback {
+            if (-not (Test-McpServerPresent)) {
+                Add-McpServerConfig
+            }
 
-        Set-McpServerEnabledInConfig -Enabled $false
+            Set-McpServerEnabledInConfig -Enabled $false
+        }
     }
 
     Write-Host "state=off"

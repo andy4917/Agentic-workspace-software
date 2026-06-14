@@ -1,6 +1,7 @@
 # MCP Runtime Status
 
-Updated for the 2026-06-10 context7 uninstall baseline.
+Updated for the 2026-06-11 PowerShell-native shim and context7 uninstall
+baseline.
 
 ## Current Finding
 
@@ -30,7 +31,8 @@ credential source, or policy boundary.
   OpenAI product facts.
 - `chrome-devtools`: use only as a temporary browser-observation role. It stays
   disabled by default, runs through the `.codex\toolchains\shims\npx.cmd`
-  wrapper when enabled, and should be disabled again after the bounded check.
+  wrapper when enabled, exposes the full Chrome DevTools MCP tool surface by
+  default, and should be disabled again after the bounded check.
 - `node_repl`: use as a discovered bundled execution tool for JavaScript,
   JSON/package checks, and browser-plugin setup code. Do not configure it as a
   user MCP server.
@@ -59,8 +61,8 @@ Use these checks after MCP baseline changes:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -Json
-codex mcp list --json
-codex doctor --json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\toolchains\shims\codex.ps1 mcp list --json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\toolchains\shims\codex.ps1 doctor --json
 ```
 
 Expected scaffold validation:

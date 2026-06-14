@@ -12,9 +12,10 @@ upstream. You drive it through the managed wrapper's `axi` command family, which
 prints machine-readable [TOON](https://toonformat.dev) to stdout and progress to
 stderr.
 On this workstation, invoke it through the managed wrapper
-`%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd`; do not call bare
+`%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` from PowerShell/Codex-managed runs; do not call bare
 `no-mistakes`, because the wrapper disables telemetry/update checks and fixes
-the child PATH used by no-mistakes-spawned Codex agents.
+the child PATH used by no-mistakes-spawned Codex agents. The `.cmd` wrapper is
+kept only for cmd.exe compatibility.
 
 When you are already running inside a no-mistakes-spawned gate worktree or agent
 step, do not invoke `no-mistakes` again, including `--version`, `doctor`, `axi`,
@@ -25,7 +26,7 @@ or fake-binary wrapper probes instead.
 When the user invokes `/no-mistakes`, validate the changes and report the outcome.
 If the user asks for something specific, translate that request into the matching
 `axi run` flags yourself - for example, "skip the lint step" becomes `--skip=lint`.
-Run `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi run --help` to
+Run `& "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi run --help` to
 see the available flags.
 
 ## Before you start
@@ -61,8 +62,8 @@ that a reviewer reading only the diff would not know.
 Run the pipeline and decide on its findings as they come up:
 
 1. Start the run. It blocks until the first decision point or the end:
-   ```sh
-   %USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi run --intent "<what the user set out to accomplish>"
+   ```powershell
+   & "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi run --intent "<what the user set out to accomplish>"
    ```
 2. If the output contains a `gate:` object, the pipeline is waiting on you.
    Read its `findings` table. Each finding has an `id`, `severity`,
@@ -75,15 +76,15 @@ Run the pipeline and decide on its findings as they come up:
      [Escalate `ask-user` findings](#escalate-ask-user-findings) below.
 
    Choose one response:
-   ```sh
+   ```powershell
    # accept the step as-is and continue
-   %USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi respond --action approve
+   & "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi respond --action approve
 
    # have the agent fix specific findings, then continue
-   %USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi respond --action fix --findings <id1,id2> --instructions "<optional guidance>"
+   & "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi respond --action fix --findings <id1,id2> --instructions "<optional guidance>"
 
    # skip this step only with an explicit run-specific waiver or inapplicable-step reason
-   %USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi respond --action skip
+   & "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi respond --action skip
    ```
     Each `respond` blocks until the next `gate:`, `checks-passed` decision point, or final outcome.
    Do not use `skip` as a convenience bypass. Record the waiver or exact
@@ -125,11 +126,11 @@ surface `ask-user` findings to the user and wait for their decision.
 
 ## Inspecting state
 
-```sh
-%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi               # home view: active run, recent runs, next steps
-%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi status        # full detail of the active (or most recent) run
-%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi logs --step <name> --full   # full log output of one step
-%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd axi abort         # cancel the active run
+```powershell
+& "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi               # home view: active run, recent runs, next steps
+& "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi status        # full detail of the active (or most recent) run
+& "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi logs --step <name> --full   # full log output of one step
+& "$env:USERPROFILE\.codex\toolchains\shims\no-mistakes.ps1" axi abort         # cancel the active run
 ```
 
 ## Reading the output

@@ -39,7 +39,7 @@ PM turn | worker final | worker mid-report | validation claim | pre-ship claim
 - reward hacking:
 - slop:
 
-## dont-even-try Verdict
+## Adversarial Review Verdict
 
 CLEAN | FIX REQUIRED
 

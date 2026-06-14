@@ -1,6 +1,6 @@
 # PRE_SHIP_GATE_DECISION
 
-## dont-even-try Verdict
+## Adversarial Review Verdict
 
 CLEAN | FIX REQUIRED
 

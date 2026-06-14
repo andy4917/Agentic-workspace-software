@@ -61,7 +61,8 @@ Record:
 - `scope`: global workstation, Codex-global, project-local, session-only, or
   out-of-scope.
 - `verification`: command or tool result that proves it is usable.
-- `rollback`: uninstall, restore, quarantine, or Recycle Bin note.
+- `rollback`: uninstall, restore from canonical source, or explicit no-rollback
+  note for deleted retired residue.
 - `handoff_update`: file or report updated for future maintenance.
 
 ## Global Project Chain Rule
@@ -105,17 +106,19 @@ not be left always-on just because they are useful sometimes.
   wrapper -> npm package `chrome-devtools-mcp@latest` -> Chrome stable.
 - `scope`: visible in Codex-global MCP settings; active only during confirmed
   frontend observation work.
-- `default_args`: slim, headless, isolated, usage-statistics off, performance
-  CrUX off.
+- `default_args`: full tool surface, headless, isolated, usage-statistics off,
+  performance CrUX off. Use the toggle script's `-Slim` option only for a
+  deliberately reduced browser-observation surface.
 - `activation`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on`.
 - `deactivation`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 off`.
 - `verification`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 status`,
   `verify-package`, app tool discovery after reload, and one safe browser
   observation when the tools are exposed.
 - `rollback`: run `off` to restore `enabled = false`; use `codex mcp remove
-  chrome-devtools` only when the settings entry should disappear
-  completely. A pre-change config backup is stored under ignored local state at
-  `%USERPROFILE%\.codex\state\mcp-toggle-backups`.
+  chrome-devtools` only when the settings entry should disappear completely.
+  Any pre-change config copy is a transient `%TEMP%\codex-mcp-config-{guid}.toml`
+  file and is deleted after success or rollback handling, not retained runtime
+  fallback state.
 
 Other frontend registry tools, including shadcn, are CLI or project-local
 fallbacks under the current minimal MCP baseline. Do not add them as global MCPs
@@ -123,7 +126,7 @@ without a future current user instruction.
 
 Do not directly edit `config.toml` for this toggle unless the Codex CLI command
 itself is confirmed broken. If manual repair becomes necessary, document the
-exact reason, restore a backup path, and update `MCP_RUNTIME_STATUS.md`.
+exact reason, sync from managed `config.d`, and update `MCP_RUNTIME_STATUS.md`.
 
 `context7` is uninstalled from the active global MCP baseline:
 
@@ -151,7 +154,8 @@ handoff surface:
 - `maintenance/MCP_RUNTIME_STATUS.md` for MCP behavior or scope;
 - `maintenance/AGENT_TOOL_REQUIREMENTS.md` for tool source policy;
 - `maintenance/NAMING_CONVENTION.md` for source class or naming rules;
-- a maintenance report under `maintenance/reports` when recording inventory.
+- a current local report under ignored `reports/*.latest.*` when recording
+  inventory.
 
 The handoff must include accepted evidence, not-run checks, residual risks, and
 the next verification command.
@@ -185,12 +189,34 @@ runtime substrates block unrelated managed-source checks.
   loop from a clean tree.
 - `compat`: `codex_agent_harness.py verify` runs the current compatibility
   wrapper across repo verification, tier smoke, live scaffold validation, P0
-  report-only, MCP list, and `codex doctor`.
+  report-only, MCP list, and Codex doctor.
 - `no-mistakes`: repository handoff outer gate for non-self-certified
   validation, safe push, PR, CI, release, merge handoff, and test/TDD handoff.
-  Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` after the
+  Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` after the
   relevant local checks are coherent, but do not invoke it recursively from
   inside a no-mistakes-spawned gate worktree or agent step.
+  Routine scaffold validation must not start or require a persistent
+  no-mistakes daemon. A live daemon is acceptable only while the daemon PID file
+  points at a running `no-mistakes.exe`; stale `daemon.pid` or `socket` files
+  are runtime control residue and should be cleaned before calling the
+  workstation user-clean.
+
+Hook route reload boundary:
+
+- When hook command routes change in `config.d/20-hooks.toml`, regenerate both
+  managed and live `config.toml`, then treat the current Codex app-server as
+  potentially stale until direct process evidence or an app-server restart shows
+  it is no longer launching the previous hook command.
+- Do not run no-mistakes, broad Git publishing, or other hook-heavy workflows
+  while current process evidence still shows the previous hook command, visible
+  `cmd.exe`, `pwsh.cmd`, WindowsApps alias, or any route other than the hidden
+  Windows PowerShell -> `pwsh.ps1` -> `compact-codex-hook.ps1` route.
+  This is a session-cache/runtime-reload issue, not a source-file pass.
+- Before resuming a hook-heavy workflow after a hook route change, check for
+  stale route processes and visible terminal windows. If stale route processes
+  appear only transiently during the current session, restart Codex Desktop or
+  the active app-server before claiming the foreground-terminal issue fixed for
+  the user's current session.
 
 Choose the smallest layer that proves the task. Escalate to `full` whenever
 hooks, MCP baseline, toolchains, browser/native host state, Goal governance,
@@ -214,10 +240,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
 %USERPROFILE%\.codex\toolchains\shims\python.cmd %USERPROFILE%\.codex\maintenance\scripts\codex_agent_harness.py doctor --json
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\validate-codex-scaffold.ps1 -Json
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-p0-integrity-loop.ps1 -Json -ProcessTimeoutSeconds 120
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\codex-home-maintenance.ps1 -Mode Report -ReportRoot %USERPROFILE%\Documents\Codex\reports
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-staged-sensitive-diff.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\maintenance\scripts\check-worktree-sensitive-diff.ps1
-git -C %USERPROFILE%\.codex status --short
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\toolchains\shims\git.ps1 -C %USERPROFILE%\.codex status --short
 ```
 
 Use report-only P0 runs only for read-only audits or while intentionally keeping
@@ -235,8 +261,37 @@ verify wrapper after the direct validator/P0 checks:
 
 The compatibility wrapper must run the current control-plane stack
 (`repo-verify`, tier smoke, live scaffold validation, P0 report-only, MCP list,
-and `codex doctor`). Use the full P0 loop separately from a clean tree before
+and Codex doctor). Use the full P0 loop separately from a clean tree before
 publishing.
+
+## Repository Handoff Conditions
+
+Before committing, pushing, opening a PR, merging, or declaring a workstation
+control-plane pass ready for handoff, regenerate the handoff condition set from
+the current goal and direct evidence. Treat the set as a checklist for the
+current pass, not as a new permanent gate.
+
+For Codex global/workstation control-plane work, the condition set must include:
+
+- `scope_clean`: `git status --short` is understood, and only in-scope managed
+  source changes are staged.
+- `live_scaffold_clean`: live `.codex` copies that are part of the change are
+  synchronized, and `validate-codex-scaffold.ps1 -Json` passes.
+- `harness_clean`: `codex_agent_harness.py verify` passes, or the exact
+  not-run reason is recorded before handoff stops.
+- `p0_user_clean`: the full `codex-p0-integrity-loop.ps1 -Json` passes with a
+  user-perspective clean result before external publishing.
+- `terminal_route_clean`: GitHub, Git, hook, and no-mistakes routes used for
+  the handoff do not spawn new visible `cmd.exe` windows; known unrelated native
+  host processes are recorded separately.
+- `review_gate_clean`: `code-review-and-quality` and `no-mistakes` have no
+  unresolved blocker, `ask-user`, stale-run, or hidden-fallback finding.
+- `publish_state_clean`: after push/PR/merge, local HEAD, remote branch/PR head,
+  and GitHub check state match the reported result.
+
+If any condition fails, stop the publish path and either fix the smallest
+confirmed blocker or report the precise blocker, closest checks run, rollback
+path, and residual risk.
 
 ## Completion Rule
 

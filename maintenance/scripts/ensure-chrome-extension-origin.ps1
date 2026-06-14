@@ -5,6 +5,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "codex-bundled-tools.ps1")
+
 function Get-OpenAiBundledSource {
     param([string]$ConfigPath)
 
@@ -128,10 +130,11 @@ function Repair-BrowserClient {
     )
 
     if (-not $NoNodeCheck) {
-        $node = Join-Path $CodexHome "toolchains\shims\node.cmd"
-        if (Test-Path -LiteralPath $node) {
-            & $node --check $BrowserClient | Out-Null
+        $node = Resolve-CodexBundledExe -Name "node"
+        if ([string]::IsNullOrWhiteSpace($node) -or -not (Test-Path -LiteralPath $node -PathType Leaf)) {
+            throw "Bundled node.exe not found for browser-client syntax check."
         }
+        & $node --check $BrowserClient | Out-Null
     }
 
     return "patched: chrome-extension origin allowed at $BrowserClient"

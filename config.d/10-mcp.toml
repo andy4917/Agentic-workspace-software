@@ -9,7 +9,7 @@ startup_timeout_sec = 30
 
 [mcp_servers.chrome-devtools]
 command = "cmd"
-args = ["/c", '%USERPROFILE%\.codex\toolchains\shims\npx.cmd', "-y", "chrome-devtools-mcp@latest", "--slim", "--headless", "--isolated", "--no-usage-statistics", "--no-performance-crux"]
+args = ["/c", '%USERPROFILE%\.codex\toolchains\shims\npx.cmd', "-y", "chrome-devtools-mcp@latest", "--headless", "--isolated", "--no-usage-statistics", "--no-performance-crux"]
 enabled = false
 required = false
 default_tools_approval_mode = "prompt"

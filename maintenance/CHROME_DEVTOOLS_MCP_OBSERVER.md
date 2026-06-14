@@ -26,12 +26,14 @@ is left enabled during non-frontend work.
   `chrome-devtools-mcp@latest` -> Chrome stable
 - `scope`: visible in Codex-global MCP settings, active only during confirmed
   frontend work
-- `default_args`: `-y chrome-devtools-mcp@latest --slim --headless --isolated
+- `default_args`: `-y chrome-devtools-mcp@latest --headless --isolated
   --no-usage-statistics --no-performance-crux`
 - `default_env`: `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1`,
   `CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1`, `SystemRoot`, `PROGRAMFILES`
-- `rollback`: run the OFF command; pre-change config backups are written under
-  ignored local state at `%USERPROFILE%\.codex\state\mcp-toggle-backups`
+- `rollback`: run the OFF command; any pre-change config copy made by the
+  toggle script is a transient `%TEMP%\codex-mcp-config-{guid}.toml` file that
+  is deleted after success or rollback handling, not retained runtime fallback
+  state
 
 ## Commands
 
@@ -73,14 +75,21 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\.codex\mai
 8. Confirm `status` reports `state=off` and that the server remains registered
    with `enabled = false`.
 
+Observation success must include target identity. A successful DevTools command
+against `about:blank`, a diagnostic helper page, an extension URL page, or the
+wrong browser context is not proof of the user's intended UI. Record the
+observed URL/title/root and keep `ERR_BLOCKED_BY_CLIENT`, missing side-panel targets,
+profile/session gaps, or data-auth gaps as blockers instead of downgrading them
+to plugin health warnings.
+
 ## Options
 
 Use `-Visible` only when the task requires a visible isolated Chrome window.
 Default headless mode is preferred for low-noise observation.
 
-Use `-Full` only when the slim tool surface cannot answer the verification
-question. Examples include performance, network, accessibility snapshot, or
-other non-slim DevTools categories.
+Full tool exposure is the default when this MCP is enabled. Use `-Slim` only
+for a deliberately reduced basic browser surface when navigation, JavaScript
+evaluation, and screenshots are sufficient.
 
 Do not connect this MCP to the user's normal Chrome profile or logged-in
 sensitive pages unless the user explicitly asks for that risk boundary.
@@ -88,8 +97,9 @@ sensitive pages unless the user explicitly asks for that risk boundary.
 ## Evidence From Setup
 
 - Official package documentation lists Codex setup via `codex mcp add`.
-- Official package documentation lists `--slim`, `--headless`,
-  `--isolated`, `--no-usage-statistics`, and `--no-performance-crux`.
+- Official package documentation lists full and slim tool references, and
+  documents `--slim`, `--headless`, `--isolated`, `--no-usage-statistics`, and
+  `--no-performance-crux`.
 - Official package documentation states usage statistics are enabled by default
   and can be disabled by flag or `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS`.
 - Local probe on 2026-05-13:
@@ -119,5 +129,6 @@ Rollback:
 
 - To remove the settings entry completely, run
   `codex mcp remove chrome-devtools`.
-- Pre-change config backups are under
-  `%USERPROFILE%\.codex\state\mcp-toggle-backups`.
+- Pre-change config copies, when created by the toggle script, are transient
+  `%TEMP%\codex-mcp-config-{guid}.toml` files and are deleted after success or
+  rollback handling.

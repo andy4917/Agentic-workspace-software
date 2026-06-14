@@ -157,7 +157,7 @@ Stop or create an ask-user item when:
 
 ## no-mistakes Gate Use
 
-Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd` for the outer gate.
+Use `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1` for the outer gate from PowerShell/Codex-managed runs.
 Treat missing CLI, daemon, repository initialization, remote, credentials, or
 gate findings as blockers to report or repair, not as reasons to silently rely
 only on local tests.

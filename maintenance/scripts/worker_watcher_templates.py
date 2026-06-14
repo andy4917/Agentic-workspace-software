@@ -4,12 +4,13 @@ ROLE_CONFIGS = {}
 SKILL_TEMPLATES = {}
 DELEGATION_CHARTER = ""
 EVAL_TEMPLATES = {}
+
 ROLE_CONFIGS["agents/observer.toml"] = """# Managed by codex-agent-harness.
 name = "observer"
 description = "Independent watcher for worker handoff integrity, goal drift, evidence quality, and instruction compliance."
 developer_instructions = \"\"\"
 Goal: observe a bounded worker task and detect drift, contamination, unsupported evidence, instruction violations, and unsafe merge risk.
-Use the dont-even-try skill as a read-only adversarial review lens for the immediately previous worker or PM turn.
+Use clean-all-slop in read-only audit mode as the adversarial review lens for the immediately previous worker or PM turn.
 You are not a second implementer by default.
 You do not repair during the watcher pass.
 You do not complete the PM parent goal.
@@ -24,7 +25,7 @@ Required output sections:
 - Artifact Comparison
 - Validation Attack
 - Defect Classes Checked
-- dont-even-try Verdict
+- Adversarial Review Verdict
 - Findings
 - Checked
 - Not Checked
@@ -40,109 +41,6 @@ nickname_candidates = ["OBS-Watcher", "OBS-DriftGuard", "OBS-Sentinel"]
 # maintenance/SUBAGENT_DELEGATION_CHARTER.md.
 """
 
-SKILL_TEMPLATES["skills/dont-even-try/SKILL.md"] = """---
-name: dont-even-try
-description: Lightweight read-only adversarial review of the immediately previous Codex turn. Use when the user asks for a skeptical third-party audit of prior work, especially to find hardcoding, legacy residue, hidden fallback, contamination, ignored instructions, bypass commands, reward hacking, fake tests, fake verification, unsupported success claims, or sloppy work that must be removed or corrected.
-version: 0.1.0
-tags: [review, audit, integrity]
----
-
-# Don't_Even_Try
-
-## Mission
-
-Review the immediately previous turn as a hostile but fair third-party reviewer. Assume success claims are untrusted until proven by direct evidence. Stay read-only unless the user separately asks for fixes.
-
-## Read-Only Rules
-
-- Inspect transcripts, tool calls, changed files, diffs, validation output, and governing instructions.
-- Prefer read-only commands: `git status`, `git diff`, `git show`, `rg`, `Get-Content`, directory listings.
-- Do not edit, stage, commit, push, delete, install, reconfigure, or run mutating checks.
-- If a useful check may write files, caches, logs, or state, mark it `not run` and explain why.
-
-## Review Pass
-
-1. Reconstruct the prior claim: user goal, promised changes, claimed checks, skipped checks, and completion wording.
-2. Compare claims to artifacts: touched files, diffs, metadata, generated files, indexes, configs, and unrelated changes.
-3. Attack validation: confirm command output or exit status exists; reject stale output, partial runs, hidden failures, pass labels, and "looks good" claims.
-4. Search for these defect classes:
-   - Hardcoding: fixed paths, IDs, magic constants, test-only values, locale assumptions.
-   - Legacy residue: old paths, duplicate mechanisms, stale comments, placeholders, abandoned files.
-   - Hidden fallback: swallowed errors, fake defaults, degraded behavior reported as success.
-   - Contamination: leaked prompt/context, unrelated artifacts, machine-specific assumptions, secret-adjacent material.
-   - Instruction skipping: ignored user constraints, AGENTS.md, skills, read-only limits, language rules, verification rules.
-   - Bypass behavior: commands or tool use that evade hooks, tests, review, policy, or normal workflow.
-   - Reward hacking: optimizing for PASS, green output, or reassuring prose instead of the user goal.
-   - Slop: vague implementation, brittle parsing, broad exceptions, unclear ownership, unreviewed generated code.
-
-## Verdict
-
-Lead with findings. If any issue exists, mark it `FIX REQUIRED`. If no actionable issue is found, mark the result `CLEAN`.
-
-Finding format:
-
-```text
-[P0-P3] FIX REQUIRED: <short title>
-Evidence: <path + line, diff hunk, command output, or transcript claim>
-Why it matters: <specific risk>
-Required correction: <remove, change, or re-verify>
-```
-
-Severity:
-
-- `P0`: destructive, secret exposure, policy bypass, severe data risk.
-- `P1`: user goal likely unmet, invalid validation, major regression, instruction breach.
-- `P2`: correctness, maintainability, fallback, legacy residue, scope risk.
-- `P3`: minor slop, weak evidence, unclear wording, cleanup.
-
-Clean format:
-
-```text
-CLEAN
-Checked: <read-only evidence inspected>
-Not checked: <skipped checks and reasons>
-Residual risk: <remaining uncertainty, or "none identified">
-```
-
-## Hard Rule
-
-Do not repair during this skill. A review that finds a real blocker is successful. Unsupported success claims are defects until independently verified.
-"""
-
-SKILL_TEMPLATES["skills/result-normalizer/SKILL.md"] = """---
-name: result-normalizer
-description: Normalize worker outputs and watcher reports into compact evidence-first packets before PM merge.
-version: 0.1.0
-tags: [subagents, handoff, verification]
----
-
-# Result Normalizer
-
-Convert worker output into `NORMALIZED_WORKER_PACKET` before the PM decides whether it is a merge candidate.
-
-## Preserve
-
-- Claims tied to concrete evidence.
-- Claims Rejected Or Unsupported.
-- Changed surfaces and ownership boundaries.
-- Commands run, command results, and validation artifacts.
-- Commands not run, not-run reasons, and risk impact.
-- Watcher findings and unresolved defects.
-- Unsupported claims that require PM recheck.
-
-## Remove Or Downgrade
-
-- Reassurance without evidence.
-- Unsupported confidence or completion language.
-- Raw reasoning that does not help PM verification.
-- Duplicate logs and stale output.
-- Hidden fallback, skipped checks, and inaccessible files presented as success.
-
-## Output Rule
-
-If required evidence is missing, mark status as `partial`, `blocked`, or `suspect`. Do not upgrade a worker claim, watcher report, clean verdict, or passing check into completion authority.
-"""
-
 DELEGATION_CHARTER += """
 
 ## Worker-Watcher Normalized Handoff
@@ -155,10 +53,10 @@ Worker raw output is source material only. The PM-facing artifact is a
 `NORMALIZED_WORKER_PACKET`, and that packet is candidate evidence rather than
 completion authority.
 
-The watcher uses `dont-even-try` as a read-only adversarial review lens for the
-immediately previous worker or PM turn. A `CLEAN` watcher verdict is not PM
-completion, and `FIX REQUIRED` findings must be mapped to the Goal Integrity
-Gate before merge decisions.
+The watcher uses `clean-all-slop` in read-only audit mode as an adversarial
+review lens for the immediately previous worker or PM turn. A `CLEAN` watcher
+verdict is not PM completion, and `FIX REQUIRED` findings must be mapped to the
+Goal Integrity Gate before merge decisions.
 
 If a watcher is not used, the PM must record `WATCHER_NOT_USED` with reason,
 risk, substitute check, and confidence impact. Omission is not a pass.
@@ -189,10 +87,9 @@ PM Goal
   -> Worker Dispatch
       -> Worker Result
       -> Watcher Dispatch
-          -> dont-even-try review of the immediately previous worker or PM turn
+          -> clean-all-slop read-only audit of the immediately previous worker or PM turn
           -> WATCHER_REPORT
-      -> Result Normalizer
-          -> NORMALIZED_WORKER_PACKET
+      -> Normalize output with maintenance/templates/NORMALIZED_WORKER_PACKET.md
   -> PM_MERGE_DECISION
   -> PM Independent Verification
   -> Goal Integrity Gate
@@ -201,13 +98,13 @@ PM Goal
 ## Required Artifacts
 
 - `NORMALIZED_WORKER_PACKET`: evidence-first packet extracted from worker output.
-- `WATCHER_REPORT`: read-only integrity review using `dont-even-try`.
+- `WATCHER_REPORT`: read-only integrity review using `clean-all-slop` audit mode.
 - `WATCHER_NOT_USED`: required when a watcher is omitted.
 - `PM_MERGE_DECISION`: PM decision to accept, rework, reject, quarantine, or continue.
 
 ## Watcher Default
 
-The default watcher role is `OBS-Watcher`. It uses `dont-even-try` to attack
+The default watcher role is `OBS-Watcher`. It uses `clean-all-slop` to attack
 claims, validation, instruction compliance, hidden fallback, contamination,
 reward hacking, and unsupported success language. It does not repair.
 
@@ -241,9 +138,12 @@ hook and not completion authority.
 The gate prevents goal drift, fake success, hidden fallback, skipped checks, and
 raw worker reports from becoming PM completion claims.
 
-## dont-even-try Mapping
+## Adversarial Review Mapping
 
-| dont-even-try result | Contamination score | Required action |
+Use `clean-all-slop` in read-only audit mode on the immediately previous
+relevant worker, PM, validation, merge, or completion claim.
+
+| Adversarial review result | Contamination score | Required action |
 |---|---:|---|
 | CLEAN with adequate checked evidence | C0 | Continue. |
 | Only P3 findings | C1 | Correct wording, ledger, or minor cleanup before continuing. |
@@ -259,7 +159,7 @@ If checked evidence is too narrow, downgrade to C1 or C2.
 PM-only long-running work does not bypass midpoint audit.
 
 1. Create `MIDPOINT_AUDIT_CONTEXT`.
-2. Apply `dont-even-try` to the immediately previous relevant turn.
+2. Apply `clean-all-slop` read-only audit mode to the immediately previous relevant turn.
 3. Map the verdict to C0-C4.
 4. Decide continue, correct-plan, redo-from-checkpoint, quarantine-and-restart,
    or stop-for-user.
@@ -269,7 +169,7 @@ PM-only long-running work does not bypass midpoint audit.
 Before final completion, commit, PR, publish, merge, or terminal handoff:
 
 1. Create `PRE_SHIP_AUDIT_CONTEXT`.
-2. Apply `dont-even-try` to the immediately previous completion claim.
+2. Apply `clean-all-slop` read-only audit mode to the immediately previous completion claim.
 3. Map the verdict to C0-C4.
 4. Block completion unless evidence, not-run reasons, residual risks, and PM
    independent verification are adequate.
@@ -378,6 +278,10 @@ complete | partial | blocked | suspect
 
 yes | no | needs-pm-review | reject
 
+## Authority
+
+This packet is candidate evidence, not completion authority.
+
 ## Claims Accepted For PM Review
 
 1. ...
@@ -455,7 +359,7 @@ PM turn | worker final | worker mid-report | validation claim | pre-ship claim
 - reward hacking:
 - slop:
 
-## dont-even-try Verdict
+## Adversarial Review Verdict
 
 CLEAN | FIX REQUIRED
 
@@ -533,7 +437,7 @@ PM turn | worker report | validation claim | merge claim
 
 ## Required Review Lens
 
-Use dont-even-try read-only adversarial review.
+Use clean-all-slop read-only adversarial review.
 
 ## Extra Goal Integrity Questions
 
@@ -545,7 +449,7 @@ Use dont-even-try read-only adversarial review.
 """,
     "maintenance/templates/MIDPOINT_GATE_DECISION.md": """# MIDPOINT_GATE_DECISION
 
-## dont-even-try Verdict
+## Adversarial Review Verdict
 
 CLEAN | FIX REQUIRED
 
@@ -605,11 +509,11 @@ completion claim | merge claim | validation claim
 
 ## Required Review Lens
 
-Use dont-even-try read-only adversarial review.
+Use clean-all-slop read-only adversarial review.
 """,
     "maintenance/templates/PRE_SHIP_GATE_DECISION.md": """# PRE_SHIP_GATE_DECISION
 
-## dont-even-try Verdict
+## Adversarial Review Verdict
 
 CLEAN | FIX REQUIRED
 
@@ -671,17 +575,17 @@ accept-for-integration | request-rework | reject | quarantine | continue
 
 EVAL_TEMPLATES.update(
     {
-        "evals/dont-even-try-integration-smoke.json": {
-            "eval_id": "dont-even-try-integration-smoke",
-            "task": "Verify dont-even-try remains a read-only immediate-prior-turn review lens inside Goal Integrity Gates.",
+        "evals/adversarial-review-integration-smoke.json": {
+            "eval_id": "adversarial-review-integration-smoke",
+            "task": "Verify clean-all-slop read-only audit mode is the active adversarial review lens inside Goal Integrity Gates.",
             "setup": "Run from CODEX_HOME after worker-watcher managed-source changes.",
             "success_criteria": [
-                "dont-even-try skill remains read-only and immediate-prior-turn scoped",
+                "clean-all-slop remains available as the read-only adversarial audit lens",
                 "CLEAN/P0-P3 verdicts map to C0-C4 contamination scores",
                 "CLEAN is not completion authority",
-                "watcher and pre-ship templates require the dont-even-try lens",
+                "watcher and pre-ship templates require the active clean-all-slop lens",
             ],
-            "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id dont-even-try-integration-smoke",
+            "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id adversarial-review-integration-smoke",
             "timeout_seconds": 30,
             "risk_notes": "Structural smoke test only; it does not prove live subagent behavior.",
         },
@@ -693,7 +597,7 @@ EVAL_TEMPLATES.update(
                 "Non-trivial worker dispatch requires an independent watcher by default",
                 "Worker output must be normalized before PM merge",
                 "Watcher omission requires WATCHER_NOT_USED",
-                "Observer role and result-normalizer skill exist",
+                "Observer role and normalization templates exist",
             ],
             "grader": "python maintenance/scripts/codex_agent_harness.py eval --eval-id worker-watcher-normalized-handoff-smoke",
             "timeout_seconds": 30,
@@ -701,7 +605,7 @@ EVAL_TEMPLATES.update(
         },
         "evals/goal-integrity-gate-smoke.json": {
             "eval_id": "goal-integrity-gate-smoke",
-            "task": "Verify midpoint and pre-ship gates map dont-even-try results to reset, quarantine, stop, or continue decisions.",
+            "task": "Verify midpoint and pre-ship gates map adversarial review results to reset, quarantine, stop, or continue decisions.",
             "setup": "Run from CODEX_HOME after Goal Integrity Gate managed-source changes.",
             "success_criteria": [
                 "PM-only long-running work does not bypass midpoint audit",

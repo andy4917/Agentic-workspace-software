@@ -1,4 +1,0 @@
-interface:
-  display_name: "Roast Feedback To Goal Hardening"
-  short_description: "Turn harsh reviews into remediation goals"
-  default_prompt: "Use $roast-feedback-to-goal-hardening to convert this review into a bounded remediation goal."

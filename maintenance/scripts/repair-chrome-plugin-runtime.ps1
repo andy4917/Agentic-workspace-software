@@ -7,6 +7,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "codex-bundled-tools.ps1")
+
 function Join-PathStrict {
     param(
         [Parameter(Mandatory = $true)][string]$Base,
@@ -29,36 +31,14 @@ function ConvertTo-ComparablePath {
     }
 }
 
-function Resolve-CodexBundledTool {
-    param([Parameter(Mandatory = $true)][string]$Name)
+function Test-CmdShimPath {
+    param([AllowNull()][string]$Path)
 
-    $shim = Join-PathStrict $CodexHome ("toolchains\shims\" + $Name + ".cmd")
-    if (Test-Path -LiteralPath $shim -PathType Leaf) {
-        return $shim
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $false
     }
 
-    $binRoot = Join-PathStrict $env:LOCALAPPDATA "OpenAI\Codex\bin"
-    $direct = Join-PathStrict $binRoot ($Name + ".exe")
-    if (Test-Path -LiteralPath $direct -PathType Leaf) {
-        return $direct
-    }
-
-    if (Test-Path -LiteralPath $binRoot -PathType Container) {
-        $match = Get-ChildItem -LiteralPath $binRoot -Directory -ErrorAction SilentlyContinue |
-            ForEach-Object {
-                $candidate = Join-PathStrict $_.FullName ($Name + ".exe")
-                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-                    Get-Item -LiteralPath $candidate
-                }
-            } |
-            Sort-Object LastWriteTime -Descending |
-            Select-Object -First 1
-        if ($null -ne $match) {
-            return $match.FullName
-        }
-    }
-
-    return $null
+    return ([string]$Path) -match '(?i)\.cmd$'
 }
 
 function Get-ChromeVersionCandidates {
@@ -139,10 +119,14 @@ function Set-LatestJunction {
 function Get-ExtensionHostProcesses {
     param([string]$CacheRoot)
 
-    @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        [string]$_.Name -ieq "extension-host.exe" -or
-            ([string]$_.CommandLine -match "extension-host" -and [string]$_.CommandLine -match [regex]::Escape($CacheRoot))
-    } | Select-Object ProcessId, ParentProcessId, Name, CommandLine)
+    try {
+        return @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            [string]$_.Name -ieq "extension-host.exe" -or
+                ([string]$_.CommandLine -match "extension-host" -and [string]$_.CommandLine -match [regex]::Escape($CacheRoot))
+        } | Select-Object ProcessId, ParentProcessId, Name, CommandLine)
+    } catch {
+        return @(Get-Process -Name "extension-host" -ErrorAction SilentlyContinue | Select-Object @{Name = "ProcessId"; Expression = { $_.Id } }, @{Name = "ParentProcessId"; Expression = { $null } }, @{Name = "Name"; Expression = { $_.ProcessName + ".exe" } }, @{Name = "CommandLine"; Expression = { "" } })
+    }
 }
 
 function Get-NativeManifestPath {
@@ -194,6 +178,9 @@ function New-ExtensionHostConfig {
         if ([string]::IsNullOrWhiteSpace([string]$entry.Path) -or -not (Test-Path -LiteralPath ([string]$entry.Path) -PathType Leaf)) {
             throw ("Chrome extension host config dependency missing: " + $entry.Name)
         }
+        if ($entry.Name -ne "browserClientPath" -and (Test-CmdShimPath -Path ([string]$entry.Path))) {
+            throw ("Chrome extension host config dependency uses cmd shim: " + $entry.Name)
+        }
     }
 
     return [ordered]@{
@@ -232,7 +219,8 @@ function Get-NonConfigRuntimeProblems {
     return @($Problems | Where-Object {
             $_ -notmatch '^extension-host-config\.json missing$' -and
             $_ -notmatch '^extension-host-config\.json unreadable:' -and
-            $_ -notmatch '^extension host config path missing:'
+            $_ -notmatch '^extension host config path missing:' -and
+            $_ -notmatch '^extension host config uses cmd shim:'
         })
 }
 
@@ -278,6 +266,7 @@ function Test-ChromePluginRuntime {
                 name = $property
                 path = $value
                 exists = (-not [string]::IsNullOrWhiteSpace($value) -and (Test-Path -LiteralPath $value -PathType Leaf))
+                uses_cmd_shim = (Test-CmdShimPath -Path $value)
             }
         }
     }
@@ -297,6 +286,9 @@ function Test-ChromePluginRuntime {
     foreach ($entry in $configPaths) {
         if (-not $entry.exists) {
             $problems.Add(("extension host config path missing: " + $entry.name)) | Out-Null
+        }
+        if ($entry.name -ne "browserClientPath" -and $entry.uses_cmd_shim) {
+            $problems.Add(("extension host config uses cmd shim: " + $entry.name)) | Out-Null
         }
     }
 
@@ -332,7 +324,10 @@ function Invoke-InstallManifest {
             @{ Name = "node_repl"; Path = $nodeRepl }
         )) {
         if ([string]::IsNullOrWhiteSpace([string]$entry.Path) -or -not (Test-Path -LiteralPath ([string]$entry.Path) -PathType Leaf)) {
-            throw ("Codex bundled " + $entry.Name + " executable or shim not found.")
+            throw ("Codex bundled " + $entry.Name + " executable not found.")
+        }
+        if (Test-CmdShimPath -Path ([string]$entry.Path)) {
+            throw ("Codex bundled " + $entry.Name + " resolved to cmd shim.")
         }
     }
 

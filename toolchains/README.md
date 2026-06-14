@@ -32,10 +32,18 @@ Windows `rg` note:
 - `rg.cmd` is a cmd.exe compatibility wrapper. Do not call it directly from
   PowerShell with unescaped cmd metacharacters; use bare `rg`, bundled `rg.exe`,
   or `rg.ps1`.
+- `git.ps1`, `gh.ps1`, `pwsh.ps1`, `codex.ps1`, and `no-mistakes.ps1` are the
+  PowerShell-native entry points for Codex-managed runs. The corresponding
+  `.cmd` files remain compatibility wrappers for cmd.exe callers only, except
+  retired GitHub CLI `.cmd` wrappers, which should not be restored.
+- `no-mistakes.cmd` must delegate to `no-mistakes.ps1` and must not call
+  `no-mistakes.exe` directly, so agent-backed gates cannot bypass the PowerShell
+  guard. `pwsh.ps1` must not fall back to the WindowsApps app-execution alias;
+  use a real PowerShell 7 executable or Windows PowerShell fallback instead.
 
 Current shim groups:
 
-- Official Codex bundle wrappers: `codex`, `node`, `rg`
+- Official Codex bundle wrappers: `codex`, `node`, `node_repl`, `rg`
 - JavaScript local-chain: `npm`, `npx`, `pnpm`, `bun`, `deno`, `tsc`, `tsserver`,
   `tsx`, `eslint`, `prettier`, `biome`, `yarn`, `zx`, `next`,
   `create-next-app`, `vite`, `create-vite`, `create-vue`, `ng`,
@@ -52,7 +60,7 @@ Current shim groups:
   `cargo-upgrade`, `cargo-set-version`, `java`, `javac`, `mvn`, `gradle`,
   `cmake`, `dotnet`
 - C/C++: `zig`, `cl`, `nmake`, `link`, `lib`, `dumpbin`, `rc`,
-  `msvc-x64-shell`, `clang`, `clang++`, `clang-cl`, `gcc`, `g++`, `lld`,
+  `clang`, `clang++`, `clang-cl`, `gcc`, `g++`, `lld`,
   `lld-link`, `llvm-config`, `pkg-config`, `make`, `mingw32-make`, `gdb`,
   `ucrt64-shell`
 - Windows debugging: `cdb`, `dumpchk`, `symchk`
@@ -107,13 +115,32 @@ Last verification:
 - Tool invocations in Codex workstation maintenance used explicit shim paths
   under `%USERPROFILE%\.codex\toolchains\shims` for package-manager and local
   toolchain commands.
+- 2026-06-11 KST: PowerShell-native `git.ps1`, `gh.ps1`, `pwsh.ps1`,
+  `codex.ps1`, and `no-mistakes.ps1` were added so
+  Git/GitHub/no-mistakes/Codex-maintenance commands do not repeatedly open
+  foreground `cmd.exe` windows from Codex-managed PowerShell runs. The `.cmd`
+  wrappers remain compatibility entry points for cmd.exe callers, not the
+  preferred PM workflow route.
 - 2026-06-10 KST: `no-mistakes` adopted as the outer repository validation
   gate. The active wrapper is
-  `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd`, which invokes the
+  `%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1`, which invokes the
   official `kunchenguid/no-mistakes` release binary under
   `%LOCALAPPDATA%\no-mistakes` with telemetry and background update checks
   disabled for deterministic Codex-managed runs. The wrapper intentionally
   removes the Codex shim directory from its child `PATH` so
-  no-mistakes-spawned Codex agents resolve real `pwsh.exe` and `codex.exe`
-  binaries instead of `.cmd` wrappers. It must normalize PATH entries only for
-  the shim-directory comparison and append retained entries unchanged.
+  no-mistakes-spawned shell commands resolve real `pwsh.exe` instead of `.cmd`
+  wrappers. It must normalize PATH entries only for the shim-directory
+  comparison and append retained entries unchanged. The no-mistakes Codex agent
+  path is overridden to
+  `%USERPROFILE%\.codex\toolchains\no-mistakes\codex-agent-hidden.exe`, a
+  managed hidden launcher that delegates to bundled `codex.exe` without opening
+  a foreground console window. It streams stdout/stderr, closes stdin by
+  default to prevent `codex exec` from waiting for additional prompt input, and
+  only forwards stdin when `CODEX_AGENT_HIDDEN_FORWARD_STDIN=1` is set. The
+  PowerShell wrapper verifies this hidden launcher and the required
+  `agent_args_override.codex` settings before `axi run`, `axi respond`, or
+  `rerun` starts. The no-mistakes `agent_args_override.codex` block must pass
+  `-c model_reasoning_effort="medium"`, `--sandbox danger-full-access`,
+  `--disable plugins`, and `--skip-git-repo-check` so gate agents do not inherit
+  interactive-session `xhigh` reasoning, plugin state, or persistent project
+  trust from isolated no-mistakes worktrees.

@@ -7,6 +7,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "codex-bundled-tools.ps1")
+
 function Join-PathStrict {
     param(
         [Parameter(Mandatory = $true)][string]$Base,
@@ -99,15 +101,15 @@ function Test-ConfigRegistration {
 }
 
 function Invoke-CodexPluginListProbe {
-    $codexShim = Join-PathStrict $CodexHome "toolchains\shims\codex.cmd"
-    if (-not (Test-Path -LiteralPath $codexShim -PathType Leaf)) {
-        return [ordered]@{ ok = $false; command = $codexShim; exit_code = $null; output = "missing codex shim" }
+    $codexExe = Resolve-CodexBundledTool -Name "codex"
+    if ([string]::IsNullOrWhiteSpace($codexExe)) {
+        return [ordered]@{ ok = $false; command = "codex.exe plugin list -m openai-curated-remote"; exit_code = $null; output = "missing bundled codex.exe" }
     }
-    $output = @(& $codexShim plugin list -m openai-curated-remote 2>&1)
+    $output = @(& $codexExe plugin list -m openai-curated-remote 2>&1)
     $text = (($output | Out-String).Trim())
     return [ordered]@{
         ok = ($LASTEXITCODE -eq 0 -and $text -match "product-design@openai-curated-remote" -and $text -match "installed,\s*enabled")
-        command = "$codexShim plugin list -m openai-curated-remote"
+        command = "$codexExe plugin list -m openai-curated-remote"
         exit_code = $LASTEXITCODE
         output = $text
     }

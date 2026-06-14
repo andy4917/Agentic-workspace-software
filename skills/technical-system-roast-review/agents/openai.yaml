@@ -1,4 +1,0 @@
-interface:
-  display_name: "Technical System Roast Review"
-  short_description: "Evidence-backed harsh technical reviews"
-  default_prompt: "Use $technical-system-roast-review to review this technical system with direct evidence."

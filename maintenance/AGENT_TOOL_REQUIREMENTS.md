@@ -6,8 +6,10 @@ them explicitly. It is operational guidance for `%USERPROFILE%\.codex`.
 ## Default Resolution
 
 Use `%USERPROFILE%\.codex\toolchains\shims` by explicit path, or use a
-process-local PATH only for a bounded task. Do not add this directory to
-persistent User or Machine PATH.
+process-local PATH only for a bounded task. In PowerShell/Codex-managed runs,
+prefer PowerShell-native `.ps1` shims when both `.ps1` and `.cmd` exist so
+Windows does not open foreground `cmd.exe` windows. Do not add this directory
+to persistent User or Machine PATH.
 
 Source selection rule:
 
@@ -104,7 +106,7 @@ validation, especially test/TDD changes, validation handoff, safe push, PR, CI,
 release, or merge handoff. Use the explicit wrapper:
 
 ```powershell
-%USERPROFILE%\.codex\toolchains\shims\no-mistakes.cmd
+%USERPROFILE%\.codex\toolchains\shims\no-mistakes.ps1
 ```
 
 The active binary is the official `kunchenguid/no-mistakes` release under
@@ -113,14 +115,32 @@ The active binary is the official `kunchenguid/no-mistakes` release under
 checks disabled for Codex-managed runs with `NO_MISTAKES_TELEMETRY=0` and
 `NO_MISTAKES_NO_UPDATE_CHECK=1`.
 
-The wrapper must also remove `%USERPROFILE%\.codex\toolchains\shims` from the
-child `PATH` before starting `no-mistakes`. This is intentional: no-mistakes
-spawns Codex agents, and Codex shell commands must resolve a real `pwsh.exe`,
-not the `.cmd` shim, or Windows batch argument handling can block every shell
-command with `batch file arguments are invalid`.
+The PowerShell wrapper must also remove `%USERPROFILE%\.codex\toolchains\shims`
+from the child `PATH` before starting `no-mistakes`. This is intentional:
+no-mistakes-spawned shell commands must resolve a real `pwsh.exe`, not the
+`.cmd` shim, or Windows batch argument handling can block every shell command
+with `batch file arguments are invalid`.
 Normalize PATH entries only for comparison with the Codex shim directory; append
 retained entries unchanged so paths containing `!`, forward slashes, or root
 trailing slashes are not corrupted.
+`no-mistakes.cmd` is compatibility-only and must delegate to
+`no-mistakes.ps1`; it must not call `no-mistakes.exe` directly because that
+would bypass the PowerShell guard.
+`pwsh.ps1` must not fall back to the WindowsApps `pwsh.exe` app-execution alias;
+use a real PowerShell 7 executable or Windows PowerShell fallback instead.
+
+On Windows, no-mistakes must not spawn a foreground `codex.exe` console window.
+Set `agent_path_override.codex` in `%USERPROFILE%\.no-mistakes\config.yaml` to
+`%USERPROFILE%\.codex\toolchains\no-mistakes\codex-agent-hidden.exe`. That
+launcher is a managed WinExe wrapper that streams stdout/stderr, closes stdin by
+default so `codex exec` does not wait for extra prompt input, starts the official
+bundled `codex.exe` with `CreateNoWindow=true`, and avoids the `.cmd` shim path.
+Set `CODEX_AGENT_HIDDEN_FORWARD_STDIN=1` only for a deliberate stdin-forwarding
+test or future caller that actually requires it.
+Because no-mistakes agents inherit the workstation Codex config by default,
+`agent_args_override.codex` must also include
+`-c model_reasoning_effort="medium"` so gate agents do not inherit the
+interactive-session `xhigh` reasoning setting.
 
 The no-mistakes Codex agent configuration must include `--sandbox
 danger-full-access`, `--disable plugins`, and `--skip-git-repo-check`.
@@ -179,7 +199,6 @@ closest project-native checks, and residual risk.
 - Use `cmake` and `zig` through `.codex` shims when present.
 - Use MSVC shims `cl`, `nmake`, `link`, `lib`, `dumpbin`, and `rc`; each shim
   loads `vcvars64.bat` before invoking the tool.
-- Use `msvc-x64-shell` when an interactive MSVC developer shell is needed.
 - Use LLVM/MSYS2 UCRT64 shims `clang`, `clang++`, `gcc`, `g++`, `lld`,
   `lld-link`, `llvm-config`, `pkg-config`, `make`, `mingw32-make`, and `gdb`
   for GNU/Clang UCRT builds. These wrappers prepend `C:\msys64\ucrt64\bin` for
@@ -257,7 +276,9 @@ repository-specific command, credential source, or policy boundary.
 - Keep `chrome-devtools` optional and OFF by default. Enable it only for a
   bounded browser-observation task, reload/restart the app if the namespace is
   not visible, verify exposure with tool discovery, use it for the rendered
-  observation, then turn it OFF and confirm `enabled = false`.
+  observation, then turn it OFF and confirm `enabled = false`. When enabled, it
+  should expose the full Chrome DevTools MCP tool surface unless `-Slim` is
+  deliberately requested for a basic navigation/evaluate/screenshot pass.
 - Use `node_repl` as a Codex Desktop bundled execution primitive, not as a
   user-configured `[mcp_servers.*]` entry. Discover it with `tool_search` when
   needed for JavaScript execution or browser-plugin setup code.
