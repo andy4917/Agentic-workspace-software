@@ -276,7 +276,9 @@ repository-specific command, credential source, or policy boundary.
 - Keep `chrome-devtools` optional and OFF by default. Enable it only for a
   bounded browser-observation task, reload/restart the app if the namespace is
   not visible, verify exposure with tool discovery, use it for the rendered
-  observation, then turn it OFF and confirm `enabled = false`.
+  observation, then turn it OFF and confirm `enabled = false`. When enabled, it
+  should expose the full Chrome DevTools MCP tool surface unless `-Slim` is
+  deliberately requested for a basic navigation/evaluate/screenshot pass.
 - Use `node_repl` as a Codex Desktop bundled execution primitive, not as a
   user-configured `[mcp_servers.*]` entry. Discover it with `tool_search` when
   needed for JavaScript execution or browser-plugin setup code.

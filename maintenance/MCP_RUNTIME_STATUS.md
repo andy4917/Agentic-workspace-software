@@ -31,7 +31,8 @@ credential source, or policy boundary.
   OpenAI product facts.
 - `chrome-devtools`: use only as a temporary browser-observation role. It stays
   disabled by default, runs through the `.codex\toolchains\shims\npx.cmd`
-  wrapper when enabled, and should be disabled again after the bounded check.
+  wrapper when enabled, exposes the full Chrome DevTools MCP tool surface by
+  default, and should be disabled again after the bounded check.
 - `node_repl`: use as a discovered bundled execution tool for JavaScript,
   JSON/package checks, and browser-plugin setup code. Do not configure it as a
   user MCP server.

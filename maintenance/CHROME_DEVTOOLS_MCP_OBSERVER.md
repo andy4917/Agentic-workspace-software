@@ -26,7 +26,7 @@ is left enabled during non-frontend work.
   `chrome-devtools-mcp@latest` -> Chrome stable
 - `scope`: visible in Codex-global MCP settings, active only during confirmed
   frontend work
-- `default_args`: `-y chrome-devtools-mcp@latest --slim --headless --isolated
+- `default_args`: `-y chrome-devtools-mcp@latest --headless --isolated
   --no-usage-statistics --no-performance-crux`
 - `default_env`: `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1`,
   `CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1`, `SystemRoot`, `PROGRAMFILES`
@@ -87,9 +87,9 @@ to plugin health warnings.
 Use `-Visible` only when the task requires a visible isolated Chrome window.
 Default headless mode is preferred for low-noise observation.
 
-Use `-Full` only when the slim tool surface cannot answer the verification
-question. Examples include performance, network, accessibility snapshot, or
-other non-slim DevTools categories.
+Full tool exposure is the default when this MCP is enabled. Use `-Slim` only
+for a deliberately reduced basic browser surface when navigation, JavaScript
+evaluation, and screenshots are sufficient.
 
 Do not connect this MCP to the user's normal Chrome profile or logged-in
 sensitive pages unless the user explicitly asks for that risk boundary.
@@ -97,8 +97,9 @@ sensitive pages unless the user explicitly asks for that risk boundary.
 ## Evidence From Setup
 
 - Official package documentation lists Codex setup via `codex mcp add`.
-- Official package documentation lists `--slim`, `--headless`,
-  `--isolated`, `--no-usage-statistics`, and `--no-performance-crux`.
+- Official package documentation lists full and slim tool references, and
+  documents `--slim`, `--headless`, `--isolated`, `--no-usage-statistics`, and
+  `--no-performance-crux`.
 - Official package documentation states usage statistics are enabled by default
   and can be disabled by flag or `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS`.
 - Local probe on 2026-05-13:

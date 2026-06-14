@@ -106,8 +106,9 @@ not be left always-on just because they are useful sometimes.
   wrapper -> npm package `chrome-devtools-mcp@latest` -> Chrome stable.
 - `scope`: visible in Codex-global MCP settings; active only during confirmed
   frontend observation work.
-- `default_args`: slim, headless, isolated, usage-statistics off, performance
-  CrUX off.
+- `default_args`: full tool surface, headless, isolated, usage-statistics off,
+  performance CrUX off. Use the toggle script's `-Slim` option only for a
+  deliberately reduced browser-observation surface.
 - `activation`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on`.
 - `deactivation`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 off`.
 - `verification`: `maintenance\scripts\chrome-devtools-mcp-toggle.ps1 status`,

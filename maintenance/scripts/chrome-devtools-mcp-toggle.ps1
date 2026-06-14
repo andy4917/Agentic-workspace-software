@@ -15,6 +15,8 @@ param(
 
     [switch] $Visible,
 
+    [switch] $Slim,
+
     [switch] $Full
 )
 
@@ -163,9 +165,13 @@ function Invoke-WithConfigRollback {
 }
 
 function Get-DesiredArgs {
+    if ($Slim -and $Full) {
+        throw "Use either -Slim or -Full, not both. Full is the default."
+    }
+
     $args = @("-y", "chrome-devtools-mcp@latest")
 
-    if (-not $Full) {
+    if ($Slim) {
         $args += "--slim"
     }
 
@@ -261,13 +267,14 @@ function Show-HelpText {
     Write-Host "Defaults:"
     Write-Host "  server=$ServerName"
     Write-Host "  command=$NpxWrapper"
-    Write-Host "  args=-y chrome-devtools-mcp@latest --slim --headless --isolated --no-usage-statistics --no-performance-crux"
+    Write-Host "  args=-y chrome-devtools-mcp@latest --headless --isolated --no-usage-statistics --no-performance-crux"
     Write-Host "  env=CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1"
     Write-Host "  env=CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1"
     Write-Host ""
     Write-Host "Options:"
     Write-Host "  -Visible  omit --headless for a visible isolated Chrome window"
-    Write-Host "  -Full     omit --slim and expose the full MCP tool surface"
+    Write-Host "  -Slim     add --slim for the reduced basic browser tool surface"
+    Write-Host "  -Full     accepted for compatibility; full is now the default"
 }
 
 if ($Action -eq "help") {

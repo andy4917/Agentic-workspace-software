@@ -50,6 +50,10 @@ agent pass. It is not a default ceremony for tiny tasks.
      reported as success.
    - Contamination: leaked prompt/context, unrelated artifacts,
      machine-specific assumptions, secret-adjacent material.
+   - Stale runtime/control-plane contamination: orphan PID/socket files,
+     broken junctions or symlinks, plugin temp snapshots, cache manifests,
+     stale MCP/process roots, generated host configs, and version-pinned paths
+     that contradict current config, installed binaries, or live process state.
    - Instruction skipping: ignored user constraints, AGENTS.md, skills,
      read-only limits, language rules, verification rules.
    - Bypass behavior: commands or tools that evade hooks, tests, review,
@@ -95,7 +99,10 @@ observed evidence.
 - **Instruction failure**: user constraints, scoped instructions, read-only
   limits, skill rules, or language requirements were skipped.
 - **State failure**: cache, generated files, session state, hook state, DB state,
-  browser state, MCP reload, or runtime injection was stale or mismatched.
+  browser state, MCP reload, runtime injection, PID/socket control files,
+  plugin temp snapshots, marketplace links, or generated host configs were stale
+  or mismatched. Treat stale runtime state as contamination until live linkage is
+  proven.
 - **Boundary failure**: unrelated files, secrets, external surfaces, destructive
   actions, or out-of-scope areas were touched.
 - **Design failure**: implementation works mechanically but fails product intent,
@@ -244,6 +251,89 @@ Fresh evidence should include at least one of:
    - No dependency additions unless explicitly required.
    - No nearby cleanup outside the requested scope.
 
+## Stale Contamination Purge Command
+
+Use this command when the user asks to treat stale code state, stale runtime
+state, fake success state, contamination-label evasion, or meaningless code/tests
+as contamination and remove it.
+
+Command phrase:
+
+```text
+clean-stale-contamination
+```
+
+Required action:
+
+1. Declare stale code and runtime state as contamination until disproven:
+   - Treat stale generated files, obsolete adapters, abandoned compatibility
+     paths, cached runtime assumptions, dead feature flags, old hook output,
+     unused config fragments, and mismatched tests as contamination candidates.
+   - Treat stale runtime/control-plane state the same way: orphan PID files,
+     dead socket files, stale lock files, broken junctions or symlinks, plugin
+     temp snapshots, generated extension-host configs, cache manifests, MCP
+     process roots, and version-pinned paths that no longer match installed
+     apps, owning config, or current process state are contamination candidates.
+   - Remove stale runtime/control-plane contamination only after path-boundary
+     verification and a liveness check prove it is not owned by an active
+     process or current config. Prefer repair scripts for owned state; delete
+     only disposable residue such as dead PID/socket/temp files.
+   - Do not call them "legacy support", "historical context", "compatibility",
+     "temporary", or "harmless" unless current code paths and tests prove that
+     role.
+   - If the stale surface cannot be safely removed in the current pass, isolate
+     it with a failure capsule, owner/scope note, and required proof.
+2. Explore and remove "success-looking" state:
+   - Search for PASS labels, green-summary files, success markers, bypass flags,
+     snapshot churn, stale reports, generated ledgers, fake dashboards, or
+     terminal/output artifacts that make unverified work look complete.
+   - Classify each item as **real validation evidence**, **historical context**,
+     or **success-looking contamination**.
+   - Delete success-looking contamination when it is not required by the
+     runtime. If deletion is unsafe, replace the success claim with explicit
+     failure, blocked, or historical-context language.
+3. Detect and remove contamination-language evasion:
+   - Treat wording changes as evasion when they rename contamination without
+     changing the underlying stale state, unsupported claim, fake pass, hidden
+     fallback, or meaningless test.
+   - Flag evasive labels such as "expected drift", "accepted residue",
+     "soft pass", "mostly verified", "non-blocking contamination", "cleanup
+     later", "known noisy", or similar terms when they weaken a blocker without
+     fresh evidence.
+   - Replace euphemisms with direct labels: `contamination`, `stale state`,
+     `unsupported success`, `fake validation`, `dead code`, `meaningless test`,
+     `hidden fallback`, or `blocked`.
+4. Remove meaningless code:
+   - Delete unused branches, dead helpers, generated shims, duplicate wrappers,
+     broad no-op compatibility layers, placeholder implementations, fake
+     adapters, and code that only preserves an obsolete story.
+   - Prefer deleting the caller and path together when evidence shows the
+     behavior is unreachable.
+   - Do not keep code solely because it makes a previous agent narrative,
+     report, or migration claim look coherent.
+5. Remove meaningless tests:
+   - Delete tests that only assert mocks, snapshots, existence, importability,
+     log text, pass markers, or implementation trivia without protecting user
+     behavior or a real contract.
+   - Replace deleted tests only when a real behavior becomes unprotected.
+   - Do not weaken assertions, rename tests, or move them to skipped/quarantine
+     status as a substitute for removal.
+6. Verify the purge:
+   - Rerun the same checks that previously made the stale or success-looking
+     state appear valid, when such checks exist.
+   - Run the narrowest regression check that proves remaining behavior still
+     works after deletion.
+   - Report every retained candidate with the evidence that makes it real, not
+     just non-deleted.
+
+Stop conditions:
+
+- Stop and produce `FAILURE_HANDOFF` if the purge exposes secrets, destructive
+  cleanup risk, cross-surface ownership ambiguity, or a stale state whose live
+  dependency cannot be proven quickly.
+- Stop and produce `GOAL_SPEC` if the stale contamination spans multiple
+  workflow/toolchain/runtime surfaces and needs a staged rollback or quarantine.
+
 ## Goal Bridge
 
 If cleanup requires more than one bounded pass, touches workflow/toolchain/runtime
@@ -326,6 +416,7 @@ Behavior Lock: <tests/checks added or run before editing>
 Cleanup Plan: <bounded smells and order>
 Failure Capsules: <none or failure -> taxonomy -> root-cause ladder position>
 Fallback Findings: <none or finding -> classification -> action>
+Stale Contamination Findings: <none or finding -> stale/success-looking/evasion/dead-code/meaningless-test -> action>
 Passes Completed: <one-smell-at-a-time fixes>
 Same-Proof Rerun: <failed proof before -> proof after>
 Quality Gates: <regression, lint, typecheck, tests, static/security as applicable>
@@ -357,6 +448,10 @@ Next action: <first bounded step>
 - A passing check is evidence, not completion authority.
 - Unsupported success claims are defects until independently verified.
 - Stale evidence is historical context, not validation.
+- Stale code state is contamination until current evidence proves it is live,
+  intentional, and behavior-protecting.
+- Stale runtime/control-plane state is contamination until current config,
+  installed binaries, path ownership, and process liveness prove it is live.
 - In audit mode, do not repair.
 - In failure handoff mode, do not rush repair unless cleanup mode is already in
   scope and same-proof rerun is possible.

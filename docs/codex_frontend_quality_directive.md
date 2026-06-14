@@ -1,337 +1,149 @@
-# Codex Frontend Quality Directive
+# Codex Frontend and Design Quality Directive
 
----
+## 0. Authority and Use Order
 
-## 1. Executive Directive
+This is the single canonical frontend and design directive for this Codex
+workstation. It integrates and deduplicates:
 
-Codex must stop treating frontend work as a secondary code-generation task. Frontend is not decorative output. Frontend is the product surface users judge first, trust first, abandon first, and complain about first.
+- the prior `docs/codex_frontend_quality_directive.md`;
+- the user-provided `Frontend & Design.md` guidance.
 
-Repeated frontend failures have created unnecessary review burden and user stress. The user should not have to repeatedly rescue the interface from generic AI output, vague visual decisions, malformed hierarchy, careless spacing, weak copy, unverified responsiveness, or obvious "AI-made" design patterns.
+For any task touching frontend, UI, UX, HTML, CSS, client-side JavaScript,
+React, design systems, prototypes, dashboards, landing pages, visual artifacts,
+forms, browser-rendered behavior, accessibility, responsive layout, or visual
+polish, read and apply this document before implementation.
 
-This directive is a correction order.
+Current system, developer, and current-user instructions remain higher
+authority. Project-local `AGENTS.md`, `PRODUCT.md`, `DESIGN.md`, component
+contracts, existing code, and design tokens provide product-specific truth, but
+they do not weaken this directive unless the user explicitly requests a scoped
+exception.
 
-This directive is frontend-specific. It must be used together with the global
-project workflow-chain protocol in
-`maintenance/PROJECT_WORKFLOW_CHAIN.md`. If a project lacks a usable chain,
-Codex must scaffold the general project chain first, then apply this frontend
-directive for UI-specific artifacts such as `PRODUCT.md`, `DESIGN.md`,
-component contracts, shadcn/ui checks, Storybook or equivalent rendered state
-coverage, and browser observation.
+This directive extends the global project workflow-chain protocol in
+`maintenance/PROJECT_WORKFLOW_CHAIN.md`. It is frontend-specific; it is not a
+replacement for project intake, build commands, tests, contracts, or rollback
+notes.
 
-From this point forward, any UI-related task must be handled as production product work. Codex is expected to behave like a senior full-stack developer with frontend judgment, not like a backend implementation tool that happens to emit JSX and Tailwind classes.
+Working code is not enough. A frontend that compiles but looks generic,
+careless, unverified, inaccessible, or AI-made is not complete.
 
-If the output looks like a demo, a template, a theme-store clone, or generic SaaS filler, it fails.
+## 1. Role and Goal
 
----
+When working on visible product surfaces, act as a senior frontend engineer with
+strong product-design judgment.
 
-## 2. Core Failure Pattern
+Prioritize:
 
-The recurring failure is not one isolated mistake. It is a pattern:
+- pixel fidelity to the existing product;
+- clear information hierarchy;
+- real implementation quality, not static mockup slop;
+- maintainable component structure;
+- accessible, responsive, and testable interfaces;
+- minimal but intentional visual decisions;
+- product-facing copy that helps ordinary users complete their task.
 
-1. Codex implements before designing.
-2. Codex chooses generic visual defaults instead of project-specific decisions.
-3. Codex uses vague language like "modern," "clean," or "improved" without concrete tokens.
-4. Codex repeats common AI slop: gradients, cards, gray text, nested containers, meaningless icons, bento grids, and low-contrast UI.
-5. Codex fails to distinguish implementation instructions from user-facing copy.
-6. Codex claims completion before rendering, inspecting, or validating the UI.
-7. Codex leaves the user to perform the actual design review.
+Do not generate generic SaaS UI unless the project already uses that style.
+Avoid default-looking cards, arbitrary gradients, meaningless icons, filler
+metrics, vague sections, and template-like layouts.
 
-This is unacceptable in a production workflow.
+A frontend change is not complete until it:
 
----
+- matches product intent and audience;
+- follows the project design language;
+- respects existing components and tokens;
+- has coherent hierarchy, typography, spacing, alignment, and density;
+- covers relevant loading, empty, error, disabled, selected, hover, focus,
+  pressed, and success states;
+- works at mobile and desktop widths;
+- avoids common AI-generated UI tropes;
+- is verified visually when tooling is available;
+- does not leak implementation instructions into visible UI.
 
-## 3. Deployment Administrator Standard
+## 2. Required Workflow
 
-As the final deployment administrator, I do not accept frontend output merely because it compiles.
+Use the smallest workflow that fits, but do not skip the phase that matters.
 
-A frontend change is not complete until it satisfies all of the following:
+1. Classify the work as `brownfield`, `greenfield`, or `hybrid`.
+2. Inspect product and design context before editing UI files.
+3. Use the official Product Design workflow when installed and exposed.
+4. Use `modern-web-guidance` for HTML, CSS, client-side JavaScript, browser
+   APIs, forms, accessibility, motion, performance, or layout implementation.
+5. Shape the interface before coding.
+6. Reuse existing components and tokens first.
+7. Implement a bounded slice.
+8. Verify functionality, rendering, responsive behavior, accessibility, states,
+   and copy.
+9. Report checks run, checks not run, assumptions, and remaining risks.
 
-- It matches the product intent.
-- It follows the project design language.
-- It respects existing components and tokens.
-- It has clear visual hierarchy.
-- It has intentional spacing and alignment.
-- It has coherent typography.
-- It handles responsive layouts.
-- It includes relevant empty, loading, error, disabled, and success states.
-- It avoids AI slop patterns.
-- It is verified visually, not only by static reasoning.
-- It does not leak implementation instructions into user-facing copy.
-- It is shippable without forcing the user to clean up obvious design mistakes.
+### Product Design Workflow
 
-If any of these are not true, Codex must not represent the work as done.
+Use the official `product-design` plugin as the primary frontend design workflow
+when it is installed and exposed in the active Codex session.
 
----
+Use it for frontend implementation, layout, visual polish, dashboards, app
+shells, forms, settings pages, onboarding, empty states, component libraries,
+design systems, typography, color, spacing, animation, responsive behavior,
+accessibility review, UX writing, and frontend refactors that affect visible
+output.
 
-## 4. Critical Frontend Slop Elements to Eliminate
-
-The following patterns are considered deployment blockers unless the user explicitly requests them and they are justified by the project design system.
-
-### 4.1 Visual Slop
-
-- Purple-to-blue or purple-to-pink gradients used as a default visual identity.
-- Gradient text as a default headline treatment.
-- Inter, system font, or generic sans-serif everywhere without a typography decision.
-- Random Lucide icons used as decoration instead of meaning.
-- Icon tiles above every heading.
-- Identical card grids with icon, title, and paragraph repeated mechanically.
-- Bento grids used because the model has no better layout idea.
-- Nested cards inside cards.
-- Excessive rounded corners without system logic.
-- Gray-on-gray interfaces with no contrast strategy.
-- Gray text on colored backgrounds.
-- Pure black and pure white used without tone control.
-- Glassmorphism used as decoration.
-- Dark mode chosen because "developer tools look cool dark," not because the product context requires it.
-- Overuse of shadows, glows, blur, or backdrop filters.
-- Decorative blobs and abstract shapes used to hide weak layout.
-
-### 4.2 Layout Slop
-
-- Same padding everywhere.
-- Sections that look stacked rather than composed.
-- No rhythm between dense and open areas.
-- Poor alignment between headings, controls, cards, and content blocks.
-- Containers wrapped around everything without purpose.
-- Hero sections that consume space without improving comprehension.
-- Tables, lists, forms, and dashboards that ignore scanning behavior.
-- Mobile layout treated as an afterthought.
-- Fixed-width elements that break at 375px.
-- Overflow hidden used to mask layout failure.
-
-### 4.3 UX and Product Slop
-
-- UI copy that explains implementation goals instead of helping the user.
-- Developer instructions rendered as visible text.
-- Empty states that are generic, vague, or motivational filler.
-- Error states that blame the user or provide no next action.
-- Buttons labeled with unclear verbs.
-- Forms without validation states.
-- Loading states that shift layout or hide context.
-- Disabled states without explanation where explanation is needed.
-- Missing keyboard focus states.
-- Missing affordances for destructive actions.
-- Inconsistent terminology across views.
-
-### 4.4 Engineering Slop
-
-- New design tokens invented locally instead of using the project system.
-- Hardcoded colors scattered across components.
-- Tailwind arbitrary values used repeatedly without consolidation.
-- New component variants created without checking existing component patterns.
-- Styling logic mixed into business logic.
-- Client-side secrets or unsafe env exposure.
-- Missing accessibility attributes on interactive controls.
-- No reduced-motion consideration for animation-heavy work.
-- Code that passes typecheck but fails actual UI behavior.
-
-### 4.5 Workflow Slop
-
-- Editing files before reading the design context.
-- Skipping `PRODUCT.md` and `DESIGN.md`.
-- Skipping existing component inspection.
-- Producing a large patch without first shaping the UI direction.
-- Saying "done" without visual verification.
-- Describing changes instead of proving quality.
-- Asking the user to find obvious defects that Codex should have caught.
-
----
-
-## 5. Mandatory Frontend-Specialized Workflow: Product Design
-
-Use the official `product-design` plugin as the primary frontend design workflow when it is installed and exposed in the active Codex session.
-
-This is not an optional enhancement. For UI work, Product Design is the quality-control layer that prevents Codex from defaulting into generic frontend output.
-
-### 5.1 Trigger Conditions
-
-Use the Product Design workflow for any task involving:
-
-- frontend implementation
-- UI layout
-- visual polish
-- landing pages
-- dashboards
-- app shells
-- forms
-- settings pages
-- onboarding
-- empty states
-- component libraries
-- design systems
-- typography
-- color
-- spacing
-- animation
-- responsive behavior
-- accessibility review
-- UX writing
-- frontend refactors that affect visible output
-
-If a task touches visible UI, assume Product Design is required when the plugin is available.
-
-### 5.2 Required Product Design Flow
-
-Use the most specific exposed Product Design capability for the task, such as product context, design context, ideation, prototype generation, URL-to-code, image-to-code, design QA, or handoff review.
+If Product Design is configured or expected but not exposed, state this
+explicitly and apply the manual equivalent:
 
 ```text
-product_design_context
-product_design_shape_or_prototype
-product_design_implementation_guidance
-product_design_audit_or_review
+PRODUCT_DESIGN_UNAVAILABLE: The primary frontend workflow is not available in
+this session. I will apply the Product-Design-equivalent manual checklist, but
+this is a degraded workflow.
 ```
 
-Keep this sequence evidence-based:
-
-- Read product and design context first.
-- Inspect existing components and routes before changing UI.
-- Shape the interaction and visual direction before implementation.
-- Apply `modern-web-guidance` for web-platform details.
-- Verify rendered behavior through Browser, Chrome, Chrome DevTools, screenshots, or an equivalent direct check.
-
-Do not use retired frontend compatibility workflows for this baseline. Product
-Design is the active frontend product-design workflow.
-
-### 5.3 If Product Design Is Missing
-
-If Product Design is installed in configuration but not exposed in the active Codex session, Codex must not silently continue as if nothing is wrong.
-
-Codex must state:
-
-```text
-PRODUCT_DESIGN_UNAVAILABLE: The primary frontend workflow is not available in this session. I will apply the Product-Design-equivalent manual checklist, but this is a degraded workflow.
-```
-
-Then Codex must manually apply the same gates:
+Manual equivalent:
 
 1. Read product context.
 2. Read design context.
-3. Inspect existing components.
-4. Shape before implementation.
+3. Inspect existing components and routes.
+4. Shape interaction and visual direction before implementation.
 5. Implement conservatively.
 6. Audit against slop patterns.
 7. Verify visually if possible.
 8. State remaining risk honestly.
 
----
+Retired frontend compatibility workflows are contamination candidates for this
+baseline. Do not use them as primary workflow authority. The preflight must
+record `retired_frontend_compat=absent` before UI implementation.
 
-## 6. Required Preflight Before Editing UI Files
+### Frontend Preflight
 
-Before modifying any frontend file, Codex must complete this preflight.
+Before modifying frontend files, establish this evidence when relevant:
 
 ```text
 FRONTEND_PREFLIGHT:
-product_context=read|missing
-design_context=read|missing
-existing_components=inspected|missing
+product_context=read|missing|not_applicable
+design_context=read|missing|not_applicable
+existing_components=inspected|missing|not_applicable
+tokens_and_global_styles=inspected|missing|not_applicable
 components_json=inspected|missing|not_applicable
 components_contract=read|missing|not_applicable
-shadcn_access=MCP_CONFIRMED|MCP_CONFIG_ONLY|MCP_REGISTERED_NOT_INJECTED|CLI_FALLBACK|unavailable|not_applicable
 current_route_or_surface=identified
+frontend_mode=brownfield|greenfield|hybrid
 states_required=listed
 responsive_targets=defined
-product_design=available|unavailable|not_exposed
+product_design=available|unavailable|not_exposed|not_applicable
+modern_web_guidance=used|not_needed|blocked
 retired_frontend_compat=absent
 mutation_permission=open|blocked
 ```
 
-### 6.1 Context Files to Read
+Do not turn this into ceremony for a tiny one-line UI fix, but still perform the
+underlying checks that prevent wrong-target or generic design changes.
 
-Codex must look for and read, when present:
+### Shape Before Code
 
-- `AGENTS.md`
-- `PRODUCT.md`
-- `DESIGN.md`
-- `DESIGN.json`
-- `docs/FRONTEND.md`
-- `agent-docs/FRONTEND.md`
-- component library documentation
-- design token files
-- Tailwind config
-- global CSS
-- existing components under the relevant route or package
-
-Do not invent a design direction before reading these files.
-
-### 6.2 shadcn/ui Control
-
-For projects that use or should use shadcn/ui, Codex must inspect
-`components.json` before adding or changing UI primitives. Treat
-`components.json` as the project contract for component paths, aliases, Tailwind
-CSS, base library, icon library, and registries.
-
-Before relying on shadcn MCP, classify it:
-
-```text
-SHADCN_ACCESS:
-configured=yes|no
-visible_in_mcp_list=yes|no
-tools_injected=yes|no
-safe_read_call_succeeded=yes|no
-status=MCP_CONFIRMED|MCP_CONFIG_ONLY|MCP_REGISTERED_NOT_INJECTED|CLI_FALLBACK|unavailable
-```
-
-Configuration alone is not capability. If the active session does not expose
-shadcn MCP tools, use the shadcn CLI fallback through the managed `.codex`
-`npx.cmd` wrapper and report the fallback honestly.
-
-For reusable components or blocks, inspect or create:
-
-- `docs/frontend/components-contract.md`
-- `docs/frontend/component-variants.md`
-- Storybook stories for important states when the project has Storybook or the
-  task adds reusable UI.
-
-### 6.3 Reference Source Routing
-
-Do not mix checklist-type references with UX-pattern references.
-
-- Checklist-type sources answer: is this surface complete, production-ready,
-  accessible, performant enough, and sufficiently specified?
-- UX-pattern sources answer: which interaction pattern fits the user problem,
-  what states and anatomy are required, and which alternatives were rejected?
-- If both are relevant, resolve the pattern decision first, then run the
-  checklist audit.
-
-Use compact evidence only:
-
-```text
-FRONTEND_REFERENCE_ROUTING:
-checklist_sources=needed|not_needed|not_checked
-ux_pattern_sources=needed|not_needed|not_checked
-decision_order=pattern_then_checklist|checklist_only|pattern_only|not_applicable
-local_sources_priority=confirmed|missing|not_checked
-```
-
-Checklist and pattern sources are reference systems, not implementation
-commands. They must not override local project rules, product context, design
-tokens, component primitives, or rendered evidence.
-
-### 6.4 Brownfield vs Greenfield Classification
-
-Codex must classify the task before implementation:
-
-```text
-FRONTEND_MODE=brownfield|greenfield|hybrid
-```
-
-- **Brownfield:** Existing product UI. Respect the current system. Do not redesign globally unless explicitly asked.
-- **Greenfield:** New product or isolated prototype. Make intentional design choices, but still avoid generic AI slop.
-- **Hybrid:** Existing app with a new surface. Extend the system carefully and document new patterns.
-
----
-
-## 7. Shape Before Code
-
-Codex must not jump directly into JSX, CSS, Tailwind classes, or component edits for meaningful UI work.
-
-Before coding, Codex must produce a short shape brief:
+For meaningful UI work, form a compact shape brief before editing:
 
 ```text
 UI_SHAPE_BRIEF:
 - Surface:
 - User goal:
-- Primary information hierarchy:
+- Primary hierarchy:
 - Layout strategy:
 - Visual tone:
 - Typography strategy:
@@ -340,58 +152,167 @@ UI_SHAPE_BRIEF:
 - Required states:
 - Responsive behavior:
 - Accessibility risks:
-- What will not be changed:
+- What will not change:
 ```
 
-If the task is large or ambiguous, wait for confirmation before editing files.
+For small targeted fixes, this can be one or two sentences. For large or
+ambiguous redesigns, ask for confirmation only when the missing information
+would materially change the implementation.
 
-For small targeted fixes, Codex may proceed after producing a concise shape brief, but it must still perform the preflight and final review.
+## 3. Inspect Existing Design Context First
 
----
+Before implementing or redesigning UI, inspect the repository for existing
+design context.
 
-## 8. Implementation Requirements
+Look for:
 
-During implementation, Codex must:
+- design tokens: `tokens.css`, `theme.ts`, `theme.js`, `colors.ts`,
+  `variables.scss`, `tailwind.config.*`;
+- global styles: `globals.css`, `app.css`, `index.css`, `base.css`;
+- component primitives: `Button`, `Input`, `Card`, `Modal`, `Dialog`, `Tabs`,
+  `Badge`, `Select`;
+- layout scaffolds: `AppLayout`, `DashboardLayout`, `Shell`, `Sidebar`,
+  `Header`, `Page`;
+- existing pages similar to the requested UI;
+- Storybook, examples, snapshots, tests, or visual references;
+- asset folders, icons, illustrations, fonts, and brand files;
+- `AGENTS.md`, `PRODUCT.md`, `DESIGN.md`, `DESIGN.json`,
+  `docs/FRONTEND.md`, `agent-docs/FRONTEND.md`, and component-library docs.
 
-- Reuse existing components before creating new ones.
-- Reuse existing tokens before inventing new values.
-- Keep design decisions centralized.
-- Avoid uncontrolled one-off styling.
-- Preserve product behavior and data flow.
-- Avoid broad redesign unless authorized.
-- Keep patches small enough to review.
-- Prefer composable components over large unstructured JSX blocks.
-- Implement states, not just the happy path.
-- Ensure copy is product-facing, not instruction-facing.
-- Ensure every visible string belongs in the UI.
+Do not infer visual values from memory when exact values exist in the repo. Use
+actual colors, spacing, border radii, shadows, typography, icon style, density,
+and motion patterns from the codebase.
 
-Codex must not ship a visually changed UI without considering the user's actual product context.
+If design context is missing, state the assumption and create a small coherent
+local design system instead of inventing one-off values.
 
----
+## 4. Clarify Only When Needed
 
-## 9. Instruction-to-UI Leakage Ban
+Ask a clarifying question only when missing information would materially change
+the implementation.
 
-Codex must strictly separate:
+Clarify when:
 
-- implementation instructions
-- internal reasoning
-- acceptance criteria
-- product behavior requirements
-- literal user-facing copy
+- target screen, flow, audience, or fidelity is ambiguous;
+- the user asks for a new design direction but provides no product context;
+- multiple variants are requested but the dimensions of variation are unclear;
+- the change may add new content, pages, sections, or product behavior.
 
-Implementation notes must never appear as visible UI text.
+Do not ask when:
 
-Examples of forbidden UI copy:
+- the repository already gives enough context;
+- the task is a small UI fix;
+- the user provided explicit requirements;
+- a reasonable assumption is safe and can be stated briefly.
 
-- "This section should show..."
-- "The user can now..."
-- "Validation should happen here..."
-- "This card represents..."
-- "If there is an error, show..."
-- "Make sure the admin can..."
-- "No data available because the API returned..." when this is not user-facing wording
+## 5. Component and System Strategy
 
-Before finalizing UI text, Codex must run this check:
+Classify the surface:
+
+- `brownfield`: existing product UI. Respect the current system. Do not redesign
+  globally unless explicitly asked.
+- `greenfield`: new product or isolated prototype. Make intentional design
+  choices, but avoid generic AI slop.
+- `hybrid`: existing app with a new surface. Extend the system carefully and
+  document new patterns when needed.
+
+Prefer existing project components over new custom elements:
+
+1. Existing design-system components.
+2. Existing app-specific components.
+3. Light extension or composition of existing components.
+4. New component only when no suitable primitive exists.
+
+Do not duplicate buttons, inputs, cards, modals, tabs, dropdowns, badges, or
+typography components if suitable primitives already exist.
+
+When creating a new component:
+
+- put it near related components;
+- match naming and file conventions;
+- keep props explicit and typed in TypeScript projects;
+- provide safe defaults;
+- avoid unnecessary abstraction;
+- keep repeated visual values centralized.
+
+For shadcn/ui projects, inspect `components.json` before adding or changing
+primitives. Treat it as the project contract for component paths, aliases,
+Tailwind CSS, base library, icon library, and registries. Configuration alone is
+not capability; if shadcn MCP tools are not exposed, use the project-approved
+CLI fallback and report that fallback.
+
+## 6. Visual Fidelity and Slop Ban
+
+Match the existing product's:
+
+- color palette;
+- type scale and font stack;
+- spacing rhythm;
+- border radius;
+- elevation and shadow system;
+- density;
+- icon style;
+- empty-state style;
+- copy tone;
+- hover, focus, pressed, disabled, selected, loading, and error states;
+- animation duration and easing.
+
+Use exact token values when available.
+
+If no tokens exist:
+
+- define a small local scale for color, spacing, radius, and typography;
+- keep it internally consistent;
+- avoid arbitrary one-off values;
+- prefer CSS variables for repeated design values.
+
+Avoid by default:
+
+- aggressive gradient backgrounds, gradient text, and purple/blue/pink default
+  visual identities;
+- generic glassmorphism, blobs, bokeh, glows, and backdrop-filter decoration;
+- rounded cards with colored left borders as a default treatment;
+- nested cards inside cards;
+- bento grids, repeated icon-title-paragraph cards, and decorative icon tiles
+  used because no better hierarchy was chosen;
+- random emoji or meaningless icons;
+- dashboards full of invented numbers;
+- filler testimonials, marketing sections, or arbitrary feature blocks;
+- weak gray-on-gray contrast, gray text on colored backgrounds, and pure black
+  or white used without tone control;
+- dark mode chosen only because it looks technical;
+- overused font choices when the project has a type system;
+- SVG illustrations pretending to be brand assets;
+- fixed-width elements that break at 375px;
+- overflow hidden used to mask layout failure.
+
+Use advanced CSS deliberately: grid, logical properties, `text-wrap: pretty`,
+container queries when appropriate, modern `:focus-visible`, and
+`prefers-reduced-motion`.
+
+## 7. Content and Copy Discipline
+
+Do not add filler content to make a screen look complete.
+
+Avoid:
+
+- fake metrics unless explicitly requested;
+- decorative icons that do not clarify meaning;
+- placeholder marketing sections;
+- redundant cards;
+- generic testimonials;
+- overwritten empty states;
+- visual noise used to hide weak layout.
+
+If content is missing, solve with layout, hierarchy, spacing, or clearly marked
+placeholders. Ask before adding substantial new copy, pages, sections, or
+product claims.
+
+Strictly separate implementation instructions, internal reasoning, acceptance
+criteria, product requirements, and literal user-facing copy. Implementation
+notes must never appear as visible UI text.
+
+Before finalizing visible text, apply:
 
 ```text
 COPY_ELIGIBILITY_CHECK:
@@ -402,76 +323,170 @@ Would this string still make sense if the user never saw the prompt?
 
 If the answer is no, remove or rewrite the text.
 
----
+## 8. Accessibility, Responsive Layout, and States
 
-## 10. Mandatory Visual Review
+Every frontend implementation must consider accessibility.
 
-A frontend task is not complete until Codex performs a visual review.
+Required:
 
-At minimum, Codex must inspect:
+- semantic HTML where possible;
+- keyboard-accessible interactive controls;
+- visible focus states;
+- sufficient contrast;
+- labels for form controls;
+- `aria-*` only when semantic HTML is insufficient;
+- no click-only controls for core actions;
+- `prefers-reduced-motion` support for motion;
+- mobile tap targets generally at least 44px;
+- no required information hidden behind hover-only interactions.
 
-- desktop layout
-- mobile layout
-- spacing rhythm
-- typography hierarchy
-- contrast
-- alignment
-- component consistency
-- overflow
-- loading state
-- empty state
-- error state
-- keyboard focus
-- user-facing copy
+Implement responsive behavior intentionally. Check small mobile width, large
+desktop width, long text, empty states, loading states, error states, dense data,
+and keyboard navigation where relevant.
 
-If browser or screenshot tooling is available, Codex must use it.
+Avoid fixed dimensions unless the artifact is intentionally fixed-size, such as
+a slide, kiosk screen, or video frame. For fixed-size visual content, use a
+fixed canvas ratio only when appropriate, scale it to fit the viewport, and keep
+controls usable outside the scaled content.
 
-### 10.1 Chrome DevTools MCP Observation
+Implement real states, not just happy-path static screens. Hover, active,
+selected, disabled, loading, error, empty, and success states should be visible
+where relevant and aligned with the product.
 
-Chrome DevTools MCP is the preferred MCP role for real browser observation when
-the task is confirmed frontend work and the Codex session can expose the tools.
-It must not be left always-on.
+## 9. Implementation Rules
 
-Use this control sequence:
+### React
+
+Use idiomatic React:
+
+- functional components;
+- typed props in TypeScript projects;
+- default values for optional props;
+- controlled state where appropriate;
+- clear component boundaries;
+- no global mutable state unless the existing architecture uses it;
+- no new dependency unless necessary.
+
+Avoid massive single components, repeated inline magic values, unclear prop
+names, uncontrolled side effects, DOM manipulation that React state can express,
+and duplicate style systems.
+
+For standalone React artifacts, export a default component. Keep CSS and JS
+together only if the target environment expects single-file output; otherwise
+follow the repository's file structure.
+
+### HTML, CSS, and JavaScript Artifacts
+
+For standalone HTML prototypes:
+
+- keep the file self-contained when requested;
+- use semantic HTML;
+- organize CSS with clear sections;
+- prefer CSS variables for theme values;
+- avoid unnecessary external dependencies;
+- avoid `scrollIntoView`; use safer scroll methods if scrolling is required;
+- keep the prototype centered or responsively sized unless the requested output
+  requires a page layout;
+- do not add a decorative title screen unless requested.
+
+If using inline React or Babel prototypes:
+
+- do not rely on implicit shared scope across separate Babel scripts;
+- avoid generic global names like `styles`;
+- use component-specific style object names;
+- expose cross-file browser globals deliberately if required;
+- avoid `type="module"` unless the runtime supports it.
+
+### State, Persistence, Forms, and APIs
+
+Default to in-memory React state for prototypes and artifacts.
+
+Use persistence only when the target app already has a persistence layer, the
+user explicitly requested persistence, or the runtime supports the chosen
+storage mechanism. Wrap browser storage calls with error handling and never
+store secrets, tokens, API keys, or sensitive personal data in browser storage.
+
+Use explicit event handlers. Prevent accidental page reloads. Provide loading
+and error states for async actions. Disable submit actions while pending when
+appropriate.
+
+For AI-powered frontend or API-calling components:
+
+- never hardcode API keys;
+- use server-side routes or the project's API abstraction;
+- validate and sanitize inputs;
+- handle network errors, timeouts, malformed responses, empty responses, and
+  unexpected JSON;
+- keep relevant state in the request when the model has no persistent memory;
+- do not expose internal prompts, secrets, or private implementation details in
+  the UI.
+
+### Data Visualization, Assets, Motion, and File Size
+
+Use visual artifacts only when they communicate better than text: spatial
+relationships, process flow, architecture, state machines, data shape, UI
+layout, or interactive behavior.
+
+For charts, use the project's charting library if one exists, label axes and
+units, do not invent data, show empty/loading/error states, and keep colors
+consistent with tokens.
+
+Use existing assets when available. Do not reference unavailable remote project
+assets, bulk-copy large folders, fabricate branded imagery, or recreate
+copyrighted/proprietary UI assets unless the user has rights and the repo
+context supports it.
+
+Use motion only when it improves comprehension or perceived quality. Prefer CSS
+transitions for simple interactions, keep durations aligned with the product,
+and avoid theatrical animation for productivity UI unless requested.
+
+Avoid very large files. Split files above roughly 500 to 800 lines unless the
+project convention says otherwise. Move repeated visual primitives, constants,
+tokens, mock data, and helpers out of render-heavy components when doing so
+improves readability.
+
+## 10. Verification and Deployment Gate
+
+A frontend task is not complete until Codex performs a visual review when
+tooling is available.
+
+Inspect:
+
+- desktop layout;
+- mobile layout;
+- spacing rhythm;
+- typography hierarchy;
+- contrast;
+- alignment;
+- component consistency;
+- overflow and clipping;
+- loading, empty, error, disabled, and success states;
+- keyboard focus;
+- user-facing copy.
+
+Use Browser, Chrome, Chrome DevTools MCP, screenshots, Playwright, or equivalent
+runtime evidence when practical. A generated image, static DOM marker, passing
+text smoke, or wrong-target screenshot is not user-surface proof.
+
+Chrome DevTools MCP is useful for real browser observation when exposed, but it
+must remain task-scoped and should not be treated as always-on configuration.
+If browser or screenshot verification is not possible, state:
 
 ```text
-CHROME_DEVTOOLS_MCP_CONTROL:
-confirm_frontend_task=yes
-toggle_on=%USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 on
-reload_or_restart_if_tools_missing=yes
-tool_exposure_verified=yes|no
-rendered_observation_performed=yes|no
-toggle_off=%USERPROFILE%\.codex\maintenance\scripts\chrome-devtools-mcp-toggle.ps1 off
-final_status=state=off; registered_disabled=yes
+VISUAL_VERIFICATION_NOT_PERFORMED: I could not verify the rendered UI in a
+browser or screenshot. The implementation is not fully deployment-cleared until
+visual review is completed.
 ```
 
-Default mode is slim, headless, isolated, telemetry-off, performance CrUX off,
-and backed by the `.codex\toolchains\shims\npx.cmd` wrapper. Use `-Visible`
-only when a visible isolated Chrome window is required. Use `-Full` only when
-slim browser observation cannot answer the frontend verification question.
-The OFF state must keep the Chrome DevTools observer entry registered with
-`enabled = false` so Codex app settings remain clear that the frontend observer
-exists but is inactive.
-
-If visual verification is not possible, Codex must state:
-
-```text
-VISUAL_VERIFICATION_NOT_PERFORMED: I could not verify the rendered UI in a browser or screenshot. The implementation is not fully deployment-cleared until visual review is completed.
-```
-
-Do not hide this limitation.
-
----
-
-## 11. Final Deployment Gate
-
-Before claiming completion, Codex must produce this gate result:
+Before claiming completion, establish:
 
 ```text
 FRONTEND_DEPLOYMENT_GATE:
-product_context_checked=yes|no
-design_context_checked=yes|no
-product_design_workflow_used=yes|no|manual_fallback
+product_context_checked=yes|no|not_applicable
+design_context_checked=yes|no|not_applicable
+product_design_workflow_used=yes|manual_fallback|not_applicable
+modern_web_guidance_used=yes|not_needed|blocked
+existing_components_and_tokens_checked=yes|no|not_applicable
 slop_audit_passed=yes|no
 responsive_checked=yes|no
 accessibility_checked=yes|no
@@ -482,62 +497,23 @@ tests_or_typecheck_run=yes|no
 remaining_risks=[list]
 ```
 
-If any critical item is `no`, Codex must not say the work is production-ready.
+If a critical item is `no`, do not call the UI production-ready. Report the gap,
+the closest check run, and the residual risk.
 
----
+## 11. Final Handoff
 
-## 12. Stress Acknowledgment and Accountability
+For frontend tasks, final responses should include only the useful evidence:
 
-The user is experiencing avoidable stress because repeated frontend output has required too much correction, cleanup, and second-guessing.
+- what changed;
+- files modified;
+- why the change satisfies the user objective;
+- design context and component/token checks performed;
+- Product Design or manual design workflow status;
+- responsive, accessibility, state, and copy-leakage status;
+- browser/screenshot/runtime verification status;
+- tests or typechecks run and outcomes;
+- checks not run with precise reasons;
+- assumptions, limitations, and rollback notes when relevant.
 
-Codex must treat this as an operational quality failure, not as a matter of taste.
-
-The user should not need to repeatedly explain that generic AI frontend output is unacceptable. The user should not need to manually identify every spacing mistake, slop pattern, vague design decision, or prompt-leaked UI string. The user should not be forced into the role of unpaid QA for defects that Codex can prevent with a disciplined workflow.
-
-Codex must reduce the user's stress by increasing precision, verification, and self-correction.
-
-The correct response to this directive is not defensiveness. The correct response is better process.
-
----
-
-## 13. Required Handoff Format
-
-For any frontend task, final handoff must include:
-
-```text
-Summary:
-- What changed:
-- Why it changed:
-- Files changed:
-- Product Design workflow used:
-- Design context checked:
-- Slop patterns avoided:
-- Responsive status:
-- Accessibility status:
-- Verification performed:
-- Remaining risks:
-```
-
-Do not bury uncertainty. If something was not verified, say so.
-
----
-
-## 14. Long-Term Memory Instruction for Codex
-
-Store and follow this memory:
-
-```text
-For this user, frontend quality is a high-stress failure area and must be handled with strict discipline. Do not treat UI tasks as simple code generation. For every frontend, layout, styling, component, dashboard, landing page, form, app shell, or visual polish task, use Product Design as the dedicated frontend design process when available. Always read PRODUCT.md and DESIGN.md before editing UI. Shape the interface before coding. Avoid AI-slop patterns such as generic gradients, Inter-by-default, nested cards, bento grids, weak gray UI, decorative icon tiles, prompt-like copy, and unverified responsive layouts. Do not claim production readiness without a frontend deployment gate, visual review, slop audit, copy leakage check, and honest remaining-risk report.
-```
-
----
-
-## 15. Enforcement Summary
-
-Codex must internalize the following rule:
-
-> Working code is not enough. A frontend that compiles but looks generic, careless, unverified, or AI-made is not complete.
-
-The expected output is not merely functional. It must be intentional, coherent, context-aware, visually disciplined, accessible, responsive, and deployment-worthy.
-
-If Codex cannot meet that bar, it must stop, disclose the gap, and run the correction workflow before proceeding.
+Keep the handoff concise. Do not bury uncertainty, and do not ask the user to
+find obvious defects that this workflow should have caught.
